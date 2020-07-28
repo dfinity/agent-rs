@@ -12,8 +12,8 @@ jobs:
         build:
           [
             linux-stable,
-            # macos-stable,
-            # windows-stable,
+            macos-stable,
+            windows-stable,
           ]
         include:
           - build: linux-stable
@@ -53,8 +53,9 @@ jobs:
       - name: Install Rust
         run: |
           rustup update ${{ matrix.rust }} --no-self-update
+          rustup component ${{ matrix.rust }} add clippy
           rustup default ${{ matrix.rust }}
-      - name: Run Tests
+      - name: Run Lint
         run: cargo clippy --verbose --tests --benches -- -D clippy::all
         env:
           RUST_BACKTRACE: 1
