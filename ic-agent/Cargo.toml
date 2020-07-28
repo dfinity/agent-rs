@@ -24,6 +24,6 @@ serde_cbor = "0.10"
 url = "2.1.0"
 
 [dev-dependencies]
-mockito = "0.20.0"
+mockito = "0.27.0"
 proptest = "0.9.5"
 tokio = "0.2.6"

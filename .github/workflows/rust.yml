@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Build
-        run: cargo build --verbose --
+        run: cargo build --verbose --tests --benches
       - name: Run tests
         run: cargo test --verbose
       - name: Lint
