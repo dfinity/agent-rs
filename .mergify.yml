@@ -6,7 +6,9 @@ pull_request_rules:
       - "-conflict"
       - "-draft"
       - status-success=conventional-pr-title
-      - status-success=Test
+      - status-success~=Test
+      - "#status-success>0"
+      - "#status-failure=0"
       - base=master
       - label=automerge-squash
     actions:
