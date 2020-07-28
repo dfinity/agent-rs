@@ -1,4 +1,4 @@
-name: Conventional Commit - Check PR title
+name: Check PR title
 on:
   pull_request:
     types:
