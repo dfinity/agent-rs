@@ -6,25 +6,7 @@ jobs:
   test:
     name: Lint
 
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        build:
-          [
-            linux-stable,
-            macos-stable,
-            windows-stable,
-          ]
-        include:
-          - build: linux-stable
-            os: ubuntu-latest
-            rust: stable
-          - build: macos-stable
-            os: macos-latest
-            rust: stable
-          - build: windows-stable
-            os: windows-latest
-            rust: stable
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v2
@@ -53,7 +35,7 @@ jobs:
       - name: Install Rust
         run: |
           rustup update ${{ matrix.rust }} --no-self-update
-          rustup component ${{ matrix.rust }} add clippy
+          rustup component add clippy
           rustup default ${{ matrix.rust }}
       - name: Run Lint
         run: cargo clippy --verbose --tests --benches -- -D clippy::all

@@ -12,8 +12,8 @@ jobs:
         build:
           [
             linux-stable,
-            # macos-stable,
-            # windows-stable,
+            macos-stable,
+            windows-stable,
           ]
         include:
           - build: linux-stable
