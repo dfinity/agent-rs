@@ -1,0 +1,87 @@
+name: ic-ref
+
+on: [pull_request, push]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        build: [ linux-0-8 ]
+        include:
+          - build: linux-0-8
+            ghc: '8.8.3'
+            spec: 'release-0.8'
+            os: ubuntu-latest
+            rust: stable
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          path: main
+      - uses: actions/checkout@v2
+        with:
+          repository: 'dfinity-lab/ic-ref'
+          # Personal Read-only Access Token created by hans.larsen@dfinity.org
+          token: ${{ secrets.IC_REF_TOKEN }}
+          path: ic-ref
+          ref: ${{ matrix.spec }}
+
+      - name: Cache ~/.cabal/store
+        uses: actions/cache@v1
+        with:
+          path: ~/.cabal/store
+          key: ${{ runner.os }}-${{ matrix.ghc }}-cabal-store
+      - uses: actions/setup-haskell@v1.1
+        with:
+          ghc-version: ${{ matrix.ghc }}
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v1
+        with:
+          path: ~/.cargo/registry
+          key: ${{ matrix.build }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.build }}-cargo-registry-
+      - name: Cache Cargo index
+        uses: actions/cache@v1
+        with:
+          path: ~/.cargo/git
+          key: ${{ matrix.build }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.build }}-cargo-index-
+      - name: Cache Cargo build
+        uses: actions/cache@v1
+        with:
+          path: main/target
+          key: ${{ matrix.build }}-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.build }}-target-
+      - name: Install Rust
+        run: |
+          rustup update ${{ matrix.rust }} --no-self-update
+          rustup default ${{ matrix.rust }}
+
+      - name: Build ic-ref
+        run: |
+          ls -l /opt/ghc/
+          export PATH=/opt/ghc/bin:$PATH
+          cabal --version
+          ghc --version
+          cd ic-ref/impl
+          cabal update
+          # build first, so that the .ghc.environment file is written
+          cabal build -w ghc-${{ matrix.ghc }}
+          # then the doctest has a chance of succeeding
+          cabal v2-test -w ghc-${{ matrix.ghc }}
+      - name: Run Tests
+        run: |
+          set -ex
+          pushd ic-ref/impl
+          cabal run ic-ref &
+          popd
+          cd main
+          cargo test --all-features -- ic-agent/tests/ic-ref/\*
+        env:
+          RUST_BACKTRACE: 1
