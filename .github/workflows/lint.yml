@@ -4,8 +4,7 @@ on: [pull_request]
 
 jobs:
   test:
-    name: Lint
-
+    name: lint
     runs-on: ubuntu-latest
 
     steps:

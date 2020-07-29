@@ -5,5 +5,35 @@ This library contains typings and utility functions dealing with the public spec
 client. It might be shared in the future but for now is separated for the purpose of testing and
 development.
 
+== Running Tests
+Regular tests can be run by anyone using `cargo test`. This will not run a special version of the
+tests that runs against a server implementation of the public specification, though those
+tests can be run against a compatible Replica.
+
+=== Public Spec Tests
+The `ic-ref` integration tests have to have a locally available server (cannot be run accross
+a network). To run those locally, one must set the `IC_REF_PORT` environment variable to the
+network port the server listens to.
+
+If you know a replica is compatible with the ic_api version supported in the code, you can run
+the replica (for example, using `dfx replica`) locally and set the environment variable to the
+port the replica will listen to.
+
+Once you have a replica and the environment variable, change the current directory to the
+`ic-agent` package, and run the `ic-ref` test suite, using:
+
+[sources, bash]
+----
+cd ic-agent
+cargo test --features=ic_ref_tests --test ic-ref
+----
+
+Alternatively, removing the `--test ic-ref` argument will run ALL tests, including the `ic-ref`
+test suite.
+
+On CI, we use a reference implementation which the Replica follows as well. This ensures
+compatibility with the latest version.
+
 == References
-The latest version of the https://hydra.dfinity.systems/latest/dfinity-ci-build/dfinity/dfinity.docs.x86_64-linux/dfinity/spec/public/index.html[public spec] is available internally on hydra.
+The public specification of the Internet Computer is, at this moment, privately shared. When it
+is made public a reference to the version supported will be available here.
