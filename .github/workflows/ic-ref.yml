@@ -12,7 +12,7 @@ jobs:
         include:
           - build: linux-0-8
             ghc: '8.8.3'
-            spec: 'release-0.8'
+            spec: 'joachim/test-for-agent-rust'
             os: ubuntu-latest
             rust: stable
 
@@ -71,10 +71,8 @@ jobs:
           ghc --version
           cd ic-ref/impl
           cabal update
-          # build first, so that the .ghc.environment file is written
           cabal build -w ghc-${{ matrix.ghc }}
-          # then the doctest has a chance of succeeding
-          cabal v2-test -w ghc-${{ matrix.ghc }}
+
       - name: Run Tests
         run: |
           set -ex
