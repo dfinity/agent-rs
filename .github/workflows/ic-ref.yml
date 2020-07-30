@@ -71,14 +71,12 @@ jobs:
           ghc --version
           cd ic-ref/impl
           cabal update
-          cabal build -w ghc-${{ matrix.ghc }}
+          cabal install -w ghc-${{ matrix.ghc }} --overwrite-policy=always  --installdir=../..
 
       - name: Run Tests
         run: |
           set -ex
-          pushd ic-ref/impl
-          cabal run ic-ref -w ghc-${{ matrix.ghc }} &
-          popd
+          ./ic-ref  &
           cd main
           cargo test --all-features -- ic-agent/tests/ic-ref/\*
         env:
