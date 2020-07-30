@@ -69,15 +69,15 @@ jobs:
           export PATH=/opt/ghc/bin:$PATH
           cabal --version
           ghc --version
-          mkdir -p bin
+          mkdir -p $HOME/bin
           cd ic-ref/impl
           cabal update
-          cabal install -w ghc-${{ matrix.ghc }} --overwrite-policy=always  --installdir=../../bin
+          cabal install -w ghc-${{ matrix.ghc }} --overwrite-policy=always  --installdir=$HOME/bin
 
       - name: Run Tests
         run: |
           set -ex
-          ./bin/ic-ref  &
+          $HOME/bin/ic-ref  &
           cd main
           cargo test --all-features -- ic-agent/tests/ic-ref/\*
         env:
