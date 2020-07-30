@@ -41,21 +41,21 @@ jobs:
         uses: actions/cache@v1
         with:
           path: ~/.cargo/registry
-          key: ${{ matrix.build }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ matrix.build }}-cargo-registry-${{ hashFiles('main/**/Cargo.lock') }}
           restore-keys: |
             ${{ matrix.build }}-cargo-registry-
       - name: Cache Cargo index
         uses: actions/cache@v1
         with:
           path: ~/.cargo/git
-          key: ${{ matrix.build }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ matrix.build }}-cargo-index-${{ hashFiles('main/**/Cargo.lock') }}
           restore-keys: |
             ${{ matrix.build }}-cargo-index-
       - name: Cache Cargo build
         uses: actions/cache@v1
         with:
           path: main/target
-          key: ${{ matrix.build }}-target-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ matrix.build }}-target-${{ hashFiles('main/**/Cargo.lock') }}
           restore-keys: |
             ${{ matrix.build }}-target-
       - name: Install Rust
