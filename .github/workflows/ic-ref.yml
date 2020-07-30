@@ -77,7 +77,7 @@ jobs:
         run: |
           set -ex
           pushd ic-ref/impl
-          cabal run ic-ref &
+          cabal run ic-ref -w ghc-${{ matrix.ghc }} &
           popd
           cd main
           cargo test --all-features -- ic-agent/tests/ic-ref/\*
