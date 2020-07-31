@@ -28,3 +28,8 @@ actix-rt = "1.1.1"
 mockito = "0.27.0"
 proptest = "0.9.5"
 tokio = "0.2.6"
+
+[features]
+    default = []
+
+ic_ref_tests = ['default'] # Used to separate integration tests for ic-ref which need a server running.
