@@ -78,7 +78,7 @@ jobs:
         run: |
           set -ex
           $HOME/bin/ic-ref  &
-          cd main
-          cargo test --all-features -- --test ic-ref
+          cd main/ic-agent
+          cargo test --features=ic_ref_tests
         env:
           RUST_BACKTRACE: 1
