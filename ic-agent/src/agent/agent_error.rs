@@ -69,3 +69,9 @@ impl From<TextualCanisterIdError> for AgentError {
         Self::CanisterIdTextError(err)
     }
 }
+
+impl From<AgentError> for String {
+    fn from(err: AgentError) -> Self {
+        format!("{:?}", err)
+    }
+}
