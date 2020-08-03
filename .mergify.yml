@@ -3,12 +3,7 @@ pull_request_rules:
     conditions:
       - "#approved-reviews-by>=1"
       - "#changes-requested-reviews-by=0"
-      - "-conflict"
-      - "-draft"
       - status-success=conventional-pr-title
-      - "#status-success>=1"
-      - "#status-failure=0"
-      - base=master
       - label=automerge-squash
     actions:
       merge:

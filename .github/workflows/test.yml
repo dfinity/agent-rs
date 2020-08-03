@@ -1,11 +1,9 @@
 name: Tests
 
-on: [pull_request]
+on: [push]
 
 jobs:
   test:
-    name: Test
-
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -47,6 +45,8 @@ jobs:
           rustup update ${{ matrix.rust }} --no-self-update
           rustup default ${{ matrix.rust }}
       - name: Run Tests
-        run: cargo test --all-features
+        run: |
+          # Do not test all features here.
+          cargo test
         env:
           RUST_BACKTRACE: 1

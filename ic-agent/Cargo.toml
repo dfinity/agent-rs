@@ -20,10 +20,16 @@ rand = "0.7.2"
 reqwest = "0.10.4"
 serde = { version = "1.0.101", features = ["derive"] }
 serde_bytes = "0.11.2"
-serde_cbor = "0.10"
+serde_cbor = "0.11.1"
 url = "2.1.0"
 
 [dev-dependencies]
+actix-rt = "1.1.1"
 mockito = "0.27.0"
 proptest = "0.9.5"
 tokio = "0.2.6"
+
+[features]
+default = []
+
+ic_ref_tests = ['default'] # Used to separate integration tests for ic-ref which need a server running.
