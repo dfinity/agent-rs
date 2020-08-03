@@ -8,7 +8,6 @@ pull_request_rules:
       - status-success=conventional-pr-title
       - "#status-success>=1"
       - "#status-failure=0"
-      - base=master
       - label=automerge-squash
     actions:
       merge:
