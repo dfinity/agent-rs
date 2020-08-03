@@ -4,7 +4,6 @@ on: [push]
 
 jobs:
   test:
-    name: Test
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -77,7 +76,9 @@ jobs:
       - name: Run Tests
         run: |
           set -ex
-          $HOME/bin/ic-ref  &
+          $HOME/bin/ic-ref --pick-port --write-port-to $HOME/ic_ref_port &
+          sleep 1
+          export IC_REF_PORT=$(cat $HOME/ic_ref_port)
           cd main/ic-agent
           cargo test --features ic_ref_tests --test ic-ref
         env:
