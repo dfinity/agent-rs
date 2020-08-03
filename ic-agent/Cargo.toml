@@ -30,6 +30,6 @@ proptest = "0.9.5"
 tokio = "0.2.6"
 
 [features]
-    default = []
+default = []
 
 ic_ref_tests = ['default'] # Used to separate integration tests for ic-ref which need a server running.
