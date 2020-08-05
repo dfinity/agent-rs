@@ -25,7 +25,8 @@ use public::*;
 
 const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 
-pub struct Agent { url: reqwest::Url,
+pub struct Agent {
+    url: reqwest::Url,
     nonce_factory: NonceFactory,
     request_executor: Box<dyn AgentRequestExecutor>,
     identity: Box<dyn Identity>,
