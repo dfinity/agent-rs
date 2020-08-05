@@ -40,6 +40,7 @@ jobs:
         run: cargo fmt --all -- --check
         env:
           RUST_BACKTRACE: 1
+        continue-on-error: true
       - name: Run Clippy
         run: cargo clippy --verbose --tests --benches -- -D clippy::all
         env:
