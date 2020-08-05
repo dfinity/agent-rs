@@ -7,11 +7,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        build: [ linux-0-8 ]
+        build: [ linux-0-9 ]
         include:
-          - build: linux-0-8
+          - build: linux-0-9
             ghc: '8.8.3'
-            spec: 'joachim/test-for-agent-rust'
+            spec: 'release-0.9'
             os: ubuntu-latest
             rust: stable
 

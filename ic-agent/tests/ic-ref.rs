@@ -8,7 +8,7 @@ use std::future::Future;
 
 mod universal_canister;
 
-const EXPECTED_IC_API_VERSION: &str = "0.8.2";
+const EXPECTED_IC_API_VERSION: &str = "0.9.2";
 
 fn create_waiter() -> Delay {
     Delay::builder()
