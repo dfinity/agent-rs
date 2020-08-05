@@ -61,6 +61,7 @@ jobs:
         run: |
           rustup update ${{ matrix.rust }} --no-self-update
           rustup default ${{ matrix.rust }}
+          rustup target add wasm32-unknown-unknown
 
       - name: Build ic-ref
         run: |
