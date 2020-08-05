@@ -37,6 +37,8 @@ jobs:
           rustup component add clippy
           rustup default ${{ matrix.rust }}
       - name: Run Lint
-        run: cargo clippy --verbose --tests --benches -- -D clippy::all
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --verbose --tests --benches -- -D clippy::all
         env:
           RUST_BACKTRACE: 1
