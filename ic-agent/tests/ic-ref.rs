@@ -285,7 +285,7 @@ mod simple_calls {
     fn query() {
         with_universal_canister(|agent, canister_id| async move {
             let arg = payload().reply_data(b"hello").build();
-            let result = agent.query(&canister_id, "query", &v).await?;
+            let result = agent.query(&canister_id, "query", &arg).await?;
 
             assert_eq!(result, Blob::from(b"hello"));
             Ok(())
@@ -295,8 +295,8 @@ mod simple_calls {
     #[test]
     fn non_existant_call() {
         with_universal_canister(|agent, canister_id| async move {
-            let v = Blob::from(b"\x03\x05\x00\x00\x00hello\x04\x05");
-            let result = agent.call(&canister_id, "non_existent_method", &v).await;
+            let arg = payload().reply_data(b"hello").build();
+            let result = agent.call(&canister_id, "non_existent_method", &arg).await;
 
             assert!(matches!(
                 result,

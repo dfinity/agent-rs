@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! The Universal Canister (UC) is a canister built in Rust, compiled to Wasm,
 //! and serves as a canister that can be used for a multitude of tests.
 //!
@@ -74,7 +75,7 @@ pub fn payload() -> PayloadBuilder {
 pub struct PayloadBuilder(Vec<u8>);
 
 impl PayloadBuilder {
-    fn op(mut self, b: Ops) -> Self {
+    fn op(self, b: Ops) -> Self {
         self.byte(b as u8)
     }
 
@@ -126,15 +127,15 @@ impl PayloadBuilder {
             .bytes(data)
     }
 
-    pub fn stable_grow(mut self, additional_pages: u32) -> Self {
+    pub fn stable_grow(self, additional_pages: u32) -> Self {
         self.push_int(additional_pages).op(Ops::StableGrow)
     }
 
-    pub fn stable_read(mut self, offset: u32, size: u32) -> Self {
+    pub fn stable_read(self, offset: u32, size: u32) -> Self {
         self.push_int(offset).push_int(size).op(Ops::StableRead)
     }
 
-    pub fn stable_write(mut self, offset: u32, data: &[u8]) -> Self {
+    pub fn stable_write(self, offset: u32, data: &[u8]) -> Self {
         self.push_int(offset).push_bytes(data).op(Ops::StableWrite)
     }
 
@@ -149,7 +150,7 @@ impl PayloadBuilder {
     }
 
     pub fn call_simple<P: Into<CanisterId>>(
-        mut self,
+        self,
         callee: P,
         method: &str,
         call_args: CallArgs,
@@ -162,51 +163,51 @@ impl PayloadBuilder {
             .op(Ops::CallSimple)
     }
 
-    pub fn message_payload(mut self) -> Self {
+    pub fn message_payload(self) -> Self {
         self.op(Ops::MessagePayload)
     }
 
-    pub fn reject_message(mut self) -> Self {
+    pub fn reject_message(self) -> Self {
         self.op(Ops::RejectMessage)
     }
 
-    pub fn reject_code(mut self) -> Self {
+    pub fn reject_code(self) -> Self {
         self.op(Ops::RejectCode)
     }
 
-    pub fn reject(mut self) -> Self {
+    pub fn reject(self) -> Self {
         self.op(Ops::Reject)
     }
 
-    pub fn noop(mut self) -> Self {
+    pub fn noop(self) -> Self {
         self.op(Ops::Noop)
     }
 
-    pub fn caller(mut self) -> Self {
+    pub fn caller(self) -> Self {
         self.op(Ops::Caller)
     }
 
-    pub fn self_(mut self) -> Self {
+    pub fn self_(self) -> Self {
         self.op(Ops::Self_)
     }
 
     /// Store data (in a global variable) on the heap.
     /// NOTE: This does _not_ correspond to a Wasm global.
-    pub fn set_global_data(mut self, data: &[u8]) -> Self {
+    pub fn set_global_data(self, data: &[u8]) -> Self {
         self.push_bytes(data).op(Ops::SetGlobal)
     }
 
     /// Get data (stored in a global variable) from the heap.
     /// NOTE: This does _not_ correspond to a Wasm global.
-    pub fn get_global_data(mut self) -> Self {
+    pub fn get_global_data(self) -> Self {
         self.op(Ops::GetGlobal)
     }
 
-    pub fn debug_print(mut self, msg: &[u8]) -> Self {
+    pub fn debug_print(self, msg: &[u8]) -> Self {
         self.push_bytes(msg).op(Ops::DebugPrint)
     }
 
-    pub fn trap_with_blob(mut self, data: &[u8]) -> Self {
+    pub fn trap_with_blob(self, data: &[u8]) -> Self {
         self.push_bytes(data).op(Ops::Trap)
     }
 
