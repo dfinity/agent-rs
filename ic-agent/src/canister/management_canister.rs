@@ -1,7 +1,7 @@
 use crate::agent::agent_error::AgentError;
 use crate::agent::response::Replied;
 use crate::agent::Agent;
-use crate::{Blob, CanisterAttributes, CanisterId, RequestId};
+use crate::{Blob, CanisterAttributes, CanisterId};
 use candid::{Decode, Encode};
 use std::str::FromStr;
 
