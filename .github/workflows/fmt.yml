@@ -1,10 +1,10 @@
-name: Lint
+name: Format
 
 on: [pull_request]
 
 jobs:
   test:
-    name: lint
+    name: fmt
     runs-on: ubuntu-latest
 
     steps:
@@ -34,9 +34,8 @@ jobs:
       - name: Install Rust
         run: |
           rustup update ${{ matrix.rust }} --no-self-update
-          rustup component add clippy
           rustup default ${{ matrix.rust }}
-      - name: Run Clippy
-        run: cargo clippy --verbose --tests --benches -- -D clippy::all
+      - name: Run Cargo Fmt
+        run: cargo fmt --all -- --check
         env:
           RUST_BACKTRACE: 1
