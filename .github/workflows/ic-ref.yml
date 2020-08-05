@@ -9,7 +9,7 @@ jobs:
       matrix:
         build: [ linux-0-8 ]
         include:
-          - build: linux-0-8
+          - build: linux-0-9
             ghc: '8.8.3'
             spec: 'release-0.9'
             os: ubuntu-latest

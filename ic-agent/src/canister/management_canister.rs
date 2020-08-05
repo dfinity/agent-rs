@@ -90,7 +90,7 @@ impl<'agent> ManagementCanister<'agent> {
         module: &Blob,
         arg: &Blob,
         attributes: &CanisterAttributes,
-    ) -> Result<RequestId, AgentError> {
+    ) -> Result<(), AgentError> {
         let canister_to_install = CanisterInstall {
             mode,
             canister_id: candid::Principal::from_text(canister_id.to_text())?,
@@ -112,8 +112,11 @@ impl<'agent> ManagementCanister<'agent> {
             .request_status_and_wait(&request_id, waiter)
             .await?
         {
-            // Candid type returned is () so ignoring _blob on purpose
-            Replied::CallReplied(_blob) => Ok(request_id),
+            // Candid type returned is () so validating the result.
+            Replied::CallReplied(blob) => {
+                Decode!(&blob.0)?;
+                Ok(())
+            }
             reply => Err(AgentError::UnexpectedReply(reply)),
         }
     }
