@@ -19,7 +19,12 @@ If you know a replica is compatible with the ic_api version supported in the cod
 the replica (for example, using `dfx replica`) locally and set the environment variable to the
 port the replica will listen to.
 
-Once you have a replica and the environment variable, change the current directory to the
+You will also need a canister to install and run. Unfortunately, at this moment the "universal
+canister" isn't made public and you will want to skip those tests if you can't build it. The
+environment variable to use it is `IC_UNIVERSAL_CANISTER_PATH` and it should point to the
+WASM file on disk.
+
+Once you have a replica and the environment variables, change the current directory to the
 `ic-agent` package, and run the `ic-ref` test suite, using:
 
 [sources, bash]

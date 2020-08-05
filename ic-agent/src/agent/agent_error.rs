@@ -1,5 +1,7 @@
 use crate::{Replied, RequestIdError, TextualCanisterIdError};
+use serde::export::Formatter;
 use serde_cbor::error::Error as SerdeError;
+use std::fmt::{Debug, Display};
 
 #[derive(Debug)]
 pub enum AgentError {
@@ -33,6 +35,14 @@ pub enum AgentError {
 
     InstallModeError(String),
 }
+
+impl Display for AgentError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self, f)
+    }
+}
+
+impl std::error::Error for AgentError {}
 
 impl From<SerdeError> for AgentError {
     fn from(err: SerdeError) -> Self {

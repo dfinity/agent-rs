@@ -61,6 +61,7 @@ jobs:
         run: |
           rustup update ${{ matrix.rust }} --no-self-update
           rustup default ${{ matrix.rust }}
+          rustup target add wasm32-unknown-unknown
 
       - name: Build ic-ref
         run: |
@@ -73,12 +74,19 @@ jobs:
           cabal update
           cabal install -w ghc-${{ matrix.ghc }} --overwrite-policy=always  --installdir=$HOME/bin
 
+      - name: Build universal-canister
+        run: |
+          cd ic-ref/universal-canister
+          cargo build --target wasm32-unknown-unknown --release
+          cp target/wasm32-unknown-unknown/release/universal_canister.wasm $HOME/canister.wasm
+
       - name: Run Tests
         run: |
           set -ex
           $HOME/bin/ic-ref --pick-port --write-port-to $HOME/ic_ref_port &
           sleep 1
           export IC_REF_PORT=$(cat $HOME/ic_ref_port)
+          export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
           cd main/ic-agent
           cargo test --features ic_ref_tests --test ic-ref
         env:
