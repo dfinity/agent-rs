@@ -1,4 +1,4 @@
-use crate::{AgentError, Blob, Identity, Principal, RequestId, Signature};
+use crate::{AgentError, Blob, Identity, Principal, Signature};
 use ring::signature::{Ed25519KeyPair, KeyPair};
 
 pub struct BasicIdentity {
@@ -15,8 +15,8 @@ impl Identity for BasicIdentity {
     fn sender(&self) -> Result<Principal, AgentError> {
         Ok(Principal::self_authenticating(&self.key_pair.public_key()))
     }
-    fn sign(&self, request: &RequestId, _principal: &Principal) -> Result<Signature, AgentError> {
-        let signature = self.key_pair.sign(&request.to_vec());
+    fn sign(&self, msg: &[u8], _principal: &Principal) -> Result<Signature, AgentError> {
+        let signature = self.key_pair.sign(msg.as_ref());
         // At this point we shall validate the signature in this first
         // skeleton version.
         let public_key_bytes = self.key_pair.public_key().as_ref();
