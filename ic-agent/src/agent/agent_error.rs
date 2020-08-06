@@ -22,10 +22,10 @@ pub enum AgentError {
         reject_code: u64,
         reject_message: String,
     },
-    ServerError {
+    HttpError {
         status: u16,
         content_type: Option<String>,
-        content: String,
+        content: Vec<u8>,
     },
 
     UnexpectedReply(Replied),
@@ -34,6 +34,9 @@ pub enum AgentError {
     CanisterIdTextError(TextualCanisterIdError),
 
     InstallModeError(String),
+
+    CannotUseAuthenticationOnNonSecureUrl(),
+    PasswordError(String),
 }
 
 impl Display for AgentError {
