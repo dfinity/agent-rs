@@ -5,7 +5,7 @@ pub(crate) mod replica_api;
 pub(crate) mod response;
 
 pub(crate) mod public {
-    pub use super::agent_config::{AgentConfig, AgentRequestExecutor};
+    pub use super::agent_config::{AgentConfig, PasswordManager};
     pub use super::agent_error::AgentError;
     pub use super::nonce::NonceFactory;
     pub use super::response::{Replied, RequestStatusResponse};
@@ -28,23 +28,36 @@ const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 pub struct Agent {
     url: reqwest::Url,
     nonce_factory: NonceFactory,
-    request_executor: Box<dyn AgentRequestExecutor>,
-    identity: Box<dyn Identity>,
     default_waiter: delay::Delay,
+    client: reqwest::Client,
+    identity: Box<dyn Identity>,
+    password_manager: Option<Box<dyn PasswordManager>>,
 }
 
 impl Agent {
     pub fn new(config: AgentConfig<'_>) -> Result<Agent, AgentError> {
         let url = config.url;
+        let mut tls_config = rustls::ClientConfig::new();
+
+        // Advertise support for HTTP/2
+        tls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+        // Mozilla CA root store
+        tls_config
+            .root_store
+            .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
 
         Ok(Agent {
             url: reqwest::Url::parse(url)
                 .and_then(|url| url.join("api/v1/"))
                 .map_err(|_| AgentError::InvalidClientUrl(String::from(url)))?,
-            request_executor: config.request_executor,
+            client: reqwest::Client::builder()
+                .use_preconfigured_tls(tls_config)
+                .build()
+                .expect("Could not create HTTP client."),
             nonce_factory: config.nonce_factory,
             identity: config.identity,
             default_waiter: config.default_waiter,
+            password_manager: config.password_manager,
         })
     }
 
@@ -55,40 +68,113 @@ impl Agent {
         buf
     }
 
+    async fn request(
+        &self,
+        http_request: reqwest::Request,
+    ) -> Result<(reqwest::StatusCode, reqwest::header::HeaderMap, Vec<u8>), AgentError> {
+        let response = self
+            .client
+            .execute(
+                http_request
+                    .try_clone()
+                    .expect("Could not clone a request."),
+            )
+            .await
+            .map_err(AgentError::from)?;
+
+        let http_status = response.status();
+        let response_headers = response.headers().clone();
+        let bytes = response.bytes().await?.to_vec();
+
+        Ok((http_status, response_headers, bytes))
+    }
+
+    fn maybe_add_authorization(
+        &self,
+        http_request: &mut reqwest::Request,
+        cached: bool,
+    ) -> Result<(), AgentError> {
+        if let Some(pm) = &self.password_manager {
+            let maybe_user_pass = if cached {
+                pm.cached(http_request.url().as_str())
+            } else {
+                pm.required(http_request.url().as_str()).map(|x| Some(x))
+            };
+
+            if let Some((u, p)) = maybe_user_pass.map_err(AgentError::PasswordError)? {
+                let auth = base64::encode(&format!("{}:{}", u, p));
+                http_request.headers_mut().insert(
+                    reqwest::header::AUTHORIZATION,
+                    format!("Basic {}", auth).parse().unwrap(),
+                );
+            }
+        }
+        Ok(())
+    }
+
     async fn execute<T: std::fmt::Debug + serde::Serialize>(
         &self,
+        method: Method,
         endpoint: &str,
-        envelope: Envelope<T>,
+        envelope: Option<Envelope<T>>,
     ) -> Result<Vec<u8>, AgentError> {
-        let mut serialized_bytes = Vec::new();
-        let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
-        serializer.self_describe()?;
-        envelope.serialize(&mut serializer)?;
+        let mut body = None;
+        if let Some(e) = envelope {
+            let mut serialized_bytes = Vec::new();
+
+            let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
+            serializer.self_describe()?;
+            e.serialize(&mut serializer)?;
+
+            body = Some(serialized_bytes);
+        }
 
         let url = self.url.join(endpoint)?;
-
-        let mut http_request = reqwest::Request::new(Method::POST, url);
+        let mut http_request = reqwest::Request::new(method, url);
         http_request.headers_mut().insert(
             reqwest::header::CONTENT_TYPE,
             "application/cbor".parse().unwrap(),
         );
-        http_request
-            .body_mut()
-            .get_or_insert(reqwest::Body::from(serialized_bytes));
 
-        let response = self.request_executor.execute(http_request).await?;
-        if response.status().is_client_error() || response.status().is_server_error() {
-            Err(AgentError::ServerError {
-                status: response.status().into(),
-                content_type: response
-                    .headers()
+        self.maybe_add_authorization(&mut http_request, true)?;
+
+        *http_request.body_mut() = body.map(reqwest::Body::from);
+
+        let mut status;
+        let mut headers;
+        let mut body;
+        loop {
+            let request_result = self.request(http_request.try_clone().unwrap()).await?;
+            status = request_result.0;
+            headers = request_result.1;
+            body = request_result.2;
+
+            // If the server returned UNAUTHORIZED, and it is the first time we replay the call,
+            // check if we can get the username/password for the HTTP Auth.
+            if status == reqwest::StatusCode::UNAUTHORIZED {
+                if self.url.scheme() == "https" || matches!(self.url.host_str(), Some("localhost"))
+                {
+                    // If there is a password manager, get the username and password from it.
+                    self.maybe_add_authorization(&mut http_request, false)?;
+                } else {
+                    return Err(AgentError::CannotUseAuthenticationOnNonSecureUrl());
+                }
+            } else {
+                break;
+            }
+        }
+
+        if status.is_client_error() || status.is_server_error() {
+            Err(AgentError::HttpError {
+                status: status.into(),
+                content_type: headers
                     .get(reqwest::header::CONTENT_TYPE)
                     .and_then(|value| value.to_str().ok())
                     .map(|x| x.to_string()),
-                content: response.text().await?,
+                content: body,
             })
         } else {
-            Ok(response.bytes().await?.to_vec())
+            Ok(body)
         }
     }
 
@@ -106,12 +192,13 @@ impl Agent {
         let signature = self.identity.sign(&msg, &sender)?;
         let bytes = self
             .execute(
+                Method::POST,
                 "read",
-                Envelope {
+                Some(Envelope {
                     content: request,
                     sender_pubkey: signature.public_key,
                     sender_sig: signature.signature,
-                },
+                }),
             )
             .await?;
 
@@ -127,12 +214,13 @@ impl Agent {
         let signature = self.identity.sign(&msg, &sender)?;
         let _ = self
             .execute(
+                Method::POST,
                 "submit",
-                Envelope {
+                Some(Envelope {
                     content: request,
                     sender_pubkey: signature.public_key,
                     sender_sig: signature.signature,
-                },
+                }),
             )
             .await?;
 
@@ -273,28 +361,9 @@ impl Agent {
     }
 
     pub async fn ping_once(&self) -> Result<serde_cbor::Value, AgentError> {
-        let url = self.url.join("status")?;
-        let mut http_request = reqwest::Request::new(Method::GET, url);
-        http_request.headers_mut().insert(
-            reqwest::header::CONTENT_TYPE,
-            "application/cbor".parse().unwrap(),
-        );
-        let response = self.request_executor.execute(http_request).await?;
+        let bytes = self.execute::<()>(Method::GET, "status", None).await?;
 
-        if response.status().is_client_error() || response.status().is_server_error() {
-            Err(AgentError::ServerError {
-                status: response.status().into(),
-                content_type: response
-                    .headers()
-                    .get(reqwest::header::CONTENT_TYPE)
-                    .and_then(|value| value.to_str().ok())
-                    .map(|x| x.to_string()),
-                content: response.text().await?,
-            })
-        } else {
-            let bytes = response.bytes().await?.to_vec();
-            Ok(serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)?)
-        }
+        Ok(serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)?)
     }
 
     pub async fn ping<W: delay::Waiter>(
