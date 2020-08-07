@@ -89,6 +89,29 @@ impl Agent {
         Ok((http_status, response_headers, bytes))
     }
 
+    fn maybe_add_authorization(
+        &self,
+        http_request: &mut reqwest::Request,
+        cached: bool,
+    ) -> Result<(), AgentError> {
+        if let Some(pm) = &self.password_manager {
+            let maybe_user_pass = if cached {
+                pm.cached(http_request.url().as_str())
+            } else {
+                pm.required(http_request.url().as_str()).map(|x| Some(x))
+            };
+
+            if let Some((u, p)) = maybe_user_pass.map_err(AgentError::PasswordError)? {
+                let auth = base64::encode(&format!("{}:{}", u, p));
+                http_request.headers_mut().insert(
+                    reqwest::header::AUTHORIZATION,
+                    format!("Basic {}", auth).parse().unwrap(),
+                );
+            }
+        }
+        Ok(())
+    }
+
     async fn execute<T: std::fmt::Debug + serde::Serialize>(
         &self,
         method: Method,
@@ -113,18 +136,7 @@ impl Agent {
             "application/cbor".parse().unwrap(),
         );
 
-        if let Some(pm) = &self.password_manager {
-            if let Some((u, p)) = pm
-                .cached(http_request.url().as_str())
-                .map_err(AgentError::PasswordError)?
-            {
-                let auth = base64::encode(&format!("{}:{}", u, p));
-                http_request.headers_mut().insert(
-                    reqwest::header::AUTHORIZATION,
-                    format!("Basic {}", auth).parse().unwrap(),
-                );
-            }
-        }
+        self.maybe_add_authorization(&mut http_request, true)?;
 
         *http_request.body_mut() = body.map(reqwest::Body::from);
 
@@ -143,17 +155,7 @@ impl Agent {
                 if self.url.scheme() == "https" || matches!(self.url.host_str(), Some("localhost"))
                 {
                     // If there is a password manager, get the username and password from it.
-                    if let Some(pm) = &self.password_manager {
-                        let (u, p) = pm
-                            .required(http_request.url().as_str())
-                            .map_err(AgentError::PasswordError)?;
-
-                        let auth = base64::encode(&format!("{}:{}", u, p));
-                        http_request.headers_mut().insert(
-                            reqwest::header::AUTHORIZATION,
-                            format!("Basic {}", auth).parse().unwrap(),
-                        );
-                    }
+                    self.maybe_add_authorization(&mut http_request, false)?;
                 } else {
                     return Err(AgentError::CannotUseAuthenticationOnNonSecureUrl());
                 }
