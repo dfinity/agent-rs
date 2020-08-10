@@ -664,7 +664,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Blob, CanisterId};
+    use crate::{Blob, Principal};
 
     /// The actual example used in the public spec in the Request ID section.
     #[test]
@@ -672,13 +672,14 @@ mod tests {
         #[derive(Serialize)]
         struct PublicSpecExampleStruct {
             request_type: &'static str,
-            canister_id: CanisterId,
+            canister_id: Principal,
             method_name: &'static str,
             arg: Blob,
         };
         let data = PublicSpecExampleStruct {
             request_type: "call",
-            canister_id: CanisterId::from_bytes(&[0, 0, 0, 0, 0, 0, 0x04, 0xD2]), // 1234 in u64
+            canister_id: Principal::from_str("75hes-oqbaa-aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-q")
+                .unwrap(),
             method_name: "hello",
             arg: Blob(b"DIDL\x00\xFD*".to_vec()),
         };
@@ -687,7 +688,7 @@ mod tests {
         let request_id = to_request_id(&data).unwrap();
         assert_eq!(
             hex::encode(request_id.0.to_vec()),
-            "8781291c347db32a9d8c10eb62b710fce5a93be676474c42babc74c51858f94b"
+            "f0d0f53375e0404ee6fd2c6769667f1d4f867d429a736e2a4c54bbaaf29ac738"
         );
     }
 
@@ -699,13 +700,14 @@ mod tests {
         #[serde(tag = "request_type")]
         enum PublicSpec {
             Call {
-                canister_id: CanisterId,
+                canister_id: Principal,
                 method_name: String,
                 arg: Option<Blob>,
             },
         }
         let data = PublicSpec::Call {
-            canister_id: CanisterId::from_bytes(&[0, 0, 0, 0, 0, 0, 0x04, 0xD2]), // 1234 in u64
+            canister_id: Principal::from_str("75hes-oqbaa-aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-q")
+                .unwrap(),
             method_name: "hello".to_owned(),
             arg: Some(Blob(b"DIDL\x00\xFD*".to_vec())),
         };
@@ -714,7 +716,7 @@ mod tests {
         let request_id = to_request_id(&data).unwrap();
         assert_eq!(
             hex::encode(request_id.0.to_vec()),
-            "8781291c347db32a9d8c10eb62b710fce5a93be676474c42babc74c51858f94b"
+            "f0d0f53375e0404ee6fd2c6769667f1d4f867d429a736e2a4c54bbaaf29ac738"
         );
     }
 }

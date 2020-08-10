@@ -1,4 +1,5 @@
-use crate::{Replied, RequestIdError, TextualCanisterIdError};
+use crate::{Replied, RequestIdError};
+use ic_types::PrincipalError;
 use serde::export::Formatter;
 use serde_cbor::error::Error as SerdeError;
 use std::fmt::{Debug, Display};
@@ -31,7 +32,7 @@ pub enum AgentError {
     UnexpectedReply(Replied),
 
     CandidError(candid::Error),
-    CanisterIdTextError(TextualCanisterIdError),
+    PrincipalError(PrincipalError),
 
     InstallModeError(String),
 
@@ -77,9 +78,9 @@ impl From<RequestIdError> for AgentError {
     }
 }
 
-impl From<TextualCanisterIdError> for AgentError {
-    fn from(err: TextualCanisterIdError) -> Self {
-        Self::CanisterIdTextError(err)
+impl From<PrincipalError> for AgentError {
+    fn from(err: PrincipalError) -> Self {
+        Self::PrincipalError(err)
     }
 }
 

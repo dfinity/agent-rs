@@ -1,4 +1,5 @@
 [workspace]
 members = [
-    "ic-agent/"
+    "ic-agent/",
+    "ic-types/",
 ]

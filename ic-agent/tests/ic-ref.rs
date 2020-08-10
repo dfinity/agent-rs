@@ -1,7 +1,7 @@
 #![cfg(feature = "ic_ref_tests")]
 use delay::Delay;
 use ic_agent::{
-    Agent, AgentConfig, BasicIdentity, Blob, CanisterAttributes, CanisterId, Identity, InstallMode,
+    Agent, AgentConfig, BasicIdentity, Blob, CanisterAttributes, Identity, InstallMode, Principal,
 };
 use ring::signature::Ed25519KeyPair;
 use std::future::Future;
@@ -59,7 +59,7 @@ where
 fn with_universal_canister<F, R>(f: F)
 where
     R: Future<Output = Result<(), Box<dyn std::error::Error>>>,
-    F: FnOnce(Agent, CanisterId) -> R,
+    F: FnOnce(Agent, Principal) -> R,
 {
     let mut runtime = tokio::runtime::Runtime::new().expect("Could not create tokio runtime.");
     match runtime.block_on(async {
@@ -121,7 +121,8 @@ mod management_canister {
 
     mod create_canister {
         use super::{create_waiter, with_agent};
-        use ic_agent::{AgentError, Blob, CanisterAttributes, CanisterId, InstallMode};
+        use ic_agent::{AgentError, Blob, CanisterAttributes, InstallMode, Principal};
+        use std::str::FromStr;
 
         #[test]
         fn no_id_given() {
@@ -141,7 +142,8 @@ mod management_canister {
                 let result = ic00
                     .install_code(
                         create_waiter(),
-                        &CanisterId::from_bytes(&[1, 2, 3]),
+                        &Principal::from_str("75hes-oqbaa-aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-q")
+                            .unwrap(),
                         InstallMode::Install,
                         &Blob::empty(),
                         &Blob::empty(),
