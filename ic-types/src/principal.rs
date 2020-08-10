@@ -270,6 +270,7 @@ impl<'de> serde::Deserialize<'de> for Principal {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
 
     #[cfg(feature = "serde")]
     #[test]
@@ -297,5 +298,91 @@ mod tests {
             Principal::try_from(vec![1u8, 2, 3, 4, 5]),
             Err(PrincipalError::InvalidPrincipalClass(5))
         )
+    }
+
+    #[test]
+    fn parse_management_canister_ok() {
+        assert_eq!(
+            Principal::from_str("aaaaa-aa").unwrap(),
+            Principal(PrincipalInner::ManagementCanister)
+        );
+    }
+
+    #[test]
+    fn parse_management_canister_to_text_ok() {
+        assert_eq!(Principal::from_str("aaaaa-aa").unwrap().as_slice(), &[]);
+    }
+
+    #[test]
+    fn create_managment_cid_from_empty_blob_ok() {
+        assert_eq!(Principal::management_canister().to_text(), "aaaaa-aa");
+    }
+
+    #[test]
+    fn create_managment_cid_from_text_ok() {
+        assert_eq!(
+            Principal::from_str("aaaaa-aa").unwrap().to_text(),
+            "aaaaa-aa",
+        );
+    }
+
+    #[test]
+    fn display_canister_id() {
+        assert_eq!(
+            Principal::try_from(vec![0xef, 0xcd, 0xab, 0, 0, 0, 0, 0, 1])
+                .unwrap()
+                .to_text(),
+            "2chl6-4hpzw-vqaaa-aaaaa-c",
+        );
+    }
+
+    #[test]
+    fn display_canister_id_from_bytes_as_bytes() {
+        assert_eq!(
+            Principal::try_from(vec![0xef, 0xcd, 0xab, 0, 0, 0, 0, 0, 1])
+                .unwrap()
+                .as_slice(),
+            &[0xef, 0xcd, 0xab, 0, 0, 0, 0, 0, 1],
+        );
+    }
+
+    #[test]
+    fn display_canister_id_from_blob_as_bytes() {
+        assert_eq!(
+            Principal::try_from(vec![0xef, 0xcd, 0xab, 0, 0, 0, 0, 0, 1])
+                .unwrap()
+                .as_slice(),
+            &[0xef, 0xcd, 0xab, 0, 0, 0, 0, 0, 1],
+        );
+    }
+
+    #[test]
+    fn display_canister_id_from_text_as_bytes() {
+        assert_eq!(
+            Principal::from_str("2chl6-4hpzw-vqaaa-aaaaa-c")
+                .unwrap()
+                .as_slice(),
+            &[0xef, 0xcd, 0xab, 0, 0, 0, 0, 0, 1],
+        );
+    }
+
+    #[test]
+    fn check_serialize_deserialize() {
+        let id = Principal::from_str("2chl6-4hpzw-vqaaa-aaaaa-c").unwrap();
+
+        // Use cbor serialization.
+        let vec = serde_cbor::to_vec(&id).unwrap();
+        let value = serde_cbor::from_slice(vec.as_slice()).unwrap();
+
+        assert_eq!(id, value);
+    }
+
+    #[test]
+    fn text_form() {
+        let cid = Principal::try_from(vec![1, 8, 64, 255, 1]).unwrap();
+        let text = cid.to_text();
+        let cid2 = Principal::from_str(&text).unwrap();
+        assert_eq!(cid, cid2);
+        assert_eq!(text, "vjh3m-zqbbb-ap6ai");
     }
 }
