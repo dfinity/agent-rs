@@ -262,7 +262,8 @@ mod deserialize {
 impl<'de> serde::Deserialize<'de> for Principal {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Principal, D::Error> {
         use serde::de::Error;
-        Principal::try_from(deserializer.deserialize_bytes(deserialize::PrincipalVisitor)?)
+        deserializer
+            .deserialize_bytes(deserialize::PrincipalVisitor)
             .map_err(D::Error::custom)
     }
 }
