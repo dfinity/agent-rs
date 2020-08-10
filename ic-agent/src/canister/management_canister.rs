@@ -1,11 +1,10 @@
 use crate::agent::agent_error::AgentError;
 use crate::agent::response::Replied;
 use crate::agent::Agent;
-use crate::{Blob, CanisterAttributes, CanisterId};
+use crate::{Blob, CanisterAttributes, Principal};
 use candid::{Decode, Encode};
 use std::str::FromStr;
 
-const MANAGEMENT_CANISTER_ID: &str = "aaaaa-aa";
 const CREATE_METHOD_NAME: &str = "create_canister";
 const INSTALL_METHOD_NAME: &str = "install_code";
 
@@ -58,13 +57,13 @@ impl<'agent> ManagementCanister<'agent> {
     pub async fn create_canister<W: delay::Waiter>(
         &self,
         waiter: W,
-    ) -> Result<CanisterId, AgentError> {
+    ) -> Result<Principal, AgentError> {
         // candid encoding of () i.e. no arguments
         let bytes: Vec<u8> = candid::Encode!().unwrap();
         let request_id = self
             .agent
             .call_raw(
-                &CanisterId::from_text(MANAGEMENT_CANISTER_ID).unwrap(),
+                &Principal::management_canister(),
                 CREATE_METHOD_NAME,
                 &Blob::from(bytes),
             )
@@ -76,7 +75,7 @@ impl<'agent> ManagementCanister<'agent> {
         {
             Replied::CallReplied(blob) => {
                 let cid = Decode!(blob.as_slice(), CreateResult)?;
-                Ok(CanisterId::from_text(cid.canister_id.to_text())?)
+                Ok(Principal::from_text(cid.canister_id.to_text())?)
             }
             reply => Err(AgentError::UnexpectedReply(reply)),
         }
@@ -85,7 +84,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub async fn install_code<W: delay::Waiter>(
         &self,
         waiter: W,
-        canister_id: &CanisterId,
+        canister_id: &Principal,
         mode: InstallMode,
         module: &Blob,
         arg: &Blob,
@@ -102,7 +101,7 @@ impl<'agent> ManagementCanister<'agent> {
         let request_id = self
             .agent
             .call_raw(
-                &CanisterId::from_text(MANAGEMENT_CANISTER_ID).unwrap(),
+                &Principal::management_canister(),
                 INSTALL_METHOD_NAME,
                 &Blob::from(bytes),
             )

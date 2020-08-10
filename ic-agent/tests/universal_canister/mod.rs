@@ -5,7 +5,7 @@
 //! Payloads to UC can execute any arbitrary sequence of system methods, making
 //! it possible to test different canister behaviors without having to write up
 //! custom Wat files.
-use ic_agent::{Blob, CanisterId};
+use ic_agent::{Blob, Principal};
 use std::path::Path;
 
 /// Load the Universal Canister code from the environment and return its WASM as a blob.
@@ -140,22 +140,22 @@ impl PayloadBuilder {
     }
 
     /// A query from a UC to another UC.
-    pub fn inter_query<P: Into<CanisterId>>(self, callee: P, call_args: CallArgs) -> Self {
+    pub fn inter_query<P: Into<Principal>>(self, callee: P, call_args: CallArgs) -> Self {
         self.call_simple(callee, "query", call_args)
     }
 
     /// An update from a UC to another UC.
-    pub fn inter_update<P: Into<CanisterId>>(self, callee: P, call_args: CallArgs) -> Self {
+    pub fn inter_update<P: Into<Principal>>(self, callee: P, call_args: CallArgs) -> Self {
         self.call_simple(callee, "update", call_args)
     }
 
-    pub fn call_simple<P: Into<CanisterId>>(
+    pub fn call_simple<P: Into<Principal>>(
         self,
         callee: P,
         method: &str,
         call_args: CallArgs,
     ) -> Self {
-        self.push_bytes(callee.into().as_bytes())
+        self.push_bytes(callee.into().as_slice())
             .push_bytes(method.as_bytes())
             .push_bytes(call_args.on_reply.as_slice())
             .push_bytes(call_args.on_reject.as_slice())

@@ -1,0 +1,24 @@
+[package]
+name = "ic-types"
+version = "0.1.0"
+authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
+edition = "2018"
+
+
+[dependencies]
+base32 = "0.4.0"
+crc32fast = "1.2.0"
+sha2 = "0.9.1"
+thiserror = "1.0.20"
+
+[dev-dependencies]
+serde = "1.0.115"
+serde_cbor = "0.11.1"
+
+[dependencies.serde]
+version = "1.0.115"
+optional = true
+
+[features]
+# Default features include serde support.
+default = ['serde']

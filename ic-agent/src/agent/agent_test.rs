@@ -1,6 +1,6 @@
 use crate::agent::replica_api::{CallReply, QueryResponse};
 use crate::agent::response::{Replied, RequestStatusResponse};
-use crate::{Agent, AgentConfig, AgentError, Blob, CanisterId};
+use crate::{Agent, AgentConfig, AgentError, Blob, Principal};
 use delay::Delay;
 use mockito::mock;
 use std::collections::BTreeMap;
@@ -26,7 +26,7 @@ fn query() -> Result<(), AgentError> {
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
         agent
-            .query(&CanisterId::from_bytes(&[1u8]), "main", &Blob(vec![]))
+            .query(&Principal::management_canister(), "main", &Blob(vec![]))
             .await
     });
 
@@ -49,7 +49,7 @@ fn query_error() -> Result<(), AgentError> {
 
     let result: Result<Blob, AgentError> = runtime.block_on(async {
         agent
-            .query(&CanisterId::from_bytes(&[2u8]), "greet", &Blob::empty())
+            .query(&Principal::management_canister(), "greet", &Blob::empty())
             .await
     });
 
@@ -81,7 +81,7 @@ fn query_rejected() -> Result<(), AgentError> {
 
     let result: Result<Blob, AgentError> = runtime.block_on(async {
         agent
-            .query(&CanisterId::from_bytes(&[3u8]), "greet", &Blob::empty())
+            .query(&Principal::management_canister(), "greet", &Blob::empty())
             .await
     });
 
@@ -123,7 +123,7 @@ fn call() -> Result<(), AgentError> {
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
         let request_id = agent
-            .call_raw(&CanisterId::from_bytes(&[4u8]), "greet", &Blob::empty())
+            .call_raw(&Principal::management_canister(), "greet", &Blob::empty())
             .await?;
         agent.request_status_raw(&request_id).await
     });
@@ -153,7 +153,7 @@ fn call_error() -> Result<(), AgentError> {
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
         agent
-            .call(&CanisterId::from_bytes(&[5u8]), "greet", &Blob::empty())
+            .call(&Principal::management_canister(), "greet", &Blob::empty())
             .await
     });
 
@@ -186,7 +186,7 @@ fn call_rejected() -> Result<(), AgentError> {
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result: Result<Replied, AgentError> = runtime.block_on(async {
         let request_id = agent
-            .call_raw(&CanisterId::from_bytes(&[6u8]), "greet", &Blob::empty())
+            .call_raw(&Principal::management_canister(), "greet", &Blob::empty())
             .await?;
         agent
             .request_status_and_wait(&request_id, Delay::timeout(Duration::from_millis(100)))

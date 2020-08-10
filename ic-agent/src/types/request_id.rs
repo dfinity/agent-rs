@@ -664,7 +664,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Blob, CanisterId};
+    use crate::{Blob, Principal};
+    use std::convert::TryFrom;
 
     /// The actual example used in the public spec in the Request ID section.
     #[test]
@@ -672,13 +673,13 @@ mod tests {
         #[derive(Serialize)]
         struct PublicSpecExampleStruct {
             request_type: &'static str,
-            canister_id: CanisterId,
+            canister_id: Principal,
             method_name: &'static str,
             arg: Blob,
         };
         let data = PublicSpecExampleStruct {
             request_type: "call",
-            canister_id: CanisterId::from_bytes(&[0, 0, 0, 0, 0, 0, 0x04, 0xD2]), // 1234 in u64
+            canister_id: Principal::try_from(&[0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
             method_name: "hello",
             arg: Blob(b"DIDL\x00\xFD*".to_vec()),
         };
@@ -699,13 +700,13 @@ mod tests {
         #[serde(tag = "request_type")]
         enum PublicSpec {
             Call {
-                canister_id: CanisterId,
+                canister_id: Principal,
                 method_name: String,
                 arg: Option<Blob>,
             },
         }
         let data = PublicSpec::Call {
-            canister_id: CanisterId::from_bytes(&[0, 0, 0, 0, 0, 0, 0x04, 0xD2]), // 1234 in u64
+            canister_id: Principal::try_from(&[0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
             method_name: "hello".to_owned(),
             arg: Some(Blob(b"DIDL\x00\xFD*".to_vec())),
         };
