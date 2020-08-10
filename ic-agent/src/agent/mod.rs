@@ -98,7 +98,7 @@ impl Agent {
             let maybe_user_pass = if cached {
                 pm.cached(http_request.url().as_str())
             } else {
-                pm.required(http_request.url().as_str()).map(|x| Some(x))
+                pm.required(http_request.url().as_str()).map(Some)
             };
 
             if let Some((u, p)) = maybe_user_pass.map_err(AgentError::PasswordError)? {

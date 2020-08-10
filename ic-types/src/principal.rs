@@ -117,7 +117,7 @@ impl Principal {
                 let result = Self::try_from(bytes.split_off(4))?;
                 let expected = format!("{}", result);
 
-                if text.as_ref().to_string() != expected {
+                if text.as_ref() != expected {
                     return Err(PrincipalError::AbnormalTextualFormat(expected));
                 }
                 Ok(result)
