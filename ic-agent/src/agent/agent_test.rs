@@ -28,7 +28,7 @@ fn query() -> Result<(), AgentError> {
     let result = runtime.block_on(async {
         agent
             .query(
-                &Principal::from_str("aaaaa-aa").unwrap(),
+                &Principal::management_canister(),
                 "main",
                 &Blob(vec![]),
             )
@@ -55,7 +55,7 @@ fn query_error() -> Result<(), AgentError> {
     let result: Result<Blob, AgentError> = runtime.block_on(async {
         agent
             .query(
-                &Principal::from_str("aaaaa-aa").unwrap(),
+                &Principal::management_canister(),
                 "greet",
                 &Blob::empty(),
             )
@@ -91,7 +91,7 @@ fn query_rejected() -> Result<(), AgentError> {
     let result: Result<Blob, AgentError> = runtime.block_on(async {
         agent
             .query(
-                &Principal::from_str("aaaaa-aa").unwrap(),
+                &Principal::management_canister(),
                 "greet",
                 &Blob::empty(),
             )
@@ -137,7 +137,7 @@ fn call() -> Result<(), AgentError> {
     let result = runtime.block_on(async {
         let request_id = agent
             .call_raw(
-                &Principal::from_str("aaaaa-aa").unwrap(),
+                &Principal::management_canister(),
                 "greet",
                 &Blob::empty(),
             )
@@ -171,7 +171,7 @@ fn call_error() -> Result<(), AgentError> {
     let result = runtime.block_on(async {
         agent
             .call(
-                &Principal::from_str("aaaaa-aa").unwrap(),
+                &Principal::management_canister(),
                 "greet",
                 &Blob::empty(),
             )
@@ -208,7 +208,7 @@ fn call_rejected() -> Result<(), AgentError> {
     let result: Result<Replied, AgentError> = runtime.block_on(async {
         let request_id = agent
             .call_raw(
-                &Principal::from_str("aaaaa-aa").unwrap(),
+                &Principal::management_canister(),
                 "greet",
                 &Blob::empty(),
             )
