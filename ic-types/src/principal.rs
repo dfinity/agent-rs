@@ -4,9 +4,6 @@ use thiserror::Error;
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum PrincipalError {
-    #[error("Invalid Principal Class: {0}")]
-    InvalidPrincipalClass(u8),
-
     #[error("Buffer is too long.")]
     BufferTooLong(),
 
@@ -25,6 +22,7 @@ const ID_ANONYMOUS_BYTES: &[u8] = &[PrincipalClass::Anonymous as u8];
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum PrincipalClass {
+    Unassigned = 0,
     OpaqueId = 1,
     SelfAuthenticating = 2,
     DerivedId = 3,
@@ -40,7 +38,7 @@ impl TryFrom<u8> for PrincipalClass {
             2 => Ok(PrincipalClass::SelfAuthenticating),
             3 => Ok(PrincipalClass::DerivedId),
             4 => Ok(PrincipalClass::Anonymous),
-            x => Err(PrincipalError::InvalidPrincipalClass(x)),
+            _ => Ok(PrincipalClass::Unassigned),
         }
     }
 }
@@ -75,6 +73,9 @@ pub enum PrincipalInner {
 
     /// The anonymous Principal.
     Anonymous,
+
+    /// An unknown principal class was found. This is unspecified from the spec, but we can use it.
+    Unassigned(Vec<u8>),
 }
 
 impl Principal {
@@ -191,6 +192,7 @@ impl TryFrom<Vec<u8>> for Principal {
                         Err(PrincipalError::BufferTooLong())
                     }
                 }
+                PrincipalClass::Unassigned => Ok(Principal(PrincipalInner::Unassigned(bytes))),
             }
         } else {
             Ok(Principal(PrincipalInner::ManagementCanister))
@@ -198,6 +200,7 @@ impl TryFrom<Vec<u8>> for Principal {
     }
 }
 
+/// Implement try_from for a generic sized slice.
 impl TryFrom<&[u8]> for Principal {
     type Error = PrincipalError;
 
@@ -205,6 +208,25 @@ impl TryFrom<&[u8]> for Principal {
         Self::try_from(bytes.to_vec())
     }
 }
+
+/// Implement try_from for a statically sized slice up to the maximum allowed by the spec.
+macro_rules! impl_try_from_for_size {
+    ($($n: literal),+) => {
+        $(
+            impl TryFrom<&[u8; $n]> for Principal {
+                type Error = PrincipalError;
+
+                fn try_from(bytes: &[u8; $n]) -> Result<Self, Self::Error> {
+                    Self::try_from(bytes.to_vec())
+                }
+            }
+        )*
+    };
+}
+impl_try_from_for_size!(
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
+    27, 28, 29
+);
 
 impl AsRef<[u8]> for Principal {
     fn as_ref(&self) -> &[u8] {
@@ -215,6 +237,7 @@ impl AsRef<[u8]> for Principal {
 impl AsRef<[u8]> for PrincipalInner {
     fn as_ref(&self) -> &[u8] {
         match self {
+            PrincipalInner::Unassigned(v) => v,
             PrincipalInner::ManagementCanister => &[],
             PrincipalInner::OpaqueId(v) => v,
 
@@ -291,14 +314,6 @@ mod tests {
             .unwrap(),
             principal
         );
-    }
-
-    #[test]
-    fn invalid_class() {
-        assert_eq!(
-            Principal::try_from(vec![1u8, 2, 3, 4, 5]),
-            Err(PrincipalError::InvalidPrincipalClass(5))
-        )
     }
 
     #[test]
@@ -380,10 +395,10 @@ mod tests {
 
     #[test]
     fn text_form() {
-        let cid = Principal::try_from(vec![1, 8, 64, 255, 1]).unwrap();
+        let cid = Principal::try_from(vec![1, 8, 64, 255]).unwrap();
         let text = cid.to_text();
         let cid2 = Principal::from_str(&text).unwrap();
         assert_eq!(cid, cid2);
-        assert_eq!(text, "vjh3m-zqbbb-ap6ai");
+        assert_eq!(text, "jkies-sibbb-ap6");
     }
 }

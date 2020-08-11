@@ -665,6 +665,7 @@ where
 mod tests {
     use super::*;
     use crate::{Blob, Principal};
+    use std::convert::TryFrom;
 
     /// The actual example used in the public spec in the Request ID section.
     #[test]
@@ -678,8 +679,7 @@ mod tests {
         };
         let data = PublicSpecExampleStruct {
             request_type: "call",
-            canister_id: Principal::from_str("75hes-oqbaa-aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-q")
-                .unwrap(),
+            canister_id: Principal::try_from(&[0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
             method_name: "hello",
             arg: Blob(b"DIDL\x00\xFD*".to_vec()),
         };
@@ -688,7 +688,7 @@ mod tests {
         let request_id = to_request_id(&data).unwrap();
         assert_eq!(
             hex::encode(request_id.0.to_vec()),
-            "f0d0f53375e0404ee6fd2c6769667f1d4f867d429a736e2a4c54bbaaf29ac738"
+            "8781291c347db32a9d8c10eb62b710fce5a93be676474c42babc74c51858f94b"
         );
     }
 
@@ -706,8 +706,7 @@ mod tests {
             },
         }
         let data = PublicSpec::Call {
-            canister_id: Principal::from_str("75hes-oqbaa-aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-q")
-                .unwrap(),
+            canister_id: Principal::try_from(&[0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
             method_name: "hello".to_owned(),
             arg: Some(Blob(b"DIDL\x00\xFD*".to_vec())),
         };
@@ -716,7 +715,7 @@ mod tests {
         let request_id = to_request_id(&data).unwrap();
         assert_eq!(
             hex::encode(request_id.0.to_vec()),
-            "f0d0f53375e0404ee6fd2c6769667f1d4f867d429a736e2a4c54bbaaf29ac738"
+            "8781291c347db32a9d8c10eb62b710fce5a93be676474c42babc74c51858f94b"
         );
     }
 }
