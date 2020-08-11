@@ -17,7 +17,7 @@ mod agent_test;
 
 use crate::agent::replica_api::{AsyncContent, Envelope, SyncContent};
 use crate::identity::Identity;
-use crate::{to_request_id, Blob, CanisterId, Principal, RequestId};
+use crate::{to_request_id, Blob, Principal, RequestId};
 use reqwest::Method;
 use serde::Serialize;
 
@@ -98,7 +98,7 @@ impl Agent {
             let maybe_user_pass = if cached {
                 pm.cached(http_request.url().as_str())
             } else {
-                pm.required(http_request.url().as_str()).map(|x| Some(x))
+                pm.required(http_request.url().as_str()).map(Some)
             };
 
             if let Some((u, p)) = maybe_user_pass.map_err(AgentError::PasswordError)? {
@@ -229,11 +229,11 @@ impl Agent {
 
     /// The simplest for of query; sends a Blob and will return a Blob. The encoding is
     /// left as an exercise to the user.
-    pub async fn query<'a>(
+    pub async fn query(
         &self,
-        canister_id: &'a CanisterId,
-        method_name: &'a str,
-        arg: &'a Blob,
+        canister_id: &Principal,
+        method_name: &str,
+        arg: &Blob,
     ) -> Result<Blob, AgentError> {
         self.read::<replica_api::QueryResponse>(SyncContent::QueryRequest {
             sender: self.identity.sender()?,
@@ -322,7 +322,7 @@ impl Agent {
 
     pub async fn call_and_wait<W: delay::Waiter>(
         &self,
-        canister_id: &CanisterId,
+        canister_id: &Principal,
         method_name: &str,
         arg: &Blob,
         waiter: W,
@@ -336,7 +336,7 @@ impl Agent {
 
     pub async fn call(
         &self,
-        canister_id: &CanisterId,
+        canister_id: &Principal,
         method_name: &str,
         arg: &Blob,
     ) -> Result<Blob, AgentError> {
@@ -346,7 +346,7 @@ impl Agent {
 
     pub async fn call_raw(
         &self,
-        canister_id: &CanisterId,
+        canister_id: &Principal,
         method_name: &str,
         arg: &Blob,
     ) -> Result<RequestId, AgentError> {
