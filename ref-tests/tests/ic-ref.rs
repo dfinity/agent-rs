@@ -1,12 +1,10 @@
-#![cfg(feature = "ic_ref_tests")]
 use delay::Delay;
 use ic_agent::{
     Agent, AgentConfig, BasicIdentity, Blob, CanisterAttributes, Identity, InstallMode, Principal,
 };
+use ref_tests::universal_canister;
 use ring::signature::Ed25519KeyPair;
 use std::future::Future;
-
-mod universal_canister;
 
 const EXPECTED_IC_API_VERSION: &str = "0.9.2";
 
