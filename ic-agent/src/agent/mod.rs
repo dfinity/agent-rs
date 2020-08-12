@@ -17,11 +17,12 @@ mod agent_test;
 
 use crate::agent::replica_api::{AsyncContent, Envelope, SyncContent};
 use crate::identity::Identity;
-use crate::{to_request_id, Blob, Principal, RequestId};
+use crate::{to_request_id, Blob, Principal, RequestId, Status};
 use reqwest::Method;
 use serde::Serialize;
 
 use public::*;
+use std::convert::TryFrom;
 
 const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 
@@ -360,29 +361,12 @@ impl Agent {
         .await
     }
 
-    pub async fn ping_once(&self) -> Result<serde_cbor::Value, AgentError> {
+    pub async fn status(&self) -> Result<Status, AgentError> {
         let bytes = self.execute::<()>(Method::GET, "status", None).await?;
 
-        Ok(serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)?)
-    }
+        let cbor: serde_cbor::Value =
+            serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)?;
 
-    pub async fn ping<W: delay::Waiter>(
-        &self,
-        mut waiter: W,
-    ) -> Result<serde_cbor::Value, AgentError> {
-        waiter.start();
-        loop {
-            // Break if the server/replica answered but was an error (compared to not being
-            // able to reach the server).
-            match self.ping_once().await {
-                Ok(x) => return Ok(x),
-                Err(AgentError::ReqwestError(_)) => {}
-                Err(x) => return Err(x),
-            }
-
-            waiter
-                .wait()
-                .map_err(|_| AgentError::TimeoutWaitingForResponse)?;
-        }
+        Status::try_from(&cbor).map_err(|_| AgentError::InvalidReplicaStatus)
     }
 }

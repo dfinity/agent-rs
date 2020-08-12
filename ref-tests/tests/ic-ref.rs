@@ -87,7 +87,7 @@ where
 #[test]
 fn status_endpoint() {
     with_agent(|agent| async move {
-        agent.ping_once().await?;
+        agent.status().await?;
         Ok(())
     })
 }
@@ -95,20 +95,10 @@ fn status_endpoint() {
 #[test]
 fn spec_compliance_claimed() {
     with_agent(|agent| async move {
-        let status = agent.ping_once().await?;
+        let status = agent.status().await?;
 
-        match status {
-            serde_cbor::Value::Map(map) => {
-                let key = serde_cbor::Value::from("ic_api_version".to_string());
-                assert_eq!(
-                    map.get(&key),
-                    Some(&serde_cbor::Value::Text(
-                        EXPECTED_IC_API_VERSION.to_string()
-                    ))
-                );
-            }
-            x => assert!(false, "Invalid status return: {:?}", x),
-        }
+        assert_eq!(status.ic_api_version, EXPECTED_IC_API_VERSION);
+
         Ok(())
     });
 }
