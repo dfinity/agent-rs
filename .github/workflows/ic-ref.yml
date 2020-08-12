@@ -87,7 +87,7 @@ jobs:
           sleep 1
           export IC_REF_PORT=$(cat $HOME/ic_ref_port)
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
-          cd main/ic-agent
-          cargo test --features ic_ref_tests --test ic-ref
+          cd main/ref-tests
+          cargo test --all-features
         env:
           RUST_BACKTRACE: 1

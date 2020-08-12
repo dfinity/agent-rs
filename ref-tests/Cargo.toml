@@ -1,0 +1,16 @@
+[package]
+name = "ref-tests"
+version = "0.0.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ic-agent = { path = "../ic-agent" }
+
+[dev-dependencies]
+delay = "0.2.0"
+ring = "0.16.11"
+serde = { version = "1.0.101", features = ["derive"] }
+serde_cbor = "0.11.1"
+tokio = "0.2.22"
