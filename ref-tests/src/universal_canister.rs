@@ -60,6 +60,7 @@ enum Ops {
 ///
 /// Example usage:
 /// ```
+/// use ref_tests::universal_canister::payload;
 /// // Instruct the UC to reply with the bytes encoding "Hello"
 /// let bytes = payload().reply_data(b"Hello").build();
 /// ```
