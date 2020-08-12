@@ -11,10 +11,10 @@ jobs:
         include:
           - build: linux-stable
             os: ubuntu-latest
-            rust: stable
+            rust: 1.45.1
           - build: macos-stable
             os: macos-latest
-            rust: stable
+            rust: 1.45.1
 
     steps:
       - uses: actions/checkout@v2
@@ -46,8 +46,6 @@ jobs:
           rustup default ${{ matrix.rust }}
       - name: Run Tests
         run: |
-          # Do not test all features for ic-agent, as we want to avoid ic_ref_tests.
-          cargo test ic-agent --all-targets
-          cargo test --workspace --exclude ic-agent --all-targets --all-features
+          cargo test --workspace --exclude ref-tests --all-targets --all-features
         env:
           RUST_BACKTRACE: 1

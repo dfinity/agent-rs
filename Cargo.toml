@@ -2,4 +2,5 @@
 members = [
     "ic-agent/",
     "ic-types/",
+    "ref-tests/",
 ]
