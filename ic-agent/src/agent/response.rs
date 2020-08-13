@@ -1,4 +1,4 @@
-use crate::{Blob, Principal};
+use crate::Blob;
 
 /// The response of /api/v1/read with "request_status" request type.
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq)]
@@ -18,6 +18,4 @@ pub enum RequestStatusResponse {
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Replied {
     CallReplied(Blob),
-    CreateCanisterReplied(Principal),
-    InstallCodeReplied,
 }

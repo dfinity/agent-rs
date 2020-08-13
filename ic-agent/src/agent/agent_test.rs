@@ -19,10 +19,7 @@ fn query() -> Result<(), AgentError> {
         .with_body(serde_cbor::to_vec(&response)?)
         .create();
 
-    let agent = Agent::new(AgentConfig {
-        url: &mockito::server_url(),
-        ..AgentConfig::default()
-    })?;
+    let agent = Agent::builder().with_url(&mockito::server_url()).build()?;
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
         agent
@@ -40,11 +37,7 @@ fn query() -> Result<(), AgentError> {
 #[test]
 fn query_error() -> Result<(), AgentError> {
     let read_mock = mock("POST", "/api/v1/read").with_status(500).create();
-
-    let agent = Agent::new(AgentConfig {
-        url: &mockito::server_url(),
-        ..AgentConfig::default()
-    })?;
+    let agent = Agent::builder().with_url(&mockito::server_url()).build()?;
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
 
     let result: Result<Blob, AgentError> = runtime.block_on(async {
@@ -74,8 +67,8 @@ fn query_rejected() -> Result<(), AgentError> {
         .create();
 
     let agent = Agent::new(AgentConfig {
-        url: &mockito::server_url(),
-        ..AgentConfig::default()
+        url: mockito::server_url(),
+        ..Default::default()
     })?;
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
 
@@ -116,8 +109,8 @@ fn call() -> Result<(), AgentError> {
         .create();
 
     let agent = Agent::new(AgentConfig {
-        url: &mockito::server_url(),
-        ..AgentConfig::default()
+        url: mockito::server_url(),
+        ..Default::default()
     })?;
 
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
@@ -146,14 +139,14 @@ fn call_error() -> Result<(), AgentError> {
     let submit_mock = mock("POST", "/api/v1/submit").with_status(500).create();
 
     let agent = Agent::new(AgentConfig {
-        url: &mockito::server_url(),
-        ..AgentConfig::default()
+        url: mockito::server_url(),
+        ..Default::default()
     })?;
 
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
         agent
-            .call(&Principal::management_canister(), "greet", &Blob::empty())
+            .update(&Principal::management_canister(), "greet", &Blob::empty())
             .await
     });
 
@@ -179,8 +172,8 @@ fn call_rejected() -> Result<(), AgentError> {
         .create();
 
     let agent = Agent::new(AgentConfig {
-        url: &mockito::server_url(),
-        ..AgentConfig::default()
+        url: mockito::server_url(),
+        ..Default::default()
     })?;
 
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
@@ -225,8 +218,8 @@ fn status() -> Result<(), AgentError> {
         .create();
 
     let agent = Agent::new(AgentConfig {
-        url: &mockito::server_url(),
-        ..AgentConfig::default()
+        url: mockito::server_url(),
+        ..Default::default()
     })?;
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async { agent.status().await });
@@ -256,8 +249,8 @@ fn status_okay() -> Result<(), AgentError> {
         .create();
 
     let agent = Agent::new(AgentConfig {
-        url: &mockito::server_url(),
-        ..AgentConfig::default()
+        url: mockito::server_url(),
+        ..Default::default()
     })?;
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(agent.status());
@@ -280,8 +273,8 @@ fn status_error() -> Result<(), AgentError> {
     let _read_mock = mock("GET", "/api/v1/status").with_status(500).create();
 
     let agent = Agent::new(AgentConfig {
-        url: &mockito::server_url(),
-        ..AgentConfig::default()
+        url: mockito::server_url(),
+        ..Default::default()
     })?;
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async { agent.status().await });

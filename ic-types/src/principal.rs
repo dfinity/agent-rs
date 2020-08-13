@@ -2,6 +2,7 @@ use sha2::{Digest, Sha224};
 use std::convert::TryFrom;
 use thiserror::Error;
 
+/// An error happened while encoding, decoding or serializing a principal.
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum PrincipalError {
     #[error("Buffer is too long.")]
@@ -19,9 +20,10 @@ pub enum PrincipalError {
 
 const ID_ANONYMOUS_BYTES: &[u8] = &[PrincipalClass::Anonymous as u8];
 
+/// A class of principal. Because this should not be exposed it
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
-pub enum PrincipalClass {
+pub(crate) enum PrincipalClass {
     Unassigned = 0,
     OpaqueId = 1,
     SelfAuthenticating = 2,
@@ -52,11 +54,17 @@ impl TryFrom<u8> for PrincipalClass {
 /// Note a principal is not necessarily tied with a public key-pair,
 /// yet we need at least a key-pair of a related principal to sign
 /// requests.
+///
+/// A Principal can be serialized to a byte array ([`Vec<u8>`]) or a text
+/// representation, but the inner structure of the byte representation
+/// is kept private.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Principal(PrincipalInner);
 
+/// Inner structure of a Principal. This is not meant to be public as the different classes
+/// of principals are not public.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum PrincipalInner {
+enum PrincipalInner {
     /// An empty principal that marks the system canister.
     ManagementCanister,
 
@@ -96,6 +104,7 @@ impl Principal {
         Self(PrincipalInner::SelfAuthenticating(bytes))
     }
 
+    /// An anonymous Principal.
     pub fn anonymous() -> Self {
         Self(PrincipalInner::Anonymous)
     }
@@ -127,10 +136,13 @@ impl Principal {
         }
     }
 
+    /// Returns this Principal's text representation. The text representation is described
+    /// in the spec.
     pub fn to_text(&self) -> String {
         format!("{}", self)
     }
 
+    /// Returns this Principal's
     pub fn as_slice(&self) -> &[u8] {
         self.as_ref()
     }
@@ -161,8 +173,7 @@ impl std::fmt::Display for Principal {
             f.write_fmt(format_args!("{}-", s))?;
             s = rest;
         }
-        write!(f, "{}", s).unwrap();
-        Ok(())
+        f.write_str(&s)
     }
 }
 
@@ -240,7 +251,6 @@ impl AsRef<[u8]> for PrincipalInner {
             PrincipalInner::Unassigned(v) => v,
             PrincipalInner::ManagementCanister => &[],
             PrincipalInner::OpaqueId(v) => v,
-
             PrincipalInner::SelfAuthenticating(v) => v,
             PrincipalInner::DerivedId(v) => v,
             PrincipalInner::Anonymous => ID_ANONYMOUS_BYTES,

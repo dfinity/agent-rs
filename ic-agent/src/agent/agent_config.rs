@@ -18,19 +18,21 @@ pub trait PasswordManager {
     fn required(&self, url: &str) -> Result<(String, String), String>;
 }
 
-pub struct AgentConfig<'a> {
-    pub url: &'a str,
+/// A configuration for an agent.
+pub struct AgentConfig {
+    pub url: String,
     pub nonce_factory: NonceFactory,
     pub identity: Box<dyn Identity>,
     pub default_waiter: delay::Delay,
     pub password_manager: Option<Box<dyn PasswordManager>>,
 }
 
-impl Default for AgentConfig<'_> {
+impl Default for AgentConfig {
     fn default() -> Self {
         Self {
-            // Making sure this is invalid so users have to overwrite it.
-            url: "-",
+            // Making sure this is invalid so users have to overwrite it before constructing
+            // the agent.
+            url: "-".to_owned(),
             nonce_factory: NonceFactory::random(),
             identity: Box::new(DummyIdentity {}),
             default_waiter: delay::Delay::instant(),
