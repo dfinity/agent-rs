@@ -216,9 +216,9 @@ fn status() -> Result<(), AgentError> {
     let mut map = BTreeMap::new();
     map.insert(
         serde_cbor::Value::Text("ic_api_version".to_owned()),
-        serde_cbor::Value::Text(ic_api_version),
+        serde_cbor::Value::Text(ic_api_version.clone()),
     );
-    let response = serde_cbor::Value::Map(map.clone());
+    let response = serde_cbor::Value::Map(map);
     let read_mock = mock("GET", "/api/v1/status")
         .with_status(200)
         .with_body(serde_cbor::to_vec(&response)?)
@@ -234,7 +234,7 @@ fn status() -> Result<(), AgentError> {
     read_mock.assert();
     assert!(matches!(
         result,
-        Ok(Status { ic_api_version, .. }) if ic_api_version == ic_api_version
+        Ok(Status { ic_api_version: v, .. }) if v == ic_api_version
     ));
 
     Ok(())
