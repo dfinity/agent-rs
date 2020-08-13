@@ -46,7 +46,7 @@ enum SubCommand {
 struct CallOpts {
     /// The Canister ID to call.
     #[clap(parse(try_from_str), required = true)]
-    canister: Principal,
+    canister_id: Principal,
 
     /// Path to a candid file to analyze the argument. Otherwise candid will parse the
     /// argument without type hint.
