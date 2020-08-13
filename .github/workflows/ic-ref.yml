@@ -88,6 +88,6 @@ jobs:
           export IC_REF_PORT=$(cat $HOME/ic_ref_port)
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
           cd main/ref-tests
-          cargo test --all-features
+          cargo test --all-features -- --ignored
         env:
           RUST_BACKTRACE: 1

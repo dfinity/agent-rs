@@ -1,3 +1,4 @@
+//! In this file, please mark all tests that require a running ic-ref as ignored.
 use delay::Delay;
 use ic_agent::{
     Agent, AgentConfig, BasicIdentity, Blob, CanisterAttributes, Identity, InstallMode, Principal,
@@ -33,10 +34,11 @@ async fn create_agent() -> Result<Agent, String> {
         .expect("Could not parse the IC_REF_PORT environment variable as an integer.");
 
     Ok(ic_agent::Agent::new(AgentConfig {
-        url: &format!("http://127.0.0.1:{}", port),
+        url: format!("http://127.0.0.1:{}", port),
         identity: create_identity().await?,
         ..AgentConfig::default()
-    })?)
+    })
+    .map_err(|e| format!("{}", e))?)
 }
 
 fn with_agent<F, R>(f: F)
@@ -84,6 +86,7 @@ where
     };
 }
 
+#[ignore]
 #[test]
 fn status_endpoint() {
     with_agent(|agent| async move {
@@ -92,6 +95,7 @@ fn status_endpoint() {
     })
 }
 
+#[ignore]
 #[test]
 fn spec_compliance_claimed() {
     with_agent(|agent| async move {
@@ -112,6 +116,7 @@ mod management_canister {
         use ic_agent::{AgentError, Blob, CanisterAttributes, InstallMode, Principal};
         use std::str::FromStr;
 
+        #[ignore]
         #[test]
         fn no_id_given() {
             with_agent(|agent| async move {
@@ -122,6 +127,7 @@ mod management_canister {
             })
         }
 
+        #[ignore]
         #[test]
         fn create_canister_necessary() {
             with_agent(|agent| async move {
@@ -150,6 +156,7 @@ mod management_canister {
         }
     }
 
+    #[ignore]
     #[test]
     fn management() {
         with_agent(|agent| async move {
@@ -267,17 +274,19 @@ mod simple_calls {
     use crate::universal_canister::payload;
     use ic_agent::{AgentError, Blob};
 
+    #[ignore]
     #[test]
     fn call() {
         with_universal_canister(|agent, canister_id| async move {
             let arg = payload().reply_data(b"hello").build();
-            let result = agent.call(&canister_id, "update", &arg).await?;
+            let result = agent.update(&canister_id, "update", &arg).await?;
 
             assert_eq!(result, Blob::from(b"hello"));
             Ok(())
         })
     }
 
+    #[ignore]
     #[test]
     fn query() {
         with_universal_canister(|agent, canister_id| async move {
@@ -289,11 +298,14 @@ mod simple_calls {
         })
     }
 
+    #[ignore]
     #[test]
     fn non_existant_call() {
         with_universal_canister(|agent, canister_id| async move {
             let arg = payload().reply_data(b"hello").build();
-            let result = agent.call(&canister_id, "non_existent_method", &arg).await;
+            let result = agent
+                .update(&canister_id, "non_existent_method", &arg)
+                .await;
 
             assert!(match result {
                 Err(AgentError::ReplicaError { reject_code: 3, .. }) => true,

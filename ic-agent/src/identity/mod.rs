@@ -1,4 +1,4 @@
-use crate::{AgentError, Blob, Principal};
+use crate::{Blob, Principal};
 
 pub(crate) mod basic;
 pub(crate) mod dummy;
@@ -22,11 +22,11 @@ pub struct Signature {
 pub trait Identity: Send + Sync {
     /// Returns a sender, ie. the Principal ID that is used to sign a request.
     /// Only one sender can be used per request.
-    fn sender(&self) -> Result<Principal, AgentError>;
+    fn sender(&self) -> Result<Principal, String>;
 
     /// Sign a blob, the concatenation of the domain separator & request ID,
     /// creating the sender signature, with the principal passed in.
     /// The principal should be
     /// the same returned by the call to `sender()`.
-    fn sign(&self, blob: &[u8], principal: &Principal) -> Result<Signature, AgentError>;
+    fn sign(&self, blob: &[u8], principal: &Principal) -> Result<Signature, String>;
 }

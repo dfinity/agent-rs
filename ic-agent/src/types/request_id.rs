@@ -226,8 +226,8 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
         // 10 bytes is enough for a 64-bit number in leb128.
         let mut buffer = [0; 10];
         let mut writable = &mut buffer[..];
-        let n_bytes = leb128::write::unsigned(&mut writable, v)
-            .map_err(|e| RequestIdError::Custom(format!("{}", e)))?;
+        let n_bytes =
+            leb128::write::unsigned(&mut writable, v).expect("Could not serialize number.");
         self.serialize_bytes(&buffer[..n_bytes])
     }
 
@@ -447,9 +447,7 @@ impl<'a> ser::SerializeTuple for &'a mut RequestIdSerializer {
     where
         T: ?Sized + Serialize,
     {
-        Err(RequestIdError::Custom(
-            "Unsupported field type: SerializeTuple element.".to_string(),
-        ))
+        Err(RequestIdError::UnsupportedTypeTuple)
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
@@ -466,9 +464,7 @@ impl<'a> ser::SerializeTupleStruct for &'a mut RequestIdSerializer {
     where
         T: ?Sized + Serialize,
     {
-        Err(RequestIdError::Custom(
-            "Unsupported field type: SerializeTupleStruct field.".to_string(),
-        ))
+        Err(RequestIdError::UnsupportedTypeTupleStruct)
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
@@ -493,9 +489,7 @@ impl<'a> ser::SerializeTupleVariant for &'a mut RequestIdSerializer {
     where
         T: ?Sized + Serialize,
     {
-        Err(RequestIdError::Custom(
-            "Unsupported field type: SerializeTupleVariant field.".to_string(),
-        ))
+        Err(RequestIdError::UnsupportedTypeTupleVariant)
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
@@ -627,9 +621,7 @@ impl<'a> ser::SerializeStructVariant for &'a mut RequestIdSerializer {
     where
         T: ?Sized + Serialize,
     {
-        Err(RequestIdError::Custom(
-            "Unsupported field type: SerializeStructVariant field.".to_string(),
-        ))
+        Err(RequestIdError::UnsupportedTypeStructVariant)
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {

@@ -1,5 +1,6 @@
 pub(crate) mod agent_config;
 pub(crate) mod agent_error;
+pub(crate) mod builder;
 pub(crate) mod nonce;
 pub(crate) mod replica_api;
 pub(crate) mod response;
@@ -26,6 +27,32 @@ use std::convert::TryFrom;
 
 const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 
+/// A low level Agent to make calls to a Replica endpoint.
+///
+/// ```
+/// use ic_agent::{Agent, Principal};
+/// use candid::{Encode, Decode, CandidType};
+/// use serde::Deserialize;
+///
+/// #[derive(CandidType, Deserialize)]
+/// struct CreateCanisterResult {
+///   canister_id: candid::Principal,  // Temporarily, while waiting for Candid to use ic-types
+/// }
+///
+/// async fn create_a_canister() -> Result<Principal, Box<dyn std::error::Error>> {
+///   let agent = Agent::builder()
+///     .with_url("http://gw.dfinity.org")
+///     .build()?;
+///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
+///
+///   let response = agent.update(&management_canister_id, "create_canister", &(Encode!()?).into()).await?;
+///   let result = Decode!(response.as_slice(), CreateCanisterResult)?;
+///   let canister_id: Principal = Principal::from_text(&result.canister_id.to_text())?;
+///   Ok(canister_id)
+/// }
+/// ```
+///
+/// This agent does not understand Candid, and only acts on byte buffers.
 pub struct Agent {
     url: reqwest::Url,
     nonce_factory: NonceFactory,
@@ -36,7 +63,14 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub fn new(config: AgentConfig<'_>) -> Result<Agent, AgentError> {
+    /// Create an instance of an [`AgentBuilder`] for building an [`Agent`]. This is simpler than
+    /// using the [`AgentConfig`] and [`Agent::new()`].
+    pub fn builder() -> builder::AgentBuilder {
+        Default::default()
+    }
+
+    /// Create an instance of an [`Agent`].
+    pub fn new(config: AgentConfig) -> Result<Agent, AgentError> {
         let url = config.url;
         let mut tls_config = rustls::ClientConfig::new();
 
@@ -48,9 +82,9 @@ impl Agent {
             .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
 
         Ok(Agent {
-            url: reqwest::Url::parse(url)
+            url: reqwest::Url::parse(&url)
                 .and_then(|url| url.join("api/v1/"))
-                .map_err(|_| AgentError::InvalidClientUrl(String::from(url)))?,
+                .map_err(|_| AgentError::InvalidReplicaUrl(url.clone()))?,
             client: reqwest::Client::builder()
                 .use_preconfigured_tls(tls_config)
                 .build()
@@ -102,7 +136,7 @@ impl Agent {
                 pm.required(http_request.url().as_str()).map(Some)
             };
 
-            if let Some((u, p)) = maybe_user_pass.map_err(AgentError::PasswordError)? {
+            if let Some((u, p)) = maybe_user_pass.map_err(AgentError::AuthenticationError)? {
                 let auth = base64::encode(&format!("{}:{}", u, p));
                 http_request.headers_mut().insert(
                     reqwest::header::AUTHORIZATION,
@@ -189,7 +223,10 @@ impl Agent {
             SyncContent::RequestStatusRequest { .. } => &anonymous,
         };
         let msg = self.construct_message(&request_id);
-        let signature = self.identity.sign(&msg, &sender)?;
+        let signature = self
+            .identity
+            .sign(&msg, &sender)
+            .map_err(AgentError::SigningError)?;
         let bytes = self
             .execute(
                 Method::POST,
@@ -211,7 +248,10 @@ impl Agent {
             AsyncContent::CallRequest { sender, .. } => sender,
         };
         let msg = self.construct_message(&request_id);
-        let signature = self.identity.sign(&msg, &sender)?;
+        let signature = self
+            .identity
+            .sign(&msg, &sender)
+            .map_err(AgentError::SigningError)?;
         let _ = self
             .execute(
                 Method::POST,
@@ -236,7 +276,7 @@ impl Agent {
         arg: &Blob,
     ) -> Result<Blob, AgentError> {
         self.read::<replica_api::QueryResponse>(SyncContent::QueryRequest {
-            sender: self.identity.sender()?,
+            sender: self.identity.sender().map_err(AgentError::SigningError)?,
             canister_id: canister_id.clone(),
             method_name: method_name.to_string(),
             arg: arg.clone(),
@@ -316,35 +356,34 @@ impl Agent {
 
             waiter
                 .wait()
-                .map_err(|_| AgentError::TimeoutWaitingForResponse)?;
+                .map_err(|_| AgentError::TimeoutWaitingForResponse())?;
         }
     }
 
-    pub async fn call_and_wait<W: delay::Waiter>(
+    pub async fn update_and_wait<W: delay::Waiter>(
         &self,
         canister_id: &Principal,
         method_name: &str,
         arg: &Blob,
         waiter: W,
     ) -> Result<Blob, AgentError> {
-        let request_id = self.call_raw(canister_id, method_name, arg).await?;
+        let request_id = self.update_raw(canister_id, method_name, arg).await?;
         match self.request_status_and_wait(&request_id, waiter).await? {
             Replied::CallReplied(arg) => Ok(arg),
-            reply => Err(AgentError::UnexpectedReply(reply)),
         }
     }
 
-    pub async fn call(
+    pub async fn update(
         &self,
         canister_id: &Principal,
         method_name: &str,
         arg: &Blob,
     ) -> Result<Blob, AgentError> {
-        self.call_and_wait(canister_id, method_name, arg, self.default_waiter.clone())
+        self.update_and_wait(canister_id, method_name, arg, self.default_waiter.clone())
             .await
     }
 
-    pub async fn call_raw(
+    pub async fn update_raw(
         &self,
         canister_id: &Principal,
         method_name: &str,
@@ -355,7 +394,7 @@ impl Agent {
             method_name: method_name.into(),
             arg: arg.clone(),
             nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
-            sender: self.identity.sender()?,
+            sender: self.identity.sender().map_err(AgentError::SigningError)?,
         })
         .await
     }

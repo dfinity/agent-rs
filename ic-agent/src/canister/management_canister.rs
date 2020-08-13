@@ -24,14 +24,14 @@ pub enum InstallMode {
 }
 
 impl FromStr for InstallMode {
-    type Err = AgentError;
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "install" => Ok(InstallMode::Install),
             "reinstall" => Ok(InstallMode::Reinstall),
             "upgrade" => Ok(InstallMode::Upgrade),
-            &_ => Err(AgentError::InstallModeError(s.to_string())),
+            &_ => Err(format!("Invalid install mode: {}", s)),
         }
     }
 }
@@ -62,7 +62,7 @@ impl<'agent> ManagementCanister<'agent> {
         let bytes: Vec<u8> = candid::Encode!().unwrap();
         let request_id = self
             .agent
-            .call_raw(
+            .update_raw(
                 &Principal::management_canister(),
                 CREATE_METHOD_NAME,
                 &Blob::from(bytes),
@@ -77,7 +77,6 @@ impl<'agent> ManagementCanister<'agent> {
                 let cid = Decode!(blob.as_slice(), CreateResult)?;
                 Ok(Principal::from_text(cid.canister_id.to_text())?)
             }
-            reply => Err(AgentError::UnexpectedReply(reply)),
         }
     }
 
@@ -100,7 +99,7 @@ impl<'agent> ManagementCanister<'agent> {
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
         let request_id = self
             .agent
-            .call_raw(
+            .update_raw(
                 &Principal::management_canister(),
                 INSTALL_METHOD_NAME,
                 &Blob::from(bytes),
@@ -116,7 +115,6 @@ impl<'agent> ManagementCanister<'agent> {
                 Decode!(&blob.0)?;
                 Ok(())
             }
-            reply => Err(AgentError::UnexpectedReply(reply)),
         }
     }
 }

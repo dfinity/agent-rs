@@ -209,7 +209,7 @@ fn create_identity(maybe_pem: Option<PathBuf>) -> Box<dyn Identity> {
 async fn main() -> Result<(), Box<dyn Error>> {
     let opts: Opts = Opts::parse();
     let agent = Agent::new(AgentConfig {
-        url: &opts.replica,
+        url: opts.replica,
         identity: create_identity(opts.pem),
         ..AgentConfig::default()
     })?;
@@ -225,7 +225,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
             let arg = blob_from_arguments(t.arg_value.as_deref(), &t.arg, &method_type)?;
             let result = match &opts.subcommand {
-                SubCommand::Update(_) => agent.call(&t.canister_id, &t.method_name, &arg).await,
+                SubCommand::Update(_) => agent.update(&t.canister_id, &t.method_name, &arg).await,
                 SubCommand::Query(_) => agent.query(&t.canister_id, &t.method_name, &arg).await,
                 _ => unreachable!(),
             };
