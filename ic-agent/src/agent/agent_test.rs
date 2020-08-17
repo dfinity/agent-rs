@@ -1,6 +1,6 @@
 use crate::agent::replica_api::{CallReply, QueryResponse};
 use crate::agent::response::{Replied, RequestStatusResponse};
-use crate::{Agent, AgentConfig, AgentError, Blob, Principal};
+use crate::{Agent, AgentConfig, AgentError, Blob, Principal, Status};
 use delay::Delay;
 use mockito::mock;
 use std::collections::BTreeMap;
@@ -211,8 +211,14 @@ fn call_rejected() -> Result<(), AgentError> {
 }
 
 #[test]
-fn ping() -> Result<(), AgentError> {
-    let response = serde_cbor::Value::Map(BTreeMap::new());
+fn status() -> Result<(), AgentError> {
+    let ic_api_version = "1.2.3".to_string();
+    let mut map = BTreeMap::new();
+    map.insert(
+        serde_cbor::Value::Text("ic_api_version".to_owned()),
+        serde_cbor::Value::Text(ic_api_version.clone()),
+    );
+    let response = serde_cbor::Value::Map(map);
     let read_mock = mock("GET", "/api/v1/status")
         .with_status(200)
         .with_body(serde_cbor::to_vec(&response)?)
@@ -223,18 +229,27 @@ fn ping() -> Result<(), AgentError> {
         ..AgentConfig::default()
     })?;
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-    let result = runtime.block_on(async { agent.ping(Delay::instant()).await });
+    let result = runtime.block_on(async { agent.status().await });
 
     read_mock.assert();
-
-    assert!(result.is_ok());
+    assert!(match result {
+        Ok(Status {
+            ic_api_version: v, ..
+        }) if v == ic_api_version => true,
+        _ => false,
+    });
 
     Ok(())
 }
 
 #[test]
-fn ping_okay() -> Result<(), AgentError> {
-    let response = serde_cbor::Value::Map(BTreeMap::new());
+fn status_okay() -> Result<(), AgentError> {
+    let mut map = BTreeMap::new();
+    map.insert(
+        serde_cbor::Value::Text("ic_api_version".to_owned()),
+        serde_cbor::Value::Text("1.2.3".to_owned()),
+    );
+    let response = serde_cbor::Value::Map(map);
     let read_mock = mock("GET", "/api/v1/status")
         .with_status(200)
         .with_body(serde_cbor::to_vec(&response)?)
@@ -245,7 +260,7 @@ fn ping_okay() -> Result<(), AgentError> {
         ..AgentConfig::default()
     })?;
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-    let result = runtime.block_on(agent.ping(Delay::instant()));
+    let result = runtime.block_on(agent.status());
 
     read_mock.assert();
 
@@ -259,7 +274,7 @@ fn ping_okay() -> Result<(), AgentError> {
 // We spawn an agent that waits 400ms between requests, and times out after 600ms. The agent is
 // expected to hit the server at ~ 0ms and ~ 400 ms, and then shut down at 600ms, so we check that
 // the server got two requests.
-fn ping_error() -> Result<(), AgentError> {
+fn status_error() -> Result<(), AgentError> {
     // This mock is never asserted as we don't know (nor do we need to know) how many times
     // it is called.
     let _read_mock = mock("GET", "/api/v1/status").with_status(500).create();
@@ -269,16 +284,7 @@ fn ping_error() -> Result<(), AgentError> {
         ..AgentConfig::default()
     })?;
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-    let result = runtime.block_on(async {
-        agent
-            .ping(
-                Delay::builder()
-                    .throttle(Duration::from_millis(4))
-                    .timeout(Duration::from_millis(6))
-                    .build(),
-            )
-            .await
-    });
+    let result = runtime.block_on(async { agent.status().await });
 
     assert!(result.is_err());
 
