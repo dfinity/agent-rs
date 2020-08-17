@@ -54,7 +54,7 @@ struct CallOpts {
     candid: Option<PathBuf>,
 
     #[clap(required = true)]
-    method: String,
+    method_name: String,
 
     /// The type of output (hex or IDL).
     #[clap(long, default_value = "idl")]
@@ -220,12 +220,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         SubCommand::Update(t) | SubCommand::Query(t) => {
             let maybe_candid_path = t.candid.as_ref();
 
-            let method_type = maybe_candid_path.and_then(|path| get_candid_type(&path, &t.method));
+            let method_type =
+                maybe_candid_path.and_then(|path| get_candid_type(&path, &t.method_name));
 
             let arg = blob_from_arguments(t.arg_value.as_deref(), &t.arg, &method_type)?;
             let result = match &opts.subcommand {
-                SubCommand::Update(_) => agent.call(&t.canister, &t.method, &arg).await,
-                SubCommand::Query(_) => agent.query(&t.canister, &t.method, &arg).await,
+                SubCommand::Update(_) => agent.call(&t.canister_id, &t.method_name, &arg).await,
+                SubCommand::Query(_) => agent.query(&t.canister_id, &t.method_name, &arg).await,
                 _ => unreachable!(),
             };
 

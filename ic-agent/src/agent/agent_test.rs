@@ -232,10 +232,10 @@ fn status() -> Result<(), AgentError> {
     let result = runtime.block_on(async { agent.status().await });
 
     read_mock.assert();
-    assert!(matches!(
-        result,
-        Ok(Status { ic_api_version: v, .. }) if v == ic_api_version
-    ));
+    assert!(match result {
+        Ok(Status { ic_api_version: v, .. }) if v == ic_api_version => true,
+        _ => false,
+    });
 
     Ok(())
 }

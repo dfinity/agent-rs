@@ -153,7 +153,7 @@ impl Agent {
             // If the server returned UNAUTHORIZED, and it is the first time we replay the call,
             // check if we can get the username/password for the HTTP Auth.
             if status == reqwest::StatusCode::UNAUTHORIZED {
-                if self.url.scheme() == "https" || matches!(self.url.host_str(), Some("localhost"))
+                if self.url.scheme() == "https" || self.url.host_str() == Some("localhost")
                 {
                     // If there is a password manager, get the username and password from it.
                     self.maybe_add_authorization(&mut http_request, false)?;

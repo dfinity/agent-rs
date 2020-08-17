@@ -139,8 +139,11 @@ mod management_canister {
                     )
                     .await;
 
-                assert!(matches!(result,
-                    Err(AgentError::ReplicaError { reject_code: c, .. }) if c == 3 || c == 5));
+                assert!(match result {
+                    Err(AgentError::ReplicaError { reject_code: c, .. }) if c == 3 || c == 5 =>
+                        true,
+                    _ => false,
+                });
 
                 Ok(())
             })
@@ -166,8 +169,8 @@ mod management_canister {
             .await?;
 
             // Re-install should fail.
-            assert!(matches!(
-                ic00.install_code(
+            let result = ic00
+                .install_code(
                     create_waiter(),
                     &canister_id,
                     InstallMode::Install,
@@ -175,9 +178,11 @@ mod management_canister {
                     &Blob::empty(),
                     &CanisterAttributes::default(),
                 )
-                .await,
-                Err(AgentError::ReplicaError { .. })
-            ));
+                .await;
+            assert!(match result {
+                Err(AgentError::ReplicaError { .. }) => true,
+                _ => false,
+            });
 
             // Reinstall should succeed.
             ic00.install_code(
@@ -195,19 +200,20 @@ mod management_canister {
             let other_ic00 = ic_agent::ManagementCanister::new(&other_agent);
 
             // Reinstall with another agent should fail.
-            assert!(matches!(
-                other_ic00
-                    .install_code(
-                        create_waiter(),
-                        &canister_id,
-                        InstallMode::Reinstall,
-                        &canister_wasm,
-                        &Blob::empty(),
-                        &CanisterAttributes::default(),
-                    )
-                    .await,
-                Err(AgentError::ReplicaError { .. })
-            ));
+            let result = other_ic00
+                .install_code(
+                    create_waiter(),
+                    &canister_id,
+                    InstallMode::Reinstall,
+                    &canister_wasm,
+                    &Blob::empty(),
+                    &CanisterAttributes::default(),
+                )
+                .await;
+            assert!(match result {
+                Err(AgentError::ReplicaError { .. }) => true,
+                _ => false,
+            });
 
             // Upgrade should succeed.
             ic00.install_code(
@@ -221,19 +227,20 @@ mod management_canister {
             .await?;
 
             // Upgrade with another agent should fail.
-            assert!(matches!(
-                other_ic00
-                    .install_code(
-                        create_waiter(),
-                        &canister_id,
-                        InstallMode::Upgrade,
-                        &canister_wasm,
-                        &Blob::empty(),
-                        &CanisterAttributes::default(),
-                    )
-                    .await,
-                Err(AgentError::ReplicaError { .. })
-            ));
+            let result = other_ic00
+                .install_code(
+                    create_waiter(),
+                    &canister_id,
+                    InstallMode::Upgrade,
+                    &canister_wasm,
+                    &Blob::empty(),
+                    &CanisterAttributes::default(),
+                )
+                .await;
+            assert!(match result {
+                Err(AgentError::ReplicaError { .. }) => true,
+                _ => false,
+            });
 
             // Change controller.
             // TODO: set controller tests.
@@ -288,10 +295,10 @@ mod simple_calls {
             let arg = payload().reply_data(b"hello").build();
             let result = agent.call(&canister_id, "non_existent_method", &arg).await;
 
-            assert!(matches!(
-                result,
-                Err(AgentError::ReplicaError { reject_code: 3, .. })
-            ));
+            assert!(match result {
+                Err(AgentError::ReplicaError { reject_code: 3, .. }) => true,
+                _ => false,
+            });
             Ok(())
         })
     }
