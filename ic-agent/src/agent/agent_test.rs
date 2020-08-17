@@ -233,7 +233,9 @@ fn status() -> Result<(), AgentError> {
 
     read_mock.assert();
     assert!(match result {
-        Ok(Status { ic_api_version: v, .. }) if v == ic_api_version => true,
+        Ok(Status {
+            ic_api_version: v, ..
+        }) if v == ic_api_version => true,
         _ => false,
     });
 
