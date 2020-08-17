@@ -38,6 +38,8 @@ pub enum AgentError {
 
     CannotUseAuthenticationOnNonSecureUrl(),
     PasswordError(String),
+
+    InvalidReplicaStatus,
 }
 
 impl Display for AgentError {
