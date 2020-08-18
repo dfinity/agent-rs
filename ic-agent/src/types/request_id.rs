@@ -671,7 +671,7 @@ mod tests {
         };
         let data = PublicSpecExampleStruct {
             request_type: "call",
-            canister_id: Principal::try_from(&[0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
+            canister_id: Principal::try_from(&vec![0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
             method_name: "hello",
             arg: Blob(b"DIDL\x00\xFD*".to_vec()),
         };
@@ -698,7 +698,7 @@ mod tests {
             },
         }
         let data = PublicSpec::Call {
-            canister_id: Principal::try_from(&[0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
+            canister_id: Principal::try_from(&vec![0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
             method_name: "hello".to_owned(),
             arg: Some(Blob(b"DIDL\x00\xFD*".to_vec())),
         };
