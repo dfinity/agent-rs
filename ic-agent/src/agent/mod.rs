@@ -43,9 +43,9 @@ const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 ///   let agent = Agent::builder()
 ///     .with_url("http://gw.dfinity.org")
 ///     .build()?;
-///   let canister_id = Principal::from_text("aaaaa-aa")?;
+///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 ///
-///   let response = agent.update(&canister_id, "create_canister", &(Encode!()?).into()).await?;
+///   let response = agent.update(&management_canister_id, "create_canister", &(Encode!()?).into()).await?;
 ///   let result = Decode!(response.as_slice(), CreateCanisterResult)?;
 ///   let canister_id: Principal = Principal::from_text(&result.canister_id.to_text())?;
 ///   Ok(canister_id)

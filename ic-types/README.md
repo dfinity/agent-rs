@@ -1,7 +1,8 @@
 # IC Types
 
 ## Goal
-This library contains typings and utility functions dealing with the public spec and the HTTP
+This library contains typings and utility functions dealing with the Public specification of the Internet Computer
+ and the HTTP
 client. It might be shared in the future but for now is separated for the purpose of testing and
 development.
 
