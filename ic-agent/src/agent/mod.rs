@@ -367,7 +367,7 @@ impl Agent {
         arg: &Blob,
         waiter: W,
     ) -> Result<Blob, AgentError> {
-        let request_id = self.call_raw(canister_id, method_name, arg).await?;
+        let request_id = self.update_raw(canister_id, method_name, arg).await?;
         match self.request_status_and_wait(&request_id, waiter).await? {
             Replied::CallReplied(arg) => Ok(arg),
         }
@@ -383,7 +383,7 @@ impl Agent {
             .await
     }
 
-    pub async fn call_raw(
+    pub async fn update_raw(
         &self,
         canister_id: &Principal,
         method_name: &str,

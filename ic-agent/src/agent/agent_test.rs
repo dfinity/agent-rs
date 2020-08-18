@@ -116,7 +116,7 @@ fn call() -> Result<(), AgentError> {
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
         let request_id = agent
-            .call_raw(&Principal::management_canister(), "greet", &Blob::empty())
+            .update_raw(&Principal::management_canister(), "greet", &Blob::empty())
             .await?;
         agent.request_status_raw(&request_id).await
     });
@@ -179,7 +179,7 @@ fn call_rejected() -> Result<(), AgentError> {
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result: Result<Replied, AgentError> = runtime.block_on(async {
         let request_id = agent
-            .call_raw(&Principal::management_canister(), "greet", &Blob::empty())
+            .update_raw(&Principal::management_canister(), "greet", &Blob::empty())
             .await?;
         agent
             .request_status_and_wait(&request_id, Delay::timeout(Duration::from_millis(100)))

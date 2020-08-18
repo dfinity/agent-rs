@@ -142,7 +142,7 @@ impl Principal {
         format!("{}", self)
     }
 
-    /// Returns this Principal's
+    /// Returns this Principal's bytes.
     pub fn as_slice(&self) -> &[u8] {
         self.as_ref()
     }

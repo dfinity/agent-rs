@@ -62,7 +62,7 @@ impl<'agent> ManagementCanister<'agent> {
         let bytes: Vec<u8> = candid::Encode!().unwrap();
         let request_id = self
             .agent
-            .call_raw(
+            .update_raw(
                 &Principal::management_canister(),
                 CREATE_METHOD_NAME,
                 &Blob::from(bytes),
@@ -99,7 +99,7 @@ impl<'agent> ManagementCanister<'agent> {
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
         let request_id = self
             .agent
-            .call_raw(
+            .update_raw(
                 &Principal::management_canister(),
                 INSTALL_METHOD_NAME,
                 &Blob::from(bytes),
