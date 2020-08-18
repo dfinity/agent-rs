@@ -223,6 +223,14 @@ impl TryFrom<Vec<u8>> for Principal {
     }
 }
 
+impl TryFrom<&Vec<u8>> for Principal {
+    type Error = PrincipalError;
+
+    fn try_from(bytes: &Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from(bytes.as_slice())
+    }
+}
+
 /// Implement try_from for a generic sized slice.
 impl TryFrom<&[u8]> for Principal {
     type Error = PrincipalError;
@@ -231,25 +239,6 @@ impl TryFrom<&[u8]> for Principal {
         Self::try_from(bytes.to_vec())
     }
 }
-
-/// Implement try_from for a statically sized slice up to the maximum allowed by the spec.
-macro_rules! impl_try_from_for_size {
-    ($($n: literal),+) => {
-        $(
-            impl TryFrom<&[u8; $n]> for Principal {
-                type Error = PrincipalError;
-
-                fn try_from(bytes: &[u8; $n]) -> Result<Self, Self::Error> {
-                    Self::try_from(bytes.to_vec())
-                }
-            }
-        )*
-    };
-}
-impl_try_from_for_size!(
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
-    27, 28, 29
-);
 
 impl AsRef<[u8]> for Principal {
     fn as_ref(&self) -> &[u8] {
@@ -278,7 +267,7 @@ impl serde::Serialize for Principal {
     }
 }
 
-/// Implement the serde feature.
+// Deserialization
 #[cfg(feature = "serde")]
 mod deserialize {
     use super::Principal;
