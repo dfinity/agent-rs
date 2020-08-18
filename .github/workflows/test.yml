@@ -47,8 +47,8 @@ jobs:
       - name: Run Tests
         run: |
           # Test all features and no features.
-          for p in $(cargo metadata --no-deps | jq .packages[].manifest_path); do
-            pushd p
+          for p in $(cargo metadata --no-deps --format-version 1 | jq .packages[].manifest_path); do
+            pushd $(dirname $p)
             cargo test --all-targets --all-features
             cargo test --all-targets --no-default-features
             popd
