@@ -46,6 +46,12 @@ jobs:
           rustup default ${{ matrix.rust }}
       - name: Run Tests
         run: |
-          cargo test --workspace --exclude ref-tests --all-targets --all-features
+          # Test all features and no features.
+          for p in $(cargo metadata --no-deps | jq .packages[].manifest_path); do
+            pushd p
+            cargo test --all-targets --all-features
+            cargo test --all-targets --no-default-features
+            popd
+          done
         env:
           RUST_BACKTRACE: 1
