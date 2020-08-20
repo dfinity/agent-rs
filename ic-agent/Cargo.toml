@@ -18,7 +18,7 @@ openssl = "0.10.24"
 rand = "0.7.2"
 reqwest = { version = "0.10.4", features = [ "blocking", "json", "rustls-tls" ] }
 rustls = "0.18.0"
-ring = "0.16.11"
+ring = { version = "0.16.11", features = ["std"] }
 serde = { version = "1.0.101", features = ["derive"] }
 serde_bytes = "0.11.2"
 serde_cbor = "0.11.1"
@@ -26,12 +26,16 @@ thiserror = "1.0.20"
 url = "2.1.0"
 webpki-roots = "0.20.0"
 
+[dependencies.pem]
+version = "0.8.1"
+optional = true
+
 [dev-dependencies]
 mockito = "0.27.0"
 proptest = "0.9.5"
 tokio = "0.2.22"
 
 [features]
-default = []
+default = ["pem"]
 
 ic_ref_tests = ['default'] # Used to separate integration tests for ic-ref which need a server running.

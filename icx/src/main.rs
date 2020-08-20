@@ -200,23 +200,18 @@ fn print_idl_blob(
 }
 
 fn create_identity(maybe_pem: Option<PathBuf>) -> Box<dyn Identity> {
-    let pkcs8_bytes = if let Some(pem_path) = maybe_pem {
-        pem::parse(std::fs::read(pem_path).unwrap())
-            .unwrap()
-            .contents
-            .as_slice()
-            .to_vec()
+    if let Some(pem_path) = maybe_pem {
+        Box::new(BasicIdentity::from_pem_file(pem_path).expect("Could not read the key pair."))
     } else {
         let rng = ring::rand::SystemRandom::new();
-        ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
+        let pkcs8_bytes = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
             .expect("Could not generate a key pair.")
             .as_ref()
-            .to_vec()
-    };
-
-    Box::new(BasicIdentity::from_key_pair(
-        Ed25519KeyPair::from_pkcs8(&pkcs8_bytes).expect("Could not read the key pair."),
-    ))
+            .to_vec();
+        Box::new(BasicIdentity::from_key_pair(
+            Ed25519KeyPair::from_pkcs8(&pkcs8_bytes).expect("Could not generate the key pair."),
+        ))
+    }
 }
 
 #[tokio::main]
