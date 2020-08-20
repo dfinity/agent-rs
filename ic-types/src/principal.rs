@@ -86,7 +86,7 @@ impl TryFrom<u8> for PrincipalClass {
 /// let id = Principal::from_str("2chl6-4hpzw-vqaaa-aaaaa-c").unwrap();
 ///
 /// // JSON is human readable, so this will serialize to a textual
-/// // representation of the Principal.
+/// // main.rsrepresentation of the Principal.
 /// assert_eq!(
 ///     serde_json::to_string(&Data { id: id.clone() }).unwrap(),
 ///     r#"{"id":"2chl6-4hpzw-vqaaa-aaaaa-c"}"#

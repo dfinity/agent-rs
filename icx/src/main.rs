@@ -7,7 +7,6 @@ use ic_types::Principal;
 use ring::signature::Ed25519KeyPair;
 use std::convert::TryFrom;
 use std::error::Error;
-use std::ffi::OsString;
 use std::path::PathBuf;
 
 #[derive(Clap)]

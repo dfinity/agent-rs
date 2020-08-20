@@ -409,6 +409,10 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
         Err(RequestIdError::UnsupportedTypeStructVariant)
     }
+
+    fn is_human_readable(&self) -> bool {
+        false
+    }
 }
 
 // The following 7 impls deal with the serialization of compound types like
