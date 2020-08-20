@@ -1,6 +1,6 @@
 [package]
 name = "ic-types"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
 description = "Types related to the Internet Computer Public Specification."
