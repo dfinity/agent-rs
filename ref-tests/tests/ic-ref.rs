@@ -264,6 +264,80 @@ mod management_canister {
             )
             .await?;
 
+
+            // Canister Status and Delete tests.
+            let canister_id_3 = ic00.create_canister(create_waiter()).await?;
+            let canister_wasm = Blob::from(b"\0asm\x01\0\0\0");
+
+            // Install once.
+            ic00.install_code(
+                create_waiter(),
+                &canister_id_3,
+                InstallMode::Install,
+                &canister_wasm,
+                &Blob::empty(),
+                &CanisterAttributes::default(),
+            )
+            .await?;
+
+            // A newly installed canister should be running
+            let result = ic00
+                .canister_status(
+                    create_waiter(),
+                    &canister_id_3,
+                )
+                .await;
+            assert!(match result {
+                Ok(ic_agent::CanisterStatus::Running) => true,
+                Ok(ic_agent::CanisterStatus::Stopped) => false,
+                Ok(ic_agent::CanisterStatus::Stopping) => false,
+                Err(AgentError::ReplicaError { .. }) => false,
+                _ => false,
+            });
+
+
+            // Delete a running canister should fail.
+            let result = ic00
+                .delete_canister(
+                    create_waiter(),
+                    &canister_id_3,
+                )
+                .await;
+            assert!(match result {
+                Err(AgentError::ReplicaError { .. }) => true,
+                _ => false,
+            });
+
+
+            // Stop should succeed.
+            ic00.stop_canister(
+                create_waiter(),
+                &canister_id_3,
+            )
+            .await?;
+
+            // Canister should be stopped
+            let result = ic00
+                .canister_status(
+                    create_waiter(),
+                    &canister_id_3,
+                )
+                .await;
+            assert!(match result {
+                Ok(ic_agent::CanisterStatus::Stopped) => true,
+                Ok(ic_agent::CanisterStatus::Stopping) => false,
+                Ok(ic_agent::CanisterStatus::Running) => false,
+                Err(AgentError::ReplicaError { .. }) => false,
+                _ => false,
+            });
+
+            // Delete a stopped canister succeeds.
+            ic00.delete_canister(
+                create_waiter(),
+                &canister_id_3,
+            )
+            .await?;
+
             Ok(())
         })
     }
