@@ -5,6 +5,7 @@ use clap::{crate_authors, crate_version, AppSettings, Clap};
 use ic_agent::{Agent, AgentConfig, AgentError, BasicIdentity, Blob, Identity};
 use ic_types::Principal;
 use ring::signature::Ed25519KeyPair;
+use std::convert::TryFrom;
 use std::error::Error;
 use std::path::PathBuf;
 
@@ -39,6 +40,9 @@ enum SubCommand {
 
     /// Checks the `status` endpoints of the replica.
     Status,
+
+    /// Transform Principal from hex to new text.
+    PrincipalConvert(PrincipalConvertOpts),
 }
 
 /// A subcommand for controlling testing
@@ -85,6 +89,16 @@ impl std::str::FromStr for ArgType {
             other => Err(format!("invalid argument type: {}", other)),
         }
     }
+}
+
+#[derive(Clap)]
+struct PrincipalConvertOpts {
+    /// Convert from hexadecimal to the new group-based Principal text.
+    #[clap(long)]
+    from_hex: Option<String>,
+    /// Convert from the new group-based Principal text to hexadecimal.
+    #[clap(long)]
+    to_hex: Option<String>,
 }
 
 /// Parse IDL file into TypeEnv. This is a best effort function: it will succeed if
@@ -257,6 +271,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         }
         SubCommand::Status => println!("{:#}", agent.status().await?),
+        SubCommand::PrincipalConvert(t) => {
+            if let Some(hex) = &t.from_hex {
+                let p = Principal::try_from(hex::decode(hex).expect("Could not decode hex: {}"))
+                    .expect("Could not transform into a Principal: {}");
+                eprintln!("Principal: {}", p);
+            } else if let Some(txt) = &t.to_hex {
+                let p = Principal::from_text(txt.as_str())
+                    .expect("Could not transform into a Principal: {}");
+                eprintln!("Hexadecimal: {}", hex::encode(p.as_slice()));
+            }
+        }
     }
 
     Ok(())

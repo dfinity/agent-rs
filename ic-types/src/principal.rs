@@ -69,6 +69,35 @@ impl TryFrom<u8> for PrincipalClass {
 /// assert_eq!(principal.to_text(), text);
 /// ```
 ///
+/// Serialization is enabled with the "serde" feature. It supports serializing
+/// to a byte bufer for non-human readable serializer, and a string version for human
+/// readable serializers.
+///
+/// ```
+/// use ic_types::Principal;
+/// use serde::{Deserialize, Serialize};
+/// use std::str::FromStr;
+///
+/// #[derive(Serialize)]
+/// struct Data {
+///     id: Principal,
+/// }
+///
+/// let id = Principal::from_str("2chl6-4hpzw-vqaaa-aaaaa-c").unwrap();
+///
+/// // JSON is human readable, so this will serialize to a textual
+/// // main.rsrepresentation of the Principal.
+/// assert_eq!(
+///     serde_json::to_string(&Data { id: id.clone() }).unwrap(),
+///     r#"{"id":"2chl6-4hpzw-vqaaa-aaaaa-c"}"#
+/// );
+///
+/// // CBOR is not human readable, so will serialize to bytes.
+/// assert_eq!(
+///     serde_cbor::to_vec(&Data { id: id.clone() }).unwrap(),
+///     &[161, 98, 105, 100, 73, 239, 205, 171, 0, 0, 0, 0, 0, 1],
+/// );
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Principal(PrincipalInner);
 
@@ -263,7 +292,11 @@ impl AsRef<[u8]> for PrincipalInner {
 #[cfg(feature = "serde")]
 impl serde::Serialize for Principal {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_bytes(self.0.as_ref())
+        if serializer.is_human_readable() {
+            self.to_text().serialize(serializer)
+        } else {
+            serializer.serialize_bytes(self.0.as_ref())
+        }
     }
 }
 
@@ -281,7 +314,14 @@ mod deserialize {
         type Value = super::Principal;
 
         fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            formatter.write_str("a binary large object (bytes)")
+            formatter.write_str("bytes or string")
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Principal::from_text(v).map_err(E::custom)
         }
 
         fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
