@@ -215,7 +215,7 @@ impl PayloadBuilder {
     }
 
     pub fn build(self) -> Vec<u8> {
-        self.0.to_vec()
+        self.0
     }
 }
 

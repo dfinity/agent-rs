@@ -231,8 +231,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
             let arg = blob_from_arguments(t.arg_value.as_deref(), &t.arg, &method_type)?;
             let result = match &opts.subcommand {
-                SubCommand::Update(_) => agent.update(&t.canister_id, &t.method_name, &arg).await,
-                SubCommand::Query(_) => agent.query(&t.canister_id, &t.method_name, &arg).await,
+                SubCommand::Update(_) => {
+                    agent
+                        .update(&t.canister_id, &t.method_name)
+                        .with_arg(arg)
+                        .call_and_wait(
+                            delay::Delay::builder()
+                                .exponential_backoff(std::time::Duration::from_secs(60), 1.5)
+                                .timeout(std::time::Duration::from_secs(60))
+                                .build(),
+                        )
+                        .await
+                }
+                SubCommand::Query(_) => agent.query_raw(&t.canister_id, &t.method_name, &arg).await,
                 _ => unreachable!(),
             };
 
