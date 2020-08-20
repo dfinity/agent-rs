@@ -318,8 +318,8 @@ mod management_canister {
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 5,
-                    reject_message: _, // reject_message: "canister is stopped",
-                }) => true,
+                    reject_message,
+                }) if reject_message == "canister is stopped" => true,
                 _ => false,
             });
 
@@ -328,8 +328,8 @@ mod management_canister {
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 5,
-                    reject_message: _, // reject_message: "canister is stopped",
-                }) => true,
+                    reject_message,
+                }) if reject_message == "canister is stopped" => true,
                 _ => false,
             });
 
@@ -351,8 +351,8 @@ mod management_canister {
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 3,
-                    reject_message: _, // reject_message: "method does not exist: update"
-                }) => true,
+                    reject_message,
+                }) if reject_message == "method does not exist: update" => true,
                 _ => false,
             });
 
@@ -361,8 +361,8 @@ mod management_canister {
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 3,
-                    reject_message: _, // reject_message: "query method does not exist"
-                }) => true,
+                    reject_message,
+                }) if reject_message == "query method does not exist" => true,
                 _ => false,
             });
 
@@ -387,8 +387,10 @@ mod management_canister {
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 3,
-                    reject_message: _, // reject_message: "canister no longer exists: qfawz-csfaq-aaaaa-aaaaa-c"
-                }) => true,
+                    reject_message,
+                }) if reject_message
+                    == format!("canister no longer exists: {}", canister_id.to_text()) =>
+                    true,
                 _ => false,
             });
 
@@ -397,8 +399,10 @@ mod management_canister {
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 3,
-                    reject_message: _, // reject_message: "canister no longer exists: qfawz-csfaq-aaaaa-aaaaa-c"
-                }) => true,
+                    reject_message,
+                }) if reject_message
+                    == format!("canister no longer exists: {}", canister_id.to_text()) =>
+                    true,
                 _ => false,
             });
 
@@ -407,8 +411,10 @@ mod management_canister {
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 5,
-                    reject_message: _, // reject_message: "canister no longer exists: jgb3o-gclaq-aaaaa-aaaaa-c"
-                }) => true,
+                    reject_message,
+                }) if reject_message
+                    == format!("canister no longer exists: {}", canister_id.to_text()) =>
+                    true,
                 Ok(ic_agent::CanisterStatus::Stopped) => false,
                 Ok(ic_agent::CanisterStatus::Stopping) => false,
                 Ok(ic_agent::CanisterStatus::Running) => false,
@@ -420,8 +426,10 @@ mod management_canister {
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 5,
-                    reject_message: _, // reject_message: "canister no longer exists: jgb3o-gclaq-aaaaa-aaaaa-c"
-                }) => true,
+                    reject_message,
+                }) if reject_message
+                    == format!("canister no longer exists: {}", canister_id.to_text()) =>
+                    true,
                 _ => false,
             });
 
