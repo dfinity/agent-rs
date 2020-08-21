@@ -12,7 +12,7 @@ const START_METHOD_NAME: &str = "start_canister";
 const STATUS_METHOD_NAME: &str = "canister_status";
 const STOP_METHOD_NAME: &str = "stop_canister";
 
-#[derive(Clone, Debug, candid::CandidType, candid::Deserialize)]
+#[derive(Clone, Debug, candid::CandidType, candid::Deserialize, PartialEq)]
 pub enum CanisterStatus {
     #[serde(rename = "running")]
     Running,

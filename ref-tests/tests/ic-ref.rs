@@ -289,26 +289,14 @@ mod management_canister {
 
             // A newly installed canister should be running
             let result = ic00.canister_status(create_waiter(), &canister_id).await;
-            assert!(match result {
-                Ok(ic_agent::CanisterStatus::Running) => true,
-                Ok(ic_agent::CanisterStatus::Stopped) => false,
-                Ok(ic_agent::CanisterStatus::Stopping) => false,
-                Err(AgentError::ReplicaError { .. }) => false,
-                _ => false,
-            });
+            assert_eq!(result?, ic_agent::CanisterStatus::Running);
 
             // Stop should succeed.
             ic00.stop_canister(create_waiter(), &canister_id).await?;
 
             // Canister should be stopped
             let result = ic00.canister_status(create_waiter(), &canister_id).await;
-            assert!(match result {
-                Ok(ic_agent::CanisterStatus::Stopped) => true,
-                Ok(ic_agent::CanisterStatus::Stopping) => false,
-                Ok(ic_agent::CanisterStatus::Running) => false,
-                Err(AgentError::ReplicaError { .. }) => false,
-                _ => false,
-            });
+            assert_eq!(result?, ic_agent::CanisterStatus::Stopped);
 
             // Another stop is a noop
             ic00.stop_canister(create_waiter(), &canister_id).await?;
@@ -338,13 +326,7 @@ mod management_canister {
 
             // Canister should be running
             let result = ic00.canister_status(create_waiter(), &canister_id).await;
-            assert!(match result {
-                Ok(ic_agent::CanisterStatus::Running) => true,
-                Ok(ic_agent::CanisterStatus::Stopped) => false,
-                Ok(ic_agent::CanisterStatus::Stopping) => false,
-                Err(AgentError::ReplicaError { .. }) => false,
-                _ => false,
-            });
+            assert_eq!(result?, ic_agent::CanisterStatus::Running);
 
             // Can call update
             let result = agent.update(&canister_id, "update", &Blob::empty()).await;
