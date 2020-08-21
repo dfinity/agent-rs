@@ -267,6 +267,157 @@ mod management_canister {
             Ok(())
         })
     }
+
+    #[ignore]
+    #[test]
+    fn canister_lifecycle_and_delete() {
+        with_agent(|agent| async move {
+            let ic00 = ic_agent::ManagementCanister::new(&agent);
+            let canister_id = ic00.create_canister(create_waiter()).await?;
+            let canister_wasm = Blob::from(b"\0asm\x01\0\0\0");
+
+            // Install once.
+            ic00.install_code(
+                create_waiter(),
+                &canister_id,
+                InstallMode::Install,
+                &canister_wasm,
+                &Blob::empty(),
+                &CanisterAttributes::default(),
+            )
+            .await?;
+
+            // A newly installed canister should be running
+            let result = ic00.canister_status(create_waiter(), &canister_id).await;
+            assert_eq!(result?, ic_agent::CanisterStatus::Running);
+
+            // Stop should succeed.
+            ic00.stop_canister(create_waiter(), &canister_id).await?;
+
+            // Canister should be stopped
+            let result = ic00.canister_status(create_waiter(), &canister_id).await;
+            assert_eq!(result?, ic_agent::CanisterStatus::Stopped);
+
+            // Another stop is a noop
+            ic00.stop_canister(create_waiter(), &canister_id).await?;
+
+            // Can't call update on a stopped canister
+            let result = agent.update(&canister_id, "update", &Blob::empty()).await;
+            assert!(match result {
+                Err(AgentError::ReplicaError {
+                    reject_code: 5,
+                    reject_message,
+                }) if reject_message == "canister is stopped" => true,
+                _ => false,
+            });
+
+            // Can't call query on a stopped canister
+            let result = agent.query(&canister_id, "query", &Blob::empty()).await;
+            assert!(match result {
+                Err(AgentError::ReplicaError {
+                    reject_code: 5,
+                    reject_message,
+                }) if reject_message == "canister is stopped" => true,
+                _ => false,
+            });
+
+            // Start should succeed.
+            ic00.start_canister(create_waiter(), &canister_id).await?;
+
+            // Canister should be running
+            let result = ic00.canister_status(create_waiter(), &canister_id).await;
+            assert_eq!(result?, ic_agent::CanisterStatus::Running);
+
+            // Can call update
+            let result = agent.update(&canister_id, "update", &Blob::empty()).await;
+            assert!(match result {
+                Err(AgentError::ReplicaError {
+                    reject_code: 3,
+                    reject_message,
+                }) if reject_message == "method does not exist: update" => true,
+                _ => false,
+            });
+
+            // Can call query
+            let result = agent.query(&canister_id, "query", &Blob::empty()).await;
+            assert!(match result {
+                Err(AgentError::ReplicaError {
+                    reject_code: 3,
+                    reject_message,
+                }) if reject_message == "query method does not exist" => true,
+                _ => false,
+            });
+
+            // Another start is a noop
+            ic00.start_canister(create_waiter(), &canister_id).await?;
+
+            // Delete a running canister should fail.
+            let result = ic00.delete_canister(create_waiter(), &canister_id).await;
+            assert!(match result {
+                Err(AgentError::ReplicaError { .. }) => true,
+                _ => false,
+            });
+
+            // Stop should succeed.
+            ic00.stop_canister(create_waiter(), &canister_id).await?;
+
+            // Delete a stopped canister succeeds.
+            ic00.delete_canister(create_waiter(), &canister_id).await?;
+
+            // Cannot call update
+            let result = agent.update(&canister_id, "update", &Blob::empty()).await;
+            assert!(match result {
+                Err(AgentError::ReplicaError {
+                    reject_code: 3,
+                    reject_message,
+                }) if reject_message
+                    == format!("canister no longer exists: {}", canister_id.to_text()) =>
+                    true,
+                _ => false,
+            });
+
+            // Cannot call query
+            let result = agent.query(&canister_id, "query", &Blob::empty()).await;
+            assert!(match result {
+                Err(AgentError::ReplicaError {
+                    reject_code: 3,
+                    reject_message,
+                }) if reject_message
+                    == format!("canister no longer exists: {}", canister_id.to_text()) =>
+                    true,
+                _ => false,
+            });
+
+            // Cannot query canister status
+            let result = ic00.canister_status(create_waiter(), &canister_id).await;
+            assert!(match result {
+                Err(AgentError::ReplicaError {
+                    reject_code: 5,
+                    reject_message,
+                }) if reject_message
+                    == format!("canister no longer exists: {}", canister_id.to_text()) =>
+                    true,
+                Ok(ic_agent::CanisterStatus::Stopped) => false,
+                Ok(ic_agent::CanisterStatus::Stopping) => false,
+                Ok(ic_agent::CanisterStatus::Running) => false,
+                _ => false,
+            });
+
+            // Delete a running canister should fail.
+            let result = ic00.delete_canister(create_waiter(), &canister_id).await;
+            assert!(match result {
+                Err(AgentError::ReplicaError {
+                    reject_code: 5,
+                    reject_message,
+                }) if reject_message
+                    == format!("canister no longer exists: {}", canister_id.to_text()) =>
+                    true,
+                _ => false,
+            });
+
+            Ok(())
+        })
+    }
 }
 
 mod simple_calls {
