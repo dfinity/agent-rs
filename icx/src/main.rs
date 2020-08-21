@@ -5,6 +5,7 @@ use clap::{crate_authors, crate_version, AppSettings, Clap};
 use ic_agent::{Agent, AgentConfig, AgentError, BasicIdentity, Blob, Identity};
 use ic_types::Principal;
 use ring::signature::Ed25519KeyPair;
+use std::convert::TryFrom;
 use std::error::Error;
 use std::path::PathBuf;
 
@@ -39,6 +40,9 @@ enum SubCommand {
 
     /// Checks the `status` endpoints of the replica.
     Status,
+
+    /// Transform Principal from hex to new text.
+    PrincipalConvert(PrincipalConvertOpts),
 }
 
 /// A subcommand for controlling testing
@@ -85,6 +89,16 @@ impl std::str::FromStr for ArgType {
             other => Err(format!("invalid argument type: {}", other)),
         }
     }
+}
+
+#[derive(Clap)]
+struct PrincipalConvertOpts {
+    /// Convert from hexadecimal to the new group-based Principal text.
+    #[clap(long)]
+    from_hex: Option<String>,
+    /// Convert from the new group-based Principal text to hexadecimal.
+    #[clap(long)]
+    to_hex: Option<String>,
 }
 
 /// Parse IDL file into TypeEnv. This is a best effort function: it will succeed if
@@ -186,23 +200,18 @@ fn print_idl_blob(
 }
 
 fn create_identity(maybe_pem: Option<PathBuf>) -> Box<dyn Identity> {
-    let pkcs8_bytes = if let Some(pem_path) = maybe_pem {
-        pem::parse(std::fs::read(pem_path).unwrap())
-            .unwrap()
-            .contents
-            .as_slice()
-            .to_vec()
+    if let Some(pem_path) = maybe_pem {
+        Box::new(BasicIdentity::from_pem_file(pem_path).expect("Could not read the key pair."))
     } else {
         let rng = ring::rand::SystemRandom::new();
-        ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
+        let pkcs8_bytes = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
             .expect("Could not generate a key pair.")
             .as_ref()
-            .to_vec()
-    };
-
-    Box::new(BasicIdentity::from_key_pair(
-        Ed25519KeyPair::from_pkcs8(&pkcs8_bytes).expect("Could not read the key pair."),
-    ))
+            .to_vec();
+        Box::new(BasicIdentity::from_key_pair(
+            Ed25519KeyPair::from_pkcs8(&pkcs8_bytes).expect("Could not generate the key pair."),
+        ))
+    }
 }
 
 #[tokio::main]
@@ -257,6 +266,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         }
         SubCommand::Status => println!("{:#}", agent.status().await?),
+        SubCommand::PrincipalConvert(t) => {
+            if let Some(hex) = &t.from_hex {
+                let p = Principal::try_from(hex::decode(hex).expect("Could not decode hex: {}"))
+                    .expect("Could not transform into a Principal: {}");
+                eprintln!("Principal: {}", p);
+            } else if let Some(txt) = &t.to_hex {
+                let p = Principal::from_text(txt.as_str())
+                    .expect("Could not transform into a Principal: {}");
+                eprintln!("Hexadecimal: {}", hex::encode(p.as_slice()));
+            }
+        }
     }
 
     Ok(())
