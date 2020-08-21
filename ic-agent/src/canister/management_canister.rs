@@ -1,7 +1,7 @@
 use crate::agent::agent_error::AgentError;
 use crate::agent::response::Replied;
 use crate::agent::Agent;
-use crate::{Blob, CanisterAttributes, Principal, RequestId};
+use crate::{Blob, CanisterAttributes, Principal};
 use candid::{Decode, Encode};
 use std::str::FromStr;
 
@@ -78,20 +78,6 @@ impl<'agent> ManagementCanister<'agent> {
         ManagementCanister { agent }
     }
 
-    async fn update_raw_intf(
-        &self,
-        bytes: Vec<u8>,
-        method_name: &str,
-    ) -> Result<RequestId, AgentError> {
-        self.agent
-            .update_raw(
-                &Principal::management_canister(),
-                method_name,
-                &Blob::from(bytes),
-            )
-            .await
-    }
-
     pub async fn canister_status<W: delay::Waiter>(
         &self,
         waiter: W,
@@ -101,7 +87,14 @@ impl<'agent> ManagementCanister<'agent> {
             canister_id: candid::Principal::from_text(canister_id.to_text())?,
         };
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
-        let request_id = self.update_raw_intf(bytes, STATUS_METHOD_NAME).await?;
+        let request_id = self
+            .agent
+            .update_raw(
+                &Principal::management_canister(),
+                STATUS_METHOD_NAME,
+                &Blob::from(bytes),
+            )
+            .await?;
         match self
             .agent
             .request_status_and_wait(&request_id, waiter)
@@ -120,7 +113,14 @@ impl<'agent> ManagementCanister<'agent> {
     ) -> Result<Principal, AgentError> {
         // candid encoding of () i.e. no arguments
         let bytes: Vec<u8> = candid::Encode!().unwrap();
-        let request_id = self.update_raw_intf(bytes, CREATE_METHOD_NAME).await?;
+        let request_id = self
+            .agent
+            .update_raw(
+                &Principal::management_canister(),
+                CREATE_METHOD_NAME,
+                &Blob::from(bytes),
+            )
+            .await?;
         match self
             .agent
             .request_status_and_wait(&request_id, waiter)
@@ -142,7 +142,14 @@ impl<'agent> ManagementCanister<'agent> {
             canister_id: candid::Principal::from_text(canister_id.to_text())?,
         };
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
-        let request_id = self.update_raw_intf(bytes, DELETE_METHOD_NAME).await?;
+        let request_id = self
+            .agent
+            .update_raw(
+                &Principal::management_canister(),
+                DELETE_METHOD_NAME,
+                &Blob::from(bytes),
+            )
+            .await?;
         match self
             .agent
             .request_status_and_wait(&request_id, waiter)
@@ -165,7 +172,14 @@ impl<'agent> ManagementCanister<'agent> {
             canister_id: candid::Principal::from_text(canister_id.to_text())?,
         };
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
-        let request_id = self.update_raw_intf(bytes, START_METHOD_NAME).await?;
+        let request_id = self
+            .agent
+            .update_raw(
+                &Principal::management_canister(),
+                START_METHOD_NAME,
+                &Blob::from(bytes),
+            )
+            .await?;
         match self
             .agent
             .request_status_and_wait(&request_id, waiter)
@@ -188,7 +202,14 @@ impl<'agent> ManagementCanister<'agent> {
             canister_id: candid::Principal::from_text(canister_id.to_text())?,
         };
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
-        let request_id = self.update_raw_intf(bytes, STOP_METHOD_NAME).await?;
+        let request_id = self
+            .agent
+            .update_raw(
+                &Principal::management_canister(),
+                STOP_METHOD_NAME,
+                &Blob::from(bytes),
+            )
+            .await?;
         match self
             .agent
             .request_status_and_wait(&request_id, waiter)
@@ -219,7 +240,14 @@ impl<'agent> ManagementCanister<'agent> {
             compute_allocation: attributes.compute_allocation.map(|x| x.into()),
         };
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
-        let request_id = self.update_raw_intf(bytes, INSTALL_METHOD_NAME).await?;
+        let request_id = self
+            .agent
+            .update_raw(
+                &Principal::management_canister(),
+                INSTALL_METHOD_NAME,
+                &Blob::from(bytes),
+            )
+            .await?;
         match self
             .agent
             .request_status_and_wait(&request_id, waiter)
