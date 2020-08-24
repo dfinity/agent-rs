@@ -1,6 +1,5 @@
 use crate::{Identity, Principal, Signature};
 use ring::signature::{Ed25519KeyPair, KeyPair};
-use std::path::Path;
 use thiserror::Error;
 
 /// An error happened while reading a PEM file to create a BasicIdentity.
@@ -9,6 +8,7 @@ pub enum PemError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
+    #[cfg(feature = "pem")]
     #[error("An error occured while reading the file: {0}")]
     PemError(#[from] pem::PemError),
 
@@ -23,11 +23,13 @@ pub struct BasicIdentity {
 
 impl BasicIdentity {
     /// Create a BasicIdentity from reading a PEM file at the path.
-    pub fn from_pem_file<P: AsRef<Path>>(file_path: P) -> Result<Self, PemError> {
+    #[cfg(feature = "pem")]
+    pub fn from_pem_file<P: AsRef<std::path::Path>>(file_path: P) -> Result<Self, PemError> {
         Self::from_pem(std::fs::File::open(file_path)?)
     }
 
     /// Create a BasicIdentity from reading a PEM File from a Reader.
+    #[cfg(feature = "pem")]
     pub fn from_pem<R: std::io::Read>(pem_reader: R) -> Result<Self, PemError> {
         let bytes: Vec<u8> = pem_reader
             .bytes()
