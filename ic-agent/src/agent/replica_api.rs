@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub struct Envelope<T: Serialize> {
     pub content: T,
+    #[serde(with = "serde_bytes")]
     pub sender_pubkey: Vec<u8>,
+    #[serde(with = "serde_bytes")]
     pub sender_sig: Vec<u8>,
 }
 
@@ -15,10 +17,12 @@ pub enum AsyncContent {
     #[serde(rename = "call")]
     CallRequest {
         #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(with = "serde_bytes")]
         nonce: Option<Vec<u8>>,
         sender: Principal,
         canister_id: Principal,
         method_name: String,
+        #[serde(with = "serde_bytes")]
         arg: Vec<u8>,
     },
 }
@@ -27,12 +31,16 @@ pub enum AsyncContent {
 #[serde(tag = "request_type")]
 pub enum SyncContent {
     #[serde(rename = "request_status")]
-    RequestStatusRequest { request_id: Vec<u8> },
+    RequestStatusRequest {
+        #[serde(with = "serde_bytes")]
+        request_id: Vec<u8>,
+    },
     #[serde(rename = "query")]
     QueryRequest {
         sender: Principal,
         canister_id: Principal,
         method_name: String,
+        #[serde(with = "serde_bytes")]
         arg: Vec<u8>,
     },
 }
@@ -63,6 +71,7 @@ pub enum RequestStatusResponseReplied {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CallReply {
+    #[serde(with = "serde_bytes")]
     pub arg: Vec<u8>,
 }
 
