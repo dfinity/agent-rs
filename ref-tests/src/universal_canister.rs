@@ -5,11 +5,11 @@
 //! Payloads to UC can execute any arbitrary sequence of system methods, making
 //! it possible to test different canister behaviors without having to write up
 //! custom Wat files.
-use ic_agent::{Blob, Principal};
+use ic_agent::Principal;
 use std::path::Path;
 
 /// Load the Universal Canister code from the environment and return its WASM as a blob.
-pub fn wasm() -> Blob {
+pub fn wasm() -> Vec<u8> {
     let canister_env = std::env::var("IC_UNIVERSAL_CANISTER_PATH")
         .expect("Need to specify the IC_UNIVERSAL_CANISTER_PATH environment variable.");
 
@@ -18,9 +18,7 @@ pub fn wasm() -> Blob {
     if !canister_path.exists() {
         panic!("Could not find the universal canister WASM file.");
     } else {
-        let canister_wasm = std::fs::read(&canister_path).expect("Could not read file.");
-
-        Blob(canister_wasm)
+        std::fs::read(&canister_path).expect("Could not read file.")
     }
 }
 
@@ -216,16 +214,16 @@ impl PayloadBuilder {
         self.trap_with_blob(&[]) // No data provided for trap.
     }
 
-    pub fn build(self) -> Blob {
-        Blob::from(self.0)
+    pub fn build(self) -> Vec<u8> {
+        self.0.to_vec()
     }
 }
 
 /// Arguments to be passed into `call_simple`.
 pub struct CallArgs {
-    pub on_reply: Blob,
-    pub on_reject: Blob,
-    pub other_side: Blob,
+    pub on_reply: Vec<u8>,
+    pub on_reject: Vec<u8>,
+    pub other_side: Vec<u8>,
 }
 
 impl Default for CallArgs {
@@ -239,24 +237,24 @@ impl Default for CallArgs {
 }
 
 impl CallArgs {
-    pub fn on_reply<C: Into<Blob>>(mut self, callback: C) -> Self {
+    pub fn on_reply<C: Into<Vec<u8>>>(mut self, callback: C) -> Self {
         self.on_reply = callback.into();
         self
     }
 
-    pub fn on_reject<C: Into<Blob>>(mut self, callback: C) -> Self {
+    pub fn on_reject<C: Into<Vec<u8>>>(mut self, callback: C) -> Self {
         self.on_reject = callback.into();
         self
     }
 
-    pub fn other_side<C: Into<Blob>>(mut self, callback: C) -> Self {
+    pub fn other_side<C: Into<Vec<u8>>>(mut self, callback: C) -> Self {
         self.other_side = callback.into();
         self
     }
 
     // The default on_reply callback.
     // Replies to the caller with whatever arguments passed to it.
-    fn default_on_reply() -> Blob {
+    fn default_on_reply() -> Vec<u8> {
         PayloadBuilder::default()
             .message_payload()
             .reply_data_append()
@@ -266,7 +264,7 @@ impl CallArgs {
 
     // The default on_reject callback.
     // Replies to the caller with the reject code and message.
-    fn default_on_reject() -> Blob {
+    fn default_on_reject() -> Vec<u8> {
         PayloadBuilder::default()
             .reject_code()
             .int_to_blob()
@@ -279,7 +277,7 @@ impl CallArgs {
 
     // The default payload to be executed by the callee.
     // Replies with a message stating who the callee and the caller is.
-    fn default_other_side() -> Blob {
+    fn default_other_side() -> Vec<u8> {
         PayloadBuilder::default()
             .push_bytes(b"Hello ")
             .reply_data_append()

@@ -1,6 +1,6 @@
 use crate::agent::replica_api::{CallReply, QueryResponse};
 use crate::agent::response::{Replied, RequestStatusResponse};
-use crate::{Agent, AgentConfig, AgentError, Blob, Principal, Status};
+use crate::{Agent, AgentConfig, AgentError, Principal, Status};
 use delay::Delay;
 use mockito::mock;
 use std::collections::BTreeMap;
@@ -8,7 +8,7 @@ use std::time::Duration;
 
 #[test]
 fn query() -> Result<(), AgentError> {
-    let blob = Blob(Vec::from("Hello World"));
+    let blob = Vec::from("Hello World");
     let response = QueryResponse::Replied {
         reply: CallReply { arg: blob.clone() },
     };
@@ -23,7 +23,7 @@ fn query() -> Result<(), AgentError> {
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
         agent
-            .query(&Principal::management_canister(), "main", &Blob(vec![]))
+            .query(&Principal::management_canister(), "main", &[])
             .await
     });
 
@@ -40,9 +40,9 @@ fn query_error() -> Result<(), AgentError> {
     let agent = Agent::builder().with_url(&mockito::server_url()).build()?;
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
 
-    let result: Result<Blob, AgentError> = runtime.block_on(async {
+    let result: Result<Vec<u8>, AgentError> = runtime.block_on(async {
         agent
-            .query(&Principal::management_canister(), "greet", &Blob::empty())
+            .query(&Principal::management_canister(), "greet", &[])
             .await
     });
 
@@ -72,9 +72,9 @@ fn query_rejected() -> Result<(), AgentError> {
     })?;
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
 
-    let result: Result<Blob, AgentError> = runtime.block_on(async {
+    let result: Result<Vec<u8>, AgentError> = runtime.block_on(async {
         agent
-            .query(&Principal::management_canister(), "greet", &Blob::empty())
+            .query(&Principal::management_canister(), "greet", &[])
             .await
     });
 
@@ -96,7 +96,7 @@ fn query_rejected() -> Result<(), AgentError> {
 
 #[test]
 fn call() -> Result<(), AgentError> {
-    let blob = Blob(Vec::from("Hello World"));
+    let blob = Vec::from("Hello World");
     let response = QueryResponse::Replied {
         reply: CallReply { arg: blob.clone() },
     };
@@ -116,7 +116,7 @@ fn call() -> Result<(), AgentError> {
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
         let request_id = agent
-            .update_raw(&Principal::management_canister(), "greet", &Blob::empty())
+            .update_raw(&Principal::management_canister(), "greet", &[])
             .await?;
         agent.request_status_raw(&request_id).await
     });
@@ -146,7 +146,7 @@ fn call_error() -> Result<(), AgentError> {
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
         agent
-            .update(&Principal::management_canister(), "greet", &Blob::empty())
+            .update(&Principal::management_canister(), "greet", &[])
             .await
     });
 
@@ -179,7 +179,7 @@ fn call_rejected() -> Result<(), AgentError> {
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result: Result<Replied, AgentError> = runtime.block_on(async {
         let request_id = agent
-            .update_raw(&Principal::management_canister(), "greet", &Blob::empty())
+            .update_raw(&Principal::management_canister(), "greet", &[])
             .await?;
         agent
             .request_status_and_wait(&request_id, Delay::timeout(Duration::from_millis(100)))

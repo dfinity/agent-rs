@@ -18,7 +18,7 @@ mod agent_test;
 
 use crate::agent::replica_api::{AsyncContent, Envelope, SyncContent};
 use crate::identity::Identity;
-use crate::{to_request_id, Blob, Principal, RequestId, Status};
+use crate::{to_request_id, Principal, RequestId, Status};
 use reqwest::Method;
 use serde::Serialize;
 
@@ -45,7 +45,7 @@ const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 ///     .build()?;
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 ///
-///   let response = agent.update(&management_canister_id, "create_canister", &(Encode!()?).into()).await?;
+///   let response = agent.update(&management_canister_id, "create_canister", &Encode!()?).await?;
 ///   let result = Decode!(response.as_slice(), CreateCanisterResult)?;
 ///   let canister_id: Principal = Principal::from_text(&result.canister_id.to_text())?;
 ///   Ok(canister_id)
@@ -99,7 +99,7 @@ impl Agent {
     fn construct_message(&self, request_id: &RequestId) -> Vec<u8> {
         let mut buf = vec![];
         buf.extend_from_slice(DOMAIN_SEPARATOR);
-        buf.extend_from_slice(Blob::from(*request_id).as_slice());
+        buf.extend_from_slice(request_id.as_slice());
         buf
     }
 
@@ -267,19 +267,19 @@ impl Agent {
         Ok(request_id)
     }
 
-    /// The simplest for of query; sends a Blob and will return a Blob. The encoding is
+    /// The simplest form of query; sends a blob and will return a blob. The encoding is
     /// left as an exercise to the user.
     pub async fn query(
         &self,
         canister_id: &Principal,
         method_name: &str,
-        arg: &Blob,
-    ) -> Result<Blob, AgentError> {
+        arg: &[u8],
+    ) -> Result<Vec<u8>, AgentError> {
         self.read::<replica_api::QueryResponse>(SyncContent::QueryRequest {
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
             canister_id: canister_id.clone(),
             method_name: method_name.to_string(),
-            arg: arg.clone(),
+            arg: arg.to_vec(),
         })
         .await
         .and_then(|response| match response {
@@ -364,9 +364,9 @@ impl Agent {
         &self,
         canister_id: &Principal,
         method_name: &str,
-        arg: &Blob,
+        arg: &[u8],
         waiter: W,
-    ) -> Result<Blob, AgentError> {
+    ) -> Result<Vec<u8>, AgentError> {
         let request_id = self.update_raw(canister_id, method_name, arg).await?;
         match self.request_status_and_wait(&request_id, waiter).await? {
             Replied::CallReplied(arg) => Ok(arg),
@@ -377,8 +377,8 @@ impl Agent {
         &self,
         canister_id: &Principal,
         method_name: &str,
-        arg: &Blob,
-    ) -> Result<Blob, AgentError> {
+        arg: &[u8],
+    ) -> Result<Vec<u8>, AgentError> {
         self.update_and_wait(canister_id, method_name, arg, self.default_waiter.clone())
             .await
     }
@@ -387,12 +387,12 @@ impl Agent {
         &self,
         canister_id: &Principal,
         method_name: &str,
-        arg: &Blob,
+        arg: &[u8],
     ) -> Result<RequestId, AgentError> {
         self.submit(AsyncContent::CallRequest {
             canister_id: canister_id.clone(),
             method_name: method_name.into(),
-            arg: arg.clone(),
+            arg: arg.to_vec(),
             nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
         })

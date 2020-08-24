@@ -1,7 +1,7 @@
 //! In this file, please mark all tests that require a running ic-ref as ignored.
 use delay::Delay;
 use ic_agent::{
-    Agent, AgentConfig, BasicIdentity, Blob, CanisterAttributes, Identity, InstallMode, Principal,
+    Agent, AgentConfig, BasicIdentity, CanisterAttributes, Identity, InstallMode, Principal,
 };
 use ref_tests::universal_canister;
 use ring::signature::Ed25519KeyPair;
@@ -74,7 +74,7 @@ where
             &canister_id,
             InstallMode::Install,
             &canister_wasm,
-            &Blob::empty(),
+            &[],
             &CanisterAttributes::default(),
         )
         .await?;
@@ -109,11 +109,11 @@ fn spec_compliance_claimed() {
 
 mod management_canister {
     use super::{create_agent, create_waiter, with_agent};
-    use ic_agent::{AgentError, Blob, CanisterAttributes, InstallMode};
+    use ic_agent::{AgentError, CanisterAttributes, InstallMode};
 
     mod create_canister {
         use super::{create_waiter, with_agent};
-        use ic_agent::{AgentError, Blob, CanisterAttributes, InstallMode, Principal};
+        use ic_agent::{AgentError, CanisterAttributes, InstallMode, Principal};
         use std::str::FromStr;
 
         #[ignore]
@@ -139,8 +139,8 @@ mod management_canister {
                         &Principal::from_str("75hes-oqbaa-aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-q")
                             .unwrap(),
                         InstallMode::Install,
-                        &Blob::empty(),
-                        &Blob::empty(),
+                        &[],
+                        &[],
                         &CanisterAttributes::default(),
                     )
                     .await;
@@ -162,7 +162,7 @@ mod management_canister {
         with_agent(|agent| async move {
             let ic00 = ic_agent::ManagementCanister::new(&agent);
             let canister_id = ic00.create_canister(create_waiter()).await?;
-            let canister_wasm = Blob::from(b"\0asm\x01\0\0\0");
+            let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
 
             // Install once.
             ic00.install_code(
@@ -170,7 +170,7 @@ mod management_canister {
                 &canister_id,
                 InstallMode::Install,
                 &canister_wasm,
-                &Blob::empty(),
+                &[],
                 &CanisterAttributes::default(),
             )
             .await?;
@@ -182,7 +182,7 @@ mod management_canister {
                     &canister_id,
                     InstallMode::Install,
                     &canister_wasm,
-                    &Blob::empty(),
+                    &[],
                     &CanisterAttributes::default(),
                 )
                 .await;
@@ -197,7 +197,7 @@ mod management_canister {
                 &canister_id,
                 InstallMode::Reinstall,
                 &canister_wasm,
-                &Blob::empty(),
+                &[],
                 &CanisterAttributes::default(),
             )
             .await?;
@@ -213,7 +213,7 @@ mod management_canister {
                     &canister_id,
                     InstallMode::Reinstall,
                     &canister_wasm,
-                    &Blob::empty(),
+                    &[],
                     &CanisterAttributes::default(),
                 )
                 .await;
@@ -228,7 +228,7 @@ mod management_canister {
                 &canister_id,
                 InstallMode::Upgrade,
                 &canister_wasm,
-                &Blob::empty(),
+                &[],
                 &CanisterAttributes::default(),
             )
             .await?;
@@ -240,7 +240,7 @@ mod management_canister {
                     &canister_id,
                     InstallMode::Upgrade,
                     &canister_wasm,
-                    &Blob::empty(),
+                    &[],
                     &CanisterAttributes::default(),
                 )
                 .await;
@@ -259,7 +259,7 @@ mod management_canister {
                 &canister_id_2,
                 InstallMode::Reinstall,
                 &canister_wasm,
-                &Blob::empty(),
+                &[],
                 &CanisterAttributes::default(),
             )
             .await?;
@@ -274,7 +274,7 @@ mod management_canister {
         with_agent(|agent| async move {
             let ic00 = ic_agent::ManagementCanister::new(&agent);
             let canister_id = ic00.create_canister(create_waiter()).await?;
-            let canister_wasm = Blob::from(b"\0asm\x01\0\0\0");
+            let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
 
             // Install once.
             ic00.install_code(
@@ -282,7 +282,7 @@ mod management_canister {
                 &canister_id,
                 InstallMode::Install,
                 &canister_wasm,
-                &Blob::empty(),
+                &[],
                 &CanisterAttributes::default(),
             )
             .await?;
@@ -302,7 +302,7 @@ mod management_canister {
             ic00.stop_canister(create_waiter(), &canister_id).await?;
 
             // Can't call update on a stopped canister
-            let result = agent.update(&canister_id, "update", &Blob::empty()).await;
+            let result = agent.update(&canister_id, "update", &[]).await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 5,
@@ -312,7 +312,7 @@ mod management_canister {
             });
 
             // Can't call query on a stopped canister
-            let result = agent.query(&canister_id, "query", &Blob::empty()).await;
+            let result = agent.query(&canister_id, "query", &[]).await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 5,
@@ -329,7 +329,7 @@ mod management_canister {
             assert_eq!(result?, ic_agent::CanisterStatus::Running);
 
             // Can call update
-            let result = agent.update(&canister_id, "update", &Blob::empty()).await;
+            let result = agent.update(&canister_id, "update", &[]).await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 3,
@@ -339,7 +339,7 @@ mod management_canister {
             });
 
             // Can call query
-            let result = agent.query(&canister_id, "query", &Blob::empty()).await;
+            let result = agent.query(&canister_id, "query", &[]).await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 3,
@@ -365,7 +365,7 @@ mod management_canister {
             ic00.delete_canister(create_waiter(), &canister_id).await?;
 
             // Cannot call update
-            let result = agent.update(&canister_id, "update", &Blob::empty()).await;
+            let result = agent.update(&canister_id, "update", &[]).await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 3,
@@ -377,7 +377,7 @@ mod management_canister {
             });
 
             // Cannot call query
-            let result = agent.query(&canister_id, "query", &Blob::empty()).await;
+            let result = agent.query(&canister_id, "query", &[]).await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 3,
@@ -423,7 +423,7 @@ mod management_canister {
 mod simple_calls {
     use super::with_universal_canister;
     use crate::universal_canister::payload;
-    use ic_agent::{AgentError, Blob};
+    use ic_agent::AgentError;
 
     #[ignore]
     #[test]
@@ -432,7 +432,7 @@ mod simple_calls {
             let arg = payload().reply_data(b"hello").build();
             let result = agent.update(&canister_id, "update", &arg).await?;
 
-            assert_eq!(result, Blob::from(b"hello"));
+            assert_eq!(result, b"hello");
             Ok(())
         })
     }
@@ -444,7 +444,7 @@ mod simple_calls {
             let arg = payload().reply_data(b"hello").build();
             let result = agent.query(&canister_id, "query", &arg).await?;
 
-            assert_eq!(result, Blob::from(b"hello"));
+            assert_eq!(result, b"hello");
             Ok(())
         })
     }

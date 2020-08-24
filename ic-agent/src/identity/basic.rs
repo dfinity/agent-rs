@@ -1,4 +1,4 @@
-use crate::{Blob, Identity, Principal, Signature};
+use crate::{Identity, Principal, Signature};
 use ring::signature::{Ed25519KeyPair, KeyPair};
 use std::path::Path;
 use thiserror::Error;
@@ -55,8 +55,8 @@ impl Identity for BasicIdentity {
         let public_key_bytes = self.key_pair.public_key().as_ref();
 
         Ok(Signature {
-            signature: Blob::from(signature.as_ref()),
-            public_key: Blob::from(public_key_bytes),
+            signature: signature.as_ref().to_vec(),
+            public_key: public_key_bytes.to_vec(),
         })
     }
 }

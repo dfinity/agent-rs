@@ -304,15 +304,14 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
     fn serialize_newtype_struct<T: ?Sized>(
         self,
         name: &'static str,
-        value: &T,
+        _value: &T,
     ) -> Result<Self::Ok, Self::Error>
     where
         T: Serialize,
     {
-        match name {
-            "Blob" => value.serialize(self), // value is of type Vec<u8>.
-            v => Err(RequestIdError::UnsupportedTypeNewtypeStruct(v.to_owned())),
-        }
+        Err(RequestIdError::UnsupportedTypeNewtypeStruct(
+            name.to_owned(),
+        ))
     }
 
     /// Serialize a newtype variant like `E::N` in `enum E { N(u8) }`.
@@ -660,7 +659,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Blob, Principal};
+    use crate::Principal;
     use std::convert::TryFrom;
 
     /// The actual example used in the public spec in the Request ID section.
@@ -671,13 +670,14 @@ mod tests {
             request_type: &'static str,
             canister_id: Principal,
             method_name: &'static str,
-            arg: Blob,
+            #[serde(with = "serde_bytes")]
+            arg: Vec<u8>,
         };
         let data = PublicSpecExampleStruct {
             request_type: "call",
             canister_id: Principal::try_from(&vec![0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
             method_name: "hello",
-            arg: Blob(b"DIDL\x00\xFD*".to_vec()),
+            arg: b"DIDL\x00\xFD*".to_vec(),
         };
 
         // Hash taken from the example on the public spec.
@@ -698,13 +698,14 @@ mod tests {
             Call {
                 canister_id: Principal,
                 method_name: String,
-                arg: Option<Blob>,
+                #[serde(with = "serde_bytes")]
+                arg: Option<Vec<u8>>,
             },
         }
         let data = PublicSpec::Call {
             canister_id: Principal::try_from(&vec![0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
             method_name: "hello".to_owned(),
-            arg: Some(Blob(b"DIDL\x00\xFD*".to_vec())),
+            arg: Some(b"DIDL\x00\xFD*".to_vec()),
         };
 
         // Hash taken from the example on the public spec.

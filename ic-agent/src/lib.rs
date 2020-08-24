@@ -27,7 +27,7 @@
 //!     .build()?;
 //!   let canister_id = Principal::from_text("aaaaa-aa")?;
 //!
-//!   let response = agent.update(&canister_id, "create_canister", &(Encode!()?).into()).await?;
+//!   let response = agent.update(&canister_id, "create_canister", &Encode!()?).await?;
 //!   let result = Decode!(response.as_slice(), CreateCanisterResult)?;
 //!   let canister_id: Principal = Principal::from_text(&result.canister_id.to_text())?;
 //!   Ok(canister_id)

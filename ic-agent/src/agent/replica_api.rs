@@ -1,12 +1,12 @@
-use crate::{Blob, Principal};
+use crate::Principal;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct Envelope<T: Serialize> {
     pub content: T,
-    pub sender_pubkey: Blob,
-    pub sender_sig: Blob,
+    pub sender_pubkey: Vec<u8>,
+    pub sender_sig: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -15,11 +15,11 @@ pub enum AsyncContent {
     #[serde(rename = "call")]
     CallRequest {
         #[serde(skip_serializing_if = "Option::is_none")]
-        nonce: Option<Blob>,
+        nonce: Option<Vec<u8>>,
         sender: Principal,
         canister_id: Principal,
         method_name: String,
-        arg: Blob,
+        arg: Vec<u8>,
     },
 }
 
@@ -27,13 +27,13 @@ pub enum AsyncContent {
 #[serde(tag = "request_type")]
 pub enum SyncContent {
     #[serde(rename = "request_status")]
-    RequestStatusRequest { request_id: Blob },
+    RequestStatusRequest { request_id: Vec<u8> },
     #[serde(rename = "query")]
     QueryRequest {
         sender: Principal,
         canister_id: Principal,
         method_name: String,
-        arg: Blob,
+        arg: Vec<u8>,
     },
 }
 
@@ -63,7 +63,7 @@ pub enum RequestStatusResponseReplied {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CallReply {
-    pub arg: Blob,
+    pub arg: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
