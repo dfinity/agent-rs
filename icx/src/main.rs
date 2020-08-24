@@ -2,7 +2,7 @@ use candid::parser::value::IDLValue;
 use candid::types::{Function, Type};
 use candid::{check_prog, IDLArgs, IDLProg, TypeEnv};
 use clap::{crate_authors, crate_version, AppSettings, Clap};
-use ic_agent::{Agent, AgentConfig, AgentError, BasicIdentity, Blob, Identity};
+use ic_agent::{Agent, AgentConfig, AgentError, BasicIdentity, Identity};
 use ic_types::Principal;
 use ring::signature::Ed25519KeyPair;
 use std::convert::TryFrom;
@@ -128,7 +128,7 @@ fn blob_from_arguments(
     arguments: Option<&str>,
     arg_type: &ArgType,
     method_type: &Option<(candid::parser::typing::TypeEnv, candid::types::Function)>,
-) -> Result<Blob, String> {
+) -> Result<Vec<u8>, String> {
     match arg_type {
         ArgType::Raw => {
             let bytes = hex::decode(&arguments.unwrap_or(""))
@@ -169,28 +169,25 @@ fn blob_from_arguments(
             Ok(typed_args)
         }
     }
-    .map(Blob::from)
 }
 
 fn print_idl_blob(
-    blob: &Blob,
+    blob: &[u8],
     output_type: &ArgType,
     method_type: &Option<(TypeEnv, Function)>,
 ) -> Result<(), String> {
     match output_type {
         ArgType::Raw => {
-            let hex_string = hex::encode(&(*blob.0));
+            let hex_string = hex::encode(blob);
             println!("{}", hex_string);
         }
         ArgType::Idl => {
             let result = match method_type {
-                None => candid::IDLArgs::from_bytes(&(*blob.0)),
-                Some((env, func)) => {
-                    candid::IDLArgs::from_bytes_with_types(&(*blob.0), &env, &func.rets)
-                }
+                None => candid::IDLArgs::from_bytes(blob),
+                Some((env, func)) => candid::IDLArgs::from_bytes_with_types(blob, &env, &func.rets),
             };
             if result.is_err() {
-                let hex_string = hex::encode(&(*blob.0));
+                let hex_string = hex::encode(blob);
                 eprintln!("Error deserializing blob 0x{}", hex_string);
             }
             println!("{}", result.map_err(|e| format!("{:?}", e))?);

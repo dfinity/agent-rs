@@ -1,7 +1,7 @@
 use crate::agent::agent_error::AgentError;
 use crate::agent::response::Replied;
 use crate::agent::Agent;
-use crate::{Blob, CanisterAttributes, Principal};
+use crate::{CanisterAttributes, Principal};
 use candid::{Decode, Encode};
 use std::str::FromStr;
 
@@ -92,7 +92,7 @@ impl<'agent> ManagementCanister<'agent> {
             .update_raw(
                 &Principal::management_canister(),
                 STATUS_METHOD_NAME,
-                &Blob::from(bytes),
+                &bytes,
             )
             .await?;
         match self
@@ -118,7 +118,7 @@ impl<'agent> ManagementCanister<'agent> {
             .update_raw(
                 &Principal::management_canister(),
                 CREATE_METHOD_NAME,
-                &Blob::from(bytes),
+                &bytes,
             )
             .await?;
         match self
@@ -147,7 +147,7 @@ impl<'agent> ManagementCanister<'agent> {
             .update_raw(
                 &Principal::management_canister(),
                 DELETE_METHOD_NAME,
-                &Blob::from(bytes),
+                &bytes,
             )
             .await?;
         match self
@@ -157,7 +157,7 @@ impl<'agent> ManagementCanister<'agent> {
         {
             // Candid type returned is () so validating the result.
             Replied::CallReplied(blob) => {
-                Decode!(&blob.0)?;
+                Decode!(&blob)?;
                 Ok(())
             }
         }
@@ -174,11 +174,7 @@ impl<'agent> ManagementCanister<'agent> {
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
         let request_id = self
             .agent
-            .update_raw(
-                &Principal::management_canister(),
-                START_METHOD_NAME,
-                &Blob::from(bytes),
-            )
+            .update_raw(&Principal::management_canister(), START_METHOD_NAME, &bytes)
             .await?;
         match self
             .agent
@@ -187,7 +183,7 @@ impl<'agent> ManagementCanister<'agent> {
         {
             // Candid type returned is () so validating the result.
             Replied::CallReplied(blob) => {
-                Decode!(&blob.0)?;
+                Decode!(&blob)?;
                 Ok(())
             }
         }
@@ -204,11 +200,7 @@ impl<'agent> ManagementCanister<'agent> {
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
         let request_id = self
             .agent
-            .update_raw(
-                &Principal::management_canister(),
-                STOP_METHOD_NAME,
-                &Blob::from(bytes),
-            )
+            .update_raw(&Principal::management_canister(), STOP_METHOD_NAME, &bytes)
             .await?;
         match self
             .agent
@@ -217,7 +209,7 @@ impl<'agent> ManagementCanister<'agent> {
         {
             // Candid type returned is () so validating the result.
             Replied::CallReplied(blob) => {
-                Decode!(&blob.0)?;
+                Decode!(&blob)?;
                 Ok(())
             }
         }
@@ -228,15 +220,15 @@ impl<'agent> ManagementCanister<'agent> {
         waiter: W,
         canister_id: &Principal,
         mode: InstallMode,
-        module: &Blob,
-        arg: &Blob,
+        module: &[u8],
+        arg: &[u8],
         attributes: &CanisterAttributes,
     ) -> Result<(), AgentError> {
         let canister_to_install = CanisterInstall {
             mode,
             canister_id: candid::Principal::from_text(canister_id.to_text())?,
-            wasm_module: module.as_slice().to_vec(),
-            arg: arg.as_slice().to_vec(),
+            wasm_module: module.to_vec(),
+            arg: arg.to_vec(),
             compute_allocation: attributes.compute_allocation.map(|x| x.into()),
         };
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
@@ -245,7 +237,7 @@ impl<'agent> ManagementCanister<'agent> {
             .update_raw(
                 &Principal::management_canister(),
                 INSTALL_METHOD_NAME,
-                &Blob::from(bytes),
+                &bytes,
             )
             .await?;
         match self
@@ -255,7 +247,7 @@ impl<'agent> ManagementCanister<'agent> {
         {
             // Candid type returned is () so validating the result.
             Replied::CallReplied(blob) => {
-                Decode!(&blob.0)?;
+                Decode!(&blob)?;
                 Ok(())
             }
         }

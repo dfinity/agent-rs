@@ -1,4 +1,4 @@
-use crate::{Blob, Principal};
+use crate::Principal;
 
 pub(crate) mod basic;
 pub(crate) mod dummy;
@@ -10,8 +10,8 @@ pub(crate) mod public {
 
 #[derive(Clone, Debug)]
 pub struct Signature {
-    pub public_key: Blob,
-    pub signature: Blob,
+    pub public_key: Vec<u8>,
+    pub signature: Vec<u8>,
 }
 
 /// An Identity takes a request id and returns the [Signature]. Since it

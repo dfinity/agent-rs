@@ -1,5 +1,5 @@
 use crate::identity::Identity;
-use crate::{Blob, Principal, Signature};
+use crate::{Principal, Signature};
 
 pub(crate) struct DummyIdentity {}
 
@@ -10,8 +10,8 @@ impl Identity for DummyIdentity {
 
     fn sign(&self, _blob: &[u8], _principal: &Principal) -> Result<Signature, String> {
         Ok(Signature {
-            signature: Blob::from(vec![1; 32]),
-            public_key: Blob::from(vec![2; 32]),
+            signature: vec![1; 32],
+            public_key: vec![2; 32],
         })
     }
 }

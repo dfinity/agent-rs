@@ -1,15 +1,14 @@
-use crate::Blob;
 use rand::rngs::OsRng;
 use rand::Rng;
 use std::sync::Mutex;
 
 /// A Factory for nonce blobs.
 pub struct NonceFactory {
-    inner: Mutex<Box<dyn Iterator<Item = Blob> + Send>>,
+    inner: Mutex<Box<dyn Iterator<Item = Vec<u8>> + Send>>,
 }
 
 impl NonceFactory {
-    pub fn from_iterator(iter: Box<dyn Iterator<Item = Blob> + Send>) -> Self {
+    pub fn from_iterator(iter: Box<dyn Iterator<Item = Vec<u8>> + Send>) -> Self {
         Self {
             inner: Mutex::new(iter),
         }
@@ -27,7 +26,7 @@ impl NonceFactory {
         Self::from_iterator(Box::new(IncrementingIter { next: 0 }))
     }
 
-    pub fn generate(&self) -> Option<Blob> {
+    pub fn generate(&self) -> Option<Vec<u8>> {
         self.inner.lock().unwrap().next()
     }
 }
@@ -35,17 +34,17 @@ impl NonceFactory {
 struct RandomBlobIter {}
 
 impl Iterator for RandomBlobIter {
-    type Item = Blob;
+    type Item = Vec<u8>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        Some(Blob(OsRng.gen::<[u8; 16]>().to_vec()))
+        Some(OsRng.gen::<[u8; 16]>().to_vec())
     }
 }
 
 struct EmptyBlobIter {}
 
 impl Iterator for EmptyBlobIter {
-    type Item = Blob;
+    type Item = Vec<u8>;
 
     fn next(&mut self) -> Option<Self::Item> {
         None
@@ -57,10 +56,10 @@ struct IncrementingIter {
 }
 
 impl Iterator for IncrementingIter {
-    type Item = Blob;
+    type Item = Vec<u8>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let blob = Blob(self.next.to_le_bytes().to_vec());
+        let blob = self.next.to_le_bytes().to_vec();
         self.next += 1;
         Some(blob)
     }
