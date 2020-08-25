@@ -40,23 +40,23 @@ jobs:
         uses: actions/cache@v1
         with:
           path: ~/.cargo/registry
-          key: ${{ matrix.build }}-cargo-registry-${{ hashFiles('main/**/Cargo.lock') }}
+          key: ${{ matrix.build }}-cargo-registry-${{ hashFiles('main/**/Cargo.toml') }}
           restore-keys: |
-            ${{ matrix.build }}-cargo-registry-
+            ${{ matrix.build }}-cargo-registry-${{ hashFiles('main/**/Cargo.toml') }}
       - name: Cache Cargo index
         uses: actions/cache@v1
         with:
           path: ~/.cargo/git
-          key: ${{ matrix.build }}-cargo-index-${{ hashFiles('main/**/Cargo.lock') }}
+          key: ${{ matrix.build }}-cargo-index-${{ hashFiles('main/**/Cargo.toml') }}
           restore-keys: |
-            ${{ matrix.build }}-cargo-index-
+            ${{ matrix.build }}-cargo-index-${{ hashFiles('main/**/Cargo.toml') }}
       - name: Cache Cargo build
         uses: actions/cache@v1
         with:
           path: main/target
-          key: ${{ matrix.build }}-target-${{ hashFiles('main/**/Cargo.lock') }}
+          key: ${{ matrix.build }}-target-${{ hashFiles('main/**/Cargo.toml') }}
           restore-keys: |
-            ${{ matrix.build }}-target-
+            ${{ matrix.build }}-target-${{ hashFiles('main/**/Cargo.toml') }}
       - name: Install Rust
         run: |
           rustup update ${{ matrix.rust }} --no-self-update

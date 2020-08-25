@@ -302,7 +302,10 @@ mod management_canister {
             ic00.stop_canister(create_waiter(), &canister_id).await?;
 
             // Can't call update on a stopped canister
-            let result = agent.update_raw(&canister_id, "update", &[]).await;
+            let result = agent
+                .update(&canister_id, "update")
+                .call_and_wait(create_waiter())
+                .await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 5,
@@ -329,7 +332,10 @@ mod management_canister {
             assert_eq!(result?, ic_agent::CanisterStatus::Running);
 
             // Can call update
-            let result = agent.update_raw(&canister_id, "update", &[]).await;
+            let result = agent
+                .update(&canister_id, "update")
+                .call_and_wait(create_waiter())
+                .await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 3,
@@ -365,7 +371,10 @@ mod management_canister {
             ic00.delete_canister(create_waiter(), &canister_id).await?;
 
             // Cannot call update
-            let result = agent.update_raw(&canister_id, "update", &[]).await;
+            let result = agent
+                .update(&canister_id, "update")
+                .call_and_wait(create_waiter())
+                .await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 3,
@@ -421,7 +430,7 @@ mod management_canister {
 }
 
 mod simple_calls {
-    use super::with_universal_canister;
+    use super::{create_waiter, with_universal_canister};
     use crate::universal_canister::payload;
     use ic_agent::AgentError;
 
@@ -430,7 +439,11 @@ mod simple_calls {
     fn call() {
         with_universal_canister(|agent, canister_id| async move {
             let arg = payload().reply_data(b"hello").build();
-            let result = agent.update_raw(&canister_id, "update", &arg).await?;
+            let result = agent
+                .update(&canister_id, "update")
+                .with_arg(&arg)
+                .call_and_wait(create_waiter())
+                .await?;
 
             assert_eq!(result.as_slice(), b"hello");
             Ok(())
@@ -455,7 +468,9 @@ mod simple_calls {
         with_universal_canister(|agent, canister_id| async move {
             let arg = payload().reply_data(b"hello").build();
             let result = agent
-                .update_raw(&canister_id, "non_existent_method", &arg)
+                .update(&canister_id, "non_existent_method")
+                .with_arg(&arg)
+                .call_and_wait(create_waiter())
                 .await;
 
             assert!(match result {

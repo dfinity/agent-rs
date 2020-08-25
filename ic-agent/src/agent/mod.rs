@@ -314,7 +314,31 @@ impl Agent {
     }
 
     /// The simplest way to do an update call; sends a byte array and will return a RequestId.
-    /// The RequestId should then be waited on.
+    /// The RequestId should then be used for request_status (most likely in a loop).
+    ///
+    /// ```
+    /// use ic_agent::{Agent, Replied, RequestStatusResponse};
+    /// use ic_types::Principal;
+    ///
+    /// // Imagine a Canister on the IC with a query function that echos input.
+    ///
+    /// async fn query_example() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let agent = Agent::builder().with_url("https://gw.dfinity.org").build()?;
+    ///     let canister_id = Principal::from_text("w7x7r-cok77-xa")?;
+    ///     let request_id = agent.update_raw(&canister_id, "echo", &[1, 2, 3]).await?;
+    ///     // Give the IC 10 seconds to process the update call.
+    ///     // THIS IS EXAMPLE CODE. In a real application we want to poll multiple times
+    ///     // and not just sleep a fixed duration. Calls can take between 2 seconds and
+    ///     // sometimes minutes (depending on the canister code itself).
+    ///     std::thread::sleep(std::time::Duration::from_secs(10));
+    ///     let status = agent.request_status_raw(&request_id).await?;
+    ///     assert_eq!(
+    ///       status,
+    ///       RequestStatusResponse::Replied { reply: Replied::CallReplied(vec![1, 2, 3]) }
+    ///     );
+    ///     Ok(())
+    /// }
+    /// ```
     pub async fn update_raw(
         &self,
         canister_id: &Principal,
