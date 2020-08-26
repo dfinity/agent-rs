@@ -1,0 +1,16 @@
+on: push
+name: Publish Cargo docs
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@master #TODO(hans) change this to pinned
+
+    - name: Publish
+      uses: netlify/actions/cli@master #TODO(hans) change this to pinned
+      with:
+        args: deploy --dir=cargo-docs
+      env:
+        NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
