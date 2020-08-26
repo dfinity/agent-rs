@@ -4,7 +4,7 @@ pub(crate) mod basic;
 pub(crate) mod dummy;
 
 pub(crate) mod public {
-    pub use super::basic::BasicIdentity;
+    pub use super::basic::{BasicIdentity, PemError};
     pub use super::{Identity, Signature};
 }
 
