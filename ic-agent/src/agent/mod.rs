@@ -322,8 +322,8 @@ impl Agent {
     ///
     /// // Imagine a Canister on the IC with a query function that echos input.
     ///
-    /// async fn query_example() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let agent = Agent::builder().with_url("https://gw.dfinity.org").build()?;
+    /// async fn update_example() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let agent = Agent::builder().with_url("localhost:8000").build()?;
     ///     let canister_id = Principal::from_text("w7x7r-cok77-xa")?;
     ///     let request_id = agent.update_raw(&canister_id, "echo", &[1, 2, 3]).await?;
     ///     // Give the IC 10 seconds to process the update call.
@@ -338,6 +338,9 @@ impl Agent {
     ///     );
     ///     Ok(())
     /// }
+    ///
+    /// # let mut runtime = tokio::runtime::Runtime::new().unwrap();
+    /// # runtime.block_on(async { update_example().await.unwrap() });
     /// ```
     pub async fn update_raw(
         &self,
