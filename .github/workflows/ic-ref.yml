@@ -100,5 +100,7 @@ jobs:
           sleep 1
           export IC_REF_PORT=$(cat $HOME/ic_ref_port)
           cd main
-          cargo test --all-features --doc
+          cargo test --all-features --doc -- --ignored
           killall ic-ref
+        env:
+          RUST_BACKTRACE: 1

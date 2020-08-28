@@ -30,7 +30,7 @@ const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 
 /// A low level Agent to make calls to a Replica endpoint.
 ///
-/// ```
+/// ```no_run
 /// use ic_agent::{Agent, Principal};
 /// use candid::{Encode, Decode, CandidType};
 /// use serde::Deserialize;
@@ -42,7 +42,7 @@ const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 ///
 /// async fn create_a_canister() -> Result<Principal, Box<dyn std::error::Error>> {
 ///   let agent = Agent::builder()
-///     .with_url("http://gw.dfinity.org")
+///     .with_url("http://gw.dfinity.network")
 ///     .build()?;
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 ///
@@ -274,14 +274,12 @@ impl Agent {
     /// The encoding is left as an exercise to the user.
     ///
     /// This can be used as follow:
-    /// ```
+    /// ```no_run
     /// use ic_agent::Agent;
     /// use ic_types::Principal;
     ///
-    /// // Imagine a Canister on the IC with a query function that echos input.
-    ///
     /// async fn query_example() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let agent = Agent::builder().with_url("https://gw.dfinity.org").build()?;
+    ///     let agent = Agent::builder().with_url("https://gw.dfinity.network").build()?;
     ///     let canister_id = Principal::from_text("w7x7r-cok77-xa")?;
     ///     let response = agent.query_raw(&canister_id, "echo", &[1, 2, 3]).await?;
     ///     assert_eq!(response, &[1, 2, 3]);
@@ -316,21 +314,17 @@ impl Agent {
     /// The simplest way to do an update call; sends a byte array and will return a RequestId.
     /// The RequestId should then be used for request_status (most likely in a loop).
     ///
-    /// ```
+    /// ```no_run
     /// use ic_agent::{Agent, Replied, RequestStatusResponse};
     /// use ic_types::Principal;
     ///
-    /// // Imagine a Canister on the IC with a query function that echos input.
-    ///
     /// async fn update_example() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let agent = Agent::builder().with_url("localhost:8000").build()?;
+    ///     let agent = Agent::builder().with_url("https://gw.dfinity.network/").build()?;
     ///     let canister_id = Principal::from_text("w7x7r-cok77-xa")?;
     ///     let request_id = agent.update_raw(&canister_id, "echo", &[1, 2, 3]).await?;
-    ///     // Give the IC 10 seconds to process the update call.
-    ///     // THIS IS EXAMPLE CODE. In a real application we want to poll multiple times
-    ///     // and not just sleep a fixed duration. Calls can take between 2 seconds and
-    ///     // sometimes minutes (depending on the canister code itself).
-    ///     std::thread::sleep(std::time::Duration::from_secs(10));
+    ///
+    ///     // Give the IC some time to process the update call.
+    ///
     ///     let status = agent.request_status_raw(&request_id).await?;
     ///     assert_eq!(
     ///       status,
@@ -338,9 +332,6 @@ impl Agent {
     ///     );
     ///     Ok(())
     /// }
-    ///
-    /// # let mut runtime = tokio::runtime::Runtime::new().unwrap();
-    /// # runtime.block_on(async { update_example().await.unwrap() });
     /// ```
     pub async fn update_raw(
         &self,
