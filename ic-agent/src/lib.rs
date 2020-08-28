@@ -11,7 +11,7 @@
 //! The following examples show how to use the `Agent` low-level API to send a call to the management
 //! canister to create a new canister ID.
 //!
-//! ```rust,ignore
+//! ```ignore
 //! # // This test is ignored because it requires an ic to be running. We run these
 //! # // in the ic-ref workflow.
 //! use ic_agent::{Agent, Principal};
@@ -34,9 +34,11 @@
 //! #     )
 //! # }
 //! #
+//! # const URL: &'static str = concat!("http://localhost:", env!("IC_REF_PORT"));
+//! #
 //! async fn create_a_canister() -> Result<Principal, Box<dyn std::error::Error>> {
 //!   let agent = Agent::builder()
-//!     .with_url("http://localhost:8001")
+//!     .with_url(URL)
 //!     .with_identity(create_identity())
 //!     .build()?;
 //!   let management_canister_id = Principal::from_text("aaaaa-aa")?;

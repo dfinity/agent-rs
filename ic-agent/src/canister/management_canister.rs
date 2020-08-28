@@ -86,13 +86,13 @@ impl<'agent> ManagementCanister<'agent> {
             canister_id: candid::Principal::from_text(canister_id.to_text())?,
         };
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
-        let blob = self
+        let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), STATUS_METHOD_NAME)
             .with_arg(&bytes)
             .call_and_wait(waiter)
             .await?;
-        let reply = Decode!(&blob, StatusReply)?;
+        let reply = Decode!(&bytes_to_decode, StatusReply)?;
         Ok(reply.status)
     }
 
@@ -102,14 +102,14 @@ impl<'agent> ManagementCanister<'agent> {
     ) -> Result<Principal, AgentError> {
         // candid encoding of () i.e. no arguments
         let bytes: Vec<u8> = candid::Encode!().unwrap();
-        let blob = self
+        let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), CREATE_METHOD_NAME)
             .with_arg(&bytes)
             .call_and_wait(waiter)
             .await?;
 
-        let cid = Decode!(blob.as_slice(), CanisterRecord)?;
+        let cid = Decode!(bytes_to_decode.as_slice(), CanisterRecord)?;
         Ok(Principal::from_text(cid.canister_id.to_text())?)
     }
 
@@ -122,14 +122,14 @@ impl<'agent> ManagementCanister<'agent> {
             canister_id: candid::Principal::from_text(canister_id.to_text())?,
         };
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
-        let blob = self
+        let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), DELETE_METHOD_NAME)
             .with_arg(&bytes)
             .call_and_wait(waiter)
             .await?;
         // Candid type returned is () so validating the result.
-        Decode!(&blob)?;
+        Decode!(&bytes_to_decode)?;
         Ok(())
     }
 
@@ -142,14 +142,14 @@ impl<'agent> ManagementCanister<'agent> {
             canister_id: candid::Principal::from_text(canister_id.to_text())?,
         };
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
-        let blob = self
+        let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), START_METHOD_NAME)
             .with_arg(&bytes)
             .call_and_wait(waiter)
             .await?;
         // Candid type returned is () so validating the result.
-        Decode!(&blob)?;
+        Decode!(&bytes_to_decode)?;
         Ok(())
     }
 
@@ -162,14 +162,14 @@ impl<'agent> ManagementCanister<'agent> {
             canister_id: candid::Principal::from_text(canister_id.to_text())?,
         };
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
-        let blob = self
+        let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), STOP_METHOD_NAME)
             .with_arg(&bytes)
             .call_and_wait(waiter)
             .await?;
         // Candid type returned is () so validating the result.
-        Decode!(&blob)?;
+        Decode!(&bytes_to_decode)?;
         Ok(())
     }
 
@@ -190,7 +190,7 @@ impl<'agent> ManagementCanister<'agent> {
             compute_allocation: attributes.compute_allocation.map(|x| x.into()),
         };
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
-        let blob = self
+        let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), INSTALL_METHOD_NAME)
             .with_arg(&bytes)
@@ -198,7 +198,7 @@ impl<'agent> ManagementCanister<'agent> {
             .await?;
 
         // Candid type returned is () so validating the result.
-        Decode!(blob.as_slice())?;
+        Decode!(bytes_to_decode.as_slice())?;
         Ok(())
     }
 }
