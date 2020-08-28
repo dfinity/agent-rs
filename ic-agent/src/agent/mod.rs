@@ -19,6 +19,7 @@ mod agent_test;
 use crate::agent::replica_api::{AsyncContent, Envelope, SyncContent};
 use crate::identity::Identity;
 use crate::{to_request_id, Principal, RequestId, Status};
+use delay::Waiter;
 use reqwest::Method;
 use serde::Serialize;
 
@@ -29,34 +30,65 @@ const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 
 /// A low level Agent to make calls to a Replica endpoint.
 ///
-/// ```
+/// ```ignore
+/// # // This test is ignored because it requires an ic to be running. We run these
+/// # // in the ic-ref workflow.
 /// use ic_agent::{Agent, Principal};
 /// use candid::{Encode, Decode, CandidType};
 /// use serde::Deserialize;
 ///
 /// #[derive(CandidType, Deserialize)]
 /// struct CreateCanisterResult {
-///   canister_id: candid::Principal,  // Temporarily, while waiting for Candid to use ic-types
+///   canister_id: candid::Principal,
 /// }
 ///
+/// # fn create_identity() -> impl ic_agent::Identity {
+/// #     let rng = ring::rand::SystemRandom::new();
+/// #     let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
+/// #         .expect("Could not generate a key pair.");
+/// #
+/// #     ic_agent::BasicIdentity::from_key_pair(
+/// #         ring::signature::Ed25519KeyPair::from_pkcs8(key_pair.as_ref())
+/// #           .expect("Could not read the key pair."),
+/// #     )
+/// # }
+/// #
+/// # const URL: &'static str = concat!("http://localhost:", env!("IC_REF_PORT"));
+/// #
 /// async fn create_a_canister() -> Result<Principal, Box<dyn std::error::Error>> {
 ///   let agent = Agent::builder()
-///     .with_url("http://gw.dfinity.org")
+///     .with_url(URL)
+///     .with_identity(create_identity())
 ///     .build()?;
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
+///   let waiter = delay::Delay::builder()
+///     .throttle(std::time::Duration::from_millis(500))
+///     .timeout(std::time::Duration::from_secs(10))
+///     .build();
 ///
-///   let response = agent.update(&management_canister_id, "create_canister", &Encode!()?).await?;
+///   // Create a call to the management canister to create a new canister ID,
+///   // and wait for a result.
+///   let response = agent.update(&management_canister_id, "create_canister")
+///     .with_arg(&Encode!()?)  // Empty Candid.
+///     .call_and_wait(waiter)
+///     .await?;
+///
 ///   let result = Decode!(response.as_slice(), CreateCanisterResult)?;
 ///   let canister_id: Principal = Principal::from_text(&result.canister_id.to_text())?;
 ///   Ok(canister_id)
 /// }
+///
+/// # let mut runtime = tokio::runtime::Runtime::new().unwrap();
+/// # runtime.block_on(async {
+/// let canister_id = create_a_canister().await.unwrap();
+/// eprintln!("{}", canister_id);
+/// # });
 /// ```
 ///
 /// This agent does not understand Candid, and only acts on byte buffers.
 pub struct Agent {
     url: reqwest::Url,
     nonce_factory: NonceFactory,
-    default_waiter: delay::Delay,
     client: reqwest::Client,
     identity: Box<dyn Identity>,
     password_manager: Option<Box<dyn PasswordManager>>,
@@ -91,7 +123,6 @@ impl Agent {
                 .expect("Could not create HTTP client."),
             nonce_factory: config.nonce_factory,
             identity: config.identity,
-            default_waiter: config.default_waiter,
             password_manager: config.password_manager,
         })
     }
@@ -212,7 +243,7 @@ impl Agent {
         }
     }
 
-    async fn read<A>(&self, request: SyncContent) -> Result<A, AgentError>
+    async fn read_endpoint<A>(&self, request: SyncContent) -> Result<A, AgentError>
     where
         A: serde::de::DeserializeOwned,
     {
@@ -242,7 +273,7 @@ impl Agent {
         serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
     }
 
-    async fn submit(&self, request: AsyncContent) -> Result<RequestId, AgentError> {
+    async fn submit_endpoint(&self, request: AsyncContent) -> Result<RequestId, AgentError> {
         let request_id = to_request_id(&request)?;
         let sender = match request.clone() {
             AsyncContent::CallRequest { sender, .. } => sender,
@@ -267,15 +298,29 @@ impl Agent {
         Ok(request_id)
     }
 
-    /// The simplest form of query; sends a blob and will return a blob. The encoding is
-    /// left as an exercise to the user.
-    pub async fn query(
+    /// The simplest way to do a query call; sends a byte array and will return a byte vector.
+    /// The encoding is left as an exercise to the user.
+    ///
+    /// This can be used as follow:
+    /// ```no_run
+    /// use ic_agent::Agent;
+    /// use ic_types::Principal;
+    ///
+    /// async fn query_example() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let agent = Agent::builder().with_url("https://gw.dfinity.network").build()?;
+    ///     let canister_id = Principal::from_text("w7x7r-cok77-xa")?;
+    ///     let response = agent.query_raw(&canister_id, "echo", &[1, 2, 3]).await?;
+    ///     assert_eq!(response, &[1, 2, 3]);
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn query_raw(
         &self,
         canister_id: &Principal,
         method_name: &str,
         arg: &[u8],
     ) -> Result<Vec<u8>, AgentError> {
-        self.read::<replica_api::QueryResponse>(SyncContent::QueryRequest {
+        self.read_endpoint::<replica_api::QueryResponse>(SyncContent::QueryRequest {
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
             canister_id: canister_id.clone(),
             method_name: method_name.to_string(),
@@ -294,16 +339,49 @@ impl Agent {
         })
     }
 
-    pub async fn request_status(&self, request_id: &RequestId) -> Result<Replied, AgentError> {
-        self.request_status_and_wait(request_id, self.default_waiter.clone())
-            .await
+    /// The simplest way to do an update call; sends a byte array and will return a RequestId.
+    /// The RequestId should then be used for request_status (most likely in a loop).
+    ///
+    /// ```no_run
+    /// use ic_agent::{Agent, Replied, RequestStatusResponse};
+    /// use ic_types::Principal;
+    ///
+    /// async fn update_example() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let agent = Agent::builder().with_url("https://gw.dfinity.network/").build()?;
+    ///     let canister_id = Principal::from_text("w7x7r-cok77-xa")?;
+    ///     let request_id = agent.update_raw(&canister_id, "echo", &[1, 2, 3]).await?;
+    ///
+    ///     // Give the IC some time to process the update call.
+    ///
+    ///     let status = agent.request_status_raw(&request_id).await?;
+    ///     assert_eq!(
+    ///       status,
+    ///       RequestStatusResponse::Replied { reply: Replied::CallReplied(vec![1, 2, 3]) }
+    ///     );
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn update_raw(
+        &self,
+        canister_id: &Principal,
+        method_name: &str,
+        arg: &[u8],
+    ) -> Result<RequestId, AgentError> {
+        self.submit_endpoint(AsyncContent::CallRequest {
+            canister_id: canister_id.clone(),
+            method_name: method_name.into(),
+            arg: arg.to_vec(),
+            nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
+            sender: self.identity.sender().map_err(AgentError::SigningError)?,
+        })
+        .await
     }
 
     pub async fn request_status_raw(
         &self,
         request_id: &RequestId,
     ) -> Result<RequestStatusResponse, AgentError> {
-        self.read(SyncContent::RequestStatusRequest {
+        self.read_endpoint(SyncContent::RequestStatusRequest {
             request_id: request_id.as_slice().into(),
         })
         .await
@@ -330,16 +408,63 @@ impl Agent {
         })
     }
 
-    pub async fn request_status_and_wait<W: delay::Waiter>(
-        &self,
-        request_id: &RequestId,
-        mut waiter: W,
-    ) -> Result<Replied, AgentError> {
+    pub fn update<S: ToString>(&self, canister_id: &Principal, method_name: S) -> UpdateBuilder {
+        UpdateBuilder::new(self, canister_id.clone(), method_name.to_string())
+    }
+
+    pub async fn status(&self) -> Result<Status, AgentError> {
+        let bytes = self.execute::<()>(Method::GET, "status", None).await?;
+
+        let cbor: serde_cbor::Value =
+            serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)?;
+
+        Status::try_from(&cbor).map_err(|_| AgentError::InvalidReplicaStatus)
+    }
+}
+
+/// An Update Request Builder.
+///
+/// This makes it easier to do update calls without actually passing all arguments or specifying
+/// if you want to wait or not.
+pub struct UpdateBuilder<'agent> {
+    agent: &'agent Agent,
+    canister_id: Principal,
+    method_name: String,
+    arg: Vec<u8>,
+}
+
+impl<'agent> UpdateBuilder<'agent> {
+    pub fn new(agent: &'agent Agent, canister_id: Principal, method_name: String) -> Self {
+        Self {
+            agent,
+            canister_id,
+            method_name,
+            arg: vec![],
+        }
+    }
+
+    pub fn with_arg<A: AsRef<[u8]>>(&mut self, arg: A) -> &mut Self {
+        self.arg = arg.as_ref().to_vec();
+        self
+    }
+
+    pub async fn call_and_wait<W: Waiter>(&self, mut waiter: W) -> Result<Vec<u8>, AgentError> {
+        let request_id = self
+            .agent
+            .update_raw(
+                &self.canister_id,
+                self.method_name.as_str(),
+                self.arg.as_slice(),
+            )
+            .await?;
+
         waiter.start();
 
         loop {
-            match self.request_status_raw(request_id).await? {
-                RequestStatusResponse::Replied { reply } => return Ok(reply),
+            match self.agent.request_status_raw(&request_id).await? {
+                RequestStatusResponse::Replied {
+                    reply: Replied::CallReplied(arg),
+                } => return Ok(arg),
                 RequestStatusResponse::Rejected {
                     reject_code,
                     reject_message,
@@ -360,51 +485,13 @@ impl Agent {
         }
     }
 
-    pub async fn update_and_wait<W: delay::Waiter>(
-        &self,
-        canister_id: &Principal,
-        method_name: &str,
-        arg: &[u8],
-        waiter: W,
-    ) -> Result<Vec<u8>, AgentError> {
-        let request_id = self.update_raw(canister_id, method_name, arg).await?;
-        match self.request_status_and_wait(&request_id, waiter).await? {
-            Replied::CallReplied(arg) => Ok(arg),
-        }
-    }
-
-    pub async fn update(
-        &self,
-        canister_id: &Principal,
-        method_name: &str,
-        arg: &[u8],
-    ) -> Result<Vec<u8>, AgentError> {
-        self.update_and_wait(canister_id, method_name, arg, self.default_waiter.clone())
+    pub async fn call(&self) -> Result<RequestId, AgentError> {
+        self.agent
+            .update_raw(
+                &self.canister_id,
+                self.method_name.as_str(),
+                self.arg.as_slice(),
+            )
             .await
-    }
-
-    pub async fn update_raw(
-        &self,
-        canister_id: &Principal,
-        method_name: &str,
-        arg: &[u8],
-    ) -> Result<RequestId, AgentError> {
-        self.submit(AsyncContent::CallRequest {
-            canister_id: canister_id.clone(),
-            method_name: method_name.into(),
-            arg: arg.to_vec(),
-            nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
-            sender: self.identity.sender().map_err(AgentError::SigningError)?,
-        })
-        .await
-    }
-
-    pub async fn status(&self) -> Result<Status, AgentError> {
-        let bytes = self.execute::<()>(Method::GET, "status", None).await?;
-
-        let cbor: serde_cbor::Value =
-            serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)?;
-
-        Status::try_from(&cbor).map_err(|_| AgentError::InvalidReplicaStatus)
     }
 }
