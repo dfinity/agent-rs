@@ -30,31 +30,55 @@ const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 
 /// A low level Agent to make calls to a Replica endpoint.
 ///
-/// ```no_run
+/// ```ignore
+/// # // This test is ignored because it requires an ic to be running. We run these
+/// # // in the ic-ref workflow.
 /// use ic_agent::{Agent, Principal};
 /// use candid::{Encode, Decode, CandidType};
 /// use serde::Deserialize;
 ///
-/// #[derive(CandidType, Deserialize)]
-/// struct CreateCanisterResult {
-///   canister_id: candid::Principal,  // Temporarily, while waiting for Candid to use ic-types
-/// }
-///
+/// # #[derive(CandidType, Deserialize)]
+/// # struct CreateCanisterResult {
+/// #   canister_id: candid::Principal,  // Temporarily, while waiting for Candid to use ic-types
+/// # }
+/// # fn create_identity() -> impl ic_agent::Identity {
+/// #     let rng = ring::rand::SystemRandom::new();
+/// #     let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
+/// #         .expect("Could not generate a key pair.");
+/// #
+/// #     ic_agent::BasicIdentity::from_key_pair(
+/// #         ring::signature::Ed25519KeyPair::from_pkcs8(key_pair.as_ref())
+/// #           .expect("Could not read the key pair."),
+/// #     )
+/// # }
+/// #
 /// async fn create_a_canister() -> Result<Principal, Box<dyn std::error::Error>> {
 ///   let agent = Agent::builder()
-///     .with_url("http://gw.dfinity.network")
+///     .with_url("http://localhost:8001")
+///     .with_identity(create_identity())
 ///     .build()?;
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
+///   let waiter = delay::Delay::builder()
+///     .throttle(std::time::Duration::from_millis(500))
+///     .timeout(std::time::Duration::from_secs(10))
+///     .build();
 ///
-///   let response = agent.update_raw(
-///     &management_canister_id,
-///     "create_canister",
-///     &(Encode!()?),
-///   ).await?;
+///   // Create a call to the management canister to create a new canister ID,
+///   // and wait for a result.
+///   let response = agent.update(&management_canister_id, "create_canister")
+///     .with_arg(&Encode!()?)  // Empty Candid.
+///     .call_and_wait(waiter)
+///     .await?;
 ///   let result = Decode!(response.as_slice(), CreateCanisterResult)?;
 ///   let canister_id: Principal = Principal::from_text(&result.canister_id.to_text())?;
 ///   Ok(canister_id)
 /// }
+/// #
+/// # let mut runtime = tokio::runtime::Runtime::new().unwrap();
+/// # runtime.block_on(async {
+/// let canister_id = create_a_canister().await.unwrap();
+/// eprintln!("{}", canister_id);
+/// # });
 /// ```
 ///
 /// This agent does not understand Candid, and only acts on byte buffers.
