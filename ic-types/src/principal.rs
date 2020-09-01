@@ -16,6 +16,9 @@ pub enum PrincipalError {
 
     #[error("Text cannot be converted to a Principal; too small.")]
     TextTooSmall(),
+
+    #[error("A custom tool returned an error instead of a Principal: {0}")]
+    ExternalError(String),
 }
 
 const ID_ANONYMOUS_BYTES: &[u8] = &[PrincipalClass::Anonymous as u8];

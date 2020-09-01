@@ -22,9 +22,9 @@ pub trait PasswordManager {
 pub struct AgentConfig {
     pub url: String,
     pub nonce_factory: NonceFactory,
-    pub identity: Box<dyn Identity>,
+    pub identity: Box<dyn Identity + Send + Sync>,
     pub default_waiter: delay::Delay,
-    pub password_manager: Option<Box<dyn PasswordManager>>,
+    pub password_manager: Option<Box<dyn PasswordManager + Send + Sync>>,
 }
 
 impl Default for AgentConfig {

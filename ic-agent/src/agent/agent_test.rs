@@ -235,7 +235,9 @@ fn status() -> Result<(), AgentError> {
 
 #[test]
 fn status_okay() -> Result<(), AgentError> {
+    use std::path::*;
     let mut map = BTreeMap::new();
+
     map.insert(
         serde_cbor::Value::Text("ic_api_version".to_owned()),
         serde_cbor::Value::Text("1.2.3".to_owned()),
