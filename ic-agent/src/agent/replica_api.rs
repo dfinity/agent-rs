@@ -19,6 +19,7 @@ pub enum AsyncContent {
         #[serde(skip_serializing_if = "Option::is_none")]
         #[serde(with = "serde_bytes")]
         nonce: Option<Vec<u8>>,
+        ingress_expiry : u64,
         sender: Principal,
         canister_id: Principal,
         method_name: String,
@@ -32,11 +33,13 @@ pub enum AsyncContent {
 pub enum SyncContent {
     #[serde(rename = "request_status")]
     RequestStatusRequest {
+        ingress_expiry: u64,
         #[serde(with = "serde_bytes")]
         request_id: Vec<u8>,
     },
     #[serde(rename = "query")]
     QueryRequest {
+        ingress_expiry: u64,
         sender: Principal,
         canister_id: Principal,
         method_name: String,

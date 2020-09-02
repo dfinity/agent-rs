@@ -325,6 +325,7 @@ impl Agent {
             canister_id: canister_id.clone(),
             method_name: method_name.to_string(),
             arg: arg.to_vec(),
+            ingress_expiry: ,
         })
         .await
         .and_then(|response| match response {
@@ -373,6 +374,7 @@ impl Agent {
             arg: arg.to_vec(),
             nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
+            ingress_expiry: ,
         })
         .await
     }
@@ -383,6 +385,7 @@ impl Agent {
     ) -> Result<RequestStatusResponse, AgentError> {
         self.read_endpoint(SyncContent::RequestStatusRequest {
             request_id: request_id.as_slice().into(),
+            ingress_expiry: ,
         })
         .await
         .map(|response| match response {
