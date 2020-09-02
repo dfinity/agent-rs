@@ -408,7 +408,11 @@ impl Agent {
         })
     }
 
-    pub fn update<S: ToString>(&self, canister_id: &Principal, method_name: S) -> UpdateBuilder {
+    pub fn update<S: ToString>(
+        &self,
+        canister_id: &Principal,
+        method_name: S,
+    ) -> UpdateBuilder<'_> {
         UpdateBuilder::new(self, canister_id.clone(), method_name.to_string())
     }
 
