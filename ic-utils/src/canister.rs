@@ -101,17 +101,21 @@ impl<'agent> Canister<'agent, ()> {
     }
 }
 
-pub struct AsyncCallBuilder<'canister, 'agent, I, O, Mapping>
+pub struct MappedAsyncCallBuilder<'agent, 'canister, I, O, Mapping>
 where
     Mapping: Fn(I) -> O,
 {
-    canister: &'canister Canister<'agent>,
-    method_name: String,
+    builder: AsyncCallBuilder<'agent, 'canister, I>,
     map: Mapping,
 }
 
-impl<'agent, 'canister, I, O, Mapping> AsyncCallBuilder<'agent, 'canister, I, O, Mapping> {
-    pub fn map(self, map: Mapping) {}
+pub struct AsyncCallBuilder<'canister, 'agent, O> {
+    canister: &'canister Canister<'agent>,
+    method_name: String,
+}
+
+impl<'agent, 'canister, I, O, Mapping> AsyncCallBuilder<'canister, 'agent, O> {
+    pub fn build(self) -> impl AsyncCall {}
 }
 
 impl<'agent, T> Canister<'agent, T> {

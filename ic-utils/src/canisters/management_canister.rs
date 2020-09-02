@@ -20,5 +20,6 @@ impl<'agent> ManagementCanisterInterface for Canister<'agent, ManagementCanister
     fn create_canister(&self) -> AsyncCaller<'_, Principal> {
         self.update_("create_canister")
             .map(|r: candid::Principal| Principal::try_from(r).unwrap())
+            .build()
     }
 }
