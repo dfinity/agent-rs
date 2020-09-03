@@ -5,3 +5,6 @@ members = [
     "icx",
     "ref-tests/",
 ]
+
+[patch.crates-io]
+ic-types = { path = "./ic-types", version = "0.1", features = [ "serde" ] }
