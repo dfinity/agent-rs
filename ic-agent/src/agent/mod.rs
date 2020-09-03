@@ -21,7 +21,7 @@ use crate::identity::Identity;
 use crate::{to_request_id, Principal, RequestId, Status};
 use delay::Waiter;
 use reqwest::Method;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 use public::*;
 use std::convert::TryFrom;
@@ -29,6 +29,50 @@ use std::time::Duration;
 
 const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 const MAX_INGRESS_TTL: Duration = Duration::from_secs(5 * 60); // 5 minutes
+
+
+/// Time since UNIX_EPOCH (in nanoseconds). Just like 'std::time::Instant' or
+/// 'std::time::SystemTime', [Time] does not implement the [Default] trait.
+/// Please use `ic_test_utilities::mock_time` if you ever need such a value.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash, Serialize, Deserialize)]
+pub struct Time(u64);
+
+pub const UNIX_EPOCH: Time = Time(0);
+
+impl std::ops::Add<Duration> for Time {
+    type Output = Time;
+    fn add(self, dur: Duration) -> Time {
+        Time::from_duration(Duration::from_nanos(self.0) + dur)
+    }
+}
+
+impl std::ops::AddAssign<Duration> for Time {
+    fn add_assign(&mut self, other: Duration) {
+        *self = Time::from_duration(Duration::from_nanos(self.0) + other)
+    }
+}
+
+impl std::ops::Sub for Time {
+    type Output = std::time::Duration;
+
+    fn sub(self, other: Time) -> std::time::Duration {
+        let lhs = Duration::from_nanos(self.0);
+        let rhs = Duration::from_nanos(other.0);
+        lhs - rhs
+    }
+}
+
+impl Time {
+    /// Number of nanoseconds since UNIX EPOCH
+    pub fn as_nanos_since_unix_epoch(self) -> u64 {
+        self.0
+    }
+
+    /// A private function to cast from [Duration] to [Time].
+    fn from_duration(t: Duration) -> Self {
+        Time(t.as_nanos() as u64)
+    }
+}
 
 /// A low level Agent to make calls to a Replica endpoint.
 ///
@@ -100,14 +144,13 @@ impl Agent {
     /// Create an instance of an [`AgentBuilder`] for building an [`Agent`]. This is simpler than
     /// using the [`AgentConfig`] and [`Agent::new()`].
 
-    // borrowed from http_handler in replica
-    fn current_expiry_time() -> Duration {
+    pub fn current_expiry_time() -> Time {
         let permitted_drift = Duration::from_secs(60);
         let start = std::time::SystemTime::now();
         let since_epoch = start
             .duration_since(std::time::UNIX_EPOCH)
             .expect("Time wrapped around");
-        Duration::new(0, 0) + (since_epoch + MAX_INGRESS_TTL - permitted_drift)
+        UNIX_EPOCH + (since_epoch + MAX_INGRESS_TTL - permitted_drift)
     }
 
     pub fn builder() -> builder::AgentBuilder {
@@ -338,7 +381,7 @@ impl Agent {
             canister_id: canister_id.clone(),
             method_name: method_name.to_string(),
             arg: arg.to_vec(),
-            ingress_expiry: Agent::current_expiry_time().as_secs(),
+            ingress_expiry: Agent::current_expiry_time().as_nanos_since_unix_epoch(),
         })
         .await
         .and_then(|response| match response {
@@ -387,7 +430,7 @@ impl Agent {
             arg: arg.to_vec(),
             nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
-            ingress_expiry: Agent::current_expiry_time().as_secs(),
+            ingress_expiry: Agent::current_expiry_time().as_nanos_since_unix_epoch(),
         })
         .await
     }
@@ -398,7 +441,7 @@ impl Agent {
     ) -> Result<RequestStatusResponse, AgentError> {
         self.read_endpoint(SyncContent::RequestStatusRequest {
             request_id: request_id.as_slice().into(),
-            ingress_expiry: Agent::current_expiry_time().as_secs(),
+            ingress_expiry: Agent::current_expiry_time().as_nanos_since_unix_epoch(),
         })
         .await
         .map(|response| match response {
