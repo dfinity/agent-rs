@@ -25,8 +25,10 @@ use serde::Serialize;
 
 use public::*;
 use std::convert::TryFrom;
+use std::time::Duration;
 
 const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
+const MAX_INGRESS_TTL: Duration = Duration::from_secs(5 * 60); // 5 minutes
 
 /// A low level Agent to make calls to a Replica endpoint.
 ///
@@ -97,6 +99,17 @@ pub struct Agent {
 impl Agent {
     /// Create an instance of an [`AgentBuilder`] for building an [`Agent`]. This is simpler than
     /// using the [`AgentConfig`] and [`Agent::new()`].
+
+    // borrowed from http_handler in replica
+    fn current_expiry_time() -> Duration {
+        let permitted_drift = Duration::from_secs(60);
+        let start = std::time::SystemTime::now();
+        let since_epoch = start
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("Time wrapped around");
+        Duration::new(0, 0) + (since_epoch + MAX_INGRESS_TTL - permitted_drift)
+    }
+
     pub fn builder() -> builder::AgentBuilder {
         Default::default()
     }
@@ -325,7 +338,7 @@ impl Agent {
             canister_id: canister_id.clone(),
             method_name: method_name.to_string(),
             arg: arg.to_vec(),
-            ingress_expiry: ,
+            ingress_expiry: Agent::current_expiry_time().as_secs(),
         })
         .await
         .and_then(|response| match response {
@@ -374,7 +387,7 @@ impl Agent {
             arg: arg.to_vec(),
             nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
-            ingress_expiry: ,
+            ingress_expiry: Agent::current_expiry_time().as_secs(),
         })
         .await
     }
@@ -385,7 +398,7 @@ impl Agent {
     ) -> Result<RequestStatusResponse, AgentError> {
         self.read_endpoint(SyncContent::RequestStatusRequest {
             request_id: request_id.as_slice().into(),
-            ingress_expiry: ,
+            ingress_expiry: Agent::current_expiry_time().as_secs(),
         })
         .await
         .map(|response| match response {
@@ -411,7 +424,7 @@ impl Agent {
         })
     }
 
-    pub fn update<S: ToString>(&self, canister_id: &Principal, method_name: S) -> UpdateBuilder {
+    pub fn update<S: ToString>(&self, canister_id: &Principal, method_name: S) -> UpdateBuilder<'_> {
         UpdateBuilder::new(self, canister_id.clone(), method_name.to_string())
     }
 
