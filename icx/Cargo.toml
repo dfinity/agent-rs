@@ -7,12 +7,12 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-candid = "0.5.1"
+candid = "0.5.4"
 clap = "3.0.0-beta.1"
 delay = "0.2.0"
 hex = "0.4.2"
 ic-agent = { path = "../ic-agent" }
-ic-types = { path = "../ic-types" }
+ic-types = "0.1.1" # cannot refer to local ic-types, because candid implements CandidType for the released version
 pem = "0.8.1"
 ring = "0.16.11"
 tokio = { version = "0.2.22", features = ["full"] }
