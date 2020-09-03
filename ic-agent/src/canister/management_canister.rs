@@ -33,7 +33,7 @@ struct StatusReply {
 }
 #[derive(candid::CandidType, candid::Deserialize)]
 struct CanisterRecord {
-    canister_id: candid::Principal,
+    canister_id: Principal,
 }
 
 #[derive(Clone, candid::CandidType, candid::Deserialize)]
@@ -62,7 +62,7 @@ impl FromStr for InstallMode {
 #[derive(candid::CandidType, candid::Deserialize)]
 struct CanisterInstall {
     mode: InstallMode,
-    canister_id: candid::Principal,
+    canister_id: Principal,
     wasm_module: Vec<u8>,
     arg: Vec<u8>,
     compute_allocation: Option<u8>,
@@ -83,7 +83,7 @@ impl<'agent> ManagementCanister<'agent> {
         canister_id: &Principal,
     ) -> Result<CanisterStatus, AgentError> {
         let canister_to_install = CanisterRecord {
-            canister_id: candid::Principal::from_text(canister_id.to_text())?,
+            canister_id: Principal::from_text(canister_id.to_text())?,
         };
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
         let bytes_to_decode = self
@@ -119,7 +119,7 @@ impl<'agent> ManagementCanister<'agent> {
         canister_id: &Principal,
     ) -> Result<(), AgentError> {
         let canister_to_install = CanisterRecord {
-            canister_id: candid::Principal::from_text(canister_id.to_text())?,
+            canister_id: Principal::from_text(canister_id.to_text())?,
         };
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
         let bytes_to_decode = self
@@ -139,7 +139,7 @@ impl<'agent> ManagementCanister<'agent> {
         canister_id: &Principal,
     ) -> Result<(), AgentError> {
         let canister_to_install = CanisterRecord {
-            canister_id: candid::Principal::from_text(canister_id.to_text())?,
+            canister_id: Principal::from_text(canister_id.to_text())?,
         };
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
         let bytes_to_decode = self
@@ -159,7 +159,7 @@ impl<'agent> ManagementCanister<'agent> {
         canister_id: &Principal,
     ) -> Result<(), AgentError> {
         let canister_to_install = CanisterRecord {
-            canister_id: candid::Principal::from_text(canister_id.to_text())?,
+            canister_id: Principal::from_text(canister_id.to_text())?,
         };
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
         let bytes_to_decode = self
@@ -184,7 +184,7 @@ impl<'agent> ManagementCanister<'agent> {
     ) -> Result<(), AgentError> {
         let canister_to_install = CanisterInstall {
             mode,
-            canister_id: candid::Principal::from_text(canister_id.to_text())?,
+            canister_id: Principal::from_text(canister_id.to_text())?,
             wasm_module: module.to_vec(),
             arg: arg.to_vec(),
             compute_allocation: attributes.compute_allocation.map(|x| x.into()),
