@@ -83,9 +83,9 @@ impl<'agent> ManagementCanister<'agent> {
         canister_id: &Principal,
     ) -> Result<CanisterStatus, AgentError> {
         let canister_to_install = CanisterRecord {
-            canister_id: Principal::from_text(canister_id.to_text())?,
+            canister_id: canister_id.to_owned(),
         };
-        let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
+        let bytes: Vec<u8> = candid::Encode!(&canister_to_install)?;
         let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), STATUS_METHOD_NAME)
@@ -101,7 +101,7 @@ impl<'agent> ManagementCanister<'agent> {
         waiter: W,
     ) -> Result<Principal, AgentError> {
         // candid encoding of () i.e. no arguments
-        let bytes: Vec<u8> = candid::Encode!().unwrap();
+        let bytes: Vec<u8> = candid::Encode!()?;
         let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), CREATE_METHOD_NAME)
@@ -119,9 +119,9 @@ impl<'agent> ManagementCanister<'agent> {
         canister_id: &Principal,
     ) -> Result<(), AgentError> {
         let canister_to_install = CanisterRecord {
-            canister_id: Principal::from_text(canister_id.to_text())?,
+            canister_id: canister_id.to_owned(),
         };
-        let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
+        let bytes: Vec<u8> = candid::Encode!(&canister_to_install)?;
         let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), DELETE_METHOD_NAME)
@@ -139,9 +139,9 @@ impl<'agent> ManagementCanister<'agent> {
         canister_id: &Principal,
     ) -> Result<(), AgentError> {
         let canister_to_install = CanisterRecord {
-            canister_id: Principal::from_text(canister_id.to_text())?,
+            canister_id: canister_id.to_owned(),
         };
-        let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
+        let bytes: Vec<u8> = candid::Encode!(&canister_to_install)?;
         let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), START_METHOD_NAME)
@@ -159,9 +159,9 @@ impl<'agent> ManagementCanister<'agent> {
         canister_id: &Principal,
     ) -> Result<(), AgentError> {
         let canister_to_install = CanisterRecord {
-            canister_id: Principal::from_text(canister_id.to_text())?,
+            canister_id: canister_id.to_owned(),
         };
-        let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
+        let bytes: Vec<u8> = candid::Encode!(&canister_to_install)?;
         let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), STOP_METHOD_NAME)
@@ -184,12 +184,12 @@ impl<'agent> ManagementCanister<'agent> {
     ) -> Result<(), AgentError> {
         let canister_to_install = CanisterInstall {
             mode,
-            canister_id: Principal::from_text(canister_id.to_text())?,
+            canister_id: canister_id.to_owned(),
             wasm_module: module.to_vec(),
             arg: arg.to_vec(),
             compute_allocation: attributes.compute_allocation.map(|x| x.into()),
         };
-        let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
+        let bytes: Vec<u8> = candid::Encode!(&canister_to_install)?;
         let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), INSTALL_METHOD_NAME)
