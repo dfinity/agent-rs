@@ -1,8 +1,9 @@
-use crate::call::{AsyncCall, SyncCall};
-use ic_agent::{Agent, AgentError};
+use crate::call::{AsyncCaller, TypedAsyncCaller};
+use candid::CandidType;
+use ic_agent::Agent;
 use ic_types::{Principal, PrincipalError};
+use serde::de::DeserializeOwned;
 use std::convert::TryInto;
-use std::ops::Deref;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -17,7 +18,7 @@ pub enum CanisterBuilderError {
     MustSpecifyCanisterId(),
 }
 
-struct CanisterBuilder<'agent, T = ()> {
+pub struct CanisterBuilder<'agent, T = ()> {
     agent: Option<&'agent Agent>,
     canister_id: Option<Result<Principal, PrincipalError>>,
     interface: T,
@@ -29,12 +30,20 @@ pub trait CanisterIdProvider {
     }
 }
 
-impl<'agent, T> CanisterIdProvider for CanisterBuilder<'agent, T> {}
+impl CanisterIdProvider for () {}
 
 impl<'agent, T> CanisterBuilder<'agent, T> {
-    pub fn with_canister_id<P: TryInto<Principal>>(self, canister_id: P) -> Self {
+    pub fn with_canister_id<E, P>(self, canister_id: P) -> Self
+    where
+        E: std::error::Error,
+        P: TryInto<Principal, Error = E>,
+    {
         Self {
-            canister_id: Some(canister_id.try_into()),
+            canister_id: Some(
+                canister_id
+                    .try_into()
+                    .map_err(|e| PrincipalError::ExternalError(format!("{}", e))),
+            ),
             ..self
         }
     }
@@ -42,8 +51,6 @@ impl<'agent, T> CanisterBuilder<'agent, T> {
     pub fn build(self) -> Result<Canister<'agent, T>, CanisterBuilderError> {
         let canister_id = if let Some(cid) = self.canister_id {
             cid?
-        } else if let Some(maybe_cid) = self.t.get_canister_id() {
-            maybe_cid?
         } else {
             return Err(CanisterBuilderError::MustSpecifyCanisterId());
         };
@@ -75,7 +82,20 @@ impl<'agent> CanisterBuilder<'agent, ()> {
     }
 
     pub fn with_interface<T>(self, interface: T) -> CanisterBuilder<'agent, T> {
-        CanisterBuilder { interface, ..self }
+        CanisterBuilder {
+            agent: self.agent,
+            canister_id: self.canister_id,
+            interface,
+        }
+    }
+}
+
+impl<'agent, T> CanisterBuilder<'agent, T> {
+    pub fn with_agent(self, agent: &'agent Agent) -> Self {
+        CanisterBuilder {
+            agent: Some(agent),
+            ..self
+        }
     }
 }
 
@@ -86,51 +106,67 @@ impl<'agent> CanisterBuilder<'agent, ()> {
 /// This is the higher level construct for talking to a canister on the Internet
 /// Computer.
 pub struct Canister<'agent, T = ()> {
-    agent: &'agent Agent,
-    canister_id: Principal,
+    pub(super) agent: &'agent Agent,
+    pub(super) canister_id: Principal,
     interface: T,
 }
 
 impl<'agent> Canister<'agent, ()> {
-    pub fn builder() -> Result<CanisterBuilder<'agent, ()>, String> {
-        Ok(CanisterBuilder {
-            agent: None,
-            canister_id: None,
-            interface: (),
-        })
+    pub fn builder() -> CanisterBuilder<'agent, ()> {
+        Default::default()
     }
 }
 
-pub struct MappedAsyncCallBuilder<'agent, 'canister, I, O, Mapping>
-where
-    Mapping: Fn(I) -> O,
-{
-    builder: AsyncCallBuilder<'agent, 'canister, I>,
-    map: Mapping,
-}
-
-pub struct AsyncCallBuilder<'canister, 'agent, O> {
-    canister: &'canister Canister<'agent>,
+pub struct AsyncCallBuilder<'canister, I, T> {
+    canister: &'canister Canister<'canister, T>,
     method_name: String,
+    arg: I,
 }
 
-impl<'agent, 'canister, I, O, Mapping> AsyncCallBuilder<'canister, 'agent, O> {
-    pub fn build(self) -> impl AsyncCall {}
+impl<'canister, T> AsyncCallBuilder<'canister, (), T> {
+    pub fn new(
+        canister: &'canister Canister<'canister, T>,
+        method_name: &str,
+    ) -> AsyncCallBuilder<'canister, (), T> {
+        Self {
+            canister,
+            method_name: method_name.to_string(),
+            arg: (),
+        }
+    }
+}
+
+impl<'canister, I: CandidType + Sync + Send, T> AsyncCallBuilder<'canister, I, T> {
+    pub fn build(self) -> AsyncCaller<'canister, I> {
+        let c = self.canister;
+        AsyncCaller {
+            agent: c.agent,
+            canister_id: c.canister_id.clone(),
+            method_name: self.method_name.clone(),
+            arg: None,
+        }
+    }
+
+    pub fn build_typed<O: DeserializeOwned + Send + Sync>(
+        self,
+    ) -> TypedAsyncCaller<'canister, I, O> {
+        TypedAsyncCaller {
+            inner: self.build(),
+            phantom_out: std::marker::PhantomData,
+        }
+    }
 }
 
 impl<'agent, T> Canister<'agent, T> {
-    pub fn update_<T>(&self, method_name: &str) -> AsyncCallBuilder<T, T, std::convert::identity> {
-        AsyncCallBuilder {
-            canister: self,
-            method_name: method_name.into_string(),
-            map: std::convert::identity,
-        }
+    pub fn update_(&self, method_name: &str) -> AsyncCallBuilder<'_, (), T> {
+        AsyncCallBuilder::new(self, method_name)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::canisters::ManagementCanister;
+    use super::super::canisters::{ManagementCanister, ManagementCanisterInterface};
+    use crate::call::TypedAsyncCall;
 
     #[tokio::test]
     async fn simple() {
@@ -145,27 +181,8 @@ mod tests {
         let management_canister = Canister::builder()
             .with_agent(&agent)
             .with_interface(ManagementCanister)
-            .build();
-
-        #[canister_import(candid_path = "../some/path/candid.did")]
-        trait SomeCandidImport {}
-
-        let basic_api = Canister::builder()
-            .with_canister_id("aaaaa-aa")
-            .with_interface(SomeCandidImport)
-            .build();
-
-        basic_api.count().await?;
-
-        let nat = basic_api
-            .query_("count", (1))
-            .call_and_wait(some_waiter)
-            .await?;
-
-        basic_api
-            .install_code()
-            .with_canister_id("abcde-qw")
-            .with_bytecode(&wasm);
+            .build()
+            .unwrap();
 
         let new_canister_id: ic_types::Principal = management_canister
             .create_canister()

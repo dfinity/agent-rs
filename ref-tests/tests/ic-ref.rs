@@ -16,7 +16,7 @@ fn create_waiter() -> Delay {
         .build()
 }
 
-async fn create_identity() -> Result<Box<dyn Identity>, String> {
+async fn create_identity() -> Result<Box<dyn Identity + Sync + Send>, String> {
     let rng = ring::rand::SystemRandom::new();
     let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
         .expect("Could not generate a key pair.");

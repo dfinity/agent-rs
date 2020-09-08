@@ -4,23 +4,31 @@ use delay::Waiter;
 use ic_agent::{Agent, AgentError, RequestId};
 use ic_types::Principal;
 use serde::de::DeserializeOwned;
-use typed_builder::TypedBuilder;
 
 #[async_trait]
 pub trait SyncCall {
-    async fn call<T: DeserializeOwned>(&self) -> Result<T, AgentError>;
+    async fn call<T: DeserializeOwned + Send + Sync>(&self) -> Result<T, AgentError>;
 }
 
 #[async_trait]
 pub trait AsyncCall {
     async fn call(&self) -> Result<RequestId, AgentError>;
-    async fn call_and_wait<T, W>(&self, mut waiter: W) -> Result<T, AgentError>
+    async fn call_and_wait<O, W>(&self, mut waiter: W) -> Result<O, AgentError>
     where
-        T: DeserializeOwned,
+        O: DeserializeOwned + Send + Sync,
         W: Waiter;
 }
 
-#[derive(TypedBuilder)]
+#[async_trait]
+pub trait TypedAsyncCall<O>
+where
+    O: DeserializeOwned + Send + Sync,
+{
+    async fn call_and_wait<W>(&self, mut waiter: W) -> Result<O, AgentError>
+    where
+        W: Waiter;
+}
+
 pub struct SyncCaller<'agent, Arg: CandidType + Send + Sync> {
     agent: &'agent Agent,
     canister_id: Principal,
@@ -32,7 +40,7 @@ pub struct SyncCaller<'agent, Arg: CandidType + Send + Sync> {
 impl<'agent, Arg: CandidType + Send + Sync> SyncCall for SyncCaller<'agent, Arg> {
     async fn call<R>(&self) -> Result<R, AgentError>
     where
-        R: DeserializeOwned,
+        R: DeserializeOwned + Send + Sync,
     {
         let arg = Encode!(&self.arg)?;
         self.agent
@@ -42,13 +50,11 @@ impl<'agent, Arg: CandidType + Send + Sync> SyncCall for SyncCaller<'agent, Arg>
     }
 }
 
-#[derive(TypedBuilder)]
 pub struct AsyncCaller<'agent, Arg: CandidType + Send + Sync> {
-    agent: &'agent Agent,
-    canister_id: Principal,
-    method_name: String,
-    #[builder(default, setter(strip_option))]
-    arg: Option<Arg>,
+    pub(crate) agent: &'agent Agent,
+    pub(crate) canister_id: Principal,
+    pub(crate) method_name: String,
+    pub(crate) arg: Option<Arg>,
 }
 
 #[async_trait]
@@ -64,9 +70,9 @@ impl<'agent, Arg: CandidType + Send + Sync> AsyncCall for AsyncCaller<'agent, Ar
             .await
     }
 
-    async fn call_and_wait<R, W>(&self, waiter: W) -> Result<R, AgentError>
+    async fn call_and_wait<O, W>(&self, waiter: W) -> Result<O, AgentError>
     where
-        R: DeserializeOwned,
+        O: DeserializeOwned + Send + Sync,
         W: Waiter,
     {
         let arg = if let Some(a) = &self.arg {
@@ -79,55 +85,27 @@ impl<'agent, Arg: CandidType + Send + Sync> AsyncCall for AsyncCaller<'agent, Ar
             .with_arg(&arg)
             .call_and_wait(waiter)
             .await
-            .and_then(|r| Decode!(&r, R).map_err(AgentError::from))
+            .and_then(|r| Decode!(&r, O).map_err(AgentError::from))
     }
 }
 
-pub struct MappedAsyncCall<'agent, Inner, ArgIn, ArgOut, MappingFunc>
-where
-    ArgIn: DeserializeOwned,
-    ArgOut: DeserializeOwned,
-    Inner: AsyncCall,
-    MappingFunc: Fn(ArgIn) -> ArgOut,
-{
-    inner: Inner,
-    mapping_fn: MappingFunc,
-}
-
-impl<'agent, Inner, ArgIn, ArgOut, MappingFunc>
-    MappedAsyncCall<'agent, Inner, ArgIn, ArgOut, MappingFunc>
-where
-    ArgIn: DeserializeOwned,
-    ArgOut: DeserializeOwned,
-    Inner: AsyncCall,
-    MappingFunc: Fn(ArgIn) -> ArgOut,
-{
-    pub fn new(
-        inner: Inner,
-        mapping_fn: MappingFunc,
-    ) -> MappedAsyncCall<'agent, Inner, ArgIn, ArgOut, MappingFunc> {
-        Self { inner, mapping_fn }
-    }
+pub struct TypedAsyncCaller<
+    'agent,
+    Arg: CandidType + Send + Sync,
+    Out: DeserializeOwned + Send + Sync,
+> {
+    pub(crate) inner: AsyncCaller<'agent, Arg>,
+    pub(crate) phantom_out: std::marker::PhantomData<Out>,
 }
 
 #[async_trait]
-impl<'agent, Inner, ArgIn, ArgOut, MappingFunc> AsyncCall
-    for MappedAsyncCall<'agent, Inner, ArgIn, ArgOut, MappingFunc>
-where
-    ArgIn: DeserializeOwned,
-    ArgOut: DeserializeOwned,
-    Inner: AsyncCall,
-    MappingFunc: Fn(ArgIn) -> ArgOut,
+impl<'agent, Arg: CandidType + Send + Sync, Out: DeserializeOwned + Send + Sync> TypedAsyncCall<Out>
+    for TypedAsyncCaller<'agent, Arg, Out>
 {
-    async fn call(&self) -> Result<RequestId, AgentError> {
-        self.inner.call()
-    }
-
-    async fn call_and_wait<T, W>(&self, mut waiter: W) -> Result<T, AgentError>
+    async fn call_and_wait<W>(&self, waiter: W) -> Result<Out, AgentError>
     where
-        T: DeserializeOwned,
         W: Waiter,
     {
-        self.inner.call_and_wait(waiter).await.map(&self.mapping_fn)
+        self.inner.call_and_wait(waiter).await
     }
 }

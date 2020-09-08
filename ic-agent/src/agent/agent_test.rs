@@ -235,7 +235,6 @@ fn status() -> Result<(), AgentError> {
 
 #[test]
 fn status_okay() -> Result<(), AgentError> {
-    use std::path::*;
     let mut map = BTreeMap::new();
 
     map.insert(
