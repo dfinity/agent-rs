@@ -228,6 +228,14 @@ impl std::str::FromStr for Principal {
     }
 }
 
+impl TryFrom<&str> for Principal {
+    type Error = PrincipalError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        Principal::from_text(s)
+    }
+}
+
 /// Vector TryFrom. The slice and array version of this trait are defined below.
 impl TryFrom<Vec<u8>> for Principal {
     type Error = PrincipalError;

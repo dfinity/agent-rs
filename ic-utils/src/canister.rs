@@ -24,14 +24,6 @@ pub struct CanisterBuilder<'agent, T = ()> {
     interface: T,
 }
 
-pub trait CanisterIdProvider {
-    fn get_canister_id(&self) -> Option<Result<Principal, CanisterBuilderError>> {
-        None
-    }
-}
-
-impl CanisterIdProvider for () {}
-
 impl<'agent, T> CanisterBuilder<'agent, T> {
     pub fn with_canister_id<E, P>(self, canister_id: P) -> Self
     where
@@ -111,39 +103,58 @@ pub struct Canister<'agent, T = ()> {
     interface: T,
 }
 
+impl<'agent, T> Canister<'agent, T> {
+    pub fn interface_(&self) -> &T {
+        &self.interface
+    }
+}
+
 impl<'agent> Canister<'agent, ()> {
     pub fn builder() -> CanisterBuilder<'agent, ()> {
         Default::default()
     }
 }
 
-pub struct AsyncCallBuilder<'canister, I, T> {
-    canister: &'canister Canister<'canister, T>,
+pub struct AsyncCallBuilder<'agent, 'canister: 'agent, I: CandidType + Sync + Send, T> {
+    canister: &'canister Canister<'agent, T>,
     method_name: String,
-    arg: I,
+    arg: Option<I>,
 }
 
-impl<'canister, T> AsyncCallBuilder<'canister, (), T> {
+impl<'agent, 'canister: 'agent, T> AsyncCallBuilder<'agent, 'canister, (), T> {
     pub fn new(
-        canister: &'canister Canister<'canister, T>,
+        canister: &'canister Canister<'agent, T>,
         method_name: &str,
-    ) -> AsyncCallBuilder<'canister, (), T> {
+    ) -> AsyncCallBuilder<'agent, 'canister, (), T> {
         Self {
             canister,
             method_name: method_name.to_string(),
-            arg: (),
+            arg: None,
         }
     }
 }
 
-impl<'canister, I: CandidType + Sync + Send, T> AsyncCallBuilder<'canister, I, T> {
+impl<'agent, 'canister: 'agent, I: CandidType + Sync + Send, T>
+    AsyncCallBuilder<'agent, 'canister, I, T>
+{
+    pub fn with_arg<A: CandidType + Sync + Send>(
+        self,
+        arg: A,
+    ) -> AsyncCallBuilder<'agent, 'canister, A, T> {
+        AsyncCallBuilder {
+            canister: self.canister,
+            method_name: self.method_name,
+            arg: Some(arg),
+        }
+    }
+
     pub fn build(self) -> AsyncCaller<'canister, I> {
         let c = self.canister;
         AsyncCaller {
             agent: c.agent,
             canister_id: c.canister_id.clone(),
             method_name: self.method_name.clone(),
-            arg: None,
+            arg: self.arg,
         }
     }
 
@@ -158,28 +169,43 @@ impl<'canister, I: CandidType + Sync + Send, T> AsyncCallBuilder<'canister, I, T
 }
 
 impl<'agent, T> Canister<'agent, T> {
-    pub fn update_(&self, method_name: &str) -> AsyncCallBuilder<'_, (), T> {
+    pub fn update_<'canister>(
+        &'canister self,
+        method_name: &str,
+    ) -> AsyncCallBuilder<'agent, 'canister, (), T> {
         AsyncCallBuilder::new(self, method_name)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::canisters::{ManagementCanister, ManagementCanisterInterface};
+    use super::super::canisters::ManagementCanister;
     use crate::call::TypedAsyncCall;
+    use ic_agent::BasicIdentity;
 
     #[tokio::test]
     async fn simple() {
         use super::Canister;
         use delay::Delay;
 
+        let rng = ring::rand::SystemRandom::new();
+        let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
+            .expect("Could not generate a key pair.");
+
+        let identity = BasicIdentity::from_key_pair(
+            ring::signature::Ed25519KeyPair::from_pkcs8(key_pair.as_ref())
+                .expect("Could not read the key pair."),
+        );
+
         let agent = ic_agent::Agent::builder()
             .with_url("http://localhost:8001")
+            .with_identity(identity)
             .build()
             .unwrap();
 
         let management_canister = Canister::builder()
             .with_agent(&agent)
+            .with_canister_id("aaaaa-aa")
             .with_interface(ManagementCanister)
             .build()
             .unwrap();
@@ -190,6 +216,12 @@ mod tests {
             .await
             .unwrap();
 
-        eprintln!("Here's your canister: {}", new_canister_id);
+        let status = management_canister
+            .canister_status(&new_canister_id)
+            .call_and_wait(Delay::throttle(std::time::Duration::from_secs(1)))
+            .await
+            .unwrap();
+
+        assert_eq!(format!("{}", status), "Running");
     }
 }
