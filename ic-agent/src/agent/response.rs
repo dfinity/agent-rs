@@ -11,6 +11,7 @@ pub enum RequestStatusResponse {
         reject_code: u64,
         reject_message: String,
     },
+    Done,
 }
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq)]

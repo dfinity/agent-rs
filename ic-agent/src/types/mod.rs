@@ -6,7 +6,10 @@ pub(crate) mod status;
 pub(crate) mod public {
     use super::*;
 
-    pub use canister_attributes::{CanisterAttributes, ComputeAllocation, ComputeAllocationError};
+    pub use canister_attributes::{
+        CanisterAttributes, ComputeAllocation, ComputeAllocationError, MemoryAllocation,
+        MemoryAllocationError,
+    };
     pub use request_id::{to_request_id, RequestId};
     pub use request_id_error::{RequestIdError, RequestIdFromStringError};
     pub use status::{Status, Value};

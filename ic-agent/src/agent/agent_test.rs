@@ -23,7 +23,7 @@ fn query() -> Result<(), AgentError> {
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
         agent
-            .query_raw(&Principal::management_canister(), "main", &[])
+            .query_raw(&Principal::management_canister(), "main", &[], 300)
             .await
     });
 
@@ -42,7 +42,7 @@ fn query_error() -> Result<(), AgentError> {
 
     let result = runtime.block_on(async {
         agent
-            .query_raw(&Principal::management_canister(), "greet", &[])
+            .query_raw(&Principal::management_canister(), "greet", &[], 300)
             .await
     });
 
@@ -74,7 +74,7 @@ fn query_rejected() -> Result<(), AgentError> {
 
     let result = runtime.block_on(async {
         agent
-            .query_raw(&Principal::management_canister(), "greet", &[])
+            .query_raw(&Principal::management_canister(), "greet", &[], 300)
             .await
     });
 
@@ -116,9 +116,9 @@ fn call() -> Result<(), AgentError> {
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
         let request_id = agent
-            .update_raw(&Principal::management_canister(), "greet", &[])
+            .update_raw(&Principal::management_canister(), "greet", &[], 300)
             .await?;
-        agent.request_status_raw(&request_id).await
+        agent.request_status_raw(&request_id, 300).await
     });
 
     submit_mock.assert();
@@ -146,7 +146,7 @@ fn call_error() -> Result<(), AgentError> {
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
         agent
-            .update_raw(&Principal::management_canister(), "greet", &[])
+            .update_raw(&Principal::management_canister(), "greet", &[], 300)
             .await
     });
 

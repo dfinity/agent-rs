@@ -21,9 +21,9 @@ pub enum MemoryAllocationError {
 impl std::fmt::Display for MemoryAllocationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
-            MemoryAllocationError::InvalidMemorySize => {
-                f.write_str("Memory allocation must be between 0 and 2^48 (i.e 256TB), inclusively.")
-            }
+            MemoryAllocationError::InvalidMemorySize => f.write_str(
+                "Memory allocation must be between 0 and 2^48 (i.e 256TB), inclusively.",
+            ),
         }
     }
 }

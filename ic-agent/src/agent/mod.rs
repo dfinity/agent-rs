@@ -8,6 +8,7 @@ pub(crate) mod response;
 pub(crate) mod public {
     pub use super::agent_config::{AgentConfig, PasswordManager};
     pub use super::agent_error::AgentError;
+    pub use super::builder::AgentBuilder;
     pub use super::nonce::NonceFactory;
     pub use super::response::{Replied, RequestStatusResponse};
     pub use super::Agent;
@@ -21,58 +22,12 @@ use crate::identity::Identity;
 use crate::{to_request_id, Principal, RequestId, Status};
 use delay::Waiter;
 use reqwest::Method;
-use serde::{Serialize, Deserialize};
+use serde::Serialize;
 
 use public::*;
 use std::convert::TryFrom;
-use std::time::Duration;
 
 const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
-const MAX_INGRESS_TTL: Duration = Duration::from_secs(5 * 60); // 5 minutes
-
-
-/// Time since UNIX_EPOCH (in nanoseconds). Just like 'std::time::Instant' or
-/// 'std::time::SystemTime', [Time] does not implement the [Default] trait.
-/// Please use `ic_test_utilities::mock_time` if you ever need such a value.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash, Serialize, Deserialize)]
-pub struct Time(u64);
-
-pub const UNIX_EPOCH: Time = Time(0);
-
-impl std::ops::Add<Duration> for Time {
-    type Output = Time;
-    fn add(self, dur: Duration) -> Time {
-        Time::from_duration(Duration::from_nanos(self.0) + dur)
-    }
-}
-
-impl std::ops::AddAssign<Duration> for Time {
-    fn add_assign(&mut self, other: Duration) {
-        *self = Time::from_duration(Duration::from_nanos(self.0) + other)
-    }
-}
-
-impl std::ops::Sub for Time {
-    type Output = std::time::Duration;
-
-    fn sub(self, other: Time) -> std::time::Duration {
-        let lhs = Duration::from_nanos(self.0);
-        let rhs = Duration::from_nanos(other.0);
-        lhs - rhs
-    }
-}
-
-impl Time {
-    /// Number of nanoseconds since UNIX EPOCH
-    pub fn as_nanos_since_unix_epoch(self) -> u64 {
-        self.0
-    }
-
-    /// A private function to cast from [Duration] to [Time].
-    fn from_duration(t: Duration) -> Self {
-        Time(t.as_nanos() as u64)
-    }
-}
 
 /// A low level Agent to make calls to a Replica endpoint.
 ///
@@ -109,13 +64,14 @@ impl Time {
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 ///   let waiter = delay::Delay::builder()
 ///     .throttle(std::time::Duration::from_millis(500))
-///     .timeout(std::time::Duration::from_secs(10))
+///     .timeout(std::time::Duration::from_secs(300))
 ///     .build();
 ///
 ///   // Create a call to the management canister to create a new canister ID,
 ///   // and wait for a result.
 ///   let response = agent.update(&management_canister_id, "create_canister")
 ///     .with_arg(&Encode!()?)  // Empty Candid.
+///     .with_expiry(300)
 ///     .call_and_wait(waiter)
 ///     .await?;
 ///
@@ -143,16 +99,6 @@ pub struct Agent {
 impl Agent {
     /// Create an instance of an [`AgentBuilder`] for building an [`Agent`]. This is simpler than
     /// using the [`AgentConfig`] and [`Agent::new()`].
-
-    pub fn current_expiry_time() -> Time {
-        let permitted_drift = Duration::from_secs(60);
-        let start = std::time::SystemTime::now();
-        let since_epoch = start
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Time wrapped around");
-        UNIX_EPOCH + (since_epoch + MAX_INGRESS_TTL - permitted_drift)
-    }
-
     pub fn builder() -> builder::AgentBuilder {
         Default::default()
     }
@@ -286,6 +232,7 @@ impl Agent {
         }
 
         if status.is_client_error() || status.is_server_error() {
+            eprintln!("Content: {}", String::from_utf8_lossy(&body));
             Err(AgentError::HttpError {
                 status: status.into(),
                 content_type: headers
@@ -365,7 +312,7 @@ impl Agent {
     /// async fn query_example() -> Result<(), Box<dyn std::error::Error>> {
     ///     let agent = Agent::builder().with_url("https://gw.dfinity.network").build()?;
     ///     let canister_id = Principal::from_text("w7x7r-cok77-xa")?;
-    ///     let response = agent.query_raw(&canister_id, "echo", &[1, 2, 3]).await?;
+    ///     let response = agent.query_raw(&canister_id, "echo", &[1, 2, 3], 300).await?;
     ///     assert_eq!(response, &[1, 2, 3]);
     ///     Ok(())
     /// }
@@ -375,13 +322,14 @@ impl Agent {
         canister_id: &Principal,
         method_name: &str,
         arg: &[u8],
+        ingress_expiry: u64,
     ) -> Result<Vec<u8>, AgentError> {
         self.read_endpoint::<replica_api::QueryResponse>(SyncContent::QueryRequest {
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
             canister_id: canister_id.clone(),
             method_name: method_name.to_string(),
             arg: arg.to_vec(),
-            ingress_expiry: Agent::current_expiry_time().as_nanos_since_unix_epoch(),
+            ingress_expiry,
         })
         .await
         .and_then(|response| match response {
@@ -406,11 +354,11 @@ impl Agent {
     /// async fn update_example() -> Result<(), Box<dyn std::error::Error>> {
     ///     let agent = Agent::builder().with_url("https://gw.dfinity.network/").build()?;
     ///     let canister_id = Principal::from_text("w7x7r-cok77-xa")?;
-    ///     let request_id = agent.update_raw(&canister_id, "echo", &[1, 2, 3]).await?;
+    ///     let request_id = agent.update_raw(&canister_id, "echo", &[1, 2, 3], 300).await?;
     ///
     ///     // Give the IC some time to process the update call.
     ///
-    ///     let status = agent.request_status_raw(&request_id).await?;
+    ///     let status = agent.request_status_raw(&request_id, 300).await?;
     ///     assert_eq!(
     ///       status,
     ///       RequestStatusResponse::Replied { reply: Replied::CallReplied(vec![1, 2, 3]) }
@@ -423,6 +371,7 @@ impl Agent {
         canister_id: &Principal,
         method_name: &str,
         arg: &[u8],
+        ingress_expiry: u64,
     ) -> Result<RequestId, AgentError> {
         self.submit_endpoint(AsyncContent::CallRequest {
             canister_id: canister_id.clone(),
@@ -430,7 +379,7 @@ impl Agent {
             arg: arg.to_vec(),
             nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
-            ingress_expiry: Agent::current_expiry_time().as_nanos_since_unix_epoch(),
+            ingress_expiry,
         })
         .await
     }
@@ -438,14 +387,15 @@ impl Agent {
     pub async fn request_status_raw(
         &self,
         request_id: &RequestId,
+        ingress_expiry: u64,
     ) -> Result<RequestStatusResponse, AgentError> {
         self.read_endpoint(SyncContent::RequestStatusRequest {
             request_id: request_id.as_slice().into(),
-            ingress_expiry: Agent::current_expiry_time().as_nanos_since_unix_epoch(),
+            ingress_expiry,
         })
         .await
         .map(|response| match response {
-            replica_api::RequestStatusResponse::Replied { reply } => {
+            replica_api::Status::Replied { reply } => {
                 let reply = match reply {
                     replica_api::RequestStatusResponseReplied::CallReply(reply) => {
                         Replied::CallReplied(reply.arg)
@@ -454,20 +404,25 @@ impl Agent {
 
                 RequestStatusResponse::Replied { reply }
             }
-            replica_api::RequestStatusResponse::Unknown {} => RequestStatusResponse::Unknown,
-            replica_api::RequestStatusResponse::Received {} => RequestStatusResponse::Received,
-            replica_api::RequestStatusResponse::Processing {} => RequestStatusResponse::Processing,
-            replica_api::RequestStatusResponse::Rejected {
+            replica_api::Status::Rejected {
                 reject_code,
                 reject_message,
             } => RequestStatusResponse::Rejected {
                 reject_code,
                 reject_message,
             },
+            replica_api::Status::Unknown {} => RequestStatusResponse::Unknown,
+            replica_api::Status::Received {} => RequestStatusResponse::Received,
+            replica_api::Status::Processing {} => RequestStatusResponse::Processing,
+            replica_api::Status::Done {} => RequestStatusResponse::Done,
         })
     }
 
-    pub fn update<S: ToString>(&self, canister_id: &Principal, method_name: S) -> UpdateBuilder<'_> {
+    pub fn update<S: ToString>(
+        &self,
+        canister_id: &Principal,
+        method_name: S,
+    ) -> UpdateBuilder<'_> {
         UpdateBuilder::new(self, canister_id.clone(), method_name.to_string())
     }
 
@@ -490,6 +445,7 @@ pub struct UpdateBuilder<'agent> {
     canister_id: Principal,
     method_name: String,
     arg: Vec<u8>,
+    ingress_expiry: u64,
 }
 
 impl<'agent> UpdateBuilder<'agent> {
@@ -499,11 +455,17 @@ impl<'agent> UpdateBuilder<'agent> {
             canister_id,
             method_name,
             arg: vec![],
+            ingress_expiry: 0,
         }
     }
 
     pub fn with_arg<A: AsRef<[u8]>>(&mut self, arg: A) -> &mut Self {
         self.arg = arg.as_ref().to_vec();
+        self
+    }
+
+    pub fn with_expiry(&mut self, ingress_expiry: u64) -> &mut Self {
+        self.ingress_expiry = ingress_expiry;
         self
     }
 
@@ -514,13 +476,17 @@ impl<'agent> UpdateBuilder<'agent> {
                 &self.canister_id,
                 self.method_name.as_str(),
                 self.arg.as_slice(),
+                self.ingress_expiry,
             )
             .await?;
-
         waiter.start();
 
         loop {
-            match self.agent.request_status_raw(&request_id).await? {
+            match self
+                .agent
+                .request_status_raw(&request_id, self.ingress_expiry)
+                .await?
+            {
                 RequestStatusResponse::Replied {
                     reply: Replied::CallReplied(arg),
                 } => return Ok(arg),
@@ -536,6 +502,7 @@ impl<'agent> UpdateBuilder<'agent> {
                 RequestStatusResponse::Unknown => (),
                 RequestStatusResponse::Received => (),
                 RequestStatusResponse::Processing => (),
+                RequestStatusResponse::Done => (),
             };
 
             waiter
@@ -550,6 +517,7 @@ impl<'agent> UpdateBuilder<'agent> {
                 &self.canister_id,
                 self.method_name.as_str(),
                 self.arg.as_slice(),
+                self.ingress_expiry,
             )
             .await
     }
