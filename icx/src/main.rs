@@ -230,7 +230,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 maybe_candid_path.and_then(|path| get_candid_type(&path, &t.method_name));
 
             let arg = blob_from_arguments(t.arg_value.as_deref(), &t.arg, &method_type)?;
-            let expiry = std::time::Duration::from_secs(60*5).as_nanos() as u64;
+            let expiry = std::time::Duration::from_secs(60 * 5).as_nanos() as u64;
             let result = match &opts.subcommand {
                 SubCommand::Update(_) => {
                     agent
@@ -240,19 +240,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         .call_and_wait(
                             delay::Delay::builder()
                                 .exponential_backoff(std::time::Duration::from_secs(60), 1.5)
-                                .timeout(std::time::Duration::from_secs(60*5))
+                                .timeout(std::time::Duration::from_secs(60 * 5))
                                 .build(),
                         )
                         .await
                 }
                 SubCommand::Query(_) => {
                     agent
-                        .query_raw(
-                            &t.canister_id,
-                            &t.method_name,
-                            &arg,
-                            expiry,
-                        )
+                        .query_raw(&t.canister_id, &t.method_name, &arg, expiry)
                         .await
                 }
                 _ => unreachable!(),
