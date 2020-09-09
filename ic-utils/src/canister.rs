@@ -1,4 +1,4 @@
-use crate::call::{AsyncCaller, TypedAsyncCaller};
+use crate::call::AsyncCaller;
 use candid::CandidType;
 use ic_agent::Agent;
 use ic_types::{Principal, PrincipalError};
@@ -148,21 +148,16 @@ impl<'agent, 'canister: 'agent, I: CandidType + Sync + Send, T>
         }
     }
 
-    pub fn build(self) -> AsyncCaller<'canister, I> {
+    pub fn build<O>(self) -> AsyncCaller<'canister, I, O>
+    where
+        O: DeserializeOwned + Send + Sync,
+    {
         let c = self.canister;
         AsyncCaller {
             agent: c.agent,
             canister_id: c.canister_id.clone(),
             method_name: self.method_name.clone(),
             arg: self.arg,
-        }
-    }
-
-    pub fn build_typed<O: DeserializeOwned + Send + Sync>(
-        self,
-    ) -> TypedAsyncCaller<'canister, I, O> {
-        TypedAsyncCaller {
-            inner: self.build(),
             phantom_out: std::marker::PhantomData,
         }
     }
@@ -180,9 +175,9 @@ impl<'agent, T> Canister<'agent, T> {
 #[cfg(test)]
 mod tests {
     use super::super::canisters::ManagementCanister;
-    use crate::call::TypedAsyncCall;
     use ic_agent::BasicIdentity;
 
+    #[ignore]
     #[tokio::test]
     async fn simple() {
         use super::Canister;

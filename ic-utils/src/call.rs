@@ -3,10 +3,14 @@ use candid::{CandidType, Decode, Encode};
 use delay::Waiter;
 use ic_agent::{Agent, AgentError, RequestId};
 use ic_types::Principal;
+use serde::de::DeserializeOwned;
+use std::future::Future;
 
 /// A type that implements synchronous calls (ie. 'query' calls).
 #[async_trait]
 pub trait SyncCall {
+    /// Execute the call, returning either the value returned by the canister, or an
+    /// error returned by the Agent.
     async fn call<T: serde::de::DeserializeOwned + Send + Sync>(&self) -> Result<T, AgentError>;
 }
 
@@ -14,21 +18,23 @@ pub trait SyncCall {
 /// This can call synchronous and return a [RequestId], or it can wait for the result
 /// by polling the agent, and return a type.
 #[async_trait]
-pub trait AsyncCall {
-    async fn call(&self) -> Result<RequestId, AgentError>;
-    async fn call_and_wait<O, W>(&self, mut waiter: W) -> Result<O, AgentError>
-    where
-        O: serde::de::DeserializeOwned + Send + Sync,
-        W: Waiter;
-}
-
-/// A type that implements asynchronous calls, where the type of the result is
-/// known ahead of time.
-#[async_trait]
-pub trait TypedAsyncCall<O>
+pub trait AsyncCall<O>
 where
     O: serde::de::DeserializeOwned + Send + Sync,
 {
+    /// Execute the call, but returns the RequestId. Waiting on the request Id must be
+    /// managed by the caller using the Agent directly.
+    ///
+    /// Since the return type is encoded in the trait itself, this can lead to types
+    /// that are not compatible to [O] when getting the result from the Request Id.
+    /// For example, you might hold a [AsyncCall<u8>], use `call()` and poll for
+    /// the result, and try to deserialize it as a [String]. This would be caught by
+    /// Rust type system, but in this case it will be checked at runtime (as Request
+    /// Id does not have a type associated with it).
+    async fn call(&self) -> Result<RequestId, AgentError>;
+
+    /// Execute the call, and wait for an answer using a [Waiter] strategy. The return
+    /// type is encoded in the trait.
     async fn call_and_wait<W>(&self, mut waiter: W) -> Result<O, AgentError>
     where
         W: Waiter;
@@ -65,15 +71,24 @@ impl<'agent, Arg: CandidType + Send + Sync> SyncCall for SyncCaller<'agent, Arg>
     }
 }
 
-/// An Asynchronous caller, implementing AsyncCall.
-pub struct AsyncCaller<'agent, Arg: CandidType + Send + Sync> {
+/// An async caller, encapsulating a call to an update method.
+pub struct AsyncCaller<'agent, Arg, Out>
+where
+    Arg: CandidType + Send + Sync,
+    Out: serde::de::DeserializeOwned + Send + Sync,
+{
     pub(crate) agent: &'agent Agent,
     pub(crate) canister_id: Principal,
     pub(crate) method_name: String,
     pub(crate) arg: Option<Arg>,
+    pub(crate) phantom_out: std::marker::PhantomData<Out>,
 }
 
-impl<'agent, Arg: CandidType + Send + Sync> AsyncCaller<'agent, Arg> {
+impl<'agent, Arg, Out> AsyncCaller<'agent, Arg, Out>
+where
+    Arg: CandidType + Send + Sync,
+    Out: serde::de::DeserializeOwned + Send + Sync,
+{
     pub async fn call(&self) -> Result<RequestId, AgentError> {
         let arg = if let Some(a) = &self.arg {
             Encode!(a)?
@@ -85,9 +100,8 @@ impl<'agent, Arg: CandidType + Send + Sync> AsyncCaller<'agent, Arg> {
             .await
     }
 
-    pub async fn call_and_wait<O, W>(&self, waiter: W) -> Result<O, AgentError>
+    pub async fn call_and_wait<W>(&self, waiter: W) -> Result<Out, AgentError>
     where
-        O: serde::de::DeserializeOwned + Send + Sync,
         W: Waiter,
     {
         let arg = if let Some(a) = &self.arg {
@@ -100,101 +114,90 @@ impl<'agent, Arg: CandidType + Send + Sync> AsyncCaller<'agent, Arg> {
             .with_arg(&arg)
             .call_and_wait(waiter)
             .await
-            .and_then(|r| Decode!(&r, O).map_err(AgentError::from))
-    }
-}
-
-#[async_trait]
-impl<'agent, Arg: CandidType + Send + Sync> AsyncCall for AsyncCaller<'agent, Arg> {
-    async fn call(&self) -> Result<RequestId, AgentError> {
-        self.call().await
-    }
-    async fn call_and_wait<O, W>(&self, waiter: W) -> Result<O, AgentError>
-    where
-        O: serde::de::DeserializeOwned + Send + Sync,
-        W: Waiter,
-    {
-        self.call_and_wait(waiter).await
-    }
-}
-
-pub struct TypedAsyncCaller<'agent, Arg, Out>
-where
-    Arg: CandidType + Send + Sync,
-    Out: serde::de::DeserializeOwned + Send + Sync,
-{
-    pub(crate) inner: AsyncCaller<'agent, Arg>,
-    pub(crate) phantom_out: std::marker::PhantomData<Out>,
-}
-
-impl<'agent, Arg, Out> TypedAsyncCaller<'agent, Arg, Out>
-where
-    Arg: CandidType + Send + Sync,
-    Out: serde::de::DeserializeOwned + Send + Sync,
-{
-    pub async fn call(&self) -> Result<RequestId, AgentError> {
-        self.inner.call().await
+            .and_then(|r| Decode!(&r, Out).map_err(AgentError::from))
     }
 
-    pub async fn call_and_wait<W>(&self, waiter: W) -> Result<Out, AgentError>
-    where
-        W: Waiter,
-    {
-        self.inner.call_and_wait(waiter).await
-    }
-
-    pub fn and_then<Out2, AndThen>(
+    pub fn and_then<Out2, R, AndThen>(
         self,
         and_then: AndThen,
-    ) -> AndThenTypedAsyncCaller<'agent, Arg, Out, Out2, AndThen>
+    ) -> AndThenAsyncCaller<'agent, Arg, Out, Out2, R, AndThen>
     where
         Out2: serde::de::DeserializeOwned + Send + Sync,
-        AndThen: Sync + Send + Fn(Out) -> Out2,
+        R: Future<Output = Result<Out2, AgentError>>,
+        AndThen: Sync + Send + Fn(Out) -> R,
     {
-        AndThenTypedAsyncCaller {
+        AndThenAsyncCaller {
             inner: self,
             and_then,
         }
     }
 }
 
-pub struct AndThenTypedAsyncCaller<
+#[async_trait]
+impl<'agent, Arg, Out> AsyncCall<Out> for AsyncCaller<'agent, Arg, Out>
+where
+    Arg: CandidType + Send + Sync,
+    Out: DeserializeOwned + Send + Sync,
+{
+    async fn call(&self) -> Result<RequestId, AgentError> {
+        self.call().await
+    }
+    async fn call_and_wait<W>(&self, waiter: W) -> Result<Out, AgentError>
+    where
+        W: Waiter,
+    {
+        self.call_and_wait(waiter).await
+    }
+}
+
+/// A structure that applies a transform function to the result of a call. Because of constraints
+/// on the type system in Rust, both the input and output to the function must be deserializable.
+pub struct AndThenAsyncCaller<
     'agent,
     Arg: CandidType + Send + Sync,
     Out: serde::de::DeserializeOwned + Send + Sync,
     Out2: serde::de::DeserializeOwned + Send + Sync,
-    AndThen: Sync + Send + Fn(Out) -> Out2,
+    R: Future<Output = Result<Out2, AgentError>>,
+    AndThen: Sync + Send + Fn(Out) -> R,
 > {
-    pub(crate) inner: TypedAsyncCaller<'agent, Arg, Out>,
+    pub(crate) inner: AsyncCaller<'agent, Arg, Out>,
     pub(crate) and_then: AndThen,
 }
 
-impl<'agent, Arg, Out, Out2, AndThen> AndThenTypedAsyncCaller<'agent, Arg, Out, Out2, AndThen>
+impl<'agent, Arg, Out, Out2, R, AndThen> AndThenAsyncCaller<'agent, Arg, Out, Out2, R, AndThen>
 where
     Arg: CandidType + Send + Sync,
     Out: serde::de::DeserializeOwned + Send + Sync,
     Out2: serde::de::DeserializeOwned + Send + Sync,
-    AndThen: Sync + Send + Fn(Out) -> Out2,
+    R: Future<Output = Result<Out2, AgentError>>,
+    AndThen: Sync + Send + Fn(Out) -> R,
 {
+    pub async fn call(&self) -> Result<RequestId, AgentError> {
+        self.inner.call().await
+    }
     pub async fn call_and_wait<W>(&self, waiter: W) -> Result<Out2, AgentError>
     where
         W: Waiter,
     {
         let v = self.inner.call_and_wait(waiter).await?;
 
-        Ok((self.and_then)(v))
+        (self.and_then)(v).await
     }
 }
 
 #[async_trait]
-impl<'agent, Arg, Out, Out2, AndThen> TypedAsyncCall<Out2>
-    for AndThenTypedAsyncCaller<'agent, Arg, Out, Out2, AndThen>
+impl<'agent, Arg, Out, Out2, R, AndThen> AsyncCall<Out2>
+    for AndThenAsyncCaller<'agent, Arg, Out, Out2, R, AndThen>
 where
     Arg: CandidType + Send + Sync,
     Out: serde::de::DeserializeOwned + Send + Sync,
     Out2: serde::de::DeserializeOwned + Send + Sync,
     AndThen: Sync + Send + Fn(Out) -> Out2,
 {
+    async fn call(&self) -> Result<RequestId, AgentError> {
+        self.call().await
+    }
+
     async fn call_and_wait<W>(&self, waiter: W) -> Result<Out2, AgentError>
     where
         W: Waiter,
