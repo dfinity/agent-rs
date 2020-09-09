@@ -62,7 +62,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
                 canister_id: canister_id.clone(),
             })
             .build()
-            .and_then(|result: Out| result.status)
+            .map(|result: Out| result.status)
     }
 
     /// Create a canister, returning a caller that returns a Canister Id.
@@ -76,7 +76,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
 
         self.update_("create_canister")
             .build()
-            .and_then(|result: Out| async { Ok(result.canister_id) })
+            .map(|result: Out| result.canister_id)
     }
 
     /// Deletes a canister.
@@ -129,23 +129,29 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             })
             .build()
     }
-    //
-    // /// Install a canister, with all the arguments necessary for creating the canister.
-    // pub fn install_code<'canister: 'agent, Arg: CandidType + Sync + Send>(
-    //     canister_id: &Principal,
-    //     mode:
-    // ) -> impl 'agent + TypedAsyncCall<()> {
-    //     #[derive(candid::CandidType, candid::Deserialize)]
-    //     struct CanisterInstall {
-    //         mode: InstallMode,
-    //         canister_id: Principal,
-    //         wasm_module: Vec<u8>,
-    //         arg: Vec<u8>,
-    //         compute_allocation: Option<u8>,
-    //     }
-    //
-    // }
-    //
-    // /// Creates a CodeInstallCallBuilder.
-    //
+
+    /// Install a canister, with all the arguments necessary for creating the canister.
+    pub fn install_code<'canister: 'agent, Arg: CandidType + Sync + Send>(
+        canister_id: &Principal,
+        mode:
+    ) -> impl 'agent + TypedAsyncCall<()> {
+        #[derive(candid::CandidType, candid::Deserialize)]
+        struct CanisterInstall {
+            mode: InstallMode,
+            canister_id: Principal,
+            wasm_module: Vec<u8>,
+            arg: Vec<u8>,
+            compute_allocation: Option<u8>,
+        }
+
+    }
+
+    /// Creates a CodeInstallCallBuilder.
+    pub fn install_code<'canister: 'agent, Arg: CandidType + Sync + Send>(
+        canister_id: &Principal,
+        mode:
+    ) -> impl 'agent + TypedAsyncCall<()> {
+
+    }
+
 }

@@ -53,7 +53,7 @@ impl<'agent, Arg: CandidType + Send + Sync> SyncCaller<'agent, Arg> {
     where
         R: serde::de::DeserializeOwned + Send + Sync,
     {
-        let arg = Encode!(&self.arg)?;
+        let arg = Encode!(&self.arg).map_err(AgentError::from)?;
         self.agent
             .query_raw(&self.canister_id, &self.method_name, &arg)
             .await
@@ -120,16 +120,21 @@ where
     pub fn and_then<Out2, R, AndThen>(
         self,
         and_then: AndThen,
-    ) -> AndThenAsyncCaller<'agent, Arg, Out, Out2, R, AndThen>
+    ) -> AndThenAsyncCaller<Out, Out2, Self, R, AndThen>
     where
         Out2: serde::de::DeserializeOwned + Send + Sync,
-        R: Future<Output = Result<Out2, AgentError>>,
+        R: Future<Output = Result<Out2, AgentError>> + Send + Sync,
         AndThen: Sync + Send + Fn(Out) -> R,
     {
-        AndThenAsyncCaller {
-            inner: self,
-            and_then,
-        }
+        AndThenAsyncCaller::new(self, and_then)
+    }
+
+    pub fn map<Out2, Map>(self, map: Map) -> MappedAsyncCaller<Out, Out2, Self, Map>
+    where
+        Out2: serde::de::DeserializeOwned + Send + Sync,
+        Map: Sync + Send + Fn(Out) -> Out2,
+    {
+        MappedAsyncCaller::new(self, map)
     }
 }
 
@@ -153,25 +158,35 @@ where
 /// A structure that applies a transform function to the result of a call. Because of constraints
 /// on the type system in Rust, both the input and output to the function must be deserializable.
 pub struct AndThenAsyncCaller<
-    'agent,
-    Arg: CandidType + Send + Sync,
     Out: serde::de::DeserializeOwned + Send + Sync,
     Out2: serde::de::DeserializeOwned + Send + Sync,
-    R: Future<Output = Result<Out2, AgentError>>,
+    Inner: AsyncCall<Out> + Sync + Send,
+    R: Future<Output = Result<Out2, AgentError>> + Send + Sync,
     AndThen: Sync + Send + Fn(Out) -> R,
 > {
-    pub(crate) inner: AsyncCaller<'agent, Arg, Out>,
-    pub(crate) and_then: AndThen,
+    inner: Inner,
+    and_then: AndThen,
+    _out: std::marker::PhantomData<Out>,
+    _out2: std::marker::PhantomData<Out2>,
 }
 
-impl<'agent, Arg, Out, Out2, R, AndThen> AndThenAsyncCaller<'agent, Arg, Out, Out2, R, AndThen>
+impl<Out, Out2, Inner, R, AndThen> AndThenAsyncCaller<Out, Out2, Inner, R, AndThen>
 where
-    Arg: CandidType + Send + Sync,
     Out: serde::de::DeserializeOwned + Send + Sync,
     Out2: serde::de::DeserializeOwned + Send + Sync,
-    R: Future<Output = Result<Out2, AgentError>>,
+    Inner: AsyncCall<Out> + Sync + Send,
+    R: Future<Output = Result<Out2, AgentError>> + Send + Sync,
     AndThen: Sync + Send + Fn(Out) -> R,
 {
+    pub fn new(inner: Inner, and_then: AndThen) -> Self {
+        Self {
+            inner,
+            and_then,
+            _out: std::marker::PhantomData,
+            _out2: std::marker::PhantomData,
+        }
+    }
+
     pub async fn call(&self) -> Result<RequestId, AgentError> {
         self.inner.call().await
     }
@@ -181,18 +196,123 @@ where
     {
         let v = self.inner.call_and_wait(waiter).await?;
 
-        (self.and_then)(v).await
+        let f = (self.and_then)(v);
+
+        f.await
+    }
+
+    pub fn and_then<Out3, R2, AndThen2>(
+        self,
+        and_then: AndThen2,
+    ) -> AndThenAsyncCaller<Out2, Out3, Self, R2, AndThen2>
+    where
+        Out3: serde::de::DeserializeOwned + Send + Sync,
+        R2: Future<Output = Result<Out3, AgentError>> + Send + Sync,
+        AndThen2: Sync + Send + Fn(Out2) -> R2,
+    {
+        AndThenAsyncCaller::new(self, and_then)
+    }
+
+    pub fn map<Out3, Map>(self, map: Map) -> MappedAsyncCaller<Out2, Out3, Self, Map>
+    where
+        Out3: serde::de::DeserializeOwned + Send + Sync,
+        Map: Sync + Send + Fn(Out2) -> Out3,
+    {
+        MappedAsyncCaller::new(self, map)
     }
 }
 
 #[async_trait]
-impl<'agent, Arg, Out, Out2, R, AndThen> AsyncCall<Out2>
-    for AndThenAsyncCaller<'agent, Arg, Out, Out2, R, AndThen>
+impl<Out, Out2, Inner, R, AndThen> AsyncCall<Out2>
+    for AndThenAsyncCaller<Out, Out2, Inner, R, AndThen>
 where
-    Arg: CandidType + Send + Sync,
     Out: serde::de::DeserializeOwned + Send + Sync,
     Out2: serde::de::DeserializeOwned + Send + Sync,
-    AndThen: Sync + Send + Fn(Out) -> Out2,
+    Inner: AsyncCall<Out> + Sync + Send,
+    R: Future<Output = Result<Out2, AgentError>> + Send + Sync,
+    AndThen: Sync + Send + Fn(Out) -> R,
+{
+    async fn call(&self) -> Result<RequestId, AgentError> {
+        self.call().await
+    }
+
+    async fn call_and_wait<W>(&self, waiter: W) -> Result<Out2, AgentError>
+    where
+        W: Waiter,
+    {
+        self.call_and_wait(waiter).await
+    }
+}
+
+/// A structure that applies a transform function to the result of a call. Because of constraints
+/// on the type system in Rust, both the input and output to the function must be deserializable.
+pub struct MappedAsyncCaller<
+    Out: serde::de::DeserializeOwned + Send + Sync,
+    Out2: serde::de::DeserializeOwned + Send + Sync,
+    Inner: AsyncCall<Out> + Sync + Send,
+    Map: Sync + Send + Fn(Out) -> Out2,
+> {
+    inner: Inner,
+    map: Map,
+    _out: std::marker::PhantomData<Out>,
+    _out2: std::marker::PhantomData<Out2>,
+}
+
+impl<Out, Out2, Inner, Map> MappedAsyncCaller<Out, Out2, Inner, Map>
+where
+    Out: serde::de::DeserializeOwned + Send + Sync,
+    Out2: serde::de::DeserializeOwned + Send + Sync,
+    Inner: AsyncCall<Out> + Sync + Send,
+    Map: Sync + Send + Fn(Out) -> Out2,
+{
+    pub fn new(inner: Inner, map: Map) -> Self {
+        Self {
+            inner,
+            map,
+            _out: std::marker::PhantomData,
+            _out2: std::marker::PhantomData,
+        }
+    }
+
+    pub async fn call(&self) -> Result<RequestId, AgentError> {
+        self.inner.call().await
+    }
+    pub async fn call_and_wait<W>(&self, waiter: W) -> Result<Out2, AgentError>
+    where
+        W: Waiter,
+    {
+        let v = self.inner.call_and_wait(waiter).await?;
+        Ok((self.map)(v))
+    }
+
+    pub fn and_then<Out3, R2, AndThen2>(
+        self,
+        and_then: AndThen2,
+    ) -> AndThenAsyncCaller<Out2, Out3, Self, R2, AndThen2>
+    where
+        Out3: serde::de::DeserializeOwned + Send + Sync,
+        R2: Future<Output = Result<Out3, AgentError>> + Send + Sync,
+        AndThen2: Sync + Send + Fn(Out2) -> R2,
+    {
+        AndThenAsyncCaller::new(self, and_then)
+    }
+
+    pub fn map<Out3, Map2>(self, map: Map2) -> MappedAsyncCaller<Out2, Out3, Self, Map2>
+    where
+        Out3: serde::de::DeserializeOwned + Send + Sync,
+        Map2: Sync + Send + Fn(Out2) -> Out3,
+    {
+        MappedAsyncCaller::new(self, map)
+    }
+}
+
+#[async_trait]
+impl<Out, Out2, Inner, Map> AsyncCall<Out2> for MappedAsyncCaller<Out, Out2, Inner, Map>
+where
+    Out: serde::de::DeserializeOwned + Send + Sync,
+    Out2: serde::de::DeserializeOwned + Send + Sync,
+    Inner: AsyncCall<Out> + Sync + Send,
+    Map: Sync + Send + Fn(Out) -> Out2,
 {
     async fn call(&self) -> Result<RequestId, AgentError> {
         self.call().await

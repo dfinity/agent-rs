@@ -175,6 +175,7 @@ impl<'agent, T> Canister<'agent, T> {
 #[cfg(test)]
 mod tests {
     use super::super::canisters::ManagementCanister;
+    use crate::call::AsyncCall;
     use ic_agent::BasicIdentity;
 
     #[ignore]
