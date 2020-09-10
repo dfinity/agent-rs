@@ -26,7 +26,7 @@ fn expiry_as_duration_and_nanos() -> (Duration, u64) {
         .expect("Time wrapped around");
     let valid_until = since_epoch + dur - permitted_drift;
 
-    (valid_until, valid_until.as_nanos() as u64)
+    (dur, valid_until.as_nanos() as u64)
 }
 
 async fn create_identity() -> Result<Box<dyn Identity>, String> {

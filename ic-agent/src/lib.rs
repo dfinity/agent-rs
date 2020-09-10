@@ -42,15 +42,24 @@
 //!     .with_identity(create_identity())
 //!     .build()?;
 //!   let management_canister_id = Principal::from_text("aaaaa-aa")?;
+//!
+//!   let duration = Duration::from_secs(60 * 5);
+//!   let start = SystemTime::now();
+//!   let since_epoch = start
+//!       .duration_since(UNIX_EPOCH)
+//!       .expect("Time wrapped around");
+//!   let valid_until = (since_epoch + duration).as_nanos() as u64;
+//!
 //!   let waiter = delay::Delay::builder()
 //!     .throttle(std::time::Duration::from_millis(500))
-//!     .timeout(std::time::Duration::from_secs(10))
+//!     .timeout(duration)
 //!     .build();
 //!
 //!   // Create a call to the management canister to create a new canister ID,
 //!   // and wait for a result.
 //!   let response = agent.update(&management_canister_id, "create_canister")
 //!     .with_arg(&Encode!()?)  // Empty Candid.
+//!     .with_expiry(valid_until)
 //!     .call_and_wait(waiter)
 //!     .await?;
 //!
