@@ -537,57 +537,57 @@ mod management_canister {
     }
 }
 
-// mod simple_calls {
-//     use super::{create_waiter, expiry_as_duration_and_nanos, with_universal_canister};
-//     use crate::universal_canister::payload;
-//     use ic_agent::AgentError;
+mod simple_calls {
+    use super::{create_waiter, expiry_as_duration_and_nanos, with_universal_canister};
+    use crate::universal_canister::payload;
+    use ic_agent::AgentError;
 
-//     #[ignore]
-//     #[test]
-//     fn call() {
-//         with_universal_canister(|agent, canister_id| async move {
-//             let arg = payload().reply_data(b"hello").build();
-//             let result = agent
-//                 .update(&canister_id, "update")
-//                 .with_arg(&arg)
-//                 .with_expiry(expiry_as_duration_and_nanos().1)
-//                 .call_and_wait(create_waiter())
-//                 .await?;
+    #[ignore]
+    #[test]
+    fn call() {
+        with_universal_canister(|agent, canister_id| async move {
+            let arg = payload().reply_data(b"hello").build();
+            let result = agent
+                .update(&canister_id, "update")
+                .with_arg(&arg)
+                .with_expiry(expiry_as_duration_and_nanos().1)
+                .call_and_wait(create_waiter())
+                .await?;
 
-//             assert_eq!(result.as_slice(), b"hello");
-//             Ok(())
-//         })
-//     }
+            assert_eq!(result.as_slice(), b"hello");
+            Ok(())
+        })
+    }
 
-//     #[ignore]
-//     #[test]
-//     fn query() {
-//         with_universal_canister(|agent, canister_id| async move {
-//             let arg = payload().reply_data(b"hello").build();
-//             let result = agent.query_raw(&canister_id, "query", &arg, expiry_as_duration_and_nanos().1).await?;
+    #[ignore]
+    #[test]
+    fn query() {
+        with_universal_canister(|agent, canister_id| async move {
+            let arg = payload().reply_data(b"hello").build();
+            let result = agent.query_raw(&canister_id, "query", &arg, expiry_as_duration_and_nanos().1).await?;
 
-//             assert_eq!(result, b"hello");
-//             Ok(())
-//         })
-//     }
+            assert_eq!(result, b"hello");
+            Ok(())
+        })
+    }
 
-//     #[ignore]
-//     #[test]
-//     fn non_existant_call() {
-//         with_universal_canister(|agent, canister_id| async move {
-//             let arg = payload().reply_data(b"hello").build();
-//             let result = agent
-//                 .update(&canister_id, "non_existent_method")
-//                 .with_arg(&arg)
-//                 .with_expiry(expiry_as_duration_and_nanos().1)
-//                 .call_and_wait(create_waiter())
-//                 .await;
+    #[ignore]
+    #[test]
+    fn non_existant_call() {
+        with_universal_canister(|agent, canister_id| async move {
+            let arg = payload().reply_data(b"hello").build();
+            let result = agent
+                .update(&canister_id, "non_existent_method")
+                .with_arg(&arg)
+                .with_expiry(expiry_as_duration_and_nanos().1)
+                .call_and_wait(create_waiter())
+                .await;
 
-//             assert!(match result {
-//                 Err(AgentError::ReplicaError { reject_code: 3, .. }) => true,
-//                 _ => false,
-//             });
-//             Ok(())
-//         })
-//     }
-// }
+            assert!(match result {
+                Err(AgentError::ReplicaError { reject_code: 3, .. }) => true,
+                _ => false,
+            });
+            Ok(())
+        })
+    }
+}
