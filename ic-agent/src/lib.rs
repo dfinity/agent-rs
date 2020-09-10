@@ -21,7 +21,7 @@
 //!
 //! #[derive(CandidType, Deserialize)]
 //! struct CreateCanisterResult {
-//!   canister_id: candid::Principal,
+//!   canister_id: Principal,
 //! }
 //!
 //! # fn create_identity() -> impl ic_agent::Identity {
@@ -65,7 +65,7 @@
 //!     .await?;
 //!
 //!   let result = Decode!(response.as_slice(), CreateCanisterResult)?;
-//!   let canister_id: Principal = Principal::from_text(&result.canister_id.to_text())?;
+//!   let canister_id: Principal = result.canister_id;
 //!   Ok(canister_id)
 //! }
 //!
