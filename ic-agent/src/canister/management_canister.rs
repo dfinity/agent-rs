@@ -33,7 +33,7 @@ struct StatusReply {
 }
 #[derive(candid::CandidType, candid::Deserialize)]
 struct CanisterRecord {
-    canister_id: candid::Principal,
+    canister_id: Principal,
 }
 
 #[derive(Clone, candid::CandidType, candid::Deserialize)]
@@ -62,7 +62,7 @@ impl FromStr for InstallMode {
 #[derive(candid::CandidType, candid::Deserialize)]
 struct CanisterInstall {
     mode: InstallMode,
-    canister_id: candid::Principal,
+    canister_id: Principal,
     wasm_module: Vec<u8>,
     arg: Vec<u8>,
     compute_allocation: Option<u8>,
@@ -85,9 +85,9 @@ impl<'agent> ManagementCanister<'agent> {
         ingress_expiry: u64,
     ) -> Result<CanisterStatus, AgentError> {
         let canister_to_install = CanisterRecord {
-            canister_id: candid::Principal::from_text(canister_id.to_text())?,
+            canister_id: canister_id.to_owned(),
         };
-        let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
+        let bytes: Vec<u8> = candid::Encode!(&canister_to_install)?;
         let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), STATUS_METHOD_NAME)
@@ -105,7 +105,7 @@ impl<'agent> ManagementCanister<'agent> {
         ingress_expiry: u64,
     ) -> Result<Principal, AgentError> {
         // candid encoding of () i.e. no arguments
-        let bytes: Vec<u8> = candid::Encode!().unwrap();
+        let bytes: Vec<u8> = candid::Encode!()?;
         let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), CREATE_METHOD_NAME)
@@ -125,9 +125,9 @@ impl<'agent> ManagementCanister<'agent> {
         ingress_expiry: u64,
     ) -> Result<(), AgentError> {
         let canister_to_install = CanisterRecord {
-            canister_id: candid::Principal::from_text(canister_id.to_text())?,
+            canister_id: canister_id.to_owned(),
         };
-        let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
+        let bytes: Vec<u8> = candid::Encode!(&canister_to_install)?;
         let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), DELETE_METHOD_NAME)
@@ -147,9 +147,9 @@ impl<'agent> ManagementCanister<'agent> {
         ingress_expiry: u64,
     ) -> Result<(), AgentError> {
         let canister_to_install = CanisterRecord {
-            canister_id: candid::Principal::from_text(canister_id.to_text())?,
+            canister_id: canister_id.to_owned(),
         };
-        let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
+        let bytes: Vec<u8> = candid::Encode!(&canister_to_install)?;
         let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), START_METHOD_NAME)
@@ -169,9 +169,9 @@ impl<'agent> ManagementCanister<'agent> {
         ingress_expiry: u64,
     ) -> Result<(), AgentError> {
         let canister_to_install = CanisterRecord {
-            canister_id: candid::Principal::from_text(canister_id.to_text())?,
+            canister_id: canister_id.to_owned(),
         };
-        let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
+        let bytes: Vec<u8> = candid::Encode!(&canister_to_install)?;
         let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), STOP_METHOD_NAME)
@@ -197,13 +197,13 @@ impl<'agent> ManagementCanister<'agent> {
     ) -> Result<(), AgentError> {
         let canister_to_install = CanisterInstall {
             mode,
-            canister_id: candid::Principal::from_text(canister_id.to_text())?,
+            canister_id: canister_id.to_owned(),
             wasm_module: module.to_vec(),
             arg: arg.to_vec(),
             compute_allocation: attributes.compute_allocation.map(|x| x.into()),
             memory_allocation: None,
         };
-        let bytes: Vec<u8> = candid::Encode!(&canister_to_install).unwrap();
+        let bytes: Vec<u8> = candid::Encode!(&canister_to_install)?;
         let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), INSTALL_METHOD_NAME)
