@@ -82,9 +82,7 @@ where
         let agent = create_agent().await.expect("Could not create an agent.");
         let ic00 = ic_agent::ManagementCanister::new(&agent);
 
-        let canister_id = ic00
-            .create_canister(create_waiter())
-            .await?;
+        let canister_id = ic00.create_canister(create_waiter()).await?;
         ic00.install_code(
             create_waiter(),
             &canister_id,
@@ -137,9 +135,7 @@ mod management_canister {
         fn no_id_given() {
             with_agent(|agent| async move {
                 let ic00 = ic_agent::ManagementCanister::new(&agent);
-                let _ = ic00
-                    .create_canister(create_waiter())
-                    .await?;
+                let _ = ic00.create_canister(create_waiter()).await?;
 
                 Ok(())
             })
@@ -179,9 +175,7 @@ mod management_canister {
     fn management() {
         with_agent(|agent| async move {
             let ic00 = ic_agent::ManagementCanister::new(&agent);
-            let canister_id = ic00
-                .create_canister(create_waiter())
-                .await?;
+            let canister_id = ic00.create_canister(create_waiter()).await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
 
             // Install once.
@@ -273,9 +267,7 @@ mod management_canister {
             // TODO: set controller tests.
 
             // Reinstall on empty should succeed.
-            let canister_id_2 = ic00
-                .create_canister(create_waiter())
-                .await?;
+            let canister_id_2 = ic00.create_canister(create_waiter()).await?;
             ic00.install_code(
                 create_waiter(),
                 &canister_id_2,
@@ -295,9 +287,7 @@ mod management_canister {
     fn canister_lifecycle_and_delete() {
         with_agent(|agent| async move {
             let ic00 = ic_agent::ManagementCanister::new(&agent);
-            let canister_id = ic00
-                .create_canister(create_waiter())
-                .await?;
+            let canister_id = ic00.create_canister(create_waiter()).await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
 
             // Install once.
@@ -312,36 +302,18 @@ mod management_canister {
             .await?;
 
             // A newly installed canister should be running
-            let result = ic00
-                .canister_status(
-                    create_waiter(),
-                    &canister_id,
-                )
-                .await;
+            let result = ic00.canister_status(create_waiter(), &canister_id).await;
             assert_eq!(result?, ic_agent::CanisterStatus::Running);
 
             // Stop should succeed.
-            ic00.stop_canister(
-                create_waiter(),
-                &canister_id,
-            )
-            .await?;
+            ic00.stop_canister(create_waiter(), &canister_id).await?;
 
             // Canister should be stopped
-            let result = ic00
-                .canister_status(
-                    create_waiter(),
-                    &canister_id,
-                )
-                .await;
+            let result = ic00.canister_status(create_waiter(), &canister_id).await;
             assert_eq!(result?, ic_agent::CanisterStatus::Stopped);
 
             // Another stop is a noop
-            ic00.stop_canister(
-                create_waiter(),
-                &canister_id,
-            )
-            .await?;
+            ic00.stop_canister(create_waiter(), &canister_id).await?;
 
             // Can't call update on a stopped canister
             let result = agent
@@ -358,9 +330,7 @@ mod management_canister {
             });
 
             // Can't call query on a stopped canister
-            let result = agent
-                .query_raw(&canister_id, "query", &[])
-                .await;
+            let result = agent.query_raw(&canister_id, "query", &[]).await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 5,
@@ -370,19 +340,10 @@ mod management_canister {
             });
 
             // Start should succeed.
-            ic00.start_canister(
-                create_waiter(),
-                &canister_id,
-            )
-            .await?;
+            ic00.start_canister(create_waiter(), &canister_id).await?;
 
             // Canister should be running
-            let result = ic00
-                .canister_status(
-                    create_waiter(),
-                    &canister_id,
-                )
-                .await;
+            let result = ic00.canister_status(create_waiter(), &canister_id).await;
             assert_eq!(result?, ic_agent::CanisterStatus::Running);
 
             // Can call update
@@ -400,9 +361,7 @@ mod management_canister {
             });
 
             // Can call query
-            let result = agent
-                .query_raw(&canister_id, "query", &[])
-                .await;
+            let result = agent.query_raw(&canister_id, "query", &[]).await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 3,
@@ -412,37 +371,20 @@ mod management_canister {
             });
 
             // Another start is a noop
-            ic00.start_canister(
-                create_waiter(),
-                &canister_id,
-            )
-            .await?;
+            ic00.start_canister(create_waiter(), &canister_id).await?;
 
             // Delete a running canister should fail.
-            let result = ic00
-                .delete_canister(
-                    create_waiter(),
-                    &canister_id,
-                )
-                .await;
+            let result = ic00.delete_canister(create_waiter(), &canister_id).await;
             assert!(match result {
                 Err(AgentError::ReplicaError { .. }) => true,
                 _ => false,
             });
 
             // Stop should succeed.
-            ic00.stop_canister(
-                create_waiter(),
-                &canister_id,
-            )
-            .await?;
+            ic00.stop_canister(create_waiter(), &canister_id).await?;
 
             // Delete a stopped canister succeeds.
-            ic00.delete_canister(
-                create_waiter(),
-                &canister_id,
-            )
-            .await?;
+            ic00.delete_canister(create_waiter(), &canister_id).await?;
 
             // Cannot call update
             let result = agent
@@ -461,9 +403,7 @@ mod management_canister {
             });
 
             // Cannot call query
-            let result = agent
-                .query_raw(&canister_id, "query", &[])
-                .await;
+            let result = agent.query_raw(&canister_id, "query", &[]).await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 3,
@@ -475,12 +415,7 @@ mod management_canister {
             });
 
             // Cannot query canister status
-            let result = ic00
-                .canister_status(
-                    create_waiter(),
-                    &canister_id,
-                )
-                .await;
+            let result = ic00.canister_status(create_waiter(), &canister_id).await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 5,
@@ -495,12 +430,7 @@ mod management_canister {
             });
 
             // Delete a running canister should fail.
-            let result = ic00
-                .delete_canister(
-                    create_waiter(),
-                    &canister_id,
-                )
-                .await;
+            let result = ic00.delete_canister(create_waiter(), &canister_id).await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 5,

@@ -489,11 +489,7 @@ impl<'agent> UpdateBuilder<'agent> {
         waiter.start();
 
         loop {
-            match self
-                .agent
-                .request_status_raw(&request_id)
-                .await?
-            {
+            match self.agent.request_status_raw(&request_id).await? {
                 RequestStatusResponse::Replied {
                     reply: Replied::CallReplied(arg),
                 } => return Ok(arg),
