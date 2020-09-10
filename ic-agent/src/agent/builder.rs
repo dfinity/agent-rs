@@ -61,4 +61,13 @@ impl AgentBuilder {
             },
         }
     }
+
+    pub fn with_expiry(self, ingress_expiry: u64) -> Self {
+        AgentBuilder {
+            config: AgentConfig {
+                ingress_expiry,
+                ..self.config
+            },
+        }
+    }
 }

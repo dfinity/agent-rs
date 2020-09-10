@@ -103,6 +103,7 @@ pub struct Agent {
     client: reqwest::Client,
     identity: Box<dyn Identity>,
     password_manager: Option<Box<dyn PasswordManager>>,
+    ingress_expiry: u64,
 }
 
 impl Agent {
@@ -135,6 +136,7 @@ impl Agent {
             nonce_factory: config.nonce_factory,
             identity: config.identity,
             password_manager: config.password_manager,
+            ingress_expiry: config.ingress_expiry,
         })
     }
 
@@ -321,7 +323,7 @@ impl Agent {
     /// async fn query_example() -> Result<(), Box<dyn std::error::Error>> {
     ///     let agent = Agent::builder().with_url("https://gw.dfinity.network").build()?;
     ///     let canister_id = Principal::from_text("w7x7r-cok77-xa")?;
-    ///     let response = agent.query_raw(&canister_id, "echo", &[1, 2, 3], 300).await?;
+    ///     let response = agent.query_raw(&canister_id, "echo", &[1, 2, 3]).await?;
     ///     assert_eq!(response, &[1, 2, 3]);
     ///     Ok(())
     /// }
@@ -331,14 +333,13 @@ impl Agent {
         canister_id: &Principal,
         method_name: &str,
         arg: &[u8],
-        ingress_expiry: u64,
     ) -> Result<Vec<u8>, AgentError> {
         self.read_endpoint::<replica_api::QueryResponse>(SyncContent::QueryRequest {
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
             canister_id: canister_id.clone(),
             method_name: method_name.to_string(),
             arg: arg.to_vec(),
-            ingress_expiry,
+            ingress_expiry: self.ingress_expiry,
         })
         .await
         .and_then(|response| match response {
@@ -363,11 +364,11 @@ impl Agent {
     /// async fn update_example() -> Result<(), Box<dyn std::error::Error>> {
     ///     let agent = Agent::builder().with_url("https://gw.dfinity.network/").build()?;
     ///     let canister_id = Principal::from_text("w7x7r-cok77-xa")?;
-    ///     let request_id = agent.update_raw(&canister_id, "echo", &[1, 2, 3], 300).await?;
+    ///     let request_id = agent.update_raw(&canister_id, "echo", &[1, 2, 3]).await?;
     ///
     ///     // Give the IC some time to process the update call.
     ///
-    ///     let status = agent.request_status_raw(&request_id, 300).await?;
+    ///     let status = agent.request_status_raw(&request_id).await?;
     ///     assert_eq!(
     ///       status,
     ///       RequestStatusResponse::Replied { reply: Replied::CallReplied(vec![1, 2, 3]) }
@@ -380,7 +381,6 @@ impl Agent {
         canister_id: &Principal,
         method_name: &str,
         arg: &[u8],
-        ingress_expiry: u64,
     ) -> Result<RequestId, AgentError> {
         self.submit_endpoint(AsyncContent::CallRequest {
             canister_id: canister_id.clone(),
@@ -388,7 +388,7 @@ impl Agent {
             arg: arg.to_vec(),
             nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
-            ingress_expiry,
+            ingress_expiry: self.ingress_expiry,
         })
         .await
     }
@@ -396,11 +396,10 @@ impl Agent {
     pub async fn request_status_raw(
         &self,
         request_id: &RequestId,
-        ingress_expiry: u64,
     ) -> Result<RequestStatusResponse, AgentError> {
         self.read_endpoint(SyncContent::RequestStatusRequest {
             request_id: request_id.as_slice().into(),
-            ingress_expiry,
+            ingress_expiry: self.ingress_expiry,
         })
         .await
         .map(|response| match response {
@@ -485,7 +484,6 @@ impl<'agent> UpdateBuilder<'agent> {
                 &self.canister_id,
                 self.method_name.as_str(),
                 self.arg.as_slice(),
-                self.ingress_expiry,
             )
             .await?;
         waiter.start();
@@ -493,7 +491,7 @@ impl<'agent> UpdateBuilder<'agent> {
         loop {
             match self
                 .agent
-                .request_status_raw(&request_id, self.ingress_expiry)
+                .request_status_raw(&request_id)
                 .await?
             {
                 RequestStatusResponse::Replied {
@@ -526,7 +524,6 @@ impl<'agent> UpdateBuilder<'agent> {
                 &self.canister_id,
                 self.method_name.as_str(),
                 self.arg.as_slice(),
-                self.ingress_expiry,
             )
             .await
     }

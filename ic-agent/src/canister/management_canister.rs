@@ -82,7 +82,6 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         waiter: W,
         canister_id: &Principal,
-        ingress_expiry: u64,
     ) -> Result<CanisterStatus, AgentError> {
         let canister_to_install = CanisterRecord {
             canister_id: candid::Principal::from_text(canister_id.to_text())?,
@@ -92,7 +91,6 @@ impl<'agent> ManagementCanister<'agent> {
             .agent
             .update(&Principal::management_canister(), STATUS_METHOD_NAME)
             .with_arg(&bytes)
-            .with_expiry(ingress_expiry)
             .call_and_wait(waiter)
             .await?;
         let reply = Decode!(&bytes_to_decode, StatusReply)?;
@@ -102,7 +100,6 @@ impl<'agent> ManagementCanister<'agent> {
     pub async fn create_canister<W: delay::Waiter>(
         &self,
         waiter: W,
-        ingress_expiry: u64,
     ) -> Result<Principal, AgentError> {
         // candid encoding of () i.e. no arguments
         let bytes: Vec<u8> = candid::Encode!().unwrap();
@@ -110,7 +107,6 @@ impl<'agent> ManagementCanister<'agent> {
             .agent
             .update(&Principal::management_canister(), CREATE_METHOD_NAME)
             .with_arg(&bytes)
-            .with_expiry(ingress_expiry)
             .call_and_wait(waiter)
             .await?;
 
@@ -122,7 +118,6 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         waiter: W,
         canister_id: &Principal,
-        ingress_expiry: u64,
     ) -> Result<(), AgentError> {
         let canister_to_install = CanisterRecord {
             canister_id: candid::Principal::from_text(canister_id.to_text())?,
@@ -132,7 +127,6 @@ impl<'agent> ManagementCanister<'agent> {
             .agent
             .update(&Principal::management_canister(), DELETE_METHOD_NAME)
             .with_arg(&bytes)
-            .with_expiry(ingress_expiry)
             .call_and_wait(waiter)
             .await?;
         // Candid type returned is () so validating the result.
@@ -144,7 +138,6 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         waiter: W,
         canister_id: &Principal,
-        ingress_expiry: u64,
     ) -> Result<(), AgentError> {
         let canister_to_install = CanisterRecord {
             canister_id: candid::Principal::from_text(canister_id.to_text())?,
@@ -154,7 +147,6 @@ impl<'agent> ManagementCanister<'agent> {
             .agent
             .update(&Principal::management_canister(), START_METHOD_NAME)
             .with_arg(&bytes)
-            .with_expiry(ingress_expiry)
             .call_and_wait(waiter)
             .await?;
         // Candid type returned is () so validating the result.
@@ -166,7 +158,6 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         waiter: W,
         canister_id: &Principal,
-        ingress_expiry: u64,
     ) -> Result<(), AgentError> {
         let canister_to_install = CanisterRecord {
             canister_id: candid::Principal::from_text(canister_id.to_text())?,
@@ -176,7 +167,6 @@ impl<'agent> ManagementCanister<'agent> {
             .agent
             .update(&Principal::management_canister(), STOP_METHOD_NAME)
             .with_arg(&bytes)
-            .with_expiry(ingress_expiry)
             .call_and_wait(waiter)
             .await?;
         // Candid type returned is () so validating the result.
@@ -184,7 +174,6 @@ impl<'agent> ManagementCanister<'agent> {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn install_code<W: delay::Waiter>(
         &self,
         waiter: W,
@@ -193,7 +182,6 @@ impl<'agent> ManagementCanister<'agent> {
         module: &[u8],
         arg: &[u8],
         attributes: &CanisterAttributes,
-        ingress_expiry: u64,
     ) -> Result<(), AgentError> {
         let canister_to_install = CanisterInstall {
             mode,
@@ -208,7 +196,6 @@ impl<'agent> ManagementCanister<'agent> {
             .agent
             .update(&Principal::management_canister(), INSTALL_METHOD_NAME)
             .with_arg(&bytes)
-            .with_expiry(ingress_expiry)
             .call_and_wait(waiter)
             .await?;
 
