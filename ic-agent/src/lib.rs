@@ -17,6 +17,7 @@
 //! use ic_agent::{Agent, Principal};
 //! use candid::{Encode, Decode, CandidType};
 //! use serde::Deserialize;
+//! use std::time::{Duration, SystemTime, UNIX_EPOCH};
 //!
 //! #[derive(CandidType, Deserialize)]
 //! struct CreateCanisterResult {
