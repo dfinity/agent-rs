@@ -564,7 +564,14 @@ mod simple_calls {
     fn query() {
         with_universal_canister(|agent, canister_id| async move {
             let arg = payload().reply_data(b"hello").build();
-            let result = agent.query_raw(&canister_id, "query", &arg, expiry_as_duration_and_nanos().1).await?;
+            let result = agent
+                .query_raw(
+                    &canister_id,
+                    "query",
+                    &arg,
+                    expiry_as_duration_and_nanos().1,
+                )
+                .await?;
 
             assert_eq!(result, b"hello");
             Ok(())
