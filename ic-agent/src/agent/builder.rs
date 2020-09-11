@@ -62,7 +62,7 @@ impl AgentBuilder {
         }
     }
 
-    pub fn expire_when(self, time: std::time::SystemTime) -> Self {
+    pub fn expire_at(self, time: std::time::SystemTime) -> Self {
         AgentBuilder {
             config: AgentConfig {
                 ingress_expiry: Some(
@@ -74,7 +74,7 @@ impl AgentBuilder {
         }
     }
 
-    pub fn valid_until(self, duration: Option<std::time::Duration>) -> Self {
+    pub fn expire_after(self, duration: Option<std::time::Duration>) -> Self {
         AgentBuilder {
             config: AgentConfig {
                 ingress_expiry: duration,

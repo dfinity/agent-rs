@@ -472,7 +472,7 @@ impl<'agent> UpdateBuilder<'agent> {
         self
     }
 
-    pub fn expire_when(&mut self, time: std::time::SystemTime) -> &mut Self {
+    pub fn expire_at(&mut self, time: std::time::SystemTime) -> &mut Self {
         self.ingress_expiry = time
             .duration_since(std::time::UNIX_EPOCH)
             .expect("Time wrapped around")
@@ -480,7 +480,7 @@ impl<'agent> UpdateBuilder<'agent> {
         self
     }
 
-    pub fn valid_until(&mut self, duration: std::time::Duration) -> &mut Self {
+    pub fn expire_after(&mut self, duration: std::time::Duration) -> &mut Self {
         self.ingress_expiry = duration.as_nanos() as u64;
         self
     }
