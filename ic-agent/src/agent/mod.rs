@@ -472,11 +472,6 @@ impl<'agent> UpdateBuilder<'agent> {
         self
     }
 
-    pub fn with_expiry(&mut self, ingress_expiry: u64) -> &mut Self {
-        self.ingress_expiry = ingress_expiry;
-        self
-    }
-
     pub fn expire_when(&mut self, time: std::time::SystemTime) -> &mut Self {
         self.ingress_expiry = time
             .duration_since(std::time::UNIX_EPOCH)

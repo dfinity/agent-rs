@@ -230,13 +230,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 maybe_candid_path.and_then(|path| get_candid_type(&path, &t.method_name));
 
             let arg = blob_from_arguments(t.arg_value.as_deref(), &t.arg, &method_type)?;
-            let expiry = std::time::Duration::from_secs(60 * 5).as_nanos() as u64;
             let result = match &opts.subcommand {
                 SubCommand::Update(_) => {
                     agent
                         .update(&t.canister_id, &t.method_name)
                         .with_arg(arg)
-                        .with_expiry(expiry)
                         .call_and_wait(
                             delay::Delay::builder()
                                 .exponential_backoff(std::time::Duration::from_secs(60), 1.5)
