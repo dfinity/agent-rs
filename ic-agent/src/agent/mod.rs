@@ -128,7 +128,9 @@ impl Agent {
             nonce_factory: config.nonce_factory,
             identity: config.identity,
             password_manager: config.password_manager,
-            ingress_expiry: config.ingress_expiry.unwrap_or(Duration::from_secs(300)),
+            ingress_expiry: config
+                .ingress_expiry
+                .unwrap_or_else(|| Duration::from_secs(300)),
         })
     }
 
