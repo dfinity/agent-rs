@@ -376,7 +376,7 @@ impl Agent {
     ///     Ok(())
     /// }
     /// ```
-    pub async fn update_raw(
+    async fn update_raw(
         &self,
         canister_id: &Principal,
         method_name: &str,
