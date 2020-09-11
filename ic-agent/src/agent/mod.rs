@@ -95,7 +95,7 @@ pub struct Agent {
     client: reqwest::Client,
     identity: Box<dyn Identity>,
     password_manager: Option<Box<dyn PasswordManager>>,
-    ingress_expiry: u64,
+    ingress_expiry: Duration,
 }
 
 impl Agent {
@@ -128,16 +128,16 @@ impl Agent {
             nonce_factory: config.nonce_factory,
             identity: config.identity,
             password_manager: config.password_manager,
-            ingress_expiry: config
-                .ingress_expiry
-                .unwrap_or(
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .expect("Time wrapped around")
-                        + Duration::from_secs(300),
-                )
-                .as_nanos() as u64,
+            ingress_expiry: config.ingress_expiry.unwrap_or(Duration::from_secs(300)),
         })
+    }
+
+    fn expiry_duration_as_nanos(&self) -> u64 {
+        (std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("Time wrapped around.")
+            + self.ingress_expiry)
+            .as_nanos() as u64
     }
 
     fn construct_message(&self, request_id: &RequestId) -> Vec<u8> {
@@ -243,7 +243,6 @@ impl Agent {
         }
 
         if status.is_client_error() || status.is_server_error() {
-            eprintln!("Content: {}", String::from_utf8_lossy(&body));
             Err(AgentError::HttpError {
                 status: status.into(),
                 content_type: headers
@@ -339,7 +338,7 @@ impl Agent {
             canister_id: canister_id.clone(),
             method_name: method_name.to_string(),
             arg: arg.to_vec(),
-            ingress_expiry: self.ingress_expiry,
+            ingress_expiry: self.expiry_duration_as_nanos(),
         })
         .await
         .and_then(|response| match response {
@@ -354,28 +353,28 @@ impl Agent {
         })
     }
 
-    /// The simplest way to do an update call; sends a byte array and will return a RequestId.
-    /// The RequestId should then be used for request_status (most likely in a loop).
-    ///
-    /// ```no_run
-    /// use ic_agent::{Agent, Replied, RequestStatusResponse};
-    /// use ic_types::Principal;
-    ///
-    /// async fn update_example() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let agent = Agent::builder().with_url("https://gw.dfinity.network/").build()?;
-    ///     let canister_id = Principal::from_text("w7x7r-cok77-xa")?;
-    ///     let request_id = agent.update_raw(&canister_id, "echo", &[1, 2, 3]).await?;
-    ///
-    ///     // Give the IC some time to process the update call.
-    ///
-    ///     let status = agent.request_status_raw(&request_id).await?;
-    ///     assert_eq!(
-    ///       status,
-    ///       RequestStatusResponse::Replied { reply: Replied::CallReplied(vec![1, 2, 3]) }
-    ///     );
-    ///     Ok(())
-    /// }
-    /// ```
+    // The simplest way to do an update call; sends a byte array and will return a RequestId.
+    // The RequestId should then be used for request_status (most likely in a loop).
+    //
+    // ```no_run
+    // use ic_agent::{Agent, Replied, RequestStatusResponse};
+    // use ic_types::Principal;
+    //
+    // async fn update_example() -> Result<(), Box<dyn std::error::Error>> {
+    //     let agent = Agent::builder().with_url("https://gw.dfinity.network/").build()?;
+    //     let canister_id = Principal::from_text("w7x7r-cok77-xa")?;
+    //     let request_id = agent.update_raw(&canister_id, "echo", &[1, 2, 3]).await?;
+    //
+    //     // Give the IC some time to process the update call.
+    //
+    //     let status = agent.request_status_raw(&request_id).await?;
+    //     assert_eq!(
+    //       status,
+    //       RequestStatusResponse::Replied { reply: Replied::CallReplied(vec![1, 2, 3]) }
+    //     );
+    //     Ok(())
+    // }
+    // ```
     async fn update_raw(
         &self,
         canister_id: &Principal,
@@ -388,7 +387,7 @@ impl Agent {
             arg: arg.to_vec(),
             nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
-            ingress_expiry: self.ingress_expiry,
+            ingress_expiry: self.expiry_duration_as_nanos(),
         })
         .await
     }
@@ -399,7 +398,7 @@ impl Agent {
     ) -> Result<RequestStatusResponse, AgentError> {
         self.read_endpoint(SyncContent::RequestStatusRequest {
             request_id: request_id.as_slice().into(),
-            ingress_expiry: self.ingress_expiry,
+            ingress_expiry: self.expiry_duration_as_nanos(),
         })
         .await
         .map(|response| match response {

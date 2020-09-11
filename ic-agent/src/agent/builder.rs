@@ -62,18 +62,6 @@ impl AgentBuilder {
         }
     }
 
-    pub fn expire_at(self, time: std::time::SystemTime) -> Self {
-        AgentBuilder {
-            config: AgentConfig {
-                ingress_expiry: Some(
-                    time.duration_since(std::time::UNIX_EPOCH)
-                        .expect("Time wrapped around"),
-                ),
-                ..self.config
-            },
-        }
-    }
-
     pub fn expire_after(self, duration: Option<std::time::Duration>) -> Self {
         AgentBuilder {
             config: AgentConfig {

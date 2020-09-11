@@ -6,25 +6,14 @@ use ic_agent::{
 use ref_tests::universal_canister;
 use ring::signature::Ed25519KeyPair;
 use std::future::Future;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const EXPECTED_IC_API_VERSION: &str = "0.10.2";
 
 fn create_waiter() -> Delay {
     Delay::builder()
         .throttle(std::time::Duration::from_millis(5))
-        .timeout(expiry_duration())
+        .timeout(std::time::Duration::from_secs(60 * 5))
         .build()
-}
-
-fn expiry_duration() -> Duration {
-    let dur = Duration::from_secs(60 * 5); // 5 minutes is max ingress timeout
-    let permitted_drift = Duration::from_secs(60);
-    let start = SystemTime::now();
-    let since_epoch = start
-        .duration_since(UNIX_EPOCH)
-        .expect("Time wrapped around");
-    since_epoch + dur - permitted_drift
 }
 
 async fn create_identity() -> Result<Box<dyn Identity>, String> {
