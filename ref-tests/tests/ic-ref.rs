@@ -13,20 +13,18 @@ const EXPECTED_IC_API_VERSION: &str = "0.10.2";
 fn create_waiter() -> Delay {
     Delay::builder()
         .throttle(std::time::Duration::from_millis(5))
-        .timeout(expiry_as_duration_and_nanos().0)
+        .timeout(expiry_duration())
         .build()
 }
 
-fn expiry_as_duration_and_nanos() -> (Duration, u64) {
+fn expiry_duration() -> Duration {
     let dur = Duration::from_secs(60 * 5); // 5 minutes is max ingress timeout
     let permitted_drift = Duration::from_secs(60);
     let start = SystemTime::now();
     let since_epoch = start
         .duration_since(UNIX_EPOCH)
         .expect("Time wrapped around");
-    let valid_until = since_epoch + dur - permitted_drift;
-
-    (dur, valid_until.as_nanos() as u64)
+    since_epoch + dur - permitted_drift
 }
 
 async fn create_identity() -> Result<Box<dyn Identity>, String> {
@@ -49,7 +47,6 @@ async fn create_agent() -> Result<Agent, String> {
     Ok(ic_agent::Agent::new(AgentConfig {
         url: format!("http://127.0.0.1:{}", port),
         identity: create_identity().await?,
-        ingress_expiry: expiry_as_duration_and_nanos().1,
         ..AgentConfig::default()
     })
     .map_err(|e| format!("{}", e))?)
@@ -122,7 +119,7 @@ fn spec_compliance_claimed() {
 }
 
 mod management_canister {
-    use super::{create_agent, create_waiter, expiry_as_duration_and_nanos, with_agent};
+    use super::{create_agent, create_waiter, with_agent};
     use ic_agent::{AgentError, CanisterAttributes, InstallMode};
 
     mod create_canister {
@@ -318,7 +315,6 @@ mod management_canister {
             // Can't call update on a stopped canister
             let result = agent
                 .update(&canister_id, "update")
-                .with_expiry(expiry_as_duration_and_nanos().1)
                 .call_and_wait(create_waiter())
                 .await;
             assert!(match result {
@@ -349,7 +345,6 @@ mod management_canister {
             // Can call update
             let result = agent
                 .update(&canister_id, "update")
-                .with_expiry(expiry_as_duration_and_nanos().1)
                 .call_and_wait(create_waiter())
                 .await;
             assert!(match result {
@@ -389,7 +384,6 @@ mod management_canister {
             // Cannot call update
             let result = agent
                 .update(&canister_id, "update")
-                .with_expiry(expiry_as_duration_and_nanos().1)
                 .call_and_wait(create_waiter())
                 .await;
             assert!(match result {
@@ -447,7 +441,7 @@ mod management_canister {
 }
 
 mod simple_calls {
-    use super::{create_waiter, expiry_as_duration_and_nanos, with_universal_canister};
+    use super::{create_waiter, with_universal_canister};
     use crate::universal_canister::payload;
     use ic_agent::AgentError;
 
@@ -459,7 +453,6 @@ mod simple_calls {
             let result = agent
                 .update(&canister_id, "update")
                 .with_arg(&arg)
-                .with_expiry(expiry_as_duration_and_nanos().1)
                 .call_and_wait(create_waiter())
                 .await?;
 
@@ -488,7 +481,6 @@ mod simple_calls {
             let result = agent
                 .update(&canister_id, "non_existent_method")
                 .with_arg(&arg)
-                .with_expiry(expiry_as_duration_and_nanos().1)
                 .call_and_wait(create_waiter())
                 .await;
 

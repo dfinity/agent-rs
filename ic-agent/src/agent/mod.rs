@@ -26,6 +26,7 @@ use serde::Serialize;
 
 use public::*;
 use std::convert::TryFrom;
+use std::time::Duration;
 
 const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 
@@ -37,7 +38,6 @@ const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 /// use ic_agent::{Agent, Principal};
 /// use candid::{Encode, Decode, CandidType};
 /// use serde::Deserialize;
-/// use std::time::{Duration, SystemTime, UNIX_EPOCH};
 ///
 /// #[derive(CandidType, Deserialize)]
 /// struct CreateCanisterResult {
@@ -64,23 +64,15 @@ const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 ///     .build()?;
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 ///
-///   let duration = Duration::from_secs(60 * 5);
-///   let start = SystemTime::now();
-///   let since_epoch = start
-///       .duration_since(UNIX_EPOCH)
-///       .expect("Time wrapped around");
-///   let valid_until = (since_epoch + duration).as_nanos() as u64;
-///
 ///   let waiter = delay::Delay::builder()
 ///     .throttle(std::time::Duration::from_millis(500))
-///     .timeout(duration)
+///     .timeout(std::time::Duration::from_secs(60 * 5))
 ///     .build();
 ///
 ///   // Create a call to the management canister to create a new canister ID,
 ///   // and wait for a result.
 ///   let response = agent.update(&management_canister_id, "create_canister")
 ///     .with_arg(&Encode!()?)  // Empty Candid.
-///     .with_expiry(valid_until)
 ///     .call_and_wait(waiter)
 ///     .await?;
 ///
@@ -136,7 +128,15 @@ impl Agent {
             nonce_factory: config.nonce_factory,
             identity: config.identity,
             password_manager: config.password_manager,
-            ingress_expiry: config.ingress_expiry,
+            ingress_expiry: config
+                .ingress_expiry
+                .unwrap_or(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .expect("Time wrapped around")
+                        + Duration::from_secs(300),
+                )
+                .as_nanos() as u64,
         })
     }
 
@@ -474,6 +474,19 @@ impl<'agent> UpdateBuilder<'agent> {
 
     pub fn with_expiry(&mut self, ingress_expiry: u64) -> &mut Self {
         self.ingress_expiry = ingress_expiry;
+        self
+    }
+
+    pub fn expire_when(&mut self, time: std::time::SystemTime) -> &mut Self {
+        self.ingress_expiry = time
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("Time wrapped around")
+            .as_nanos() as u64;
+        self
+    }
+
+    pub fn valid_until(&mut self, duration: std::time::Duration) -> &mut Self {
+        self.ingress_expiry = duration.as_nanos() as u64;
         self
     }
 

@@ -19,10 +19,7 @@ fn query() -> Result<(), AgentError> {
         .with_body(serde_cbor::to_vec(&response)?)
         .create();
 
-    let agent = Agent::builder()
-        .with_url(&mockito::server_url())
-        .with_expiry(300)
-        .build()?;
+    let agent = Agent::builder().with_url(&mockito::server_url()).build()?;
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
         agent
@@ -40,10 +37,7 @@ fn query() -> Result<(), AgentError> {
 #[test]
 fn query_error() -> Result<(), AgentError> {
     let read_mock = mock("POST", "/api/v1/read").with_status(500).create();
-    let agent = Agent::builder()
-        .with_url(&mockito::server_url())
-        .with_expiry(300)
-        .build()?;
+    let agent = Agent::builder().with_url(&mockito::server_url()).build()?;
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
 
     let result = runtime.block_on(async {
@@ -72,11 +66,7 @@ fn query_rejected() -> Result<(), AgentError> {
         .with_body(serde_cbor::to_vec(&response)?)
         .create();
 
-    let agent = Agent::new(AgentConfig {
-        url: mockito::server_url(),
-        ingress_expiry: 300,
-        ..Default::default()
-    })?;
+    let agent = Agent::builder().with_url(&mockito::server_url()).build()?;
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
 
     let result = runtime.block_on(async {
@@ -115,11 +105,7 @@ fn call() -> Result<(), AgentError> {
         .with_body(serde_cbor::to_vec(&response)?)
         .create();
 
-    let agent = Agent::new(AgentConfig {
-        url: mockito::server_url(),
-        ingress_expiry: 300,
-        ..Default::default()
-    })?;
+    let agent = Agent::builder().with_url(&mockito::server_url()).build()?;
 
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
@@ -146,11 +132,7 @@ fn call() -> Result<(), AgentError> {
 fn call_error() -> Result<(), AgentError> {
     let submit_mock = mock("POST", "/api/v1/submit").with_status(500).create();
 
-    let agent = Agent::new(AgentConfig {
-        url: mockito::server_url(),
-        ingress_expiry: 300,
-        ..Default::default()
-    })?;
+    let agent = Agent::builder().with_url(&mockito::server_url()).build()?;
 
     let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
