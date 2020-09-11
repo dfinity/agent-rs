@@ -49,30 +49,26 @@ pub enum SyncContent {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct RequestStatusResponse {
-    pub status: Status,
-    #[serde(rename = "time")]
-    pub time: u64,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "status")]
-pub enum Status {
+pub enum RequestStatusResponse {
     #[serde(rename = "unknown")]
-    Unknown {},
+    Unknown { time: u64 },
     #[serde(rename = "received")]
-    Received {},
+    Received { time: u64 },
     #[serde(rename = "processing")]
-    Processing {},
+    Processing { time: u64 },
     #[serde(rename = "replied")]
-    Replied { reply: RequestStatusResponseReplied },
+    Replied {
+        reply: RequestStatusResponseReplied,
+        time: u64,
+    },
     #[serde(rename = "rejected")]
     Rejected {
         reject_code: u64,
         reject_message: String,
+        time: u64,
     },
     #[serde(rename = "done")]
-    Done {},
+    Done { time: u64 },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

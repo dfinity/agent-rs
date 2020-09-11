@@ -404,7 +404,7 @@ impl Agent {
         })
         .await
         .map(|response| match response {
-            replica_api::Status::Replied { reply } => {
+            replica_api::RequestStatusResponse::Replied { reply, time: _ } => {
                 let reply = match reply {
                     replica_api::RequestStatusResponseReplied::CallReply(reply) => {
                         Replied::CallReplied(reply.arg)
@@ -413,17 +413,24 @@ impl Agent {
 
                 RequestStatusResponse::Replied { reply }
             }
-            replica_api::Status::Rejected {
+            replica_api::RequestStatusResponse::Unknown { time: _ } => {
+                RequestStatusResponse::Unknown
+            }
+            replica_api::RequestStatusResponse::Received { time: _ } => {
+                RequestStatusResponse::Received
+            }
+            replica_api::RequestStatusResponse::Processing { time: _ } => {
+                RequestStatusResponse::Processing
+            }
+            replica_api::RequestStatusResponse::Rejected {
                 reject_code,
                 reject_message,
+                time: _,
             } => RequestStatusResponse::Rejected {
                 reject_code,
                 reject_message,
             },
-            replica_api::Status::Unknown {} => RequestStatusResponse::Unknown,
-            replica_api::Status::Received {} => RequestStatusResponse::Received,
-            replica_api::Status::Processing {} => RequestStatusResponse::Processing,
-            replica_api::Status::Done {} => RequestStatusResponse::Done,
+            replica_api::RequestStatusResponse::Done { time: _ } => RequestStatusResponse::Done,
         })
     }
 
