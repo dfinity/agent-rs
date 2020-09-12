@@ -1,8 +1,9 @@
 use crate::call::AsyncCaller;
+use candid::de::ArgumentDecoder;
+use candid::ser::IDLBuilder;
 use candid::CandidType;
 use ic_agent::Agent;
 use ic_types::{Principal, PrincipalError};
-use serde::de::DeserializeOwned;
 use std::convert::TryInto;
 use thiserror::Error;
 
@@ -115,49 +116,53 @@ impl<'agent> Canister<'agent, ()> {
     }
 }
 
-pub struct AsyncCallBuilder<'agent, 'canister: 'agent, I: CandidType + Sync + Send, T> {
+pub struct AsyncCallBuilder<'agent, 'canister: 'agent, T> {
     canister: &'canister Canister<'agent, T>,
     method_name: String,
-    arg: Option<I>,
+    arg: Result<candid::ser::IDLBuilder, candid::Error>,
 }
 
-impl<'agent, 'canister: 'agent, T> AsyncCallBuilder<'agent, 'canister, (), T> {
+impl<'agent, 'canister: 'agent, T> AsyncCallBuilder<'agent, 'canister, T> {
     pub fn new(
         canister: &'canister Canister<'agent, T>,
         method_name: &str,
-    ) -> AsyncCallBuilder<'agent, 'canister, (), T> {
+    ) -> AsyncCallBuilder<'agent, 'canister, T> {
         Self {
             canister,
             method_name: method_name.to_string(),
-            arg: None,
+            arg: Ok(IDLBuilder::new()),
         }
     }
 }
 
-impl<'agent, 'canister: 'agent, I: CandidType + Sync + Send, T>
-    AsyncCallBuilder<'agent, 'canister, I, T>
-{
+impl<'agent, 'canister: 'agent, T> AsyncCallBuilder<'agent, 'canister, T> {
     pub fn with_arg<A: CandidType + Sync + Send>(
-        self,
+        mut self,
         arg: A,
-    ) -> AsyncCallBuilder<'agent, 'canister, A, T> {
-        AsyncCallBuilder {
-            canister: self.canister,
-            method_name: self.method_name,
-            arg: Some(arg),
+    ) -> AsyncCallBuilder<'agent, 'canister, T> {
+        match self.arg {
+            Ok(ref mut builder) => {
+                let result = builder.arg(&arg);
+                match result {
+                    Err(e) => self.arg = Err(e),
+                    _ => {}
+                }
+            }
+            _ => {}
         }
+        self
     }
 
-    pub fn build<O>(self) -> AsyncCaller<'canister, I, O>
+    pub fn build<O>(self) -> AsyncCaller<'canister, O>
     where
-        O: DeserializeOwned + Send + Sync,
+        O: for<'de> ArgumentDecoder<'de> + Send + Sync,
     {
         let c = self.canister;
         AsyncCaller {
             agent: c.agent,
             canister_id: c.canister_id.clone(),
             method_name: self.method_name.clone(),
-            arg: self.arg,
+            arg: self.arg.and_then(|mut builder| builder.serialize_to_vec()),
             phantom_out: std::marker::PhantomData,
         }
     }
@@ -167,7 +172,7 @@ impl<'agent, T> Canister<'agent, T> {
     pub fn update_<'canister>(
         &'canister self,
         method_name: &str,
-    ) -> AsyncCallBuilder<'agent, 'canister, (), T> {
+    ) -> AsyncCallBuilder<'agent, 'canister, T> {
         AsyncCallBuilder::new(self, method_name)
     }
 }
@@ -206,18 +211,38 @@ mod tests {
             .build()
             .unwrap();
 
-        let new_canister_id: ic_types::Principal = management_canister
+        let (new_canister_id,) = management_canister
             .create_canister()
             .call_and_wait(Delay::throttle(std::time::Duration::from_secs(1)))
             .await
             .unwrap();
 
-        let status = management_canister
+        let (status,) = management_canister
             .canister_status(&new_canister_id)
             .call_and_wait(Delay::throttle(std::time::Duration::from_secs(1)))
             .await
             .unwrap();
 
         assert_eq!(format!("{}", status), "Running");
+
+        let canister_wasm = b"\0asm\x01\0\0\0";
+        management_canister
+            .install_code(&new_canister_id, canister_wasm)
+            .call_and_wait(Delay::throttle(std::time::Duration::from_secs(1)))
+            .await
+            .unwrap();
+
+        let canister = Canister::builder()
+            .with_agent(&agent)
+            .with_canister_id(new_canister_id)
+            .build()
+            .unwrap();
+
+        assert!(canister
+            .update_("hello")
+            .build::<()>()
+            .call_and_wait(Delay::throttle(std::time::Duration::from_secs(1)))
+            .await
+            .is_err());
     }
 }

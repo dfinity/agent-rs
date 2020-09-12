@@ -1,5 +1,6 @@
 use async_trait::async_trait;
-use candid::{CandidType, Decode, Encode};
+use candid::de::ArgumentDecoder;
+use candid::{decode_args, decode_one};
 use delay::Waiter;
 use ic_agent::{Agent, AgentError, RequestId};
 use ic_types::Principal;
@@ -8,19 +9,25 @@ use std::future::Future;
 
 /// A type that implements synchronous calls (ie. 'query' calls).
 #[async_trait]
-pub trait SyncCall {
+pub trait SyncCall<O>
+where
+    O: for<'de> ArgumentDecoder<'de> + Send + Sync,
+{
     /// Execute the call, returning either the value returned by the canister, or an
     /// error returned by the Agent.
-    async fn call<T: serde::de::DeserializeOwned + Send + Sync>(&self) -> Result<T, AgentError>;
+    async fn call(self) -> Result<O, AgentError>;
 }
 
 /// A type that implements asynchronous calls (ie. 'update' calls).
 /// This can call synchronous and return a [RequestId], or it can wait for the result
 /// by polling the agent, and return a type.
+///
+/// The return type must be a tuple type that represents all the values the return
+/// call should be returning.
 #[async_trait]
 pub trait AsyncCall<O>
 where
-    O: serde::de::DeserializeOwned + Send + Sync,
+    O: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
     /// Execute the call, but returns the RequestId. Waiting on the request Id must be
     /// managed by the caller using the Agent directly.
@@ -31,90 +38,92 @@ where
     /// the result, and try to deserialize it as a [String]. This would be caught by
     /// Rust type system, but in this case it will be checked at runtime (as Request
     /// Id does not have a type associated with it).
-    async fn call(&self) -> Result<RequestId, AgentError>;
+    async fn call(self) -> Result<RequestId, AgentError>;
 
     /// Execute the call, and wait for an answer using a [Waiter] strategy. The return
     /// type is encoded in the trait.
-    async fn call_and_wait<W>(&self, mut waiter: W) -> Result<O, AgentError>
+    async fn call_and_wait<W>(self, mut waiter: W) -> Result<O, AgentError>
     where
         W: Waiter;
 }
 
 /// A synchronous call encapsulation.
-pub struct SyncCaller<'agent, Arg: CandidType + Send + Sync> {
+pub struct SyncCaller<'agent> {
     agent: &'agent Agent,
     canister_id: Principal,
     method_name: String,
-    arg: Arg,
+    arg: Result<Vec<u8>, candid::Error>,
 }
 
-impl<'agent, Arg: CandidType + Send + Sync> SyncCaller<'agent, Arg> {
-    async fn call<R>(&self) -> Result<R, AgentError>
+impl<'agent> SyncCaller<'agent> {
+    async fn call<R>(self) -> Result<R, AgentError>
     where
-        R: serde::de::DeserializeOwned + Send + Sync,
+        R: for<'de> ArgumentDecoder<'de> + Send + Sync,
     {
-        let arg = Encode!(&self.arg).map_err(AgentError::from)?;
         self.agent
-            .query_raw(&self.canister_id, &self.method_name, &arg)
+            .query_raw(&self.canister_id, &self.method_name, &self.arg?)
             .await
-            .and_then(|r| Decode!(&r, R).map_err(AgentError::from))
+            .and_then(|r| decode_args(&r).map_err(AgentError::from))
     }
 }
 
 #[async_trait]
-impl<'agent, Arg: CandidType + Send + Sync> SyncCall for SyncCaller<'agent, Arg> {
-    async fn call<R>(&self) -> Result<R, AgentError>
-    where
-        R: serde::de::DeserializeOwned + Send + Sync,
-    {
-        self.call().await
+impl<'agent, O> SyncCall<O> for SyncCaller<'agent>
+where
+    O: 'agent + for<'de> ArgumentDecoder<'de> + Send + Sync,
+{
+    async fn call(self) -> Result<O, AgentError> {
+        Ok(self.call().await?)
     }
 }
 
 /// An async caller, encapsulating a call to an update method.
-pub struct AsyncCaller<'agent, Arg, Out>
+pub struct AsyncCaller<'agent, Out>
 where
-    Arg: CandidType + Send + Sync,
-    Out: serde::de::DeserializeOwned + Send + Sync,
+    Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
     pub(crate) agent: &'agent Agent,
     pub(crate) canister_id: Principal,
     pub(crate) method_name: String,
-    pub(crate) arg: Option<Arg>,
+    pub(crate) arg: Result<Vec<u8>, candid::Error>,
     pub(crate) phantom_out: std::marker::PhantomData<Out>,
 }
 
-impl<'agent, Arg, Out> AsyncCaller<'agent, Arg, Out>
+impl<'agent, Out> AsyncCaller<'agent, Out>
 where
-    Arg: CandidType + Send + Sync,
-    Out: serde::de::DeserializeOwned + Send + Sync,
+    Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
-    pub async fn call(&self) -> Result<RequestId, AgentError> {
-        let arg = if let Some(a) = &self.arg {
-            Encode!(a)?
-        } else {
-            Encode!()?
-        };
+    pub async fn call(self) -> Result<RequestId, AgentError> {
         self.agent
-            .update_raw(&self.canister_id, &self.method_name, &arg)
+            .update(&self.canister_id, &self.method_name)
+            .with_arg(&self.arg?)
+            .call()
             .await
     }
 
-    pub async fn call_and_wait<W>(&self, waiter: W) -> Result<Out, AgentError>
+    pub async fn call_and_wait<W>(self, waiter: W) -> Result<Out, AgentError>
     where
         W: Waiter,
     {
-        let arg = if let Some(a) = &self.arg {
-            Encode!(a)?
-        } else {
-            Encode!()?
-        };
         self.agent
             .update(&self.canister_id, &self.method_name)
-            .with_arg(&arg)
+            .with_arg(&self.arg?)
             .call_and_wait(waiter)
             .await
-            .and_then(|r| Decode!(&r, Out).map_err(AgentError::from))
+            .and_then(|r| decode_args(&r).map_err(AgentError::from))
+    }
+
+    pub async fn call_and_wait_one<W, T>(self, waiter: W) -> Result<T, AgentError>
+    where
+        W: Waiter,
+        T: DeserializeOwned,
+    {
+        self.agent
+            .update(&self.canister_id, &self.method_name)
+            .with_arg(&self.arg?)
+            .call_and_wait(waiter)
+            .await
+            .and_then(|r| decode_one(&r).map_err(AgentError::from))
     }
 
     pub fn and_then<Out2, R, AndThen>(
@@ -122,7 +131,7 @@ where
         and_then: AndThen,
     ) -> AndThenAsyncCaller<Out, Out2, Self, R, AndThen>
     where
-        Out2: serde::de::DeserializeOwned + Send + Sync,
+        Out2: for<'de> ArgumentDecoder<'de> + Send + Sync,
         R: Future<Output = Result<Out2, AgentError>> + Send + Sync,
         AndThen: Sync + Send + Fn(Out) -> R,
     {
@@ -131,7 +140,7 @@ where
 
     pub fn map<Out2, Map>(self, map: Map) -> MappedAsyncCaller<Out, Out2, Self, Map>
     where
-        Out2: serde::de::DeserializeOwned + Send + Sync,
+        Out2: for<'de> ArgumentDecoder<'de> + Send + Sync,
         Map: Sync + Send + Fn(Out) -> Out2,
     {
         MappedAsyncCaller::new(self, map)
@@ -139,15 +148,14 @@ where
 }
 
 #[async_trait]
-impl<'agent, Arg, Out> AsyncCall<Out> for AsyncCaller<'agent, Arg, Out>
+impl<'agent, Out> AsyncCall<Out> for AsyncCaller<'agent, Out>
 where
-    Arg: CandidType + Send + Sync,
-    Out: DeserializeOwned + Send + Sync,
+    Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
-    async fn call(&self) -> Result<RequestId, AgentError> {
+    async fn call(self) -> Result<RequestId, AgentError> {
         self.call().await
     }
-    async fn call_and_wait<W>(&self, waiter: W) -> Result<Out, AgentError>
+    async fn call_and_wait<W>(self, waiter: W) -> Result<Out, AgentError>
     where
         W: Waiter,
     {
@@ -158,8 +166,8 @@ where
 /// A structure that applies a transform function to the result of a call. Because of constraints
 /// on the type system in Rust, both the input and output to the function must be deserializable.
 pub struct AndThenAsyncCaller<
-    Out: serde::de::DeserializeOwned + Send + Sync,
-    Out2: serde::de::DeserializeOwned + Send + Sync,
+    Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
+    Out2: for<'de> ArgumentDecoder<'de> + Send + Sync,
     Inner: AsyncCall<Out> + Sync + Send,
     R: Future<Output = Result<Out2, AgentError>> + Send + Sync,
     AndThen: Sync + Send + Fn(Out) -> R,
@@ -172,8 +180,8 @@ pub struct AndThenAsyncCaller<
 
 impl<Out, Out2, Inner, R, AndThen> AndThenAsyncCaller<Out, Out2, Inner, R, AndThen>
 where
-    Out: serde::de::DeserializeOwned + Send + Sync,
-    Out2: serde::de::DeserializeOwned + Send + Sync,
+    Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
+    Out2: for<'de> ArgumentDecoder<'de> + Send + Sync,
     Inner: AsyncCall<Out> + Sync + Send,
     R: Future<Output = Result<Out2, AgentError>> + Send + Sync,
     AndThen: Sync + Send + Fn(Out) -> R,
@@ -187,10 +195,10 @@ where
         }
     }
 
-    pub async fn call(&self) -> Result<RequestId, AgentError> {
+    pub async fn call(self) -> Result<RequestId, AgentError> {
         self.inner.call().await
     }
-    pub async fn call_and_wait<W>(&self, waiter: W) -> Result<Out2, AgentError>
+    pub async fn call_and_wait<W>(self, waiter: W) -> Result<Out2, AgentError>
     where
         W: Waiter,
     {
@@ -206,7 +214,7 @@ where
         and_then: AndThen2,
     ) -> AndThenAsyncCaller<Out2, Out3, Self, R2, AndThen2>
     where
-        Out3: serde::de::DeserializeOwned + Send + Sync,
+        Out3: for<'de> ArgumentDecoder<'de> + Send + Sync,
         R2: Future<Output = Result<Out3, AgentError>> + Send + Sync,
         AndThen2: Sync + Send + Fn(Out2) -> R2,
     {
@@ -215,7 +223,7 @@ where
 
     pub fn map<Out3, Map>(self, map: Map) -> MappedAsyncCaller<Out2, Out3, Self, Map>
     where
-        Out3: serde::de::DeserializeOwned + Send + Sync,
+        Out3: for<'de> ArgumentDecoder<'de> + Send + Sync,
         Map: Sync + Send + Fn(Out2) -> Out3,
     {
         MappedAsyncCaller::new(self, map)
@@ -226,17 +234,17 @@ where
 impl<Out, Out2, Inner, R, AndThen> AsyncCall<Out2>
     for AndThenAsyncCaller<Out, Out2, Inner, R, AndThen>
 where
-    Out: serde::de::DeserializeOwned + Send + Sync,
-    Out2: serde::de::DeserializeOwned + Send + Sync,
+    Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
+    Out2: for<'de> ArgumentDecoder<'de> + Send + Sync,
     Inner: AsyncCall<Out> + Sync + Send,
     R: Future<Output = Result<Out2, AgentError>> + Send + Sync,
     AndThen: Sync + Send + Fn(Out) -> R,
 {
-    async fn call(&self) -> Result<RequestId, AgentError> {
+    async fn call(self) -> Result<RequestId, AgentError> {
         self.call().await
     }
 
-    async fn call_and_wait<W>(&self, waiter: W) -> Result<Out2, AgentError>
+    async fn call_and_wait<W>(self, waiter: W) -> Result<Out2, AgentError>
     where
         W: Waiter,
     {
@@ -247,8 +255,8 @@ where
 /// A structure that applies a transform function to the result of a call. Because of constraints
 /// on the type system in Rust, both the input and output to the function must be deserializable.
 pub struct MappedAsyncCaller<
-    Out: serde::de::DeserializeOwned + Send + Sync,
-    Out2: serde::de::DeserializeOwned + Send + Sync,
+    Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
+    Out2: for<'de> ArgumentDecoder<'de> + Send + Sync,
     Inner: AsyncCall<Out> + Sync + Send,
     Map: Sync + Send + Fn(Out) -> Out2,
 > {
@@ -260,8 +268,8 @@ pub struct MappedAsyncCaller<
 
 impl<Out, Out2, Inner, Map> MappedAsyncCaller<Out, Out2, Inner, Map>
 where
-    Out: serde::de::DeserializeOwned + Send + Sync,
-    Out2: serde::de::DeserializeOwned + Send + Sync,
+    Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
+    Out2: for<'de> ArgumentDecoder<'de> + Send + Sync,
     Inner: AsyncCall<Out> + Sync + Send,
     Map: Sync + Send + Fn(Out) -> Out2,
 {
@@ -274,10 +282,10 @@ where
         }
     }
 
-    pub async fn call(&self) -> Result<RequestId, AgentError> {
+    pub async fn call(self) -> Result<RequestId, AgentError> {
         self.inner.call().await
     }
-    pub async fn call_and_wait<W>(&self, waiter: W) -> Result<Out2, AgentError>
+    pub async fn call_and_wait<W>(self, waiter: W) -> Result<Out2, AgentError>
     where
         W: Waiter,
     {
@@ -290,7 +298,7 @@ where
         and_then: AndThen2,
     ) -> AndThenAsyncCaller<Out2, Out3, Self, R2, AndThen2>
     where
-        Out3: serde::de::DeserializeOwned + Send + Sync,
+        Out3: for<'de> ArgumentDecoder<'de> + Send + Sync,
         R2: Future<Output = Result<Out3, AgentError>> + Send + Sync,
         AndThen2: Sync + Send + Fn(Out2) -> R2,
     {
@@ -299,7 +307,7 @@ where
 
     pub fn map<Out3, Map2>(self, map: Map2) -> MappedAsyncCaller<Out2, Out3, Self, Map2>
     where
-        Out3: serde::de::DeserializeOwned + Send + Sync,
+        Out3: for<'de> ArgumentDecoder<'de> + Send + Sync,
         Map2: Sync + Send + Fn(Out2) -> Out3,
     {
         MappedAsyncCaller::new(self, map)
@@ -309,16 +317,16 @@ where
 #[async_trait]
 impl<Out, Out2, Inner, Map> AsyncCall<Out2> for MappedAsyncCaller<Out, Out2, Inner, Map>
 where
-    Out: serde::de::DeserializeOwned + Send + Sync,
-    Out2: serde::de::DeserializeOwned + Send + Sync,
+    Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
+    Out2: for<'de> ArgumentDecoder<'de> + Send + Sync,
     Inner: AsyncCall<Out> + Sync + Send,
     Map: Sync + Send + Fn(Out) -> Out2,
 {
-    async fn call(&self) -> Result<RequestId, AgentError> {
+    async fn call(self) -> Result<RequestId, AgentError> {
         self.call().await
     }
 
-    async fn call_and_wait<W>(&self, waiter: W) -> Result<Out2, AgentError>
+    async fn call_and_wait<W>(self, waiter: W) -> Result<Out2, AgentError>
     where
         W: Waiter,
     {
