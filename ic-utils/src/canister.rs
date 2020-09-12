@@ -140,15 +140,11 @@ impl<'agent, 'canister: 'agent, T> AsyncCallBuilder<'agent, 'canister, T> {
         mut self,
         arg: A,
     ) -> AsyncCallBuilder<'agent, 'canister, T> {
-        match self.arg {
-            Ok(ref mut builder) => {
-                let result = builder.arg(&arg);
-                match result {
-                    Err(e) => self.arg = Err(e),
-                    _ => {}
-                }
+        if let Ok(ref mut builder) = self.arg {
+            let result = builder.arg(&arg);
+            if let Err(e) = result {
+                self.arg = Err(e)
             }
-            _ => {}
         }
         self
     }
