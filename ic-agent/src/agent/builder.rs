@@ -35,7 +35,10 @@ impl AgentBuilder {
         }
     }
 
-    pub fn with_identity<I: 'static + Identity + Send + Sync>(self, identity: I) -> Self {
+    pub fn with_identity<I>(self, identity: I) -> Self
+    where
+        I: 'static + Identity + Send + Sync,
+    {
         AgentBuilder {
             config: AgentConfig {
                 identity: Box::new(identity),
@@ -53,10 +56,10 @@ impl AgentBuilder {
         }
     }
 
-    pub fn with_password_manager<P: 'static + PasswordManager + Send + Sync>(
-        self,
-        password_manager: P,
-    ) -> Self {
+    pub fn with_password_manager<P>(self, password_manager: P) -> Self
+    where
+        P: 'static + PasswordManager + Send + Sync,
+    {
         AgentBuilder {
             config: AgentConfig {
                 password_manager: Some(Box::new(password_manager)),
