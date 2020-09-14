@@ -114,7 +114,7 @@ fn call() -> Result<(), AgentError> {
             .with_arg(&[])
             .call()
             .await?;
-        agent.request_status_raw(&request_id).await
+        agent.request_status_raw(&request_id, None).await
     });
 
     submit_mock.assert();

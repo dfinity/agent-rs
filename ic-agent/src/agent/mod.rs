@@ -341,7 +341,7 @@ impl Agent {
             canister_id: canister_id.clone(),
             method_name: method_name.to_string(),
             arg: arg.to_vec(),
-            ingress_expiry: ing_exp_datetime.unwrap_or(self.get_expiry_date()),
+            ingress_expiry: ing_exp_datetime.unwrap_or_else(|| self.get_expiry_date()),
         })
         .await
         .and_then(|response| match response {
@@ -391,7 +391,7 @@ impl Agent {
             arg: arg.to_vec(),
             nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
-            ingress_expiry: ing_exp_datetime.unwrap_or(self.get_expiry_date()),
+            ingress_expiry: ing_exp_datetime.unwrap_or_else(|| self.get_expiry_date()),
         })
         .await
     }
@@ -399,10 +399,11 @@ impl Agent {
     pub async fn request_status_raw(
         &self,
         request_id: &RequestId,
+        ing_exp_datetime: Option<u64>,
     ) -> Result<RequestStatusResponse, AgentError> {
         self.read_endpoint(SyncContent::RequestStatusRequest {
             request_id: request_id.as_slice().into(),
-            ingress_expiry: self.get_expiry_date(),
+            ingress_expiry: ing_exp_datetime.unwrap_or_else(|| self.get_expiry_date()),
         })
         .await
         .map(|response| match response {
@@ -488,7 +489,7 @@ impl<'agent> UpdateBuilder<'agent> {
 
     // Takes a Duration (i.e. 30 sec/5 min 30 sec/1 h 30 min, etc.) and adds it to the
     // Duration of the current SystemTime since the UnixEpoch
-    // Converts the sum to nanoseconds and stores in ingress_ttl
+    // Converts the sum to nanoseconds and stores in ing_exp_datetime
     pub fn expire_after(&mut self, duration: std::time::Duration) -> &mut Self {
         self.ing_exp_datetime = Some(
             (duration
@@ -513,7 +514,11 @@ impl<'agent> UpdateBuilder<'agent> {
         waiter.start();
 
         loop {
-            match self.agent.request_status_raw(&request_id).await? {
+            match self
+                .agent
+                .request_status_raw(&request_id, self.ing_exp_datetime)
+                .await?
+            {
                 RequestStatusResponse::Replied {
                     reply: Replied::CallReplied(arg),
                 } => return Ok(arg),
