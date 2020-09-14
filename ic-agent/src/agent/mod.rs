@@ -135,11 +135,13 @@ impl Agent {
     }
 
     fn get_expiry_date(&self) -> u64 {
+        let permitted_drift = Duration::from_secs(60);
         (self.ing_exp_duration
             + std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .expect("Time wrapped around."))
-        .as_nanos() as u64
+                .expect("Time wrapped around.")
+            - permitted_drift)
+            .as_nanos() as u64
     }
 
     fn construct_message(&self, request_id: &RequestId) -> Vec<u8> {
@@ -465,14 +467,17 @@ impl<'agent> UpdateBuilder<'agent> {
 
     /// Takes a Duration (i.e. 30 sec/5 min 30 sec/1 h 30 min, etc.) and adds it to the
     /// Duration of the current SystemTime since the UNIX_EPOCH
-    /// Converts the sum to nanoseconds and stores in ing_exp_datetime
+    /// Subtracts a permitted drift from the sum to account for using system time and not block time.
+    /// Converts the difference to nanoseconds and stores in ing_exp_datetime
     pub fn expire_after(&mut self, duration: std::time::Duration) -> &mut Self {
+        let permitted_drift = Duration::from_secs(60);
         self.ing_exp_datetime = Some(
             (duration
                 + std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .expect("Time wrapped around"))
-            .as_nanos() as u64,
+                    .expect("Time wrapped around")
+                - permitted_drift)
+                .as_nanos() as u64,
         );
         self
     }
