@@ -356,28 +356,8 @@ impl Agent {
         })
     }
 
-    // The simplest way to do an update call; sends a byte array and will return a RequestId.
-    // The RequestId should then be used for request_status (most likely in a loop).
-    //
-    // ```no_run
-    // use ic_agent::{Agent, Replied, RequestStatusResponse};
-    // use ic_types::Principal;
-    //
-    // async fn update_example() -> Result<(), Box<dyn std::error::Error>> {
-    //     let agent = Agent::builder().with_url("https://gw.dfinity.network/").build()?;
-    //     let canister_id = Principal::from_text("w7x7r-cok77-xa")?;
-    //     let request_id = agent.update_raw(&canister_id, "echo", &[1, 2, 3]).await?;
-    //
-    //     // Give the IC some time to process the update call.
-    //
-    //     let status = agent.request_status_raw(&request_id).await?;
-    //     assert_eq!(
-    //       status,
-    //       RequestStatusResponse::Replied { reply: Replied::CallReplied(vec![1, 2, 3]) }
-    //     );
-    //     Ok(())
-    // }
-    // ```
+    /// The simplest way to do an update call; sends a byte array and will return a RequestId.
+    /// The RequestId should then be used for request_status (most likely in a loop).
     async fn update_raw(
         &self,
         canister_id: &Principal,
@@ -429,11 +409,7 @@ impl Agent {
         })
     }
 
-    pub fn update<S: ToString>(
-        &self,
-        canister_id: &Principal,
-        method_name: S,
-    ) -> UpdateBuilder<'_> {
+    pub fn update<S: ToString>(&self, canister_id: &Principal, method_name: S) -> UpdateBuilder {
         UpdateBuilder::new(self, canister_id.clone(), method_name.to_string())
     }
 
@@ -475,9 +451,9 @@ impl<'agent> UpdateBuilder<'agent> {
         self
     }
 
-    // Takes a SystemTime converts it to a Duration by calling
-    // duration_since(UNIX_EPOCH) to learn about where in time this SystemTime lies.
-    // The Duration is converted to nanoseconds and stored in ing_exp_datetime
+    /// Takes a SystemTime converts it to a Duration by calling
+    /// duration_since(UNIX_EPOCH) to learn about where in time this SystemTime lies.
+    /// The Duration is converted to nanoseconds and stored in ing_exp_datetime
     pub fn expire_at(&mut self, time: std::time::SystemTime) -> &mut Self {
         self.ing_exp_datetime = Some(
             time.duration_since(std::time::UNIX_EPOCH)
@@ -487,9 +463,9 @@ impl<'agent> UpdateBuilder<'agent> {
         self
     }
 
-    // Takes a Duration (i.e. 30 sec/5 min 30 sec/1 h 30 min, etc.) and adds it to the
-    // Duration of the current SystemTime since the UnixEpoch
-    // Converts the sum to nanoseconds and stores in ing_exp_datetime
+    /// Takes a Duration (i.e. 30 sec/5 min 30 sec/1 h 30 min, etc.) and adds it to the
+    /// Duration of the current SystemTime since the UNIX_EPOCH
+    /// Converts the sum to nanoseconds and stores in ing_exp_datetime
     pub fn expire_after(&mut self, duration: std::time::Duration) -> &mut Self {
         self.ing_exp_datetime = Some(
             (duration
