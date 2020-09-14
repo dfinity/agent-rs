@@ -95,7 +95,7 @@ pub struct Agent {
     client: reqwest::Client,
     identity: Box<dyn Identity>,
     password_manager: Option<Box<dyn PasswordManager>>,
-    ingress_expiry: Duration,
+    ing_exp_duration: Duration,
 }
 
 impl Agent {
@@ -128,18 +128,18 @@ impl Agent {
             nonce_factory: config.nonce_factory,
             identity: config.identity,
             password_manager: config.password_manager,
-            ingress_expiry: config
-                .ingress_expiry
+            ing_exp_duration: config
+                .ing_exp_duration
                 .unwrap_or_else(|| Duration::from_secs(300)),
         })
     }
 
-    fn expiry_duration_as_nanos(&self) -> u64 {
-        (std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Time wrapped around.")
-            + self.ingress_expiry)
-            .as_nanos() as u64
+    fn get_expiry_date(&self) -> u64 {
+        (self.ing_exp_duration
+            + std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time wrapped around."))
+        .as_nanos() as u64
     }
 
     fn construct_message(&self, request_id: &RequestId) -> Vec<u8> {
@@ -324,7 +324,7 @@ impl Agent {
     /// async fn query_example() -> Result<(), Box<dyn std::error::Error>> {
     ///     let agent = Agent::builder().with_url("https://gw.dfinity.network").build()?;
     ///     let canister_id = Principal::from_text("w7x7r-cok77-xa")?;
-    ///     let response = agent.query_raw(&canister_id, "echo", &[1, 2, 3]).await?;
+    ///     let response = agent.query_raw(&canister_id, "echo", &[1, 2, 3], None).await?;
     ///     assert_eq!(response, &[1, 2, 3]);
     ///     Ok(())
     /// }
@@ -334,13 +334,14 @@ impl Agent {
         canister_id: &Principal,
         method_name: &str,
         arg: &[u8],
+        ing_exp_datetime: Option<u64>,
     ) -> Result<Vec<u8>, AgentError> {
         self.read_endpoint::<replica_api::QueryResponse>(SyncContent::QueryRequest {
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
             canister_id: canister_id.clone(),
             method_name: method_name.to_string(),
             arg: arg.to_vec(),
-            ingress_expiry: self.expiry_duration_as_nanos(),
+            ingress_expiry: ing_exp_datetime.unwrap_or(self.get_expiry_date()),
         })
         .await
         .and_then(|response| match response {
@@ -382,6 +383,7 @@ impl Agent {
         canister_id: &Principal,
         method_name: &str,
         arg: &[u8],
+        ing_exp_datetime: Option<u64>,
     ) -> Result<RequestId, AgentError> {
         self.submit_endpoint(AsyncContent::CallRequest {
             canister_id: canister_id.clone(),
@@ -389,7 +391,7 @@ impl Agent {
             arg: arg.to_vec(),
             nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
-            ingress_expiry: self.expiry_duration_as_nanos(),
+            ingress_expiry: ing_exp_datetime.unwrap_or(self.get_expiry_date()),
         })
         .await
     }
@@ -400,37 +402,29 @@ impl Agent {
     ) -> Result<RequestStatusResponse, AgentError> {
         self.read_endpoint(SyncContent::RequestStatusRequest {
             request_id: request_id.as_slice().into(),
-            ingress_expiry: self.expiry_duration_as_nanos(),
+            ingress_expiry: self.get_expiry_date(),
         })
         .await
         .map(|response| match response {
-            replica_api::RequestStatusResponse::Replied { reply, time: _ } => {
+            replica_api::Status::Replied { reply } => {
                 let reply = match reply {
                     replica_api::RequestStatusResponseReplied::CallReply(reply) => {
                         Replied::CallReplied(reply.arg)
                     }
                 };
-
                 RequestStatusResponse::Replied { reply }
             }
-            replica_api::RequestStatusResponse::Unknown { time: _ } => {
-                RequestStatusResponse::Unknown
-            }
-            replica_api::RequestStatusResponse::Received { time: _ } => {
-                RequestStatusResponse::Received
-            }
-            replica_api::RequestStatusResponse::Processing { time: _ } => {
-                RequestStatusResponse::Processing
-            }
-            replica_api::RequestStatusResponse::Rejected {
+            replica_api::Status::Rejected {
                 reject_code,
                 reject_message,
-                time: _,
             } => RequestStatusResponse::Rejected {
                 reject_code,
                 reject_message,
             },
-            replica_api::RequestStatusResponse::Done { time: _ } => RequestStatusResponse::Done,
+            replica_api::Status::Unknown {} => RequestStatusResponse::Unknown,
+            replica_api::Status::Received {} => RequestStatusResponse::Received,
+            replica_api::Status::Processing {} => RequestStatusResponse::Processing,
+            replica_api::Status::Done {} => RequestStatusResponse::Done,
         })
     }
 
@@ -461,7 +455,7 @@ pub struct UpdateBuilder<'agent> {
     canister_id: Principal,
     method_name: String,
     arg: Vec<u8>,
-    ingress_expiry: u64,
+    ing_exp_datetime: Option<u64>,
 }
 
 impl<'agent> UpdateBuilder<'agent> {
@@ -471,7 +465,7 @@ impl<'agent> UpdateBuilder<'agent> {
             canister_id,
             method_name,
             arg: vec![],
-            ingress_expiry: 0,
+            ing_exp_datetime: None,
         }
     }
 
@@ -480,16 +474,29 @@ impl<'agent> UpdateBuilder<'agent> {
         self
     }
 
+    // Takes a SystemTime converts it to a Duration by calling
+    // duration_since(UNIX_EPOCH) to learn about where in time this SystemTime lies.
+    // The Duration is converted to nanoseconds and stored in ing_exp_datetime
     pub fn expire_at(&mut self, time: std::time::SystemTime) -> &mut Self {
-        self.ingress_expiry = time
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Time wrapped around")
-            .as_nanos() as u64;
+        self.ing_exp_datetime = Some(
+            time.duration_since(std::time::UNIX_EPOCH)
+                .expect("Time wrapped around")
+                .as_nanos() as u64,
+        );
         self
     }
 
+    // Takes a Duration (i.e. 30 sec/5 min 30 sec/1 h 30 min, etc.) and adds it to the
+    // Duration of the current SystemTime since the UnixEpoch
+    // Converts the sum to nanoseconds and stores in ingress_ttl
     pub fn expire_after(&mut self, duration: std::time::Duration) -> &mut Self {
-        self.ingress_expiry = duration.as_nanos() as u64;
+        self.ing_exp_datetime = Some(
+            (duration
+                + std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("Time wrapped around"))
+            .as_nanos() as u64,
+        );
         self
     }
 
@@ -500,6 +507,7 @@ impl<'agent> UpdateBuilder<'agent> {
                 &self.canister_id,
                 self.method_name.as_str(),
                 self.arg.as_slice(),
+                self.ing_exp_datetime,
             )
             .await?;
         waiter.start();
@@ -521,7 +529,11 @@ impl<'agent> UpdateBuilder<'agent> {
                 RequestStatusResponse::Unknown => (),
                 RequestStatusResponse::Received => (),
                 RequestStatusResponse::Processing => (),
-                RequestStatusResponse::Done => (),
+                RequestStatusResponse::Done => {
+                    return Err(AgentError::RequestStatusDoneNoReply(String::from(
+                        request_id,
+                    )))
+                }
             };
 
             waiter
@@ -536,6 +548,7 @@ impl<'agent> UpdateBuilder<'agent> {
                 &self.canister_id,
                 self.method_name.as_str(),
                 self.arg.as_slice(),
+                self.ing_exp_datetime,
             )
             .await
     }
