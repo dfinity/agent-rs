@@ -238,12 +238,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         .call_and_wait(
                             delay::Delay::builder()
                                 .exponential_backoff(std::time::Duration::from_secs(60), 1.5)
-                                .timeout(std::time::Duration::from_secs(60))
+                                .timeout(std::time::Duration::from_secs(60 * 5))
                                 .build(),
                         )
                         .await
                 }
-                SubCommand::Query(_) => agent.query_raw(&t.canister_id, &t.method_name, &arg).await,
+                SubCommand::Query(_) => {
+                    agent
+                        .query_raw(&t.canister_id, &t.method_name, &arg, None)
+                        .await
+                }
                 _ => unreachable!(),
             };
 
