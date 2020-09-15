@@ -25,7 +25,7 @@ pub struct AgentConfig {
     pub identity: Box<dyn Identity>,
     pub default_waiter: delay::Delay,
     pub password_manager: Option<Box<dyn PasswordManager>>,
-    pub ing_exp_duration: Option<std::time::Duration>,
+    pub ingress_expiry_duration: Option<std::time::Duration>,
 }
 
 impl Default for AgentConfig {
@@ -38,7 +38,7 @@ impl Default for AgentConfig {
             identity: Box::new(DummyIdentity {}),
             default_waiter: delay::Delay::instant(),
             password_manager: None,
-            ing_exp_duration: None,
+            ingress_expiry_duration: None,
         }
     }
 }

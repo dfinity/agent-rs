@@ -65,7 +65,7 @@ impl AgentBuilder {
     pub fn expire_after(self, duration: Option<std::time::Duration>) -> Self {
         AgentBuilder {
             config: AgentConfig {
-                ing_exp_duration: duration,
+                ingress_expiry_duration: duration,
                 ..self.config
             },
         }

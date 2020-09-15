@@ -95,7 +95,7 @@ pub struct Agent {
     client: reqwest::Client,
     identity: Box<dyn Identity>,
     password_manager: Option<Box<dyn PasswordManager>>,
-    ing_exp_duration: Duration,
+    ingress_expiry_duration: Duration,
 }
 
 impl Agent {
@@ -128,15 +128,15 @@ impl Agent {
             nonce_factory: config.nonce_factory,
             identity: config.identity,
             password_manager: config.password_manager,
-            ing_exp_duration: config
-                .ing_exp_duration
+            ingress_expiry_duration: config
+                .ingress_expiry_duration
                 .unwrap_or_else(|| Duration::from_secs(300)),
         })
     }
 
     fn get_expiry_date(&self) -> u64 {
         let permitted_drift = Duration::from_secs(60);
-        (self.ing_exp_duration
+        (self.ingress_expiry_duration
             + std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("Time wrapped around.")
@@ -336,14 +336,14 @@ impl Agent {
         canister_id: &Principal,
         method_name: &str,
         arg: &[u8],
-        ing_exp_datetime: Option<u64>,
+        ingress_expiry_datetime: Option<u64>,
     ) -> Result<Vec<u8>, AgentError> {
         self.read_endpoint::<replica_api::QueryResponse>(SyncContent::QueryRequest {
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
             canister_id: canister_id.clone(),
             method_name: method_name.to_string(),
             arg: arg.to_vec(),
-            ingress_expiry: ing_exp_datetime.unwrap_or_else(|| self.get_expiry_date()),
+            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
         })
         .await
         .and_then(|response| match response {
@@ -365,7 +365,7 @@ impl Agent {
         canister_id: &Principal,
         method_name: &str,
         arg: &[u8],
-        ing_exp_datetime: Option<u64>,
+        ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestId, AgentError> {
         self.submit_endpoint(AsyncContent::CallRequest {
             canister_id: canister_id.clone(),
@@ -373,7 +373,7 @@ impl Agent {
             arg: arg.to_vec(),
             nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
-            ingress_expiry: ing_exp_datetime.unwrap_or_else(|| self.get_expiry_date()),
+            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
         })
         .await
     }
@@ -381,11 +381,11 @@ impl Agent {
     pub async fn request_status_raw(
         &self,
         request_id: &RequestId,
-        ing_exp_datetime: Option<u64>,
+        ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestStatusResponse, AgentError> {
         self.read_endpoint(SyncContent::RequestStatusRequest {
             request_id: request_id.as_slice().into(),
-            ingress_expiry: ing_exp_datetime.unwrap_or_else(|| self.get_expiry_date()),
+            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
         })
         .await
         .map(|response| match response {
@@ -434,7 +434,7 @@ pub struct UpdateBuilder<'agent> {
     canister_id: Principal,
     method_name: String,
     arg: Vec<u8>,
-    ing_exp_datetime: Option<u64>,
+    ingress_expiry_datetime: Option<u64>,
 }
 
 impl<'agent> UpdateBuilder<'agent> {
@@ -444,7 +444,7 @@ impl<'agent> UpdateBuilder<'agent> {
             canister_id,
             method_name,
             arg: vec![],
-            ing_exp_datetime: None,
+            ingress_expiry_datetime: None,
         }
     }
 
@@ -455,9 +455,9 @@ impl<'agent> UpdateBuilder<'agent> {
 
     /// Takes a SystemTime converts it to a Duration by calling
     /// duration_since(UNIX_EPOCH) to learn about where in time this SystemTime lies.
-    /// The Duration is converted to nanoseconds and stored in ing_exp_datetime
+    /// The Duration is converted to nanoseconds and stored in ingress_expiry_datetime
     pub fn expire_at(&mut self, time: std::time::SystemTime) -> &mut Self {
-        self.ing_exp_datetime = Some(
+        self.ingress_expiry_datetime = Some(
             time.duration_since(std::time::UNIX_EPOCH)
                 .expect("Time wrapped around")
                 .as_nanos() as u64,
@@ -468,10 +468,10 @@ impl<'agent> UpdateBuilder<'agent> {
     /// Takes a Duration (i.e. 30 sec/5 min 30 sec/1 h 30 min, etc.) and adds it to the
     /// Duration of the current SystemTime since the UNIX_EPOCH
     /// Subtracts a permitted drift from the sum to account for using system time and not block time.
-    /// Converts the difference to nanoseconds and stores in ing_exp_datetime
+    /// Converts the difference to nanoseconds and stores in ingress_expiry_datetime
     pub fn expire_after(&mut self, duration: std::time::Duration) -> &mut Self {
         let permitted_drift = Duration::from_secs(60);
-        self.ing_exp_datetime = Some(
+        self.ingress_expiry_datetime = Some(
             (duration
                 + std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -489,7 +489,7 @@ impl<'agent> UpdateBuilder<'agent> {
                 &self.canister_id,
                 self.method_name.as_str(),
                 self.arg.as_slice(),
-                self.ing_exp_datetime,
+                self.ingress_expiry_datetime,
             )
             .await?;
         waiter.start();
@@ -497,7 +497,7 @@ impl<'agent> UpdateBuilder<'agent> {
         loop {
             match self
                 .agent
-                .request_status_raw(&request_id, self.ing_exp_datetime)
+                .request_status_raw(&request_id, self.ingress_expiry_datetime)
                 .await?
             {
                 RequestStatusResponse::Replied {
@@ -534,7 +534,7 @@ impl<'agent> UpdateBuilder<'agent> {
                 &self.canister_id,
                 self.method_name.as_str(),
                 self.arg.as_slice(),
-                self.ing_exp_datetime,
+                self.ingress_expiry_datetime,
             )
             .await
     }
