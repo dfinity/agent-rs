@@ -83,7 +83,7 @@ impl Serialize for RequestId {
 ///
 /// The only types that are supported right now are:
 ///   . Strings and string slices.
-///   . Blobs (the newtype exported from this crate).
+///   . Vector of u8 (byte strings).
 ///   . A structure as the base level. Its typename and fields are not validated.
 ///
 /// Additionally, this will fail if there are unsupported data structure, for example

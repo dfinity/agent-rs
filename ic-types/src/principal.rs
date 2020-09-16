@@ -16,6 +16,9 @@ pub enum PrincipalError {
 
     #[error("Text cannot be converted to a Principal; too small.")]
     TextTooSmall(),
+
+    #[error("A custom tool returned an error instead of a Principal: {0}")]
+    ExternalError(String),
 }
 
 const ID_ANONYMOUS_BYTES: &[u8] = &[PrincipalClass::Anonymous as u8];
@@ -225,6 +228,14 @@ impl std::str::FromStr for Principal {
     }
 }
 
+impl TryFrom<&str> for Principal {
+    type Error = PrincipalError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        Principal::from_text(s)
+    }
+}
+
 /// Vector TryFrom. The slice and array version of this trait are defined below.
 impl TryFrom<Vec<u8>> for Principal {
     type Error = PrincipalError;
@@ -329,6 +340,17 @@ mod deserialize {
             E: serde::de::Error,
         {
             Principal::try_from(value).map_err(E::custom)
+        }
+        /// This visitor should only be used by the Candid crate.
+        fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            if v.is_empty() || v[0] != 2u8 {
+                Err(E::custom("Not called by Candid"))
+            } else {
+                Principal::try_from(&v[1..]).map_err(E::custom)
+            }
         }
     }
 }

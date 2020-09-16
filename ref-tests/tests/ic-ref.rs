@@ -7,16 +7,16 @@ use ref_tests::universal_canister;
 use ring::signature::Ed25519KeyPair;
 use std::future::Future;
 
-const EXPECTED_IC_API_VERSION: &str = "0.9.2";
+const EXPECTED_IC_API_VERSION: &str = "0.10.2";
 
 fn create_waiter() -> Delay {
     Delay::builder()
         .throttle(std::time::Duration::from_millis(5))
-        .timeout(std::time::Duration::from_millis(100))
+        .timeout(std::time::Duration::from_secs(60 * 5))
         .build()
 }
 
-async fn create_identity() -> Result<Box<dyn Identity>, String> {
+async fn create_identity() -> Result<Box<dyn Identity + Sync + Send>, String> {
     let rng = ring::rand::SystemRandom::new();
     let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
         .expect("Could not generate a key pair.");
@@ -302,7 +302,10 @@ mod management_canister {
             ic00.stop_canister(create_waiter(), &canister_id).await?;
 
             // Can't call update on a stopped canister
-            let result = agent.update(&canister_id, "update", &[]).await;
+            let result = agent
+                .update(&canister_id, "update")
+                .call_and_wait(create_waiter())
+                .await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 5,
@@ -312,7 +315,7 @@ mod management_canister {
             });
 
             // Can't call query on a stopped canister
-            let result = agent.query(&canister_id, "query", &[]).await;
+            let result = agent.query_raw(&canister_id, "query", &[], None).await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 5,
@@ -329,7 +332,10 @@ mod management_canister {
             assert_eq!(result?, ic_agent::CanisterStatus::Running);
 
             // Can call update
-            let result = agent.update(&canister_id, "update", &[]).await;
+            let result = agent
+                .update(&canister_id, "update")
+                .call_and_wait(create_waiter())
+                .await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 3,
@@ -339,7 +345,7 @@ mod management_canister {
             });
 
             // Can call query
-            let result = agent.query(&canister_id, "query", &[]).await;
+            let result = agent.query_raw(&canister_id, "query", &[], None).await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 3,
@@ -365,7 +371,10 @@ mod management_canister {
             ic00.delete_canister(create_waiter(), &canister_id).await?;
 
             // Cannot call update
-            let result = agent.update(&canister_id, "update", &[]).await;
+            let result = agent
+                .update(&canister_id, "update")
+                .call_and_wait(create_waiter())
+                .await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 3,
@@ -377,7 +386,7 @@ mod management_canister {
             });
 
             // Cannot call query
-            let result = agent.query(&canister_id, "query", &[]).await;
+            let result = agent.query_raw(&canister_id, "query", &[], None).await;
             assert!(match result {
                 Err(AgentError::ReplicaError {
                     reject_code: 3,
@@ -421,7 +430,7 @@ mod management_canister {
 }
 
 mod simple_calls {
-    use super::with_universal_canister;
+    use super::{create_waiter, with_universal_canister};
     use crate::universal_canister::payload;
     use ic_agent::AgentError;
 
@@ -430,9 +439,13 @@ mod simple_calls {
     fn call() {
         with_universal_canister(|agent, canister_id| async move {
             let arg = payload().reply_data(b"hello").build();
-            let result = agent.update(&canister_id, "update", &arg).await?;
+            let result = agent
+                .update(&canister_id, "update")
+                .with_arg(&arg)
+                .call_and_wait(create_waiter())
+                .await?;
 
-            assert_eq!(result, b"hello");
+            assert_eq!(result.as_slice(), b"hello");
             Ok(())
         })
     }
@@ -442,7 +455,7 @@ mod simple_calls {
     fn query() {
         with_universal_canister(|agent, canister_id| async move {
             let arg = payload().reply_data(b"hello").build();
-            let result = agent.query(&canister_id, "query", &arg).await?;
+            let result = agent.query_raw(&canister_id, "query", &arg, None).await?;
 
             assert_eq!(result, b"hello");
             Ok(())
@@ -455,7 +468,9 @@ mod simple_calls {
         with_universal_canister(|agent, canister_id| async move {
             let arg = payload().reply_data(b"hello").build();
             let result = agent
-                .update(&canister_id, "non_existent_method", &arg)
+                .update(&canister_id, "non_existent_method")
+                .with_arg(&arg)
+                .call_and_wait(create_waiter())
                 .await;
 
             assert!(match result {

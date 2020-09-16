@@ -11,7 +11,7 @@ jobs:
         include:
           - build: linux-0-9
             ghc: '8.8.3'
-            spec: 'release-0.9'
+            spec: 'release-0.10'
             os: ubuntu-latest
             rust: stable
 
@@ -89,5 +89,18 @@ jobs:
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
           cd main/ref-tests
           cargo test --all-features -- --ignored
+          killall ic-ref
+        env:
+          RUST_BACKTRACE: 1
+
+      - name: Run Doc Tests
+        run: |
+          set -ex
+          $HOME/bin/ic-ref --pick-port --write-port-to $HOME/ic_ref_port &
+          sleep 1
+          export IC_REF_PORT=$(cat $HOME/ic_ref_port)
+          cd main
+          cargo test --all-features --doc -- --ignored
+          killall ic-ref
         env:
           RUST_BACKTRACE: 1
