@@ -196,18 +196,19 @@ fn print_idl_blob(
     Ok(())
 }
 
-fn create_identity(maybe_pem: Option<PathBuf>) -> Box<dyn Identity> {
+fn create_identity(maybe_pem: Option<PathBuf>) -> impl Identity {
     if let Some(pem_path) = maybe_pem {
-        Box::new(BasicIdentity::from_pem_file(pem_path).expect("Could not read the key pair."))
+        BasicIdentity::from_pem_file(pem_path).expect("Could not read the key pair.")
     } else {
         let rng = ring::rand::SystemRandom::new();
         let pkcs8_bytes = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
             .expect("Could not generate a key pair.")
             .as_ref()
             .to_vec();
-        Box::new(BasicIdentity::from_key_pair(
+
+        BasicIdentity::from_key_pair(
             Ed25519KeyPair::from_pkcs8(&pkcs8_bytes).expect("Could not generate the key pair."),
-        ))
+        )
     }
 }
 
@@ -216,7 +217,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let opts: Opts = Opts::parse();
     let agent = Agent::new(AgentConfig {
         url: opts.replica,
-        identity: create_identity(opts.pem),
+        identity: Box::new(create_identity(opts.pem)),
         ..AgentConfig::default()
     })?;
 

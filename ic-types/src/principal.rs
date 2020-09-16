@@ -16,6 +16,9 @@ pub enum PrincipalError {
 
     #[error("Text cannot be converted to a Principal; too small.")]
     TextTooSmall(),
+
+    #[error("A custom tool returned an error instead of a Principal: {0}")]
+    ExternalError(String),
 }
 
 const ID_ANONYMOUS_BYTES: &[u8] = &[PrincipalClass::Anonymous as u8];
@@ -221,6 +224,14 @@ impl std::str::FromStr for Principal {
     type Err = PrincipalError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Principal::from_text(s)
+    }
+}
+
+impl TryFrom<&str> for Principal {
+    type Error = PrincipalError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
         Principal::from_text(s)
     }
 }
