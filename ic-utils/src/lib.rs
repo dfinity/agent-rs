@@ -4,6 +4,6 @@
 /// Utilities to encapsulate calls to a canister.
 pub mod call;
 pub mod canister;
-pub mod canisters;
+pub mod interfaces;
 
 pub use canister::Canister;

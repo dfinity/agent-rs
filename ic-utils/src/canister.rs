@@ -192,7 +192,7 @@ impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, I
 
 #[cfg(test)]
 mod tests {
-    use super::super::canisters::ManagementCanister;
+    use super::super::interfaces::ManagementCanister;
     use crate::call::AsyncCall;
     use ic_agent::BasicIdentity;
 
