@@ -7,6 +7,7 @@ use ic_types::{Principal, PrincipalError};
 use std::convert::TryInto;
 use thiserror::Error;
 
+/// An error happened while building a canister.
 #[derive(Debug, Error)]
 pub enum CanisterBuilderError {
     #[error("Getting the Canister ID returned an error: {0}")]
@@ -19,6 +20,7 @@ pub enum CanisterBuilderError {
     MustSpecifyCanisterId(),
 }
 
+/// A canister builder, which can be used to create a canister abstraction.
 pub struct CanisterBuilder<'agent, T = ()> {
     agent: Option<&'agent Agent>,
     canister_id: Option<Result<Principal, PrincipalError>>,
@@ -26,6 +28,7 @@ pub struct CanisterBuilder<'agent, T = ()> {
 }
 
 impl<'agent, T> CanisterBuilder<'agent, T> {
+    /// Attach a canister ID to this canister.
     pub fn with_canister_id<E, P>(self, canister_id: P) -> Self
     where
         E: std::error::Error,
@@ -41,6 +44,15 @@ impl<'agent, T> CanisterBuilder<'agent, T> {
         }
     }
 
+    /// Assign an agent to the canister being built.
+    pub fn with_agent(self, agent: &'agent Agent) -> Self {
+        CanisterBuilder {
+            agent: Some(agent),
+            ..self
+        }
+    }
+
+    /// Create this canister abstraction after passing in all the necessary state.
     pub fn build(self) -> Result<Canister<'agent, T>, CanisterBuilderError> {
         let canister_id = if let Some(cid) = self.canister_id {
             cid?
@@ -70,24 +82,18 @@ impl Default for CanisterBuilder<'static, ()> {
 }
 
 impl<'agent> CanisterBuilder<'agent, ()> {
+    /// Create a canister builder with no value.
     pub fn new() -> CanisterBuilder<'static, ()> {
         Default::default()
     }
 
+    /// Apply an interface to this canister. An interface can add methods to the canister's
+    /// type. For example, see the Management Canister.
     pub fn with_interface<T>(self, interface: T) -> CanisterBuilder<'agent, T> {
         CanisterBuilder {
             agent: self.agent,
             canister_id: self.canister_id,
             interface,
-        }
-    }
-}
-
-impl<'agent, T> CanisterBuilder<'agent, T> {
-    pub fn with_agent(self, agent: &'agent Agent) -> Self {
-        CanisterBuilder {
-            agent: Some(agent),
-            ..self
         }
     }
 }
@@ -105,17 +111,31 @@ pub struct Canister<'agent, T = ()> {
 }
 
 impl<'agent, T> Canister<'agent, T> {
+    /// Get the interface object from this canister. Sometimes those interfaces might have
+    /// custom methods that are useful.
     pub fn interface_(&self) -> &T {
         &self.interface
+    }
+
+    /// Create an AsyncCallBuilder to do an update call.
+    pub fn update_<'canister>(
+        &'canister self,
+        method_name: &str,
+    ) -> AsyncCallBuilder<'agent, 'canister, T> {
+        AsyncCallBuilder::new(self, method_name)
     }
 }
 
 impl<'agent> Canister<'agent, ()> {
+    /// Create a CanisterBuilder instance to build a canister abstraction.
     pub fn builder() -> CanisterBuilder<'agent, ()> {
         Default::default()
     }
 }
 
+/// A builder for an asynchronous call (ie. update) to the Internet Computer.
+///
+/// See [AsyncCaller] for a description of this structure.
 pub struct AsyncCallBuilder<'agent, 'canister: 'agent, T> {
     canister: &'canister Canister<'agent, T>,
     method_name: String,
@@ -123,7 +143,8 @@ pub struct AsyncCallBuilder<'agent, 'canister: 'agent, T> {
 }
 
 impl<'agent, 'canister: 'agent, T> AsyncCallBuilder<'agent, 'canister, T> {
-    pub fn new(
+    /// Create a new instance of an AsyncCallBuilder.
+    pub(super) fn new(
         canister: &'canister Canister<'agent, T>,
         method_name: &str,
     ) -> AsyncCallBuilder<'agent, 'canister, T> {
@@ -135,13 +156,17 @@ impl<'agent, 'canister: 'agent, T> AsyncCallBuilder<'agent, 'canister, T> {
     }
 }
 
-impl<'agent, 'canister: 'agent, T> AsyncCallBuilder<'agent, 'canister, T> {
-    pub fn with_arg<A: CandidType + Sync + Send>(
+impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, Interface> {
+    /// Add an argument to the list. This requires Candid arguments, as well as
+    pub fn with_arg<Argument>(
         mut self,
-        arg: A,
-    ) -> AsyncCallBuilder<'agent, 'canister, T> {
-        if let Ok(ref mut builder) = self.arg {
-            let result = builder.arg(&arg);
+        arg: Argument,
+    ) -> AsyncCallBuilder<'agent, 'canister, Interface>
+    where
+        Argument: CandidType + Sync + Send,
+    {
+        if let Ok(ref mut idl_builder) = self.arg {
+            let result = idl_builder.arg(&arg);
             if let Err(e) = result {
                 self.arg = Err(e)
             }
@@ -149,27 +174,19 @@ impl<'agent, 'canister: 'agent, T> AsyncCallBuilder<'agent, 'canister, T> {
         self
     }
 
-    pub fn build<O>(self) -> AsyncCaller<'canister, O>
+    /// Builds an [AsyncCaller] from this builder's state.
+    pub fn build<Output>(self) -> AsyncCaller<'canister, Output>
     where
-        O: for<'de> ArgumentDecoder<'de> + Send + Sync,
+        Output: for<'de> ArgumentDecoder<'de> + Send + Sync,
     {
         let c = self.canister;
         AsyncCaller {
             agent: c.agent,
             canister_id: c.canister_id.clone(),
             method_name: self.method_name.clone(),
-            arg: self.arg.and_then(|mut builder| builder.serialize_to_vec()),
+            arg: self.arg.and_then(|mut idl| idl.serialize_to_vec()),
             phantom_out: std::marker::PhantomData,
         }
-    }
-}
-
-impl<'agent, T> Canister<'agent, T> {
-    pub fn update_<'canister>(
-        &'canister self,
-        method_name: &str,
-    ) -> AsyncCallBuilder<'agent, 'canister, T> {
-        AsyncCallBuilder::new(self, method_name)
     }
 }
 

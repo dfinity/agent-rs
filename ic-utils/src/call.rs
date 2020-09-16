@@ -48,20 +48,22 @@ where
 }
 
 /// A synchronous call encapsulation.
+#[derive(Clone)]
 pub struct SyncCaller<'agent> {
     agent: &'agent Agent,
     canister_id: Principal,
     method_name: String,
-    arg: Result<Vec<u8>, candid::Error>,
+    arg: Vec<u8>,
 }
 
 impl<'agent> SyncCaller<'agent> {
+    /// Perform the call, consuming the the abstraction.
     async fn call<R>(self) -> Result<R, AgentError>
     where
         R: for<'de> ArgumentDecoder<'de> + Send + Sync,
     {
         self.agent
-            .query_raw(&self.canister_id, &self.method_name, &self.arg?)
+            .query_raw(&self.canister_id, &self.method_name, &self.arg)
             .await
             .and_then(|r| decode_args(&r).map_err(AgentError::from))
     }
@@ -163,8 +165,9 @@ where
     }
 }
 
-/// A structure that applies a transform function to the result of a call. Because of constraints
-/// on the type system in Rust, both the input and output to the function must be deserializable.
+/// An AsyncCall that applies a transform function to the result of the call. Because of
+/// constraints on the type system in Rust, both the input and output to the function must be
+/// deserializable.
 pub struct AndThenAsyncCaller<
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
     Out2: for<'de> ArgumentDecoder<'de> + Send + Sync,

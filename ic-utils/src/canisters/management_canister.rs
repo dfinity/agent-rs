@@ -1,7 +1,8 @@
 use crate::call::AsyncCall;
 use crate::Canister;
 use async_trait::async_trait;
-use candid::{CandidType, Deserialize, Encode};
+use candid::ser::IDLBuilder;
+use candid::{CandidType, Deserialize};
 use delay::Waiter;
 use ic_agent::{AgentError, ComputeAllocation, RequestId};
 use ic_types::Principal;
@@ -10,7 +11,7 @@ use std::str::FromStr;
 
 pub struct ManagementCanister;
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum CanisterStatus {
     Running,
@@ -24,7 +25,7 @@ impl std::fmt::Display for CanisterStatus {
     }
 }
 
-#[derive(Copy, Clone, CandidType, Deserialize)]
+#[derive(Copy, Clone, CandidType, Deserialize, Eq, PartialEq)]
 pub enum InstallMode {
     #[serde(rename = "install")]
     Install,
@@ -47,18 +48,16 @@ impl FromStr for InstallMode {
     }
 }
 
-pub struct InstallCodeBuilder<'agent, 'canister: 'agent, Arg: CandidType + Sync + Send, T> {
+pub struct InstallCodeBuilder<'agent, 'canister: 'agent, T> {
     canister: &'canister Canister<'agent, T>,
     canister_id: Principal,
     wasm: &'canister [u8],
-    arg: Option<Arg>,
+    arg: Result<IDLBuilder, candid::Error>,
     mode: Option<InstallMode>,
     compute_allocation: Option<ComputeAllocation>,
 }
 
-impl<'agent, 'canister: 'agent, Arg: CandidType + Sync + Send, T>
-    InstallCodeBuilder<'agent, 'canister, Arg, T>
-{
+impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
     pub fn builder(
         canister: &'canister Canister<'agent, T>,
         canister_id: &Principal,
@@ -68,24 +67,23 @@ impl<'agent, 'canister: 'agent, Arg: CandidType + Sync + Send, T>
             canister,
             canister_id: canister_id.clone(),
             wasm,
-            arg: None,
+            arg: Ok(IDLBuilder::new()),
             mode: None,
             compute_allocation: None,
         }
     }
 
-    pub fn with_arg<Arg2: CandidType + Sync + Send>(
-        self,
-        arg: Arg2,
-    ) -> InstallCodeBuilder<'agent, 'canister, Arg2, T> {
-        InstallCodeBuilder {
-            arg: Some(arg),
-            canister: self.canister,
-            canister_id: self.canister_id,
-            wasm: self.wasm,
-            mode: self.mode,
-            compute_allocation: self.compute_allocation,
+    pub fn with_arg<Argument: CandidType + Sync + Send>(
+        mut self,
+        arg: Argument,
+    ) -> InstallCodeBuilder<'agent, 'canister, T> {
+        if let Ok(ref mut idl_builder) = self.arg {
+            let result = idl_builder.arg(&arg);
+            if let Err(e) = result {
+                self.arg = Err(e)
+            }
         }
+        self
     }
 
     pub fn with_mode(self, mode: InstallMode) -> Self {
@@ -105,7 +103,7 @@ impl<'agent, 'canister: 'agent, Arg: CandidType + Sync + Send, T>
         }
     }
 
-    pub fn build(&self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
+    pub fn build(self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
         #[derive(candid::CandidType)]
         struct CanisterInstall {
             mode: InstallMode,
@@ -125,9 +123,7 @@ impl<'agent, 'canister: 'agent, Arg: CandidType + Sync + Send, T>
                 wasm_module: self.wasm.to_owned(),
                 arg: self
                     .arg
-                    .as_ref()
-                    .map_or_else(|| Ok(vec![]), |arg| Encode!(arg))?
-                    .to_vec(),
+                    .and_then(|mut idl_builder| idl_builder.serialize_to_vec())?,
                 compute_allocation: self.compute_allocation.map(|ca| ca.into()),
                 memory_allocation: None,
             })
@@ -147,8 +143,8 @@ impl<'agent, 'canister: 'agent, Arg: CandidType + Sync + Send, T>
 }
 
 #[async_trait]
-impl<'agent, 'canister: 'agent, Arg: CandidType + Sync + Send, T: Sync> AsyncCall<()>
-    for InstallCodeBuilder<'agent, 'canister, Arg, T>
+impl<'agent, 'canister: 'agent, T: Sync> AsyncCall<()>
+    for InstallCodeBuilder<'agent, 'canister, T>
 {
     async fn call(self) -> Result<RequestId, AgentError> {
         self.build()?.call().await
@@ -205,12 +201,12 @@ impl<'agent> Canister<'agent, ManagementCanister> {
         canister_id: &Principal,
     ) -> impl 'agent + AsyncCall<()> {
         #[derive(CandidType)]
-        struct In {
+        struct Argument {
             canister_id: Principal,
         }
 
         self.update_("delete_canister")
-            .with_arg(In {
+            .with_arg(Argument {
                 canister_id: canister_id.clone(),
             })
             .build()
@@ -222,12 +218,12 @@ impl<'agent> Canister<'agent, ManagementCanister> {
         canister_id: &Principal,
     ) -> impl 'agent + AsyncCall<()> {
         #[derive(CandidType)]
-        struct In {
+        struct Argument {
             canister_id: Principal,
         }
 
         self.update_("start_canister")
-            .with_arg(In {
+            .with_arg(Argument {
                 canister_id: canister_id.clone(),
             })
             .build()
@@ -239,12 +235,12 @@ impl<'agent> Canister<'agent, ManagementCanister> {
         canister_id: &Principal,
     ) -> impl 'agent + AsyncCall<()> {
         #[derive(CandidType)]
-        struct In {
+        struct Argument {
             canister_id: Principal,
         }
 
         self.update_("stop_canister")
-            .with_arg(In {
+            .with_arg(Argument {
                 canister_id: canister_id.clone(),
             })
             .build()
@@ -255,7 +251,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
         &'canister self,
         canister_id: &Principal,
         wasm: &'canister [u8],
-    ) -> InstallCodeBuilder<'agent, 'canister, (), ManagementCanister> {
+    ) -> InstallCodeBuilder<'agent, 'canister, ManagementCanister> {
         InstallCodeBuilder::builder(self, canister_id, wasm)
     }
 }
