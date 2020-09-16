@@ -42,9 +42,10 @@
 //!     .with_identity(create_identity())
 //!     .build()?;
 //!   let management_canister_id = Principal::from_text("aaaaa-aa")?;
+//!
 //!   let waiter = delay::Delay::builder()
 //!     .throttle(std::time::Duration::from_millis(500))
-//!     .timeout(std::time::Duration::from_secs(10))
+//!     .timeout(std::time::Duration::from_secs(60 * 5))
 //!     .build();
 //!
 //!   // Create a call to the management canister to create a new canister ID,

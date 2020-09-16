@@ -19,6 +19,7 @@ pub enum AsyncContent {
         #[serde(skip_serializing_if = "Option::is_none")]
         #[serde(with = "serde_bytes")]
         nonce: Option<Vec<u8>>,
+        ingress_expiry: u64,
         sender: Principal,
         canister_id: Principal,
         method_name: String,
@@ -32,11 +33,13 @@ pub enum AsyncContent {
 pub enum SyncContent {
     #[serde(rename = "request_status")]
     RequestStatusRequest {
+        ingress_expiry: u64,
         #[serde(with = "serde_bytes")]
         request_id: Vec<u8>,
     },
     #[serde(rename = "query")]
     QueryRequest {
+        ingress_expiry: u64,
         sender: Principal,
         canister_id: Principal,
         method_name: String,
@@ -46,8 +49,15 @@ pub enum SyncContent {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RequestStatusResponse {
+    pub status: Status,
+    #[serde(rename = "time")]
+    pub time: u64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "status")]
-pub enum RequestStatusResponse {
+pub enum Status {
     #[serde(rename = "unknown")]
     Unknown {},
     #[serde(rename = "received")]
@@ -61,6 +71,8 @@ pub enum RequestStatusResponse {
         reject_code: u64,
         reject_message: String,
     },
+    #[serde(rename = "done")]
+    Done {},
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

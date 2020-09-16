@@ -8,6 +8,7 @@ pub(crate) mod response;
 pub(crate) mod public {
     pub use super::agent_config::{AgentConfig, PasswordManager};
     pub use super::agent_error::AgentError;
+    pub use super::builder::AgentBuilder;
     pub use super::nonce::NonceFactory;
     pub use super::response::{Replied, RequestStatusResponse};
     pub use super::Agent;
@@ -25,6 +26,7 @@ use serde::Serialize;
 
 use public::*;
 use std::convert::TryFrom;
+use std::time::Duration;
 
 const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 
@@ -61,9 +63,10 @@ const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 ///     .with_identity(create_identity())
 ///     .build()?;
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
+///
 ///   let waiter = delay::Delay::builder()
 ///     .throttle(std::time::Duration::from_millis(500))
-///     .timeout(std::time::Duration::from_secs(10))
+///     .timeout(std::time::Duration::from_secs(60 * 5))
 ///     .build();
 ///
 ///   // Create a call to the management canister to create a new canister ID,
@@ -92,6 +95,7 @@ pub struct Agent {
     client: reqwest::Client,
     identity: Box<dyn Identity + Send + Sync>,
     password_manager: Option<Box<dyn PasswordManager + Send + Sync>>,
+    ingress_expiry_duration: Duration,
 }
 
 impl Agent {
@@ -124,7 +128,20 @@ impl Agent {
             nonce_factory: config.nonce_factory,
             identity: config.identity,
             password_manager: config.password_manager,
+            ingress_expiry_duration: config
+                .ingress_expiry_duration
+                .unwrap_or_else(|| Duration::from_secs(300)),
         })
+    }
+
+    fn get_expiry_date(&self) -> u64 {
+        let permitted_drift = Duration::from_secs(60);
+        (self.ingress_expiry_duration
+            + std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time wrapped around.")
+            - permitted_drift)
+            .as_nanos() as u64
     }
 
     fn construct_message(&self, request_id: &RequestId) -> Vec<u8> {
@@ -309,7 +326,7 @@ impl Agent {
     /// async fn query_example() -> Result<(), Box<dyn std::error::Error>> {
     ///     let agent = Agent::builder().with_url("https://gw.dfinity.network").build()?;
     ///     let canister_id = Principal::from_text("w7x7r-cok77-xa")?;
-    ///     let response = agent.query_raw(&canister_id, "echo", &[1, 2, 3]).await?;
+    ///     let response = agent.query_raw(&canister_id, "echo", &[1, 2, 3], None).await?;
     ///     assert_eq!(response, &[1, 2, 3]);
     ///     Ok(())
     /// }
@@ -319,12 +336,14 @@ impl Agent {
         canister_id: &Principal,
         method_name: &str,
         arg: &[u8],
+        ingress_expiry_datetime: Option<u64>,
     ) -> Result<Vec<u8>, AgentError> {
         self.read_endpoint::<replica_api::QueryResponse>(SyncContent::QueryRequest {
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
             canister_id: canister_id.clone(),
             method_name: method_name.to_string(),
             arg: arg.to_vec(),
+            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
         })
         .await
         .and_then(|response| match response {
@@ -341,31 +360,12 @@ impl Agent {
 
     /// The simplest way to do an update call; sends a byte array and will return a RequestId.
     /// The RequestId should then be used for request_status (most likely in a loop).
-    ///
-    /// ```no_run
-    /// use ic_agent::{Agent, Replied, RequestStatusResponse};
-    /// use ic_types::Principal;
-    ///
-    /// async fn update_example() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let agent = Agent::builder().with_url("https://gw.dfinity.network/").build()?;
-    ///     let canister_id = Principal::from_text("w7x7r-cok77-xa")?;
-    ///     let request_id = agent.update_raw(&canister_id, "echo", &[1, 2, 3]).await?;
-    ///
-    ///     // Give the IC some time to process the update call.
-    ///
-    ///     let status = agent.request_status_raw(&request_id).await?;
-    ///     assert_eq!(
-    ///       status,
-    ///       RequestStatusResponse::Replied { reply: Replied::CallReplied(vec![1, 2, 3]) }
-    ///     );
-    ///     Ok(())
-    /// }
-    /// ```
-    pub async fn update_raw(
+    async fn update_raw(
         &self,
         canister_id: &Principal,
         method_name: &str,
         arg: &[u8],
+        ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestId, AgentError> {
         self.submit_endpoint(AsyncContent::CallRequest {
             canister_id: canister_id.clone(),
@@ -373,6 +373,7 @@ impl Agent {
             arg: arg.to_vec(),
             nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
+            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
         })
         .await
     }
@@ -380,31 +381,33 @@ impl Agent {
     pub async fn request_status_raw(
         &self,
         request_id: &RequestId,
+        ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestStatusResponse, AgentError> {
         self.read_endpoint(SyncContent::RequestStatusRequest {
             request_id: request_id.as_slice().into(),
+            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
         })
         .await
         .map(|response| match response {
-            replica_api::RequestStatusResponse::Replied { reply } => {
+            replica_api::Status::Replied { reply } => {
                 let reply = match reply {
                     replica_api::RequestStatusResponseReplied::CallReply(reply) => {
                         Replied::CallReplied(reply.arg)
                     }
                 };
-
                 RequestStatusResponse::Replied { reply }
             }
-            replica_api::RequestStatusResponse::Unknown {} => RequestStatusResponse::Unknown,
-            replica_api::RequestStatusResponse::Received {} => RequestStatusResponse::Received,
-            replica_api::RequestStatusResponse::Processing {} => RequestStatusResponse::Processing,
-            replica_api::RequestStatusResponse::Rejected {
+            replica_api::Status::Rejected {
                 reject_code,
                 reject_message,
             } => RequestStatusResponse::Rejected {
                 reject_code,
                 reject_message,
             },
+            replica_api::Status::Unknown {} => RequestStatusResponse::Unknown,
+            replica_api::Status::Received {} => RequestStatusResponse::Received,
+            replica_api::Status::Processing {} => RequestStatusResponse::Processing,
+            replica_api::Status::Done {} => RequestStatusResponse::Done,
         })
     }
 
@@ -431,6 +434,7 @@ pub struct UpdateBuilder<'agent> {
     canister_id: Principal,
     method_name: String,
     arg: Vec<u8>,
+    ingress_expiry_datetime: Option<u64>,
 }
 
 impl<'agent> UpdateBuilder<'agent> {
@@ -440,11 +444,41 @@ impl<'agent> UpdateBuilder<'agent> {
             canister_id,
             method_name,
             arg: vec![],
+            ingress_expiry_datetime: None,
         }
     }
 
     pub fn with_arg<A: AsRef<[u8]>>(&mut self, arg: A) -> &mut Self {
         self.arg = arg.as_ref().to_vec();
+        self
+    }
+
+    /// Takes a SystemTime converts it to a Duration by calling
+    /// duration_since(UNIX_EPOCH) to learn about where in time this SystemTime lies.
+    /// The Duration is converted to nanoseconds and stored in ingress_expiry_datetime
+    pub fn expire_at(&mut self, time: std::time::SystemTime) -> &mut Self {
+        self.ingress_expiry_datetime = Some(
+            time.duration_since(std::time::UNIX_EPOCH)
+                .expect("Time wrapped around")
+                .as_nanos() as u64,
+        );
+        self
+    }
+
+    /// Takes a Duration (i.e. 30 sec/5 min 30 sec/1 h 30 min, etc.) and adds it to the
+    /// Duration of the current SystemTime since the UNIX_EPOCH
+    /// Subtracts a permitted drift from the sum to account for using system time and not block time.
+    /// Converts the difference to nanoseconds and stores in ingress_expiry_datetime
+    pub fn expire_after(&mut self, duration: std::time::Duration) -> &mut Self {
+        let permitted_drift = Duration::from_secs(60);
+        self.ingress_expiry_datetime = Some(
+            (duration
+                + std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("Time wrapped around")
+                - permitted_drift)
+                .as_nanos() as u64,
+        );
         self
     }
 
@@ -455,13 +489,17 @@ impl<'agent> UpdateBuilder<'agent> {
                 &self.canister_id,
                 self.method_name.as_str(),
                 self.arg.as_slice(),
+                self.ingress_expiry_datetime,
             )
             .await?;
-
         waiter.start();
 
         loop {
-            match self.agent.request_status_raw(&request_id).await? {
+            match self
+                .agent
+                .request_status_raw(&request_id, self.ingress_expiry_datetime)
+                .await?
+            {
                 RequestStatusResponse::Replied {
                     reply: Replied::CallReplied(arg),
                 } => return Ok(arg),
@@ -477,6 +515,11 @@ impl<'agent> UpdateBuilder<'agent> {
                 RequestStatusResponse::Unknown => (),
                 RequestStatusResponse::Received => (),
                 RequestStatusResponse::Processing => (),
+                RequestStatusResponse::Done => {
+                    return Err(AgentError::RequestStatusDoneNoReply(String::from(
+                        request_id,
+                    )))
+                }
             };
 
             waiter
@@ -491,6 +534,7 @@ impl<'agent> UpdateBuilder<'agent> {
                 &self.canister_id,
                 self.method_name.as_str(),
                 self.arg.as_slice(),
+                self.ingress_expiry_datetime,
             )
             .await
     }

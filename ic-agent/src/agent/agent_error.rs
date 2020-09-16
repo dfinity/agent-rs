@@ -51,4 +51,7 @@ pub enum AgentError {
 
     #[error("Status endpoint returned an invalid status.")]
     InvalidReplicaStatus,
+
+    #[error("Call was marked as done but we never saw the reply. Request ID: {0}")]
+    RequestStatusDoneNoReply(String),
 }

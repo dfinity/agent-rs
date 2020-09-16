@@ -66,6 +66,7 @@ struct CanisterInstall {
     wasm_module: Vec<u8>,
     arg: Vec<u8>,
     compute_allocation: Option<u8>,
+    memory_allocation: Option<u64>,
 }
 
 pub struct ManagementCanister<'agent> {
@@ -188,6 +189,7 @@ impl<'agent> ManagementCanister<'agent> {
             wasm_module: module.to_vec(),
             arg: arg.to_vec(),
             compute_allocation: attributes.compute_allocation.map(|x| x.into()),
+            memory_allocation: None,
         };
         let bytes: Vec<u8> = candid::Encode!(&canister_to_install)?;
         let bytes_to_decode = self
