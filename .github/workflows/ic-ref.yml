@@ -10,7 +10,7 @@ jobs:
         build: [ linux-0-9 ]
         include:
           - build: linux-0-9
-            ghc: '8.8.3'
+            ghc: '8.6.5'
             spec: 'release-0.10'
             os: ubuntu-latest
             rust: stable
