@@ -41,12 +41,12 @@ jobs:
       - name: Build ic-ref
         run: |
           nix-build ic-ref -A ic-ref
-          export PATH="$(readlink result):$PATH"
+          echo "::add-path::$(readlink result)/bin"
 
       - name: Build universal-canister
         run: |
           nix-build ic-ref -A universal-canister
-          export IC_UNIVERSAL_CANISTER_PATH="$(readlink result)/universal_canister.wasm"
+          echo "::set-env IC_UNIVERSAL_CANISTER_PATH=$(readlink result)/universal_canister.wasm::"
 
       - name: Run Tests
         run: |
