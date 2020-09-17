@@ -10,27 +10,14 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Cache Cargo registry
-        uses: actions/cache@v1
+      - uses: actions/cache@v2
         with:
-          path: ~/.cargo/registry
-          key: ${{ matrix.build }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.build }}-cargo-registry-
-      - name: Cache Cargo index
-        uses: actions/cache@v1
-        with:
-          path: ~/.cargo/git
-          key: ${{ matrix.build }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.build }}-cargo-index-
-      - name: Cache Cargo build
-        uses: actions/cache@v1
-        with:
-          path: target
-          key: ${{ matrix.build }}-target-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.build }}-target-
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
       - name: Install Rust
         run: |
           rustup update ${{ matrix.rust }} --no-self-update
