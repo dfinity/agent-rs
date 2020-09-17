@@ -23,20 +23,17 @@ jobs:
       run: |
         cargo doc --no-deps
 
-    - name: Extract branch name
-      id: extract_branch
-      run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
-
-    - if: ${{ steps.extract_branch.outputs.branch == 'master' }}
-      name: Publish (master)
-      uses: netlify/actions/cli@6c34c3fcafc69ac2e1d6dbf226560329c6dfc51b
+    - if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      name: Publish (master only)
+      uses: South-Paw/action-netlify-deploy@v1.0.4
       with:
-        args: deploy --dir=target/doc/ --prod
-      env:
-        NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
-        NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        netlify-auth-token: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        netlify-site-id: ${{ secrets.NETLIFY_SITE_ID }}
+        build-dir: target/doc/
 
-    - name: Deploy draft to Netlify
+    - if: github.event_name == 'pull_request' && github.ref != 'refs/heads/master'
+      name: Deploy draft to Netlify
       uses: South-Paw/action-netlify-deploy@v1.0.4
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
