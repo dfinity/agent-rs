@@ -7,9 +7,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        build: [ linux-0-9 ]
+        build: [ linux-stable ]
         include:
-          - build: linux-0-9
+          - build: linux-stable
             ghc: '8.8.4'
             spec: 'release-0.10'
             os: ubuntu-latest
@@ -28,9 +28,10 @@ jobs:
           ref: ${{ matrix.spec }}
 
       - name: Cache ~/.cabal/store
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         with:
-          path: ~/.cabal/store
+          path: |
+            ~/.cabal/store
           key: ${{ runner.os }}-${{ matrix.ghc }}-cabal-store
 
       - uses: actions/setup-haskell@v1.1
