@@ -27,63 +27,19 @@ jobs:
           path: ic-ref
           ref: ${{ matrix.spec }}
 
-      - name: Cache ~/.cabal/store
-        uses: actions/cache@v1
-        with:
-          path: ~/.cabal/store
-          key: ${{ runner.os }}-${{ matrix.ghc }}-cabal-store
-      - uses: actions/setup-haskell@v1.1
-        with:
-          ghc-version: ${{ matrix.ghc }}
-
-      - name: Cache Cargo registry
-        uses: actions/cache@v1
-        with:
-          path: ~/.cargo/registry
-          key: ${{ matrix.build }}-cargo-registry-${{ hashFiles('main/**/Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.build }}-cargo-registry-
-      - name: Cache Cargo index
-        uses: actions/cache@v1
-        with:
-          path: ~/.cargo/git
-          key: ${{ matrix.build }}-cargo-index-${{ hashFiles('main/**/Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.build }}-cargo-index-
-      - name: Cache Cargo build
-        uses: actions/cache@v1
-        with:
-          path: main/target
-          key: ${{ matrix.build }}-target-${{ hashFiles('main/**/Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.build }}-target-
-      - name: Install Rust
-        run: |
-          rustup update ${{ matrix.rust }} --no-self-update
-          rustup default ${{ matrix.rust }}
-          rustup target add wasm32-unknown-unknown
+      - uses: cachix/install-nix-action@v10
+          with:
+            skip_adding_nixpkgs_channel: false
 
       - name: Build ic-ref
         run: |
-          ls -l /opt/ghc/
-          export PATH=/opt/ghc/bin:$PATH
-          cabal --version
-          ghc --version
-          mkdir -p $HOME/bin
-          cd ic-ref/impl
-          cabal update
-          cabal install -w ghc-${{ matrix.ghc }} --overwrite-policy=always  --installdir=$HOME/bin
-
-      - name: Build universal-canister
-        run: |
-          cd ic-ref/universal-canister
-          cargo build --target wasm32-unknown-unknown --release
-          cp target/wasm32-unknown-unknown/release/universal_canister.wasm $HOME/canister.wasm
+          nix-build ic-ref -A ic-ref
+          export PATH="$(readlink result):$PATH"
 
       - name: Run Tests
         run: |
           set -ex
-          $HOME/bin/ic-ref --pick-port --write-port-to $HOME/ic_ref_port &
+          ic-ref --pick-port --write-port-to $HOME/ic_ref_port &
           sleep 1
           export IC_REF_PORT=$(cat $HOME/ic_ref_port)
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
