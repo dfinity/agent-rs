@@ -44,6 +44,6 @@ jobs:
             cargo test --all-targets --all-features
             cargo test --all-targets --no-default-features
             popd
-          done        env:
+          done
         env:
           RUST_BACKTRACE: 1
