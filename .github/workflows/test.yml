@@ -37,13 +37,12 @@ jobs:
 
       - name: Install dependencies (windows only)
         if: matrix.os == 'windows-latest'
+        shell: bash
         run: |
           vcpkg integrate install
           vcpkg install openssl:x64-windows-static
-          $env:OPENSSL_DIR = 'C:\Tools\vcpkg\installed\x64-windows'
-          $env:OPENSSL_STATIC = 'Yes'
-          [System.Environment]::SetEnvironmentVariable('OPENSSL_DIR', $env:OPENSSL_DIR, [System.EnvironmentVariableTarget]::User)
-          [System.Environment]::SetEnvironmentVariable('OPENSSL_STATIC', $env:OPENSSL_STATIC, [System.EnvironmentVariableTarget]::User)
+          export OPENSSL_DIR = 'C:\Tools\vcpkg\installed\x64-windows-static'
+          export OPENSSL_STATIC = Yes
         env:
           VCPKG_ROOT: 'C:\vcpkg'
 
