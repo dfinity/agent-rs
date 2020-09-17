@@ -7,16 +7,13 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: Cache Cargo
-      uses: actions/cache@v2
+    - uses: actions/cache@v2
       with:
         path: |
           ~/.cargo/registry
           ~/.cargo/git
           target
-        key: ${{ matrix.build }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ matrix.build }}-cargo-
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Install Rust
       run: |
@@ -39,15 +36,12 @@ jobs:
         NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
 
-    - if: ${{ steps.extract_branch.outputs.branch != 'master' }}
-      name: Publish (branch)
-      uses: netlify/actions/cli@6c34c3fcafc69ac2e1d6dbf226560329c6dfc51b
-      id: deploy_doc
-      with:
-        args: deploy --dir=target/doc/ --json
+    - name: Deploy Site
       env:
         NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      run: |
+        netlify deploy --dir=target/doc/ --json
 
     - if: ${{ steps.extract_branch.outputs.branch != 'master' }}
       name: Post Doc Link
