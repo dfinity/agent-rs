@@ -19,6 +19,7 @@ jobs:
       - uses: actions/checkout@v2
         with:
           path: main
+
       - uses: actions/checkout@v2
         with:
           repository: 'dfinity-lab/ic-ref'
@@ -26,6 +27,12 @@ jobs:
           token: ${{ secrets.IC_REF_TOKEN }}
           path: ic-ref
           ref: ${{ matrix.spec }}
+
+      - name: Cache /nix/store
+        uses: actions/cache@v1
+        with:
+          path: /nix/store
+          key: ${{ runner.os }}-nix-store
 
       - uses: cachix/install-nix-action@v10
         with:
