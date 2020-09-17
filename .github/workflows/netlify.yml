@@ -52,4 +52,4 @@ jobs:
     - if: ${{ steps.extract_branch.outputs.branch != 'master' }}
       name: Post Doc Link
       run: |
-        echo ${{ join(steps.run_tests.outputs.*, '\n') }}
+        echo ${{steps.deploy_doc.outputs.output}}
