@@ -40,8 +40,8 @@ jobs:
         shell: bash
         run: |
           vcpkg integrate install
-          vcpkg install openssl:x64-windows-static
-          echo "::set-env OPENSSL_DIR 'C:\Tools\vcpkg\installed\x64-windows-static'"
+          vcpkg install openssl:x64-windows-static-md
+          echo "::set-env OPENSSL_DIR 'C:\Tools\vcpkg\installed\x64-windows-static-md'"
           echo "::set-env OPENSSL_STATIC Yes"
         env:
           VCPKG_ROOT: 'C:\vcpkg'
