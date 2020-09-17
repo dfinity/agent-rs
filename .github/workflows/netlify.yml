@@ -22,6 +22,8 @@ jobs:
     - name: Build Docs
       run: |
         cargo doc --no-deps
+         # Add an index.html for the root of the netlify docs.
+        rustdoc README.md --output target/doc && mv target/doc/README.html target/doc/index.html
 
     - if: github.event_name == 'push' && github.ref == 'refs/heads/master'
       name: Publish (master only)

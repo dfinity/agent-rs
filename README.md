@@ -1,6 +1,7 @@
-<!-- This file is only meant to be read on GitHub. It will not be published anywhere. -->
 # DFINITY's Rust Agent Repository
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/dfinity-lab/agent-rust/all)
+
+<!-- This file is only meant to be read on GitHub. It will not be published anywhere. -->
 
 
 ## Contributing
@@ -23,6 +24,8 @@ This repo has multiple packages in its Cargo workspace.
 
 | Package Name | Links | Description |
 |---|---|---|
-| `ic-agent` | [![README](https://img.shields.io/badge/-README-green)](./tree/next/ic-agent) | The `ic-agent` is a library to talk directly to the Replica. |  
-| `ic-types` | [![README](https://img.shields.io/badge/-README-green)](./tree/next/ic-types) | A list of types relevant to talking to the Replica, and building canisters on the Internet Computer. |  
+| `ic-agent` | [![README](https://img.shields.io/badge/-README-green)](./tree/next/ic-agent) [![DOC](https://img.shields.io/badge/-DOC-blue)](./ic_agent) | The `ic-agent` is a library to talk directly to the Replica. |  
+| `ic-types` | [![README](https://img.shields.io/badge/-README-green)](./tree/next/ic-types) [![DOC](https://img.shields.io/badge/-DOC-blue)](./ic_types) | A list of types relevant to talking to the Replica, and building canisters on the Internet Computer. |  
+| `ic-utils` | [![README](https://img.shields.io/badge/-README-green)](./tree/next/ic-types) [![DOC](https://img.shields.io/badge/-DOC-blue)](./ic_utils) | A library of utilities for managing calls and canisters. |  
+| `icx` | | A command line utility to use the agent. Not meant to be published, only available in this repo for tests. |
 | `ref-tests` | | A package that only exists to run the ic-ref tests with the ic-agent as the connection. |
