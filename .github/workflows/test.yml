@@ -41,8 +41,8 @@ jobs:
         run: |
           vcpkg integrate install
           vcpkg install openssl:x64-windows-static
-          export OPENSSL_DIR = 'C:\Tools\vcpkg\installed\x64-windows-static'
-          export OPENSSL_STATIC = Yes
+          export OPENSSL_DIR 'C:\Tools\vcpkg\installed\x64-windows-static'
+          export OPENSSL_STATIC Yes
         env:
           VCPKG_ROOT: 'C:\vcpkg'
 
