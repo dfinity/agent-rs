@@ -7,13 +7,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        build: [ linux-stable, macos-stable ]
+        build: [ linux-stable, macos-stable, windows-stable ]
         include:
           - build: linux-stable
             os: ubuntu-latest
             rust: 1.45.1
           - build: macos-stable
             os: macos-latest
+            rust: 1.45.1
+          - build: windows-stable
+            os: windows-latest
             rust: 1.45.1
 
     steps:
@@ -34,12 +37,7 @@ jobs:
 
       - name: Run Tests
         run: |
-          # Test all features and no features for each package.
-          for p in $(cargo metadata --no-deps --format-version 1 | jq -r .packages[].manifest_path); do
-            pushd $(dirname $p)
-            cargo test --all-targets --all-features
-            cargo test --all-targets --no-default-features
-            popd
-          done
+          cargo test --all-targets --all-features
+          cargo test --all-targets --no-default-features
         env:
           RUST_BACKTRACE: 1
