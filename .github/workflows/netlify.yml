@@ -52,4 +52,6 @@ jobs:
     - if: ${{ steps.extract_branch.outputs.branch != 'master' }}
       name: Post Doc Link
       run: |
-        echo ${{steps.deploy_doc.outputs.output}}
+        echo $OUTPUT
+      env:
+        OUTPUT: ${{ steps.deploy_doc.outputs.output }}
