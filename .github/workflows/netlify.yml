@@ -36,16 +36,12 @@ jobs:
         NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
 
-    - name: Deploy Site
-      env:
-        NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
-        NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-      run: |
-        netlify deploy --dir=target/doc/ --json
-
-    - if: ${{ steps.extract_branch.outputs.branch != 'master' }}
-      name: Post Doc Link
-      run: |
-        echo $OUTPUT
-      env:
-        OUTPUT: ${{ steps.deploy_doc.outputs.output }}
+    - name: Deploy draft to Netlify
+      uses: South-Paw/action-netlify-deploy@v1.0.4
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        netlify-auth-token: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        netlify-site-id: ${{ secrets.NETLIFY_SITE_ID }}
+        build-dir: target/doc/
+        draft: true
+        comment-on-pull-request: true
