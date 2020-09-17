@@ -37,10 +37,25 @@ jobs:
       run: |
         cargo doc --no-deps
 
-    - name: Publish
+    - name: Extract branch name
+      id: extract_branch
+      run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+
+    - if: ${{ steps.extract_branch.outputs.branch == 'master' }}
+      name: Publish (master)
+      uses: netlify/actions/cli@6c34c3fcafc69ac2e1d6dbf226560329c6dfc51b
+      with:
+        args: deploy --dir=target/doc/ --prod
+      env:
+        NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+
+    - if: ${{ steps.extract_branch.outputs.branch != 'master' }}
+      name: Publish (branch)
       uses: netlify/actions/cli@6c34c3fcafc69ac2e1d6dbf226560329c6dfc51b
       with:
         args: deploy --dir=target/doc/
       env:
+        DEBUG=*
         NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
