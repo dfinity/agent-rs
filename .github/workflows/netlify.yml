@@ -56,6 +56,6 @@ jobs:
       with:
         args: deploy --dir=target/doc/
       env:
-        DEBUG=*
+        DEBUG: '*'
         NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
