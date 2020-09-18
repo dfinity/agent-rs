@@ -419,10 +419,9 @@ impl Agent {
     }
 }
 
-/// An Query Request Builder.
+/// A Query Request Builder.
 ///
-/// This makes it easier to do query calls without actually passing all arguments or specifying
-/// if you want to wait or not.
+/// This makes it easier to do query calls without actually passing all arguments.
 pub struct QueryBuilder<'agent> {
     agent: &'agent Agent,
     canister_id: Principal,
