@@ -25,7 +25,7 @@ jobs:
          # Add an index.html for the root of the netlify docs.
         rustdoc README.md --output target/doc && mv target/doc/README.html target/doc/index.html
 
-    - if: github.ref == 'refs/heads/master'
+    - if: github.ref == 'refs/heads/next'
       name: Deploy to Netlify (master only)
       uses: South-Paw/action-netlify-deploy@v1.0.4
       with:
@@ -35,7 +35,7 @@ jobs:
         build-dir: target/doc/
         comment-on-commit: true
 
-    - if: github.ref != 'refs/heads/master'
+    - if: github.ref != 'refs/heads/next'
       name: Deploy draft to Netlify
       uses: South-Paw/action-netlify-deploy@v1.0.4
       with:
