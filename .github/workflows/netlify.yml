@@ -37,10 +37,10 @@ jobs:
 
     - if: github.ref != 'refs/heads/next'
       name: Deploy to Netlify (PR only)
-      id: deploy
+      id: deploy_docs
       uses: netlify/actions/cli@6c34c3fcafc69ac2e1d6dbf226560329c6dfc51b
       with:
-        args: deploy --dir=target/doc/ --json
+        args: deploy --dir=target/doc/
       env:
         NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
         NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
@@ -54,5 +54,5 @@ jobs:
         msg: |
           Netlify deployed agent-rust as draft
 
-          ${{ steps.deploy.outputs.NETLIFY_LIVE_URL }}
+          Link: ${{ steps.deploy_docs.outputs.NETLIFY_LIVE_URL }}
         check_for_duplicate_msg: false
