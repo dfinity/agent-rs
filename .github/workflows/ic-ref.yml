@@ -11,7 +11,7 @@ jobs:
         include:
           - build: linux-stable
             ghc: '8.6.5'
-            spec: 'release-0.10'
+            spec: '0.10.2'
             os: ubuntu-latest
             rust: stable
 
