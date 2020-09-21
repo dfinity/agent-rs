@@ -37,9 +37,22 @@ jobs:
 
     - if: github.ref != 'refs/heads/next'
       name: Deploy to Netlify (PR only)
+      id: deploy
       uses: netlify/actions/cli@6c34c3fcafc69ac2e1d6dbf226560329c6dfc51b
       with:
         args: deploy --dir=target/doc/ --json
       env:
         NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
         NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
+    - if: github.ref != 'refs/heads/next'
+      name: Commenting on PR
+      uses: unsplash/comment-on-pr@v1.2.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        msg: |
+          Netlify deployed agent-rust as draft
+
+          ${{ steps.deploy.outputs.NETLIFY_LIVE_URL }}
+        check_for_duplicate_msg: false
