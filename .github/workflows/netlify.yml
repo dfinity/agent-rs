@@ -55,4 +55,3 @@ jobs:
           Netlify deployed agent-rust as draft
 
           Link: ${{ steps.deploy_docs.outputs.NETLIFY_URL }}
-        check_for_duplicate_msg: false
