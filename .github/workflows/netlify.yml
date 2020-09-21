@@ -26,7 +26,7 @@ jobs:
         rustdoc README.md --output target/doc && mv target/doc/README.html target/doc/index.html
 
     - if: github.ref == 'refs/heads/next'
-      name: Deploy to Netlify (master only)
+      name: Deploy to Netlify (next only)
       uses: South-Paw/action-netlify-deploy@v1.0.4
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -36,12 +36,10 @@ jobs:
         comment-on-commit: true
 
     - if: github.ref != 'refs/heads/next'
-      name: Deploy draft to Netlify
-      uses: South-Paw/action-netlify-deploy@v1.0.4
+      name: Deploy to Netlify (PR only)
+      uses: netlify/actions/cli@6c34c3fcafc69ac2e1d6dbf226560329c6dfc51b
       with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        netlify-auth-token: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-        netlify-site-id: ${{ secrets.NETLIFY_SITE_ID }}
-        build-dir: target/doc/
-        draft: true
-        comment-on-pull-request: true
+        args: deploy --dir=target/doc/ --json
+      env:
+        NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
