@@ -143,7 +143,7 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
         }
     }
 
-    /// Pass in a compute allocation value for the canister.
+    /// Pass in a memory allocation value for the canister.
     pub fn with_memory_allocation<C: Into<MemoryAllocation>>(self, memory_allocation: C) -> Self {
         Self {
             memory_allocation: Some(memory_allocation.into()),
