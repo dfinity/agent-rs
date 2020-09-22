@@ -9,6 +9,7 @@ const DELETE_METHOD_NAME: &str = "delete_canister";
 const INSTALL_METHOD_NAME: &str = "install_code";
 const START_METHOD_NAME: &str = "start_canister";
 const STATUS_METHOD_NAME: &str = "canister_status";
+const SET_CONTROLLER_METHOD_NAME: &str = "set_controller";
 const STOP_METHOD_NAME: &str = "stop_canister";
 
 #[derive(Clone, Debug, candid::CandidType, candid::Deserialize, PartialEq)]
@@ -67,6 +68,12 @@ struct CanisterInstall {
     arg: Vec<u8>,
     compute_allocation: Option<u8>,
     memory_allocation: Option<u64>,
+}
+
+#[derive(candid::CandidType, candid::Deserialize)]
+struct SetController {
+    canister_id: Principal,
+    new_controller: Principal,
 }
 
 pub struct ManagementCanister<'agent> {
@@ -195,6 +202,32 @@ impl<'agent> ManagementCanister<'agent> {
         let bytes_to_decode = self
             .agent
             .update(&Principal::management_canister(), INSTALL_METHOD_NAME)
+            .with_arg(&bytes)
+            .call_and_wait(waiter)
+            .await?;
+
+        // Candid type returned is () so validating the result.
+        Decode!(bytes_to_decode.as_slice())?;
+        Ok(())
+    }
+
+    pub async fn set_controller<W: delay::Waiter>(
+        &self,
+        waiter: W,
+        canister_id: &Principal,
+        new_controller: &Principal,
+    ) -> Result<(), AgentError> {
+        let set_controller_record = SetController {
+            canister_id: canister_id.to_owned(),
+            new_controller: new_controller.to_owned(),
+        };
+        let bytes: Vec<u8> = candid::Encode!(&set_controller_record)?;
+        let bytes_to_decode = self
+            .agent
+            .update(
+                &Principal::management_canister(),
+                SET_CONTROLLER_METHOD_NAME,
+            )
             .with_arg(&bytes)
             .call_and_wait(waiter)
             .await?;
