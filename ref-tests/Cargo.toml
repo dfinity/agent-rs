@@ -7,6 +7,7 @@ edition = "2018"
 
 [dependencies]
 ic-agent = { path = "../ic-agent" }
+ic-utils = { path = "../ic-utils" }
 
 [dev-dependencies]
 delay = "0.2.0"

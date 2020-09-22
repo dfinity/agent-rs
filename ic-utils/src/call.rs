@@ -145,7 +145,7 @@ impl<'agent> SyncCaller<'agent> {
         self.agent
             .query_raw(&self.canister_id, &self.method_name, &self.arg, None)
             .await
-            .and_then(|r| decode_args(&r).map_err(AgentError::from))
+            .and_then(|r| decode_args(&r).map_err(|e| AgentError::CandidError(Box::new(e))))
     }
 }
 
@@ -167,7 +167,7 @@ where
     pub(crate) agent: &'agent Agent,
     pub(crate) canister_id: Principal,
     pub(crate) method_name: String,
-    pub(crate) arg: Result<Vec<u8>, candid::Error>,
+    pub(crate) arg: Result<Vec<u8>, AgentError>,
     pub(crate) phantom_out: std::marker::PhantomData<Out>,
 }
 
@@ -192,7 +192,7 @@ where
             .with_arg(&self.arg?)
             .call_and_wait(waiter)
             .await
-            .and_then(|r| decode_args(&r).map_err(AgentError::from))
+            .and_then(|r| decode_args(&r).map_err(|e| AgentError::CandidError(Box::new(e))))
     }
 
     pub async fn call_and_wait_one<W, T>(self, waiter: W) -> Result<T, AgentError>
@@ -205,7 +205,7 @@ where
             .with_arg(&self.arg?)
             .call_and_wait(waiter)
             .await
-            .and_then(|r| decode_one(&r).map_err(AgentError::from))
+            .and_then(|r| decode_one(&r).map_err(|e| AgentError::CandidError(Box::new(e))))
     }
 
     pub fn map<Out2, Map>(self, map: Map) -> MappedAsyncCaller<Out, Out2, Self, Map>
