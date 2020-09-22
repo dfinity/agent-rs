@@ -1,15 +1,44 @@
 use crate::call::AsyncCall;
+use crate::canister::{Argument, CanisterBuilder};
 use crate::Canister;
 use async_trait::async_trait;
-use candid::ser::IDLBuilder;
 use candid::{CandidType, Deserialize};
 use delay::Waiter;
-use ic_agent::{AgentError, ComputeAllocation, RequestId};
+use ic_agent::{Agent, AgentError, RequestId};
 use ic_types::Principal;
 use std::fmt::Debug;
 use std::str::FromStr;
 
+pub mod attributes;
+pub use attributes::ComputeAllocation;
+pub use attributes::MemoryAllocation;
+
 pub struct ManagementCanister;
+
+impl ManagementCanister {
+    /// Create an instance of a [Canister] implementing the ManagementCanister interface
+    /// and pointing to the right Canister ID.
+    pub fn create(agent: &Agent) -> Canister<ManagementCanister> {
+        Canister::builder()
+            .with_agent(agent)
+            .with_canister_id(Principal::management_canister())
+            .with_interface(ManagementCanister)
+            .build()
+            .unwrap()
+    }
+
+    /// Creating a CanisterBuilder with the right interface and Canister Id. This can
+    /// be useful, for example, for providing additional Builder information.
+    pub fn with_agent(agent: &Agent) -> CanisterBuilder<ManagementCanister> {
+        Canister::builder()
+            .with_agent(agent)
+            .with_canister_id(Principal::management_canister())
+            .with_interface(ManagementCanister)
+    }
+}
+
+/// The status of a Canister, whether it's running, in the process of stopping, or
+/// stopped.
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -25,6 +54,9 @@ impl std::fmt::Display for CanisterStatus {
     }
 }
 
+/// The install mode of the canister to install. If a canister is already installed,
+/// using [InstallMode::Install] will be an error. [InstallMode::Reinstall] overwrites
+/// the module, and [InstallMode::Upgrade] performs an Upgrade step.
 #[derive(Copy, Clone, CandidType, Deserialize, Eq, PartialEq)]
 pub enum InstallMode {
     #[serde(rename = "install")]
@@ -52,12 +84,14 @@ pub struct InstallCodeBuilder<'agent, 'canister: 'agent, T> {
     canister: &'canister Canister<'agent, T>,
     canister_id: Principal,
     wasm: &'canister [u8],
-    arg: Result<IDLBuilder, candid::Error>,
+    arg: Argument,
     mode: Option<InstallMode>,
     compute_allocation: Option<ComputeAllocation>,
+    memory_allocation: Option<MemoryAllocation>,
 }
 
 impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
+    /// Create an InstallCode builder, which is also an AsyncCall implementation.
     pub fn builder(
         canister: &'canister Canister<'agent, T>,
         canister_id: &Principal,
@@ -67,25 +101,30 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
             canister,
             canister_id: canister_id.clone(),
             wasm,
-            arg: Ok(IDLBuilder::new()),
+            arg: Default::default(),
             mode: None,
             compute_allocation: None,
+            memory_allocation: None,
         }
     }
 
+    /// Add an argument to the installation, which will be passed to the init
+    /// method of the canister.
     pub fn with_arg<Argument: CandidType + Sync + Send>(
         mut self,
         arg: Argument,
     ) -> InstallCodeBuilder<'agent, 'canister, T> {
-        if let Ok(ref mut idl_builder) = self.arg {
-            let result = idl_builder.arg(&arg);
-            if let Err(e) = result {
-                self.arg = Err(e)
-            }
-        }
+        self.arg.push_idl_arg(arg);
         self
     }
 
+    /// Override the argument passed in to the canister with raw bytes.
+    pub fn with_raw_arg(mut self, arg: Vec<u8>) -> InstallCodeBuilder<'agent, 'canister, T> {
+        self.arg.set_raw_arg(arg);
+        self
+    }
+
+    /// Pass in the [InstallMode].
     pub fn with_mode(self, mode: InstallMode) -> Self {
         Self {
             mode: Some(mode),
@@ -93,6 +132,7 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
         }
     }
 
+    /// Pass in a compute allocation value for the canister.
     pub fn with_compute_allocation<C: Into<ComputeAllocation>>(
         self,
         compute_allocation: C,
@@ -103,6 +143,16 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
         }
     }
 
+    /// Pass in a compute allocation value for the canister.
+    pub fn with_memory_allocation<C: Into<MemoryAllocation>>(self, memory_allocation: C) -> Self {
+        Self {
+            memory_allocation: Some(memory_allocation.into()),
+            ..self
+        }
+    }
+
+    /// Create an [AsyncCall] implementation that, when called, will install the
+    /// canister.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
         #[derive(candid::CandidType)]
         struct CanisterInstall {
@@ -121,19 +171,19 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
                 mode: self.mode.unwrap_or(InstallMode::Install),
                 canister_id: self.canister_id.clone(),
                 wasm_module: self.wasm.to_owned(),
-                arg: self
-                    .arg
-                    .and_then(|mut idl_builder| idl_builder.serialize_to_vec())?,
+                arg: self.arg.serialize()?,
                 compute_allocation: self.compute_allocation.map(|ca| ca.into()),
                 memory_allocation: None,
             })
             .build())
     }
 
+    /// Make a call. This is equivalent to the [AsyncCall::call].
     pub async fn call(self) -> Result<RequestId, AgentError> {
         self.build()?.call().await
     }
 
+    /// Make a call. This is equivalent to the [AsyncCall::call_and_wait].
     pub async fn call_and_wait<W>(self, waiter: W) -> Result<(), AgentError>
     where
         W: Waiter,
@@ -159,6 +209,7 @@ impl<'agent, 'canister: 'agent, T: Sync> AsyncCall<()>
 }
 
 impl<'agent> Canister<'agent, ManagementCanister> {
+    /// Get the status of a canister.
     pub fn canister_status<'canister: 'agent>(
         &'canister self,
         canister_id: &Principal,
