@@ -169,10 +169,9 @@ impl Argument {
     /// Set the argument as raw, replacing any value that was there before. If the
     /// current argument was an error, does nothing.
     pub fn set_raw_arg(&mut self, arg: Vec<u8>) {
-        match self.0 {
-            Ok(_) => self.0 = Ok(ArgumentType::Raw(arg)),
-            _ => {}
-        };
+        if self.0.is_ok() {
+            self.0 = Ok(ArgumentType::Raw(arg));
+        }
     }
 
     pub fn serialize(self) -> Result<Vec<u8>, AgentError> {

@@ -161,7 +161,7 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
             wasm_module: Vec<u8>,
             arg: Vec<u8>,
             compute_allocation: Option<u8>,
-            memory_allocation: Option<u8>,
+            memory_allocation: Option<u64>,
         }
 
         Ok(self
@@ -173,7 +173,7 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
                 wasm_module: self.wasm.to_owned(),
                 arg: self.arg.serialize()?,
                 compute_allocation: self.compute_allocation.map(|ca| ca.into()),
-                memory_allocation: None,
+                memory_allocation: self.memory_allocation.map(|ma| ma.into()),
             })
             .build())
     }
