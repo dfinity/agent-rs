@@ -250,6 +250,7 @@ impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, I
             canister_id: c.canister_id.clone(),
             method_name: self.method_name.clone(),
             arg: self.arg.serialize(),
+            expiry: Default::default(),
             phantom_out: std::marker::PhantomData,
         }
     }

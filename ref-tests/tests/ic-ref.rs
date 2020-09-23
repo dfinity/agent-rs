@@ -1,89 +1,19 @@
 //! In this file, please mark all tests that require a running ic-ref as ignored.
-use delay::Delay;
-use ic_agent::{Agent, AgentConfig, BasicIdentity, Identity, Principal};
-use ic_utils::call::AsyncCall;
-use ic_utils::interfaces::ManagementCanister;
+//!
+//! These tests are a Rust-like version using the Agent to cover the same tests
+//! as the IC Ref repo itself.
+//!
+//! The tests can be found in the Spec.hs file in the IC Ref repo.
+//!
+//! Try to keep these tests as close to 1-to-1 to the IC Ref test use cases. For
+//! every spec in the IC Ref tests, there should be a matching spec here. Some
+//! tests (like invalid CBOR or special Headers) might not be translatable, in
+//! which case they should still be added here but do nothing (just keep the
+//! use case being tested).
 use ref_tests::universal_canister;
-use ring::signature::Ed25519KeyPair;
-use std::future::Future;
+use ref_tests::with_agent;
 
 const EXPECTED_IC_API_VERSION: &str = "0.10.3";
-
-fn create_waiter() -> Delay {
-    Delay::builder()
-        .throttle(std::time::Duration::from_millis(5))
-        .timeout(std::time::Duration::from_secs(60 * 5))
-        .build()
-}
-
-async fn create_identity() -> Result<Box<dyn Identity + Sync + Send>, String> {
-    let rng = ring::rand::SystemRandom::new();
-    let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
-        .expect("Could not generate a key pair.");
-
-    Ok(Box::new(BasicIdentity::from_key_pair(
-        Ed25519KeyPair::from_pkcs8(key_pair.as_ref()).expect("Could not read the key pair."),
-    )))
-}
-
-async fn create_agent() -> Result<Agent, String> {
-    let port_env = std::env::var("IC_REF_PORT")
-        .expect("Need to specify the IC_REF_PORT environment variable.");
-    let port = port_env
-        .parse::<u32>()
-        .expect("Could not parse the IC_REF_PORT environment variable as an integer.");
-
-    Ok(ic_agent::Agent::new(AgentConfig {
-        url: format!("http://127.0.0.1:{}", port),
-        identity: create_identity().await?,
-        ..AgentConfig::default()
-    })
-    .map_err(|e| format!("{}", e))?)
-}
-
-fn with_agent<F, R>(f: F)
-where
-    R: Future<Output = Result<(), Box<dyn std::error::Error>>>,
-    F: FnOnce(Agent) -> R,
-{
-    let mut runtime = tokio::runtime::Runtime::new().expect("Could not create tokio runtime.");
-    runtime.block_on(async {
-        let agent = create_agent().await.expect("Could not create an agent.");
-        match f(agent).await {
-            Ok(_) => {}
-            Err(e) => assert!(false, "{:?}", e),
-        };
-    })
-}
-
-fn with_universal_canister<F, R>(f: F)
-where
-    R: Future<Output = Result<(), Box<dyn std::error::Error>>>,
-    F: FnOnce(Agent, Principal) -> R,
-{
-    let mut runtime = tokio::runtime::Runtime::new().expect("Could not create tokio runtime.");
-    match runtime.block_on(async {
-        let canister_wasm = universal_canister::wasm();
-
-        let agent = create_agent().await.expect("Could not create an agent.");
-        let ic00 = ManagementCanister::create(&agent);
-
-        let (canister_id,) = ic00
-            .create_canister()
-            .call_and_wait(create_waiter())
-            .await?;
-
-        ic00.install_code(&canister_id, &canister_wasm)
-            .with_raw_arg(vec![])
-            .call_and_wait(create_waiter())
-            .await?;
-
-        f(agent, canister_id).await
-    }) {
-        Ok(_) => {}
-        Err(e) => assert!(false, "{:?}", e),
-    };
-}
 
 #[ignore]
 #[test]
@@ -107,11 +37,11 @@ fn spec_compliance_claimed() {
 }
 
 mod management_canister {
-    use super::{create_agent, create_waiter, with_agent};
     use ic_agent::AgentError;
     use ic_utils::call::AsyncCall;
     use ic_utils::interfaces::management_canister::{CanisterStatus, InstallMode};
     use ic_utils::interfaces::ManagementCanister;
+    use ref_tests::{create_agent, create_waiter, with_agent};
 
     mod create_canister {
         use super::{create_waiter, with_agent};
@@ -450,9 +380,9 @@ mod management_canister {
 }
 
 mod simple_calls {
-    use super::{create_waiter, with_universal_canister};
     use crate::universal_canister::payload;
     use ic_agent::AgentError;
+    use ref_tests::{create_waiter, with_universal_canister};
 
     #[ignore]
     #[test]
@@ -495,6 +425,23 @@ mod simple_calls {
                 .update(&canister_id, "non_existent_method")
                 .with_arg(&arg)
                 .call_and_wait(create_waiter())
+                .await;
+
+            assert!(match result {
+                Err(AgentError::ReplicaError { reject_code: 3, .. }) => true,
+                _ => false,
+            });
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn non_existant_query() {
+        with_universal_canister(|agent, canister_id| async move {
+            let arg = payload().reply_data(b"hello").build();
+            let result = agent
+                .query_raw(&canister_id, "non_existent_method", &arg, None)
                 .await;
 
             assert!(match result {

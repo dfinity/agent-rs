@@ -6,12 +6,12 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+delay = "0.3.0"
 ic-agent = { path = "../ic-agent" }
 ic-utils = { path = "../ic-utils" }
+ring = "0.16.11"
+tokio = "0.2.22"
 
 [dev-dependencies]
-delay = "0.2.0"
-ring = "0.16.11"
 serde = { version = "1.0.101", features = ["derive"] }
 serde_cbor = "0.11.1"
-tokio = "0.2.22"

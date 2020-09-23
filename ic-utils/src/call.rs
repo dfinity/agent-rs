@@ -2,10 +2,13 @@ use async_trait::async_trait;
 use candid::de::ArgumentDecoder;
 use candid::{decode_args, decode_one};
 use delay::Waiter;
-use ic_agent::{Agent, AgentError, RequestId};
+use ic_agent::{Agent, AgentError, RequestId, UpdateBuilder};
 use ic_types::Principal;
 use serde::de::DeserializeOwned;
 use std::future::Future;
+
+mod expiry;
+pub use expiry::Expiry;
 
 /// A type that implements synchronous calls (ie. 'query' calls).
 #[async_trait]
@@ -134,6 +137,7 @@ pub struct SyncCaller<'agent> {
     canister_id: Principal,
     method_name: String,
     arg: Vec<u8>,
+    expiry: Expiry,
 }
 
 impl<'agent> SyncCaller<'agent> {
@@ -170,6 +174,7 @@ where
     pub(crate) canister_id: Principal,
     pub(crate) method_name: String,
     pub(crate) arg: Result<Vec<u8>, AgentError>,
+    pub(crate) expiry: Expiry,
     pub(crate) phantom_out: std::marker::PhantomData<Out>,
 }
 
@@ -177,21 +182,22 @@ impl<'agent, Out> AsyncCaller<'agent, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
+    fn build_call(self) -> Result<UpdateBuilder<'agent>, AgentError> {
+        let mut builder = self.agent.update(&self.canister_id, &self.method_name);
+        self.expiry.apply_to_update(&mut builder);
+        builder.with_arg(&self.arg?);
+        Ok(builder)
+    }
+
     pub async fn call(self) -> Result<RequestId, AgentError> {
-        self.agent
-            .update(&self.canister_id, &self.method_name)
-            .with_arg(&self.arg?)
-            .call()
-            .await
+        self.build_call()?.call().await
     }
 
     pub async fn call_and_wait<W>(self, waiter: W) -> Result<Out, AgentError>
     where
         W: Waiter,
     {
-        self.agent
-            .update(&self.canister_id, &self.method_name)
-            .with_arg(&self.arg?)
+        self.build_call()?
             .call_and_wait(waiter)
             .await
             .and_then(|r| decode_args(&r).map_err(|e| AgentError::CandidError(Box::new(e))))
@@ -202,9 +208,7 @@ where
         W: Waiter,
         T: DeserializeOwned,
     {
-        self.agent
-            .update(&self.canister_id, &self.method_name)
-            .with_arg(&self.arg?)
+        self.build_call()?
             .call_and_wait(waiter)
             .await
             .and_then(|r| decode_one(&r).map_err(|e| AgentError::CandidError(Box::new(e))))

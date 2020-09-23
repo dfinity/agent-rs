@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 async-trait = "0.1.40"
 candid = "0.6.1"
-delay = "0.2.0"
+delay = "0.3.0"
 ic-agent = { path = "../ic-agent", version = "0.1" }
 ic-types = { path = "../ic-types", version = "0.1" }
 serde = "1.0.115"
