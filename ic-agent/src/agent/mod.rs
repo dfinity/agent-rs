@@ -397,10 +397,13 @@ impl Agent {
         })
     }
 
+    /// Returns an UpdateBuilder enabling the construction of an update call without
+    /// passing all arguments.
     pub fn update<S: ToString>(&self, canister_id: &Principal, method_name: S) -> UpdateBuilder {
         UpdateBuilder::new(self, canister_id.clone(), method_name.to_string())
     }
 
+    /// Calls and returns the information returned by the status endpoint of a replica.
     pub async fn status(&self) -> Result<Status, AgentError> {
         let bytes = self.execute::<()>(Method::GET, "status", None).await?;
 
@@ -410,6 +413,8 @@ impl Agent {
         Status::try_from(&cbor).map_err(|_| AgentError::InvalidReplicaStatus)
     }
 
+    /// Returns a QueryBuilder enabling the construction of a query call without
+    /// passing all arguments.
     pub fn query<S: ToString>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder {
         QueryBuilder::new(self, canister_id.clone(), method_name.to_string())
     }
@@ -471,6 +476,7 @@ impl<'agent> QueryBuilder<'agent> {
         self
     }
 
+    /// Make a query call. This will return a byte vector.
     pub async fn call(&self) -> Result<Vec<u8>, AgentError> {
         self.agent
             .query_raw(
@@ -540,6 +546,8 @@ impl<'agent> UpdateBuilder<'agent> {
         self
     }
 
+    /// Make an update call. This will call request_status on the RequestId in a loop and return
+    /// the response as a byte vector.
     pub async fn call_and_wait<W: Waiter>(&self, mut waiter: W) -> Result<Vec<u8>, AgentError> {
         let request_id = self
             .agent
@@ -586,6 +594,8 @@ impl<'agent> UpdateBuilder<'agent> {
         }
     }
 
+    /// Make an update call. This will return a RequestId.
+    /// The RequestId should then be used for request_status (most likely in a loop).
     pub async fn call(&self) -> Result<RequestId, AgentError> {
         self.agent
             .update_raw(
