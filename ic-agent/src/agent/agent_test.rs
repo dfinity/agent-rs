@@ -1,8 +1,7 @@
 use crate::agent::replica_api::{CallReply, QueryResponse};
 use crate::agent::response::{Replied, RequestStatusResponse};
-use crate::agent::AgentConfig;
+use crate::agent::{AgentConfig, Status};
 use crate::export::Principal;
-use crate::types::Status;
 use crate::{Agent, AgentError};
 use delay::Delay;
 use mockito::mock;

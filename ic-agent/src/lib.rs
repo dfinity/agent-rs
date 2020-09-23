@@ -14,7 +14,8 @@
 //! ```ignore
 //! # // This test is ignored because it requires an ic to be running. We run these
 //! # // in the ic-ref workflow.
-//! use ic_agent::{Agent, Principal};
+//! use ic_agent::Agent;
+//! use ic_types::Principal;
 //! use candid::{Encode, Decode, CandidType};
 //! use serde::Deserialize;
 //!
@@ -28,7 +29,7 @@
 //! #     let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
 //! #         .expect("Could not generate a key pair.");
 //! #
-//! #     ic_agent::BasicIdentity::from_key_pair(
+//! #     ic_agent::identity::BasicIdentity::from_key_pair(
 //! #         ring::signature::Ed25519KeyPair::from_pkcs8(key_pair.as_ref())
 //! #           .expect("Could not read the key pair."),
 //! #     )

@@ -662,7 +662,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ic_agent::export::Principal;
+    use crate::export::Principal;
     use std::convert::TryFrom;
 
     /// The actual example used in the public spec in the Request ID section.

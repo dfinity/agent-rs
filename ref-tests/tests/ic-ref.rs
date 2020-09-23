@@ -45,7 +45,7 @@ mod management_canister {
 
     mod create_canister {
         use super::{create_waiter, with_agent};
-        use ic_agent::types::Principal;
+        use ic_agent::export::Principal;
         use ic_agent::AgentError;
         use ic_utils::call::AsyncCall;
         use ic_utils::interfaces::ManagementCanister;
