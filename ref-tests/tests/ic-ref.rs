@@ -45,7 +45,8 @@ mod management_canister {
 
     mod create_canister {
         use super::{create_waiter, with_agent};
-        use ic_agent::{AgentError, Principal};
+        use ic_agent::types::Principal;
+        use ic_agent::AgentError;
         use ic_utils::call::AsyncCall;
         use ic_utils::interfaces::ManagementCanister;
         use std::str::FromStr;
@@ -441,7 +442,9 @@ mod simple_calls {
         with_universal_canister(|agent, canister_id| async move {
             let arg = payload().reply_data(b"hello").build();
             let result = agent
-                .query_raw(&canister_id, "non_existent_method", &arg, None)
+                .query(&canister_id, "non_existent_method")
+                .with_arg(&arg)
+                .call()
                 .await;
 
             assert!(match result {
