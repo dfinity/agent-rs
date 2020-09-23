@@ -397,11 +397,7 @@ impl Agent {
         })
     }
 
-    pub fn update<S: ToString>(
-        &self,
-        canister_id: &Principal,
-        method_name: S,
-    ) -> UpdateBuilder<'_> {
+    pub fn update<S: ToString>(&self, canister_id: &Principal, method_name: S) -> UpdateBuilder {
         UpdateBuilder::new(self, canister_id.clone(), method_name.to_string())
     }
 
@@ -414,7 +410,7 @@ impl Agent {
         Status::try_from(&cbor).map_err(|_| AgentError::InvalidReplicaStatus)
     }
 
-    pub fn query<S: ToString>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder<'_> {
+    pub fn query<S: ToString>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder {
         QueryBuilder::new(self, canister_id.clone(), method_name.to_string())
     }
 }
