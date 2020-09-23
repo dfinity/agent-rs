@@ -46,7 +46,7 @@ jobs:
       - name: Build universal-canister
         run: |
           nix-build ic-ref -A universal-canister
-          echo "::set-env IC_UNIVERSAL_CANISTER_PATH=$(readlink result)/universal_canister.wasm::"
+          echo "::set-env name=IC_UNIVERSAL_CANISTER_PATH=::$(readlink result)/universal_canister.wasm"
 
       - name: Run Tests
         run: |
