@@ -1,3 +1,4 @@
+//! The main Agent module. Contains the [Agent] type and all associated structures.
 pub(crate) mod agent_config;
 pub(crate) mod agent_error;
 pub(crate) mod builder;
@@ -5,26 +6,25 @@ pub(crate) mod nonce;
 pub(crate) mod replica_api;
 pub(crate) mod response;
 
-pub(crate) mod public {
-    pub use super::agent_config::{AgentConfig, PasswordManager};
-    pub use super::agent_error::AgentError;
-    pub use super::builder::AgentBuilder;
-    pub use super::nonce::NonceFactory;
-    pub use super::response::{Replied, RequestStatusResponse};
-    pub use super::{Agent, UpdateBuilder};
-}
+pub mod status;
+pub use agent_config::{AgentConfig, PasswordManager};
+pub use agent_error::AgentError;
+pub use builder::AgentBuilder;
+pub use nonce::NonceFactory;
+pub use response::{Replied, RequestStatusResponse};
 
 #[cfg(test)]
 mod agent_test;
 
 use crate::agent::replica_api::{AsyncContent, Envelope, SyncContent};
+use crate::export::Principal;
 use crate::identity::Identity;
-use crate::{to_request_id, Principal, RequestId, Status};
+use crate::{to_request_id, RequestId};
 use delay::Waiter;
 use reqwest::Method;
 use serde::Serialize;
+use status::Status;
 
-use public::*;
 use std::convert::TryFrom;
 use std::time::Duration;
 
@@ -35,7 +35,8 @@ const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 /// ```ignore
 /// # // This test is ignored because it requires an ic to be running. We run these
 /// # // in the ic-ref workflow.
-/// use ic_agent::{Agent, Principal};
+/// use ic_agent::Agent;
+/// use ic_types::Principal;
 /// use candid::{Encode, Decode, CandidType};
 /// use serde::Deserialize;
 ///
@@ -49,7 +50,7 @@ const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 /// #     let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
 /// #         .expect("Could not generate a key pair.");
 /// #
-/// #     ic_agent::BasicIdentity::from_key_pair(
+/// #     ic_agent::identity::BasicIdentity::from_key_pair(
 /// #         ring::signature::Ed25519KeyPair::from_pkcs8(key_pair.as_ref())
 /// #           .expect("Could not read the key pair."),
 /// #     )

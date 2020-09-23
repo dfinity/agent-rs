@@ -1,12 +1,9 @@
-use crate::Principal;
+//! Types and traits dealing with identity across the Internet Computer.
+use crate::export::Principal;
 
 pub(crate) mod basic;
 pub(crate) mod dummy;
-
-pub(crate) mod public {
-    pub use super::basic::{BasicIdentity, PemError};
-    pub use super::{Identity, Signature};
-}
+pub use basic::{BasicIdentity, PemError};
 
 #[derive(Clone, Debug)]
 pub struct Signature {

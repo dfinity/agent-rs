@@ -28,7 +28,7 @@ pub enum AgentError {
     UrlParseError(#[from] url::ParseError),
 
     #[error("Cannot parse Principal: {0}")]
-    PrincipalError(#[from] ic_types::principal::PrincipalError),
+    PrincipalError(#[from] crate::export::PrincipalError),
 
     #[error(r#"The Replica returned an error: code {reject_code}, message: "{reject_message}""#)]
     ReplicaError {

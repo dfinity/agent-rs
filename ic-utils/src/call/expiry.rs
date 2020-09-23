@@ -1,3 +1,5 @@
+use ic_agent::agent::UpdateBuilder;
+
 /// An expiry value. Either not specified (the default), a delay relative to the time the
 /// call is made, or a specific date time.
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
@@ -26,7 +28,7 @@ impl Expiry {
         Self::DateTime(dt)
     }
 
-    pub(crate) fn apply_to_update(self, u: &mut ic_agent::UpdateBuilder<'_>) {
+    pub(crate) fn apply_to_update(self, u: &mut UpdateBuilder<'_>) {
         match self {
             Expiry::Unspecified => {}
             Expiry::Delay(d) => {

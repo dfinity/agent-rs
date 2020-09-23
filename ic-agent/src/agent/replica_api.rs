@@ -1,4 +1,4 @@
-use ic_types::Principal;
+use crate::export::Principal;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize)]

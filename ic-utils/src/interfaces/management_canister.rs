@@ -4,8 +4,8 @@ use crate::Canister;
 use async_trait::async_trait;
 use candid::{CandidType, Deserialize};
 use delay::Waiter;
+use ic_agent::export::Principal;
 use ic_agent::{Agent, AgentError, RequestId};
-use ic_types::Principal;
 use std::fmt::Debug;
 use std::str::FromStr;
 

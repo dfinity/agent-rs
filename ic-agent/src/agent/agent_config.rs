@@ -1,6 +1,6 @@
+use crate::agent::NonceFactory;
 use crate::identity::dummy::DummyIdentity;
 use crate::identity::Identity;
-use crate::NonceFactory;
 
 /// Implemented by the Agent environment to cache and update an HTTP Auth password.
 /// It returns a tuple of `(username, password)`.

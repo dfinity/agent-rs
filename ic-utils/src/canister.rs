@@ -260,7 +260,7 @@ impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, I
 mod tests {
     use super::super::interfaces::ManagementCanister;
     use crate::call::AsyncCall;
-    use ic_agent::BasicIdentity;
+    use ic_agent::identity::BasicIdentity;
 
     #[ignore]
     #[tokio::test]

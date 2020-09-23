@@ -2,8 +2,9 @@ use async_trait::async_trait;
 use candid::de::ArgumentDecoder;
 use candid::{decode_args, decode_one};
 use delay::Waiter;
-use ic_agent::{Agent, AgentError, RequestId, UpdateBuilder};
-use ic_types::Principal;
+use ic_agent::agent::UpdateBuilder;
+use ic_agent::export::Principal;
+use ic_agent::{Agent, AgentError, RequestId};
 use serde::de::DeserializeOwned;
 use std::future::Future;
 
