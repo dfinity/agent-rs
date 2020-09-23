@@ -10,12 +10,8 @@
 //! tests (like invalid CBOR or special Headers) might not be translatable, in
 //! which case they should still be added here but do nothing (just keep the
 //! use case being tested).
-use ic_utils::call::AsyncCall;
-use ic_utils::interfaces::ManagementCanister;
 use ref_tests::universal_canister;
-use ref_tests::{create_waiter, with_agent, with_universal_canister};
-use ring::signature::Ed25519KeyPair;
-use std::future::Future;
+use ref_tests::with_agent;
 
 const EXPECTED_IC_API_VERSION: &str = "0.10.3";
 

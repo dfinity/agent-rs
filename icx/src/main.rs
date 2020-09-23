@@ -26,6 +26,11 @@ struct Opts {
     #[clap(long)]
     pem: Option<PathBuf>,
 
+    /// An optional field to set the expiry time on requests. Can be a human
+    /// readable time (like `100s`) or a number of seconds.
+    #[clap(long, parse(try_from_str))]
+    ttl: Option<humantime::Duration>,
+
     #[clap(subcommand)]
     subcommand: SubCommand,
 }
@@ -226,6 +231,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     match &opts.subcommand {
         SubCommand::Update(t) | SubCommand::Query(t) => {
             let maybe_candid_path = t.candid.as_ref();
+            let expire_after: Option<std::time::Duration> = opts.ttl.map(|ht| ht.into());
 
             let method_type =
                 maybe_candid_path.and_then(|path| get_candid_type(&path, &t.method_name));
@@ -233,8 +239,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let arg = blob_from_arguments(t.arg_value.as_deref(), &t.arg, &method_type)?;
             let result = match &opts.subcommand {
                 SubCommand::Update(_) => {
-                    agent
-                        .update(&t.canister_id, &t.method_name)
+                    let mut builder = agent.update(&t.canister_id, &t.method_name);
+
+                    if let Some(d) = expire_after {
+                        builder.expire_after(d)
+                    }
+
+                    builder
                         .with_arg(arg)
                         .call_and_wait(
                             delay::Delay::builder()

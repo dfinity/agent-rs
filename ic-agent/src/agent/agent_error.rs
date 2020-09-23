@@ -61,3 +61,11 @@ pub enum AgentError {
     #[error("A tool returned a custom error: {0}")]
     CustomError(#[from] Box<dyn Send + Sync + std::error::Error>),
 }
+
+impl PartialEq for AgentError {
+    fn eq(&self, other: &Self) -> bool {
+        // Verify the debug string is the same. Some of the subtypes of this error
+        // don't implement Eq or PartialEq, so we cannot rely on derive.
+        format!("{:?}", self) == format!("{:?}", other)
+    }
+}
