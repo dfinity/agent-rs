@@ -22,7 +22,7 @@ pub enum AgentError {
     ReqwestError(#[from] reqwest::Error),
 
     #[error("Candid returned an error: {0}")]
-    CandidError(#[from] candid::Error),
+    CandidError(Box<dyn Send + Sync + std::error::Error>),
 
     #[error(r#"Cannot parse url: "{0}""#)]
     UrlParseError(#[from] url::ParseError),
@@ -54,4 +54,18 @@ pub enum AgentError {
 
     #[error("Call was marked as done but we never saw the reply. Request ID: {0}")]
     RequestStatusDoneNoReply(String),
+
+    #[error("A tool returned a string message error: {0}")]
+    MessageError(String),
+
+    #[error("A tool returned a custom error: {0}")]
+    CustomError(#[from] Box<dyn Send + Sync + std::error::Error>),
+}
+
+impl PartialEq for AgentError {
+    fn eq(&self, other: &Self) -> bool {
+        // Verify the debug string is the same. Some of the subtypes of this error
+        // don't implement Eq or PartialEq, so we cannot rely on derive.
+        format!("{:?}", self) == format!("{:?}", other)
+    }
 }

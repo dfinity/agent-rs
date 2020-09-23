@@ -2,7 +2,7 @@ use crate::call::AsyncCaller;
 use candid::de::ArgumentDecoder;
 use candid::ser::IDLBuilder;
 use candid::CandidType;
-use ic_agent::Agent;
+use ic_agent::{Agent, AgentError};
 use ic_types::{Principal, PrincipalError};
 use std::convert::TryInto;
 use thiserror::Error;
@@ -133,13 +133,75 @@ impl<'agent> Canister<'agent, ()> {
     }
 }
 
+/// The type of argument passed to a canister call. This can either be a raw argument,
+/// in which case it's a vector of bytes that will be passed verbatim, or an IDL
+/// Builder which will result in an error or a raw argument at the call site.
+///
+/// This enumeration is meant to be private. You should use [Argument] for holding
+/// argument values.
+enum ArgumentType {
+    Raw(Vec<u8>),
+    Idl(candid::ser::IDLBuilder),
+}
+
+pub struct Argument(Result<ArgumentType, AgentError>);
+
+impl Argument {
+    /// Add an IDL Argument. If the current value of Argument is Raw, will set the
+    /// result to an error. If the current value is an error, will do nothing.
+    pub fn push_idl_arg<A: CandidType>(&mut self, arg: A) {
+        match self.0 {
+            Ok(ArgumentType::Idl(ref mut idl_builder)) => {
+                let result = idl_builder.arg(&arg);
+                if let Err(e) = result {
+                    self.0 = Err(AgentError::CandidError(Box::new(e)))
+                }
+            }
+            Ok(ArgumentType::Raw(_)) => {
+                self.0 = Err(AgentError::MessageError(
+                    "Cannot overwrite a Raw Argument with a non-raw argument.".to_owned(),
+                ))
+            }
+            _ => {}
+        }
+    }
+
+    /// Set the argument as raw, replacing any value that was there before. If the
+    /// current argument was an error, does nothing.
+    pub fn set_raw_arg(&mut self, arg: Vec<u8>) {
+        if self.0.is_ok() {
+            self.0 = Ok(ArgumentType::Raw(arg));
+        }
+    }
+
+    pub fn serialize(self) -> Result<Vec<u8>, AgentError> {
+        match self.0 {
+            Ok(ArgumentType::Idl(mut idl_builder)) => idl_builder
+                .serialize_to_vec()
+                .map_err(|e| AgentError::CandidError(Box::new(e))),
+            Ok(ArgumentType::Raw(vec)) => Ok(vec),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn reset(&mut self) {
+        *self = Default::default();
+    }
+}
+
+impl Default for Argument {
+    fn default() -> Self {
+        Argument(Ok(ArgumentType::Idl(IDLBuilder::new())))
+    }
+}
+
 /// A builder for an asynchronous call (ie. update) to the Internet Computer.
 ///
 /// See [AsyncCaller] for a description of this structure.
 pub struct AsyncCallBuilder<'agent, 'canister: 'agent, T> {
     canister: &'canister Canister<'agent, T>,
     method_name: String,
-    arg: Result<candid::ser::IDLBuilder, candid::Error>,
+    arg: Argument,
 }
 
 impl<'agent, 'canister: 'agent, T> AsyncCallBuilder<'agent, 'canister, T> {
@@ -151,13 +213,14 @@ impl<'agent, 'canister: 'agent, T> AsyncCallBuilder<'agent, 'canister, T> {
         Self {
             canister,
             method_name: method_name.to_string(),
-            arg: Ok(IDLBuilder::new()),
+            arg: Default::default(),
         }
     }
 }
 
 impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, Interface> {
-    /// Add an argument to the list. This requires Candid arguments, as well as
+    /// Add an argument to the candid argument list. This requires Candid arguments, if
+    /// there is a raw argument set (using [with_arg_raw]), this will fail.
     pub fn with_arg<Argument>(
         mut self,
         arg: Argument,
@@ -165,12 +228,14 @@ impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, I
     where
         Argument: CandidType + Sync + Send,
     {
-        if let Ok(ref mut idl_builder) = self.arg {
-            let result = idl_builder.arg(&arg);
-            if let Err(e) = result {
-                self.arg = Err(e)
-            }
-        }
+        self.arg.push_idl_arg(arg);
+        self
+    }
+
+    /// Replace the argument with raw argument bytes. This will overwrite the current
+    /// argument set, so calling this method twice will discard the first argument.
+    pub fn with_arg_raw(mut self, arg: Vec<u8>) -> AsyncCallBuilder<'agent, 'canister, Interface> {
+        self.arg.set_raw_arg(arg);
         self
     }
 
@@ -184,7 +249,8 @@ impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, I
             agent: c.agent,
             canister_id: c.canister_id.clone(),
             method_name: self.method_name.clone(),
-            arg: self.arg.and_then(|mut idl| idl.serialize_to_vec()),
+            arg: self.arg.serialize(),
+            expiry: Default::default(),
             phantom_out: std::marker::PhantomData,
         }
     }

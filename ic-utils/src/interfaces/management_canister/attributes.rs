@@ -65,17 +65,3 @@ impl std::convert::TryFrom<u64> for MemoryAllocation {
         }
     }
 }
-
-pub struct CanisterAttributes {
-    pub compute_allocation: Option<ComputeAllocation>,
-    pub memory_allocation: Option<MemoryAllocation>,
-}
-
-impl Default for CanisterAttributes {
-    fn default() -> Self {
-        CanisterAttributes {
-            compute_allocation: None,
-            memory_allocation: None,
-        }
-    }
-}
