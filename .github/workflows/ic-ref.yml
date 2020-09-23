@@ -54,6 +54,8 @@ jobs:
           ic-ref --pick-port --write-port-to $HOME/ic_ref_port &
           sleep 1
           export IC_REF_PORT=$(cat $HOME/ic_ref_port)
+          echo "IC_UNIVERSAL_CANISTER_PATH: $IC_UNIVERSAL_CANISTER_PATH"
+          ls -sh $IC_UNIVERSAL_CANISTER_PATH
           cd main/ref-tests
           cargo test --all-features -- --ignored
           killall ic-ref
