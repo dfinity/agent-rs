@@ -78,7 +78,7 @@ impl AgentBuilder {
         }
     }
 
-    pub fn with_boxed_password_manager<P>(
+    pub fn with_boxed_password_manager(
         self,
         password_manager: Box<impl 'static + PasswordManager + Send + Sync>,
     ) -> Self {
