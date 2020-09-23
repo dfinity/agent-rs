@@ -1,6 +1,6 @@
+use crate::export::Principal;
 use crate::identity::Identity;
 use crate::Signature;
-use ic_types::Principal;
 
 pub(crate) struct DummyIdentity {}
 

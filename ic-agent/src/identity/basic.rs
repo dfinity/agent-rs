@@ -1,5 +1,5 @@
+use crate::export::Principal;
 use crate::{Identity, Signature};
-use ic_types::Principal;
 use ring::signature::{Ed25519KeyPair, KeyPair};
 use thiserror::Error;
 

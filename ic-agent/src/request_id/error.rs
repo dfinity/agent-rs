@@ -1,3 +1,4 @@
+//! Error type for the RequestId calculation.
 use thiserror::Error;
 
 /// Errors from reading a RequestId from a string. This is not the same as

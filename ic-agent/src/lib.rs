@@ -74,9 +74,10 @@
 //! is made public a reference to the version(s) supported will be available here.
 //!
 pub mod agent;
+pub mod export;
 pub mod identity;
-pub mod types;
+pub mod request_id;
 
 pub use agent::{agent_error::AgentError, nonce::NonceFactory, Agent, PasswordManager};
 pub use identity::{Identity, Signature};
-pub use types::{to_request_id, RequestId, RequestIdError};
+pub use request_id::{to_request_id, RequestId, RequestIdError};

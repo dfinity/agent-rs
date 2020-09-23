@@ -1,3 +1,4 @@
+//! The main Agent module. Contains the [Agent] type and all associated structures.
 pub(crate) mod agent_config;
 pub(crate) mod agent_error;
 pub(crate) mod builder;
@@ -5,6 +6,7 @@ pub(crate) mod nonce;
 pub(crate) mod replica_api;
 pub(crate) mod response;
 
+pub mod status;
 pub use agent_config::{AgentConfig, PasswordManager};
 pub use agent_error::AgentError;
 pub use builder::AgentBuilder;
@@ -15,14 +17,14 @@ pub use response::{Replied, RequestStatusResponse};
 mod agent_test;
 
 use crate::agent::replica_api::{AsyncContent, Envelope, SyncContent};
+use crate::export::Principal;
 use crate::identity::Identity;
 use crate::{to_request_id, RequestId};
 use delay::Waiter;
-use ic_types::Principal;
 use reqwest::Method;
 use serde::Serialize;
+use status::Status;
 
-use crate::types::Status;
 use std::convert::TryFrom;
 use std::time::Duration;
 

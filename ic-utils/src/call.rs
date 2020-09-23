@@ -3,8 +3,8 @@ use candid::de::ArgumentDecoder;
 use candid::{decode_args, decode_one};
 use delay::Waiter;
 use ic_agent::agent::UpdateBuilder;
+use ic_agent::export::Principal;
 use ic_agent::{Agent, AgentError, RequestId};
-use ic_types::Principal;
 use serde::de::DeserializeOwned;
 use std::future::Future;
 

@@ -1,4 +1,5 @@
-use ic_types::Principal;
+//! Types and traits dealing with identity across the Internet Computer.
+use crate::export::Principal;
 
 pub(crate) mod basic;
 pub(crate) mod dummy;

@@ -1,7 +1,7 @@
 use crate::universal_canister;
 use delay::Delay;
+use ic_agent::export::Principal;
 use ic_agent::identity::BasicIdentity;
-use ic_agent::types::Principal;
 use ic_agent::Agent;
 use ic_utils::call::AsyncCall;
 use ic_utils::interfaces::ManagementCanister;

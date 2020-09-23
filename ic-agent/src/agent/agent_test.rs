@@ -1,10 +1,10 @@
 use crate::agent::replica_api::{CallReply, QueryResponse};
 use crate::agent::response::{Replied, RequestStatusResponse};
 use crate::agent::AgentConfig;
+use crate::export::Principal;
 use crate::types::Status;
 use crate::{Agent, AgentError};
 use delay::Delay;
-use ic_types::Principal;
 use mockito::mock;
 use std::collections::BTreeMap;
 use std::time::Duration;
