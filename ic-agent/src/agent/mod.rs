@@ -5,26 +5,24 @@ pub(crate) mod nonce;
 pub(crate) mod replica_api;
 pub(crate) mod response;
 
-pub(crate) mod public {
-    pub use super::agent_config::{AgentConfig, PasswordManager};
-    pub use super::agent_error::AgentError;
-    pub use super::builder::AgentBuilder;
-    pub use super::nonce::NonceFactory;
-    pub use super::response::{Replied, RequestStatusResponse};
-    pub use super::{Agent, UpdateBuilder};
-}
+pub use agent_config::{AgentConfig, PasswordManager};
+pub use agent_error::AgentError;
+pub use builder::AgentBuilder;
+pub use nonce::NonceFactory;
+pub use response::{Replied, RequestStatusResponse};
 
 #[cfg(test)]
 mod agent_test;
 
 use crate::agent::replica_api::{AsyncContent, Envelope, SyncContent};
 use crate::identity::Identity;
-use crate::{to_request_id, Principal, RequestId, Status};
+use crate::{to_request_id, RequestId};
 use delay::Waiter;
+use ic_types::Principal;
 use reqwest::Method;
 use serde::Serialize;
 
-use public::*;
+use crate::types::Status;
 use std::convert::TryFrom;
 use std::time::Duration;
 

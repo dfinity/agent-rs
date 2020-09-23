@@ -1,4 +1,5 @@
-use crate::{Agent, AgentConfig, AgentError, Identity, NonceFactory, PasswordManager};
+use crate::agent::AgentConfig;
+use crate::{Agent, AgentError, Identity, NonceFactory, PasswordManager};
 
 pub struct AgentBuilder {
     config: AgentConfig,

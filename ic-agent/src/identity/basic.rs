@@ -1,4 +1,5 @@
-use crate::{Identity, Principal, Signature};
+use crate::{Identity, Signature};
+use ic_types::Principal;
 use ring::signature::{Ed25519KeyPair, KeyPair};
 use thiserror::Error;
 
@@ -9,7 +10,7 @@ pub enum PemError {
     Io(#[from] std::io::Error),
 
     #[cfg(feature = "pem")]
-    #[error("An error occured while reading the file: {0}")]
+    #[error("An error occurred while reading the file: {0}")]
     PemError(#[from] pem::PemError),
 
     #[error("A key was rejected by Ring: {0}")]

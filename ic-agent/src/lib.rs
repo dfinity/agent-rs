@@ -73,11 +73,10 @@
 //! The public specification of the Internet Computer is, at this moment, privately shared. When it
 //! is made public a reference to the version(s) supported will be available here.
 //!
-mod agent;
-pub use agent::public::*;
+pub mod agent;
+pub mod identity;
+pub mod types;
 
-mod identity;
-pub use identity::public::*;
-
-mod types;
-pub use types::public::*;
+pub use agent::{agent_error::AgentError, nonce::NonceFactory, Agent, PasswordManager};
+pub use identity::{Identity, Signature};
+pub use types::{to_request_id, RequestId, RequestIdError};
