@@ -34,9 +34,7 @@ jobs:
           path: /nix/store
           key: ${{ runner.os }}-nix-store
 
-      - uses: cachix/install-nix-action@v10
-        with:
-          skip_adding_nixpkgs_channel: false
+      - uses: cachix/install-nix-action@v11
 
       - name: Build ic-ref
         run: |
