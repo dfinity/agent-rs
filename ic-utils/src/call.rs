@@ -147,7 +147,9 @@ impl<'agent> SyncCaller<'agent> {
         R: for<'de> ArgumentDecoder<'de> + Send + Sync,
     {
         self.agent
-            .query_raw(&self.canister_id, &self.method_name, &self.arg, None)
+            .query(&self.canister_id, &self.method_name)
+            .with_arg(&self.method_name)
+            .call()
             .await
             .and_then(|r| decode_args(&r).map_err(|e| AgentError::CandidError(Box::new(e))))
     }
