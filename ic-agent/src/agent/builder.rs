@@ -48,6 +48,15 @@ impl AgentBuilder {
         }
     }
 
+    pub fn with_boxed_identity(self, identity: Box<impl 'static + Identity + Send + Sync>) -> Self {
+        AgentBuilder {
+            config: AgentConfig {
+                identity,
+                ..self.config
+            },
+        }
+    }
+
     pub fn with_waiter(self, waiter: delay::Delay) -> Self {
         AgentBuilder {
             config: AgentConfig {
@@ -69,7 +78,19 @@ impl AgentBuilder {
         }
     }
 
-    pub fn expire_after(self, duration: Option<std::time::Duration>) -> Self {
+    pub fn with_boxed_password_manager<P>(
+        self,
+        password_manager: Box<impl 'static + PasswordManager + Send + Sync>,
+    ) -> Self {
+        AgentBuilder {
+            config: AgentConfig {
+                password_manager: Some(password_manager),
+                ..self.config
+            },
+        }
+    }
+
+    pub fn with_ingress_expiry(self, duration: Option<std::time::Duration>) -> Self {
         AgentBuilder {
             config: AgentConfig {
                 ingress_expiry_duration: duration,
