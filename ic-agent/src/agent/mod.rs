@@ -317,21 +317,7 @@ impl Agent {
 
     /// The simplest way to do a query call; sends a byte array and will return a byte vector.
     /// The encoding is left as an exercise to the user.
-    ///
-    /// This can be used as follow:
-    /// ```no_run
-    /// use ic_agent::Agent;
-    /// use ic_types::Principal;
-    ///
-    /// async fn query_example() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let agent = Agent::builder().with_url("https://gw.dfinity.network").build()?;
-    ///     let canister_id = Principal::from_text("w7x7r-cok77-xa")?;
-    ///     let response = agent.query_raw(&canister_id, "echo", &[1, 2, 3], None).await?;
-    ///     assert_eq!(response, &[1, 2, 3]);
-    ///     Ok(())
-    /// }
-    /// ```
-    pub async fn query_raw(
+    async fn query_raw(
         &self,
         canister_id: &Principal,
         method_name: &str,
@@ -411,10 +397,13 @@ impl Agent {
         })
     }
 
+    /// Returns an UpdateBuilder enabling the construction of an update call without
+    /// passing all arguments.
     pub fn update<S: ToString>(&self, canister_id: &Principal, method_name: S) -> UpdateBuilder {
         UpdateBuilder::new(self, canister_id.clone(), method_name.to_string())
     }
 
+    /// Calls and returns the information returned by the status endpoint of a replica.
     pub async fn status(&self) -> Result<Status, AgentError> {
         let bytes = self.execute::<()>(Method::GET, "status", None).await?;
 
@@ -422,6 +411,81 @@ impl Agent {
             serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)?;
 
         Status::try_from(&cbor).map_err(|_| AgentError::InvalidReplicaStatus)
+    }
+
+    /// Returns a QueryBuilder enabling the construction of a query call without
+    /// passing all arguments.
+    pub fn query<S: ToString>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder {
+        QueryBuilder::new(self, canister_id.clone(), method_name.to_string())
+    }
+}
+
+/// A Query Request Builder.
+///
+/// This makes it easier to do query calls without actually passing all arguments.
+pub struct QueryBuilder<'agent> {
+    agent: &'agent Agent,
+    canister_id: Principal,
+    method_name: String,
+    arg: Vec<u8>,
+    ingress_expiry_datetime: Option<u64>,
+}
+
+impl<'agent> QueryBuilder<'agent> {
+    pub fn new(agent: &'agent Agent, canister_id: Principal, method_name: String) -> Self {
+        Self {
+            agent,
+            canister_id,
+            method_name,
+            arg: vec![],
+            ingress_expiry_datetime: None,
+        }
+    }
+
+    pub fn with_arg<A: AsRef<[u8]>>(&mut self, arg: A) -> &mut Self {
+        self.arg = arg.as_ref().to_vec();
+        self
+    }
+
+    /// Takes a SystemTime converts it to a Duration by calling
+    /// duration_since(UNIX_EPOCH) to learn about where in time this SystemTime lies.
+    /// The Duration is converted to nanoseconds and stored in ingress_expiry_datetime
+    pub fn expire_at(&mut self, time: std::time::SystemTime) -> &mut Self {
+        self.ingress_expiry_datetime = Some(
+            time.duration_since(std::time::UNIX_EPOCH)
+                .expect("Time wrapped around")
+                .as_nanos() as u64,
+        );
+        self
+    }
+
+    /// Takes a Duration (i.e. 30 sec/5 min 30 sec/1 h 30 min, etc.) and adds it to the
+    /// Duration of the current SystemTime since the UNIX_EPOCH
+    /// Subtracts a permitted drift from the sum to account for using system time and not block time.
+    /// Converts the difference to nanoseconds and stores in ingress_expiry_datetime
+    pub fn expire_after(&mut self, duration: std::time::Duration) -> &mut Self {
+        let permitted_drift = Duration::from_secs(60);
+        self.ingress_expiry_datetime = Some(
+            (duration
+                + std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("Time wrapped around")
+                - permitted_drift)
+                .as_nanos() as u64,
+        );
+        self
+    }
+
+    /// Make a query call. This will return a byte vector.
+    pub async fn call(&self) -> Result<Vec<u8>, AgentError> {
+        self.agent
+            .query_raw(
+                &self.canister_id,
+                self.method_name.as_str(),
+                self.arg.as_slice(),
+                self.ingress_expiry_datetime,
+            )
+            .await
     }
 }
 
@@ -482,6 +546,8 @@ impl<'agent> UpdateBuilder<'agent> {
         self
     }
 
+    /// Make an update call. This will call request_status on the RequestId in a loop and return
+    /// the response as a byte vector.
     pub async fn call_and_wait<W: Waiter>(&self, mut waiter: W) -> Result<Vec<u8>, AgentError> {
         let request_id = self
             .agent
@@ -528,6 +594,8 @@ impl<'agent> UpdateBuilder<'agent> {
         }
     }
 
+    /// Make an update call. This will return a RequestId.
+    /// The RequestId should then be used for request_status (most likely in a loop).
     pub async fn call(&self) -> Result<RequestId, AgentError> {
         self.agent
             .update_raw(

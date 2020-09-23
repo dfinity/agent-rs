@@ -246,7 +246,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 }
                 SubCommand::Query(_) => {
                     agent
-                        .query_raw(&t.canister_id, &t.method_name, &arg, None)
+                        .query(&t.canister_id, &t.method_name)
+                        .with_arg(&arg)
+                        .call()
                         .await
                 }
                 _ => unreachable!(),
