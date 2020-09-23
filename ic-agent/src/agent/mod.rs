@@ -135,6 +135,7 @@ impl Agent {
     }
 
     fn get_expiry_date(&self) -> u64 {
+        // TODO(hansl): evaluate if we need this on the agent side (my hunch is we don't).
         let permitted_drift = Duration::from_secs(60);
         (self.ingress_expiry_duration
             + std::time::SystemTime::now()

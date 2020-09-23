@@ -28,7 +28,7 @@ struct Opts {
 
     /// An optional field to set the expiry time on requests. Can be a human
     /// readable time (like `100s`) or a number of seconds.
-    #[clap(long, parse(try_from_str))]
+    #[clap(long)]
     ttl: Option<humantime::Duration>,
 
     #[clap(subcommand)]
@@ -242,25 +242,33 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     let mut builder = agent.update(&t.canister_id, &t.method_name);
 
                     if let Some(d) = expire_after {
-                        builder.expire_after(d)
+                        builder.expire_after(d);
                     }
 
-                    builder
+                    eprint!(".");
+                    let result = builder
                         .with_arg(arg)
                         .call_and_wait(
                             delay::Delay::builder()
-                                .exponential_backoff(std::time::Duration::from_secs(60), 1.5)
+                                .exponential_backoff(std::time::Duration::from_secs(1), 1.1)
+                                .side_effect(|| {
+                                    eprint!(".");
+                                    Ok(())
+                                })
                                 .timeout(std::time::Duration::from_secs(60 * 5))
                                 .build(),
                         )
-                        .await
+                        .await;
+                    eprintln!();
+                    result
                 }
                 SubCommand::Query(_) => {
-                    agent
-                        .query(&t.canister_id, &t.method_name)
-                        .with_arg(&arg)
-                        .call()
-                        .await
+                    let mut builder = agent.query(&t.canister_id, &t.method_name);
+                    if let Some(d) = expire_after {
+                        builder.expire_after(d);
+                    }
+
+                    builder.with_arg(&arg).call().await
                 }
                 _ => unreachable!(),
             };
