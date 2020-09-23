@@ -11,7 +11,7 @@ pub(crate) mod public {
     pub use super::builder::AgentBuilder;
     pub use super::nonce::NonceFactory;
     pub use super::response::{Replied, RequestStatusResponse};
-    pub use super::Agent;
+    pub use super::{Agent, UpdateBuilder};
 }
 
 #[cfg(test)]
