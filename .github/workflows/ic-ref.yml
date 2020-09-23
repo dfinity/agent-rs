@@ -46,7 +46,7 @@ jobs:
       - name: Build universal-canister
         run: |
           nix-build ic-ref -A universal-canister
-          echo "::set-env name=IC_UNIVERSAL_CANISTER_PATH=::$(readlink result)/universal_canister.wasm"
+          echo "::set-env name=IC_UNIVERSAL_CANISTER_PATH::$(readlink result)/universal_canister.wasm"
 
       - name: Run Tests
         run: |
@@ -54,8 +54,7 @@ jobs:
           ic-ref --pick-port --write-port-to $HOME/ic_ref_port &
           sleep 1
           export IC_REF_PORT=$(cat $HOME/ic_ref_port)
-          echo "IC_UNIVERSAL_CANISTER_PATH: $IC_UNIVERSAL_CANISTER_PATH"
-          ls -sh $IC_UNIVERSAL_CANISTER_PATH
+          echo "Using universal canister at $IC_UNIVERSAL_CANISTER_PATH"
           cd main/ref-tests
           cargo test --all-features -- --ignored
           killall ic-ref
