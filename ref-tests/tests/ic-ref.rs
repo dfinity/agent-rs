@@ -175,7 +175,10 @@ mod management_canister {
                 .call_and_wait(create_waiter())
                 .await;
             assert!(match result {
-                Err(AgentError::ReplicaError { .. }) => true,
+                Err(AgentError::ReplicaError {
+                    reject_code: 5,
+                    reject_message,
+                }) if reject_message.contains("is not authorized to manage canister") => true,
                 _ => false,
             });
 
@@ -394,6 +397,84 @@ mod management_canister {
                 }) if reject_message
                     == format!("canister no longer exists: {}", canister_id.to_text()) =>
                     true,
+                _ => false,
+            });
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn canister_lifecycle_as_wrong_controller() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+            let (canister_id,) = ic00
+                .create_canister()
+                .call_and_wait(create_waiter())
+                .await?;
+            let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
+
+            // Install once.
+            ic00.install_code(&canister_id, &canister_wasm)
+                .with_mode(InstallMode::Install)
+                .call_and_wait(create_waiter())
+                .await?;
+
+            // Each agent has their own identity.
+            let other_agent_identity = create_identity().await?;
+            let other_agent = create_agent(other_agent_identity).await?;
+            let other_ic00 = ManagementCanister::create(&other_agent);
+
+            // Start as a wrong controller should fail.
+            let result = other_ic00
+                .start_canister(&canister_id)
+                .call_and_wait(create_waiter())
+                .await;
+            assert!(match result {
+                Err(AgentError::ReplicaError {
+                    reject_code: 5,
+                    reject_message,
+                }) if reject_message.contains("is not authorized to manage canister") => true,
+                _ => false,
+            });
+
+            // Stop as a wrong controller should fail.
+            let result = other_ic00
+                .canister_status(&canister_id)
+                .call_and_wait(create_waiter())
+                .await;
+            assert!(match result {
+                Err(AgentError::ReplicaError {
+                    reject_code: 5,
+                    reject_message,
+                }) if reject_message.contains("is not authorized to manage canister") => true,
+                _ => false,
+            });
+
+            // Get canister status as a wrong controller should fail.
+            let result = other_ic00
+                .canister_status(&canister_id)
+                .call_and_wait(create_waiter())
+                .await;
+            assert!(match result {
+                Err(AgentError::ReplicaError {
+                    reject_code: 5,
+                    reject_message,
+                }) if reject_message.contains("is not authorized to manage canister") => true,
+                _ => false,
+            });
+
+            // Delete as a wrong controller should fail.
+            let result = other_ic00
+                .delete_canister(&canister_id)
+                .call_and_wait(create_waiter())
+                .await;
+            assert!(match result {
+                Err(AgentError::ReplicaError {
+                    reject_code: 5,
+                    reject_message,
+                }) if reject_message.contains("is not authorized to manage canister") => true,
                 _ => false,
             });
 
