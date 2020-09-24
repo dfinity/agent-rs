@@ -23,7 +23,6 @@ pub struct AgentConfig {
     pub url: String,
     pub nonce_factory: NonceFactory,
     pub identity: Box<dyn Identity + Send + Sync>,
-    pub default_waiter: delay::Delay,
     pub password_manager: Option<Box<dyn PasswordManager + Send + Sync>>,
     pub ingress_expiry_duration: Option<std::time::Duration>,
 }
@@ -36,7 +35,6 @@ impl Default for AgentConfig {
             url: "-".to_owned(),
             nonce_factory: NonceFactory::random(),
             identity: Box::new(DummyIdentity {}),
-            default_waiter: delay::Delay::instant(),
             password_manager: None,
             ingress_expiry_duration: None,
         }
