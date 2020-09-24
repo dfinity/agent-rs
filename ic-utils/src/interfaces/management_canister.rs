@@ -4,8 +4,8 @@ use crate::Canister;
 use async_trait::async_trait;
 use candid::{CandidType, Deserialize};
 use delay::Waiter;
+use ic_agent::export::Principal;
 use ic_agent::{Agent, AgentError, RequestId};
-use ic_types::Principal;
 use std::fmt::Debug;
 use std::str::FromStr;
 
@@ -132,13 +132,34 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
         }
     }
 
+    /// Pass in a compute allocation optional value for the canister. If this is [None],
+    /// it will revert the compute allocation to default.
+    pub fn with_optional_compute_allocation<C: Into<ComputeAllocation>>(
+        self,
+        compute_allocation: Option<C>,
+    ) -> Self {
+        Self {
+            compute_allocation: compute_allocation.map(|ca| ca.into()),
+            ..self
+        }
+    }
+
     /// Pass in a compute allocation value for the canister.
     pub fn with_compute_allocation<C: Into<ComputeAllocation>>(
         self,
         compute_allocation: C,
     ) -> Self {
+        self.with_optional_compute_allocation(Some(compute_allocation))
+    }
+
+    /// Pass in a memory allocation optional value for the canister. If this is [None],
+    /// it will revert the memory allocation to default.
+    pub fn with_optional_memory_allocation<C: Into<MemoryAllocation>>(
+        self,
+        memory_allocation: Option<C>,
+    ) -> Self {
         Self {
-            compute_allocation: Some(compute_allocation.into()),
+            memory_allocation: memory_allocation.map(|ma| ma.into()),
             ..self
         }
     }

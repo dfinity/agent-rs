@@ -5,7 +5,7 @@
 //! Payloads to UC can execute any arbitrary sequence of system methods, making
 //! it possible to test different canister behaviors without having to write up
 //! custom Wat files.
-use ic_agent::Principal;
+use ic_agent::export::Principal;
 use std::path::Path;
 
 /// Load the Universal Canister code from the environment and return its WASM as a blob.

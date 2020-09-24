@@ -6,12 +6,15 @@
 //!
 //! A single method is exported, to_request_id, which returns a RequestId
 //! (a 256 bits slice) or an error.
-use crate::types::request_id_error::{RequestIdError, RequestIdFromStringError};
+use error::RequestIdFromStringError;
 use openssl::sha::Sha256;
 use serde::{ser, Serialize, Serializer};
 use std::collections::BTreeMap;
 use std::iter::Extend;
 use std::str::FromStr;
+
+pub mod error;
+pub use error::RequestIdError;
 
 /// Type alias for a sha256 result (ie. a u256).
 type Sha256Hash = [u8; 32];
@@ -659,7 +662,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Principal;
+    use crate::export::Principal;
     use std::convert::TryFrom;
 
     /// The actual example used in the public spec in the Request ID section.
