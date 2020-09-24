@@ -1,9 +1,11 @@
+name: Publish Cargo docs
+
 on:
   push:
     branches:
       - next
-  pull_request:
-name: Publish Cargo docs
+  pull_request_target:
+
 jobs:
   publish:
     runs-on: ubuntu-latest
