@@ -421,7 +421,7 @@ mod management_canister {
                 .call_and_wait(create_waiter())
                 .await?;
 
-            // Each agent has their own identity.
+            // Create another agent with different identity.
             let other_agent_identity = create_identity().await?;
             let other_agent = create_agent(other_agent_identity).await?;
             let other_ic00 = ManagementCanister::create(&other_agent);
@@ -441,7 +441,7 @@ mod management_canister {
 
             // Stop as a wrong controller should fail.
             let result = other_ic00
-                .canister_status(&canister_id)
+                .stop_canister(&canister_id)
                 .call_and_wait(create_waiter())
                 .await;
             assert!(match result {
