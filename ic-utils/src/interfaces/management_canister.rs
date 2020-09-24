@@ -326,4 +326,24 @@ impl<'agent> Canister<'agent, ManagementCanister> {
     ) -> InstallCodeBuilder<'agent, 'canister, ManagementCanister> {
         InstallCodeBuilder::builder(self, canister_id, wasm)
     }
+
+    /// Set controller for a canister.
+    pub fn set_controller<'canister: 'agent>(
+        &'canister self,
+        canister_id: &Principal,
+        new_controller: &Principal,
+    ) -> impl 'agent + AsyncCall<()> {
+        #[derive(CandidType)]
+        struct Argument {
+            canister_id: Principal,
+            new_controller: Principal,
+        }
+
+        self.update_("set_controller")
+            .with_arg(Argument {
+                canister_id: canister_id.clone(),
+                new_controller: new_controller.clone(),
+            })
+            .build()
+    }
 }

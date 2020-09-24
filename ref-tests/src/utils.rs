@@ -25,7 +25,7 @@ pub async fn create_identity() -> Result<BasicIdentity, String> {
     ))
 }
 
-pub async fn create_agent() -> Result<Agent, String> {
+pub async fn create_agent(identity: BasicIdentity) -> Result<Agent, String> {
     let port_env = std::env::var("IC_REF_PORT")
         .expect("Need to specify the IC_REF_PORT environment variable.");
     let port = port_env
@@ -34,7 +34,7 @@ pub async fn create_agent() -> Result<Agent, String> {
 
     Agent::builder()
         .with_url(format!("http://127.0.0.1:{}", port))
-        .with_identity(create_identity().await?)
+        .with_identity(identity)
         .build()
         .map_err(|e| format!("{:?}", e))
 }
@@ -46,7 +46,12 @@ where
 {
     let mut runtime = tokio::runtime::Runtime::new().expect("Could not create tokio runtime.");
     runtime.block_on(async {
-        let agent = create_agent().await.expect("Could not create an agent.");
+        let agent_identity = create_identity()
+            .await
+            .expect("Could not create an identity.");
+        let agent = create_agent(agent_identity)
+            .await
+            .expect("Could not create an agent.");
         match f(agent).await {
             Ok(_) => {}
             Err(e) => assert!(false, "{:?}", e),
@@ -63,7 +68,12 @@ where
     match runtime.block_on(async {
         let canister_wasm = universal_canister::wasm();
 
-        let agent = create_agent().await.expect("Could not create an agent.");
+        let agent_identity = create_identity()
+            .await
+            .expect("Could not create an identity.");
+        let agent = create_agent(agent_identity)
+            .await
+            .expect("Could not create an agent.");
         let ic00 = ManagementCanister::create(&agent);
 
         let (canister_id,) = ic00

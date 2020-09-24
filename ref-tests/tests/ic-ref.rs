@@ -38,10 +38,11 @@ fn spec_compliance_claimed() {
 
 mod management_canister {
     use ic_agent::AgentError;
+    use ic_agent::Identity;
     use ic_utils::call::AsyncCall;
     use ic_utils::interfaces::management_canister::{CanisterStatus, InstallMode};
     use ic_utils::interfaces::ManagementCanister;
-    use ref_tests::{create_agent, create_waiter, with_agent};
+    use ref_tests::{create_agent, create_identity, create_waiter, with_agent};
 
     mod create_canister {
         use super::{create_waiter, with_agent};
@@ -130,7 +131,9 @@ mod management_canister {
                 .await?;
 
             // Each agent has their own identity.
-            let other_agent = create_agent().await?;
+            let other_agent_identity = create_identity().await?;
+            let other_agent_principal = other_agent_identity.sender()?;
+            let other_agent = create_agent(other_agent_identity).await?;
             let other_ic00 = ManagementCanister::create(&other_agent);
 
             // Reinstall with another agent should fail.
@@ -162,7 +165,26 @@ mod management_canister {
             });
 
             // Change controller.
-            // TODO: set controller tests.
+            ic00.set_controller(&canister_id, &other_agent_principal)
+                .call_and_wait(create_waiter())
+                .await?;
+
+            // Change controller with wrong controller should fail
+            let result = ic00
+                .set_controller(&canister_id, &other_agent_principal)
+                .call_and_wait(create_waiter())
+                .await;
+            assert!(match result {
+                Err(AgentError::ReplicaError { .. }) => true,
+                _ => false,
+            });
+
+            // Reinstall as new controller
+            other_ic00
+                .install_code(&canister_id, &canister_wasm)
+                .with_mode(InstallMode::Reinstall)
+                .call_and_wait(create_waiter())
+                .await?;
 
             // Reinstall on empty should succeed.
             let (canister_id_2,) = ic00
