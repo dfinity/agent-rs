@@ -1,34 +1,34 @@
 //! The `ic-agent` is a simple-to-use library that enables
-//! you to build applications and interact with the 
+//! you to build applications and interact with the
 //! [Internet Computer](https://dfinity.org) in Rust.
-//! It serves as a Rust-based low-level backend for the 
+//! It serves as a Rust-based low-level backend for the
 //! DFINITY Canister Software Development Kit (SDK)
-//! and the [Canister SDK](https://sdk.dfinity.org) 
-//! command-line execution environment 
+//! and the [Canister SDK](https://sdk.dfinity.org)
+//! command-line execution environment
 //! [`dfx`](https://sdk.dfinity.org/docs/developers-guide/install-upgrade-remove.html#_what_gets_installed).
 //!
 //! ## Overview
-//! The `ic-agent` is a Rust crate that can connect directly to 
+//! The `ic-agent` is a Rust crate that can connect directly to
 //! the Internet Computer through the Internet Computer protocol (ICP).
-//! The key software components of the ICP are broadly referred 
-//! to as the [replica](https://sdk.dfinity.org/docs/developers-guide/introduction-key-concepts.html#_basic_architecture). 
+//! The key software components of the ICP are broadly referred
+//! to as the [replica](https://sdk.dfinity.org/docs/developers-guide/introduction-key-concepts.html#_basic_architecture).
 //!
-//! The agent is designed to be compatible with multiple 
-//! versions of the replica API, and to expose both low-level 
-//! APIs for communicating with Internet Computer protocol 
+//! The agent is designed to be compatible with multiple
+//! versions of the replica API, and to expose both low-level
+//! APIs for communicating with Internet Computer protocol
 //! components like the replica and to provide higher-level
-// APIs for communicating with software applications deployed 
+// APIs for communicating with software applications deployed
 //! as [canisters](https://sdk.dfinity.org/docs/developers-guide/introduction-key-concepts.html#_writing_deploying_and_running_software).
 //!
 //! ## Example
-//! The following example illustrates how to use the Agent 
-//! interface to send a call to an Internet Computer canister 
-//! that performs network management operations. In this 
-//! example, the call to the Internet Computer management 
-//! canister (`aaaaa-aa`) creates a placeholder for a new 
-//! canister by registering a network-specific identifier. 
-//! The management canister then returns the result in the 
-//! form of the textual representation of the canister 
+//! The following example illustrates how to use the Agent
+//! interface to send a call to an Internet Computer canister
+//! that performs network management operations. In this
+//! example, the call to the Internet Computer management
+//! canister (`aaaaa-aa`) creates a placeholder for a new
+//! canister by registering a network-specific identifier.
+//! The management canister then returns the result in the
+//! form of the textual representation of the canister
 //! identifier to the caller.
 //!
 //! ```ignore
@@ -87,21 +87,21 @@
 //! eprintln!("{}", canister_id);
 //! # });
 //! ```
-//! For more information about the Agent interface used in 
-//! this example, see the 
-//! [Agent](https://agent-rust.netlify.app/ic_agent/struct.agent) 
+//! For more information about the Agent interface used in
+//! this example, see the
+//! [Agent](https://agent-rust.netlify.app/ic_agent/struct.agent)
 //! documentation.
 //!
 //! ## References
-//! For an introduction to the Internet Computer and the 
+//! For an introduction to the Internet Computer and the
 //! DFINITY Canister SDK, see the following resources:
-//! 
+//!
 //! - [Frequently Asked Questions](https://dfinity.org/faq)
 //! - [DFINITY Canister SDK](https://sdk.dfinity.org/docs/index.html)
 //!
 //! The Internet Computer protocol and interface specifications
-//! are not publicly available yet. When these specifications 
-//! are made public and generally available, additional details 
+//! are not publicly available yet. When these specifications
+//! are made public and generally available, additional details
 //! about the versions supported will be available here.
 //!
 pub mod agent;
