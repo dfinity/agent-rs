@@ -102,13 +102,13 @@
 //! 
 //! - [Frequently Asked Questions](https://dfinity.org/faq)
 //! - [DFINITY Canister SDK](https://sdk.dfinity.org/docs/index.html)
-//! - [Introduction and key concepts](https://sdk.dfinity.org/docs/developers-guide/introduction-key-concepts.html)
 //!
 //! The Internet Computer protocol and interface specifications
 //! are not publicly available yet. When these specifications 
 //! are made public and generally available, additional details 
 //! about the versions supported will be available here.
 //!
+
 pub mod agent;
 pub mod export;
 pub mod identity;
