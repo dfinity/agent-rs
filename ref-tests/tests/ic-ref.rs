@@ -558,3 +558,57 @@ mod simple_calls {
         })
     }
 }
+
+mod extras {
+    use ic_utils::call::AsyncCall;
+    use ic_utils::interfaces::ManagementCanister;
+    use ref_tests::{create_waiter, with_agent};
+
+    #[ignore]
+    #[test]
+    fn memory_allocation() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+            let (canister_id,) = ic00
+                .create_canister()
+                .call_and_wait(create_waiter())
+                .await?;
+            let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
+
+            // Prevent installing with over 1 << 48. This does not contact the server.
+            assert!(ic00
+                .install_code(&canister_id, &canister_wasm)
+                .with_memory_allocation(1u64 << 50)
+                .call_and_wait(create_waiter())
+                .await
+                .is_err());
+
+            ic00.install_code(&canister_id, &canister_wasm)
+                .with_memory_allocation(10 * 1024 * 1024u64)
+                .call_and_wait(create_waiter())
+                .await?;
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn compute_allocation() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+            let (canister_id,) = ic00
+                .create_canister()
+                .call_and_wait(create_waiter())
+                .await?;
+            let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
+
+            ic00.install_code(&canister_id, &canister_wasm)
+                .with_compute_allocation(10)
+                .call_and_wait(create_waiter())
+                .await?;
+
+            Ok(())
+        })
+    }
+}

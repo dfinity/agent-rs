@@ -10,8 +10,12 @@ use std::fmt::Debug;
 use std::str::FromStr;
 
 pub mod attributes;
+use crate::interfaces::management_canister::attributes::{
+    ComputeAllocationError, MemoryAllocationError,
+};
 pub use attributes::ComputeAllocation;
 pub use attributes::MemoryAllocation;
+use std::convert::TryInto;
 
 pub struct ManagementCanister;
 
@@ -86,8 +90,8 @@ pub struct InstallCodeBuilder<'agent, 'canister: 'agent, T> {
     wasm: &'canister [u8],
     arg: Argument,
     mode: Option<InstallMode>,
-    compute_allocation: Option<ComputeAllocation>,
-    memory_allocation: Option<MemoryAllocation>,
+    compute_allocation: Option<Result<ComputeAllocation, ComputeAllocationError>>,
+    memory_allocation: Option<Result<MemoryAllocation, MemoryAllocationError>>,
 }
 
 impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
@@ -134,42 +138,42 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
 
     /// Pass in a compute allocation optional value for the canister. If this is [None],
     /// it will revert the compute allocation to default.
-    pub fn with_optional_compute_allocation<C: Into<ComputeAllocation>>(
-        self,
-        compute_allocation: Option<C>,
-    ) -> Self {
+    pub fn with_optional_compute_allocation<C>(self, compute_allocation: Option<C>) -> Self
+    where
+        C: TryInto<ComputeAllocation, Error = ComputeAllocationError>,
+    {
         Self {
-            compute_allocation: compute_allocation.map(|ca| ca.into()),
+            compute_allocation: compute_allocation.map(|ca| ca.try_into()),
             ..self
         }
     }
 
     /// Pass in a compute allocation value for the canister.
-    pub fn with_compute_allocation<C: Into<ComputeAllocation>>(
-        self,
-        compute_allocation: C,
-    ) -> Self {
+    pub fn with_compute_allocation<C>(self, compute_allocation: C) -> Self
+    where
+        C: TryInto<ComputeAllocation, Error = ComputeAllocationError>,
+    {
         self.with_optional_compute_allocation(Some(compute_allocation))
     }
 
     /// Pass in a memory allocation optional value for the canister. If this is [None],
     /// it will revert the memory allocation to default.
-    pub fn with_optional_memory_allocation<C: Into<MemoryAllocation>>(
-        self,
-        memory_allocation: Option<C>,
-    ) -> Self {
+    pub fn with_optional_memory_allocation<C>(self, memory_allocation: Option<C>) -> Self
+    where
+        C: TryInto<MemoryAllocation, Error = MemoryAllocationError>,
+    {
         Self {
-            memory_allocation: memory_allocation.map(|ma| ma.into()),
+            memory_allocation: memory_allocation.map(|ma| ma.try_into()),
             ..self
         }
     }
 
     /// Pass in a memory allocation value for the canister.
-    pub fn with_memory_allocation<C: Into<MemoryAllocation>>(self, memory_allocation: C) -> Self {
-        Self {
-            memory_allocation: Some(memory_allocation.into()),
-            ..self
-        }
+    pub fn with_memory_allocation<C>(self, memory_allocation: C) -> Self
+    where
+        C: TryInto<MemoryAllocation, Error = MemoryAllocationError>,
+    {
+        self.with_optional_memory_allocation(Some(memory_allocation))
     }
 
     /// Create an [AsyncCall] implementation that, when called, will install the
@@ -181,9 +185,20 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
             canister_id: Principal,
             wasm_module: Vec<u8>,
             arg: Vec<u8>,
-            compute_allocation: Option<u8>,
-            memory_allocation: Option<u64>,
+            compute_allocation: Option<candid::Nat>,
+            memory_allocation: Option<candid::Nat>,
         }
+
+        let compute_allocation = match self.compute_allocation {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Ok(x)) => Some(candid::Nat::from(u8::from(x))),
+            None => None,
+        };
+        let memory_allocation = match self.memory_allocation {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Ok(x)) => Some(candid::Nat::from(u64::from(x))),
+            None => None,
+        };
 
         Ok(self
             .canister
@@ -193,8 +208,8 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
                 canister_id: self.canister_id.clone(),
                 wasm_module: self.wasm.to_owned(),
                 arg: self.arg.serialize()?,
-                compute_allocation: self.compute_allocation.map(|ca| ca.into()),
-                memory_allocation: self.memory_allocation.map(|ma| ma.into()),
+                compute_allocation,
+                memory_allocation,
             })
             .build())
     }
