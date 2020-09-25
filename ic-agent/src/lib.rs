@@ -8,7 +8,6 @@
 //! [`dfx`](https://sdk.dfinity.org/docs/developers-guide/install-upgrade-remove.html#_what_gets_installed).
 //!
 //! ## Overview
-
 //! The `ic-agent` is a Rust crate that can connect directly to 
 //! the Internet Computer through the Internet Computer protocol (ICP).
 //! The key software components of the ICP are broadly referred 
@@ -22,7 +21,6 @@
 //! as [canisters](https://sdk.dfinity.org/docs/developers-guide/introduction-key-concepts.html#_writing_deploying_and_running_software).
 //!
 //! ## Example
-//!
 //! The following example illustrates how to use the Agent 
 //! interface to send a call to an Internet Computer canister 
 //! that performs network management operations. In this 
@@ -89,14 +87,12 @@
 //! eprintln!("{}", canister_id);
 //! # });
 //! ```
-//!
 //! For more information about the Agent interface used in 
 //! this example, see the 
 //! [Agent](https://agent-rust.netlify.app/ic_agent/struct.agent) 
 //! documentation.
 //!
 //! ## References
-//!
 //1 For an introduction to the Internet Computer and the 
 //! DFINITY Canister SDK, see the following resources:
 //! 
@@ -108,7 +104,6 @@
 //! are made public and generally available, additional details 
 //! about the versions supported will be available here.
 //!
-
 pub mod agent;
 pub mod export;
 pub mod identity;
