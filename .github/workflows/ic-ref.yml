@@ -62,7 +62,7 @@ jobs:
       - name: Run Doc Tests
         run: |
           set -ex
-          $HOME/bin/ic-ref --pick-port --write-port-to $HOME/ic_ref_port &
+          ic-ref --pick-port --write-port-to $HOME/ic_ref_port &
           sleep 1
           export IC_REF_PORT=$(cat $HOME/ic_ref_port)
           cd main
