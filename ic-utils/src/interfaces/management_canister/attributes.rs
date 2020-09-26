@@ -81,6 +81,7 @@ try_from_memory_alloc_decl!(i32);
 try_from_memory_alloc_decl!(i64);
 
 #[test]
+#[allow(clippy::useless_conversion)]
 fn can_convert_compute_allocation() {
     use std::convert::{TryFrom, TryInto};
 
@@ -99,6 +100,7 @@ fn can_convert_compute_allocation() {
 }
 
 #[test]
+#[allow(clippy::useless_conversion)]
 fn can_convert_memory_allocation() {
     use std::convert::{TryFrom, TryInto};
 
