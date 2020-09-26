@@ -561,6 +561,7 @@ mod simple_calls {
 
 mod extras {
     use ic_utils::call::AsyncCall;
+    use ic_utils::interfaces::management_canister::ComputeAllocation;
     use ic_utils::interfaces::ManagementCanister;
     use ref_tests::{create_waiter, with_agent};
 
@@ -595,6 +596,8 @@ mod extras {
     #[ignore]
     #[test]
     fn compute_allocation() {
+        use std::convert::TryFrom;
+
         with_agent(|agent| async move {
             let ic00 = ManagementCanister::create(&agent);
             let (canister_id,) = ic00
@@ -603,8 +606,10 @@ mod extras {
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
 
+            let ca = ComputeAllocation::try_from(10).unwrap();
+
             ic00.install_code(&canister_id, &canister_wasm)
-                .with_compute_allocation(10)
+                .with_compute_allocation(ca)
                 .call_and_wait(create_waiter())
                 .await?;
 
