@@ -10,9 +10,6 @@ use std::fmt::Debug;
 use std::str::FromStr;
 
 pub mod attributes;
-use crate::interfaces::management_canister::attributes::{
-    ComputeAllocationError, MemoryAllocationError,
-};
 pub use attributes::ComputeAllocation;
 pub use attributes::MemoryAllocation;
 use std::convert::TryInto;
@@ -90,8 +87,8 @@ pub struct InstallCodeBuilder<'agent, 'canister: 'agent, T> {
     wasm: &'canister [u8],
     arg: Argument,
     mode: Option<InstallMode>,
-    compute_allocation: Option<Result<ComputeAllocation, ComputeAllocationError>>,
-    memory_allocation: Option<Result<MemoryAllocation, MemoryAllocationError>>,
+    compute_allocation: Option<Result<ComputeAllocation, AgentError>>,
+    memory_allocation: Option<Result<MemoryAllocation, AgentError>>,
 }
 
 impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
@@ -138,40 +135,50 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
 
     /// Pass in a compute allocation optional value for the canister. If this is [None],
     /// it will revert the compute allocation to default.
-    pub fn with_optional_compute_allocation<C>(self, compute_allocation: Option<C>) -> Self
+    pub fn with_optional_compute_allocation<C, E>(self, compute_allocation: Option<C>) -> Self
     where
-        C: TryInto<ComputeAllocation, Error = ComputeAllocationError>,
+        E: std::fmt::Display,
+        C: TryInto<ComputeAllocation, Error = E>,
     {
         Self {
-            compute_allocation: compute_allocation.map(|ca| ca.try_into()),
+            compute_allocation: compute_allocation.map(|ca| {
+                ca.try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+            }),
             ..self
         }
     }
 
     /// Pass in a compute allocation value for the canister.
-    pub fn with_compute_allocation<C>(self, compute_allocation: C) -> Self
+    pub fn with_compute_allocation<C, E>(self, compute_allocation: C) -> Self
     where
-        C: TryInto<ComputeAllocation, Error = ComputeAllocationError>,
+        E: std::fmt::Display,
+        C: TryInto<ComputeAllocation, Error = E>,
     {
         self.with_optional_compute_allocation(Some(compute_allocation))
     }
 
     /// Pass in a memory allocation optional value for the canister. If this is [None],
     /// it will revert the memory allocation to default.
-    pub fn with_optional_memory_allocation<C>(self, memory_allocation: Option<C>) -> Self
+    pub fn with_optional_memory_allocation<E, C>(self, memory_allocation: Option<C>) -> Self
     where
-        C: TryInto<MemoryAllocation, Error = MemoryAllocationError>,
+        E: std::fmt::Display,
+        C: TryInto<MemoryAllocation, Error = E>,
     {
         Self {
-            memory_allocation: memory_allocation.map(|ma| ma.try_into()),
+            memory_allocation: memory_allocation.map(|ma| {
+                ma.try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+            }),
             ..self
         }
     }
 
     /// Pass in a memory allocation value for the canister.
-    pub fn with_memory_allocation<C>(self, memory_allocation: C) -> Self
+    pub fn with_memory_allocation<C, E>(self, memory_allocation: C) -> Self
     where
-        C: TryInto<MemoryAllocation, Error = MemoryAllocationError>,
+        E: std::fmt::Display,
+        C: TryInto<MemoryAllocation, Error = E>,
     {
         self.with_optional_memory_allocation(Some(memory_allocation))
     }
