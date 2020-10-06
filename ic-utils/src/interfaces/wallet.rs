@@ -141,7 +141,7 @@ impl<'agent> Canister<'agent, Wallet> {
         &'canister self,
         custodian: Principal,
     ) -> impl 'agent + AsyncCall<()> {
-        self.update_("authorize").with_arg(custodian).build()
+        self.update_("deauthorize").with_arg(custodian).build()
     }
 
     /// Get the balance.
