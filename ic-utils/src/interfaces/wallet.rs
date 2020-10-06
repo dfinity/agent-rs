@@ -82,70 +82,10 @@ where
     }
 }
 
+/// A wallet canister interface, for the standard wallet provided by DFINITY.
+/// This interface implement most methods conveniently for the user.
 pub struct Wallet;
-//type device = record {
-//   name: text;
-//   id: text;
-//   public_key: text;
-// };
-//
-// type Unit = vec nat8;
-//
-// type EventKind = variant {
-//   UnitSent: record {
-//     to: principal;
-//     unit: Unit;
-//     amount: nat64;
-//   };
-//   UnitReceived: record {
-//     from: principal;
-//     unit: Unit;
-//     amount: nat64;
-//   };
-//   CustodianAdded: record {
-//     custodian: principal;
-//   };
-//   CustodianRemoved: record {
-//     custodian: principal;
-//   };
-// };
-//
-// type event = record {
-//   id: nat32;
-//   timestamp: nat64;
-//   kind: EventKind;
-// };
-//
-// service : {
-//   // Controller Management
-//   get_controller: () -> (principal) query;
-//   set_controller: (principal) -> ();
-//
-//   // Custodian Management
-//   get_custodians: () -> (vec principal) query;
-//   authorize: (principal) -> ();
-//   deauthorize: (principal) -> ();
-//
-//   // WebAuthn Support
-//   register: (text, text, text) -> ();
-//   get_devices: () -> (vec device) query;
-//
-//   // Cycle Management
-//   cycle_balance: () -> (nat64) query;
-//   send_cycles: (principal, nat64) -> ();
-//   receive_cycles: () -> ();
-//
-//   // ICPT Management
-//   icpt_balance: () -> (nat64) query;
-//   send_icpt: (principal, nat64) -> ();
-//   receive_icpt: () -> ();
-//
-//   // Call Forwarding
-//   call: (principal, text, blob, nat64) -> (blob);
-//
-//   // Events
-//   get_events: () -> (vec event) query;
-// }
+
 impl Wallet {
     /// Create an instance of a [Canister] implementing the Wallet interface
     /// and pointing to the right Canister ID.
