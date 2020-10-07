@@ -14,6 +14,7 @@ pub use attributes::ComputeAllocation;
 pub use attributes::MemoryAllocation;
 use std::convert::TryInto;
 
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub struct ManagementCanister;
 
 impl ManagementCanister {

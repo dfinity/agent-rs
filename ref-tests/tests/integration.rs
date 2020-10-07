@@ -3,6 +3,8 @@
 //! Contrary to ic-ref.rs, these tests are not meant to match any other tests. They're
 //! integration tests with a running IC-Ref.
 use ic_agent::AgentError;
+use ic_utils::call::SyncCall;
+use ic_utils::Canister;
 use ref_tests::universal_canister::payload;
 use ref_tests::{create_waiter, with_universal_canister};
 
@@ -43,6 +45,32 @@ fn basic_expiry() {
             .await?;
 
         assert_eq!(result.as_slice(), b"hello");
+
+        Ok(())
+    })
+}
+
+#[ignore]
+#[test]
+fn canister_query() {
+    with_universal_canister(|agent, canister_id| async move {
+        let universal = Canister::builder()
+            .with_canister_id(canister_id)
+            .with_agent(&agent)
+            .build()?;
+
+        let arg = payload().reply_data(b"hello").build();
+
+        let out = unsafe {
+            universal
+                .query_("query")
+                .with_arg_raw(arg)
+                .build::<()>()
+                .call_raw()
+                .await?
+        };
+
+        assert_eq!(out, b"hello");
 
         Ok(())
     })
