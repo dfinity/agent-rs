@@ -18,23 +18,15 @@ where
     O: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
     /// Execute the call, return an array of bytes directly from the canister.
-    ///
-    /// # Safety
-    /// This is marked unsafe to ensure that code can be tagged with it. It should
-    /// not be used in a regular code flow. Use the [call] method instead.
-    async unsafe fn call_raw(self) -> Result<Vec<u8>, AgentError>;
+    #[cfg(feature = "raw")]
+    async fn call_raw(self) -> Result<Vec<u8>, AgentError>;
 
     /// Execute the call, returning either the value returned by the canister, or an
     /// error returned by the Agent.
     async fn call(self) -> Result<O, AgentError>
     where
         Self: Sized + Sync + Send,
-        O: 'async_trait,
-    {
-        let result = unsafe { self.call_raw().await }?;
-
-        decode_args(&result).map_err(|e| AgentError::CandidError(Box::new(e)))
-    }
+        O: 'async_trait;
 }
 
 /// A type that implements asynchronous calls (ie. 'update' calls).
@@ -163,14 +155,11 @@ impl<'agent, Out> SyncCaller<'agent, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
-    /// Perform the call, consuming the the abstraction.
-    async unsafe fn call_raw(self) -> Result<Vec<u8>, AgentError> {
+    /// Perform the call, consuming the the abstraction. This is a private method.
+    async fn call_raw(self) -> Result<Vec<u8>, AgentError> {
         let mut builder = self.agent.query(&self.canister_id, &self.method_name);
-
         self.expiry.apply_to_query(&mut builder);
-
         builder.with_arg(&self.arg?);
-
         builder.call().await
     }
 }
@@ -181,8 +170,15 @@ where
     Self: Sized,
     Out: 'agent + for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
-    async unsafe fn call_raw(self) -> Result<Vec<u8>, AgentError> {
+    #[cfg(feature = "raw")]
+    async fn call_raw(self) -> Result<Vec<u8>, AgentError> {
         Ok(self.call_raw().await?)
+    }
+
+    async fn call(self) -> Result<Out, AgentError> {
+        let result = unsafe { self.call_raw().await }?;
+
+        decode_args(&result).map_err(|e| AgentError::CandidError(Box::new(e)))
     }
 }
 

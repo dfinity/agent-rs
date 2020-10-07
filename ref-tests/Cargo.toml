@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 delay = "0.3.0"
 ic-agent = { path = "../ic-agent" }
-ic-utils = { path = "../ic-utils" }
+ic-utils = { path = "../ic-utils", features = ["raw"] }
 ring = "0.16.11"
 tokio = "0.2.22"
 
