@@ -3,10 +3,13 @@
 //! Contrary to ic-ref.rs, these tests are not meant to match any other tests. They're
 //! integration tests with a running IC-Ref.
 use ic_agent::AgentError;
+use ic_utils::call::AsyncCall;
 use ic_utils::call::SyncCall;
-use ic_utils::Canister;
+use ic_utils::{interfaces, Canister};
 use ref_tests::universal_canister::payload;
-use ref_tests::{create_waiter, with_universal_canister};
+use ref_tests::{
+    create_universal_canister, create_waiter, with_universal_canister, with_wallet_canister,
+};
 
 #[ignore]
 #[test]
@@ -74,4 +77,32 @@ fn canister_query() {
 
         Ok(())
     })
+}
+
+#[ignore]
+#[test]
+fn canister_create_forward() {
+    with_wallet_canister(|agent, wallet_id| async move {
+        let wallet = interfaces::Wallet::create(&agent, wallet_id);
+
+        let universal_id = create_universal_canister(&agent).await?;
+        let universal = Canister::builder()
+            .with_canister_id(universal_id)
+            .with_agent(&agent)
+            .build()?;
+
+        // Perform an "echo" call through the wallet canister.
+        // We encode the result in DIDL to decode it on the other side (would normally get
+        // a Vec<u8>).
+        let arg = payload()
+            .reply_data(b"DIDL\0\x01\x71\x0bHello World")
+            .build();
+
+        let forward = wallet
+            .call_forward::<(String,)>(universal.update_("update").with_arg_raw(arg).build(), 0)?;
+        let (result,) = forward.call_and_wait(create_waiter()).await.unwrap();
+
+        assert_eq!(result, "Hello World");
+        Ok(())
+    });
 }

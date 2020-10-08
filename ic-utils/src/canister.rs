@@ -112,18 +112,18 @@ pub struct Canister<'agent, T = ()> {
 
 impl<'agent, T> Canister<'agent, T> {
     /// Get the canister ID of this canister.
-    pub fn canister_id_(&self) -> Principal {
-        self.canister_id.clone()
+    pub fn canister_id_<'canister: 'agent>(&'canister self) -> &Principal {
+        &self.canister_id
     }
 
     /// Get the interface object from this canister. Sometimes those interfaces might have
     /// custom methods that are useful.
-    pub fn interface_(&self) -> &T {
+    pub fn interface_<'canister: 'agent>(&'canister self) -> &T {
         &self.interface
     }
 
     /// Create an AsyncCallBuilder to do an update call.
-    pub fn update_<'canister>(
+    pub fn update_<'canister: 'agent>(
         &'canister self,
         method_name: &str,
     ) -> AsyncCallBuilder<'agent, 'canister, T> {
@@ -131,7 +131,7 @@ impl<'agent, T> Canister<'agent, T> {
     }
 
     /// Create a SyncCallBuilder to do a query call.
-    pub fn query_<'canister>(
+    pub fn query_<'canister: 'agent>(
         &'canister self,
         method_name: &str,
     ) -> SyncCallBuilder<'agent, 'canister, T> {
@@ -286,9 +286,9 @@ impl<'agent, 'canister: 'agent, Interface> SyncCallBuilder<'agent, 'canister, In
 ///
 /// See [AsyncCaller] for a description of this structure.
 pub struct AsyncCallBuilder<'agent, 'canister: 'agent, T> {
-    canister: &'canister Canister<'agent, T>,
-    method_name: String,
-    arg: Argument,
+    pub canister: &'canister Canister<'agent, T>,
+    pub method_name: String,
+    pub arg: Argument,
 }
 
 impl<'agent, 'canister: 'agent, T> AsyncCallBuilder<'agent, 'canister, T> {

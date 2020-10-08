@@ -6,21 +6,6 @@
 //! it possible to test different canister behaviors without having to write up
 //! custom Wat files.
 use ic_agent::export::Principal;
-use std::path::Path;
-
-/// Load the Universal Canister code from the environment and return its WASM as a blob.
-pub fn wasm() -> Vec<u8> {
-    let canister_env = std::env::var("IC_UNIVERSAL_CANISTER_PATH")
-        .expect("Need to specify the IC_UNIVERSAL_CANISTER_PATH environment variable.");
-
-    let canister_path = Path::new(&canister_env);
-
-    if !canister_path.exists() {
-        panic!("Could not find the universal canister WASM file.");
-    } else {
-        std::fs::read(&canister_path).expect("Could not read file.")
-    }
-}
 
 /// Operands used in encoding UC payloads.
 #[repr(u8)]
