@@ -36,7 +36,7 @@ jobs:
           # Personal Read-only Access Token created by hans.larsen@dfinity.org
           token: ${{ secrets.IC_REF_TOKEN }}
           path: wallet-rs
-          ref: latest
+          ref: e41a91fc64857b5eb07b6ebb5ad4ff257536c69c
 
       - name: Cache ~/.cabal/store
         uses: actions/cache@v2
@@ -85,7 +85,7 @@ jobs:
         run: |
           cd wallet-rs/wallet
           sh build.sh
-          cp wallet/target/wasm32-unknown-unknown/release/wallet-opt.wasm $HOME/wallet.wasm
+          cp target/wasm32-unknown-unknown/release/wallet-opt.wasm $HOME/wallet.wasm
 
       - name: Run Integration Tests
         run: |
