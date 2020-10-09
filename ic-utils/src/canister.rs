@@ -286,9 +286,9 @@ impl<'agent, 'canister: 'agent, Interface> SyncCallBuilder<'agent, 'canister, In
 ///
 /// See [AsyncCaller] for a description of this structure.
 pub struct AsyncCallBuilder<'agent, 'canister: 'agent, T> {
-    pub canister: &'canister Canister<'agent, T>,
-    pub method_name: String,
-    pub arg: Argument,
+    canister: &'canister Canister<'agent, T>,
+    method_name: String,
+    arg: Argument,
 }
 
 impl<'agent, 'canister: 'agent, T> AsyncCallBuilder<'agent, 'canister, T> {

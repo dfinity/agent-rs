@@ -1,3 +1,4 @@
+use candid::CandidType;
 use delay::Delay;
 use ic_agent::export::Principal;
 use ic_agent::identity::BasicIdentity;
@@ -5,6 +6,7 @@ use ic_agent::Agent;
 use ic_utils::call::AsyncCall;
 use ic_utils::interfaces::ManagementCanister;
 use ring::signature::Ed25519KeyPair;
+use serde::Deserialize;
 use std::error::Error;
 use std::future::Future;
 use std::path::Path;
@@ -101,8 +103,24 @@ pub async fn create_wallet_canister(agent: &Agent) -> Result<Principal, Box<dyn 
 
     let ic00 = ManagementCanister::create(&agent);
 
-    let (canister_id,) = ic00
-        .create_canister()
+    #[derive(CandidType)]
+    struct Input {
+        num_cycles: candid::Nat,
+        num_icpt: candid::Nat,
+    }
+
+    #[derive(Deserialize)]
+    struct Output {
+        canister_id: Principal,
+    }
+
+    let (Output { canister_id },) = ic00
+        .update_("dev_create_canister_with_funds")
+        .with_arg(Input {
+            num_cycles: candid::Nat::from(1_000_000_000_000u64),
+            num_icpt: candid::Nat::from(1_000u64),
+        })
+        .build()
         .call_and_wait(create_waiter())
         .await?;
 

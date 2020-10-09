@@ -154,10 +154,10 @@ impl<'agent> Canister<'agent, Wallet> {
         self.query_("cycle_balance").build()
     }
 
-    /// Send cycles to another canister.
+    /// Send cycles to another (hopefully Wallet) canister.
     pub fn send_cycles<'canister: 'agent>(
         &'canister self,
-        destination: Canister<'agent>,
+        destination: &'_ Canister<'agent, Wallet>,
         amount: u64,
     ) -> impl 'agent + AsyncCall<()> {
         self.update_("send_cycles")

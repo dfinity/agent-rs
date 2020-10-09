@@ -8,7 +8,8 @@ use ic_utils::call::SyncCall;
 use ic_utils::{interfaces, Canister};
 use ref_tests::universal_canister::payload;
 use ref_tests::{
-    create_universal_canister, create_waiter, with_universal_canister, with_wallet_canister,
+    create_universal_canister, create_waiter, create_wallet_canister, with_universal_canister,
+    with_wallet_canister,
 };
 
 #[ignore]
@@ -81,7 +82,7 @@ fn canister_query() {
 
 #[ignore]
 #[test]
-fn canister_create_forward() {
+fn wallet_canister_forward() {
     with_wallet_canister(|agent, wallet_id| async move {
         let wallet = interfaces::Wallet::create(&agent, wallet_id);
 
@@ -103,6 +104,28 @@ fn canister_create_forward() {
         let (result,) = forward.call_and_wait(create_waiter()).await.unwrap();
 
         assert_eq!(result, "Hello World");
+        Ok(())
+    });
+}
+
+#[ignore]
+#[test]
+fn wallet_canister_funds() {
+    with_wallet_canister(|agent, wallet_id| async move {
+        let alice = interfaces::Wallet::create(&agent, wallet_id);
+        let bob = interfaces::Wallet::create(&agent, create_wallet_canister(&agent).await?);
+
+        alice
+            .send_cycles(&bob, 1_000_000)
+            .call_and_wait(create_waiter())
+            .await?;
+
+        let (cycles,) = bob.cycle_balance().call().await?;
+        assert_eq!(cycles, 1_000_001_000_000);
+
+        let (cycles,) = alice.cycle_balance().call().await?;
+        assert_eq!(cycles, 999_999_000_000);
+
         Ok(())
     });
 }
