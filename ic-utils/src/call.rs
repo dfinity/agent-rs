@@ -123,18 +123,26 @@ where
     /// eprintln!("{}", canister_id);
     /// # });
     /// ```
-    async fn and_then<Out2, R, AndThen>(
+    fn and_then<Out2, R, AndThen>(
         self,
         and_then: AndThen,
     ) -> AndThenAsyncCaller<Out, Out2, Self, R, AndThen>
     where
         Self: Sized + Sync + Send,
-        Out: 'async_trait,
         Out2: for<'de> ArgumentDecoder<'de> + Send + Sync,
         R: Future<Output = Result<Out2, AgentError>> + Send + Sync,
         AndThen: Sync + Send + Fn(Out) -> R,
     {
         AndThenAsyncCaller::new(self, and_then)
+    }
+
+    fn map<Out2, Map>(self, map: Map) -> MappedAsyncCaller<Out, Out2, Self, Map>
+    where
+        Self: Sized + Sync + Send,
+        Out2: for<'de> ArgumentDecoder<'de> + Send + Sync,
+        Map: Sync + Send + Fn(Out) -> Out2,
+    {
+        MappedAsyncCaller::new(self, map)
     }
 }
 
@@ -199,17 +207,21 @@ impl<'agent, Out> AsyncCaller<'agent, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
-    fn build_call(self) -> Result<UpdateBuilder<'agent>, AgentError> {
+    /// Build an UpdateBuilder call that can be used directly with the [Agent]. This is
+    /// essentially downleveling this type into the lower level [ic-agent] abstraction.
+    pub fn build_call(self) -> Result<UpdateBuilder<'agent>, AgentError> {
         let mut builder = self.agent.update(&self.canister_id, &self.method_name);
         self.expiry.apply_to_update(&mut builder);
         builder.with_arg(&self.arg?);
         Ok(builder)
     }
 
+    /// Perform this call and returns .
     pub async fn call(self) -> Result<RequestId, AgentError> {
         self.build_call()?.call().await
     }
 
+    ///
     pub async fn call_and_wait<W>(self, waiter: W) -> Result<Out, AgentError>
     where
         W: Waiter,

@@ -3,24 +3,26 @@ use crate::canister::{Argument, CanisterBuilder};
 use crate::Canister;
 use async_trait::async_trait;
 use candid::de::ArgumentDecoder;
-use candid::CandidType;
+use candid::{decode_args, CandidType};
 use delay::Waiter;
+use ic_agent::agent::UpdateBuilder;
 use ic_agent::export::Principal;
 use ic_agent::{Agent, AgentError, RequestId};
 
-pub struct CallForward<'agent, 'canister: 'agent, Out>
+pub struct CallForwarder<'agent, 'canister: 'agent, Out>
 where
+    Self: 'canister,
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
     wallet: &'canister Canister<'agent, Wallet>,
-    destination: &'agent Canister<'agent, ()>,
+    destination: Principal,
     method_name: String,
     amount: u64,
     arg: Argument,
     phantom_out: std::marker::PhantomData<Out>,
 }
 
-impl<'agent, 'canister: 'agent, Out> CallForward<'agent, 'canister, Out>
+impl<'agent, 'canister: 'agent, Out> CallForwarder<'agent, 'canister, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
@@ -41,15 +43,19 @@ where
         self
     }
 
-    pub fn build(self) -> Result<AsyncCaller<'canister, Out>, AgentError> {
+    pub fn build(self) -> Result<impl 'agent + AsyncCall<Out>, AgentError> {
         Ok(self
             .wallet
             .update_("call")
-            .with_arg(self.destination.canister_id_())
+            .with_arg(self.destination)
             .with_arg(self.method_name)
-            .with_arg(self.arg.serialize()?)
+            .with_arg(self.arg.serialize()?.to_vec())
             .with_arg(self.amount)
-            .build())
+            .build()
+            .and_then(|(result,): (Vec<u8>,)| async move {
+                decode_args::<Out>(result.as_slice())
+                    .map_err(|e| AgentError::CandidError(Box::new(e)))
+            }))
     }
 
     pub async fn call(self) -> Result<RequestId, AgentError> {
@@ -58,7 +64,6 @@ where
 
     pub async fn call_and_wait<W>(self, waiter: W) -> Result<Out, AgentError>
     where
-        Out: 'agent + for<'de> ArgumentDecoder<'de> + Send + Sync,
         W: Waiter,
     {
         self.build()?.call_and_wait(waiter).await
@@ -66,7 +71,7 @@ where
 }
 
 #[async_trait]
-impl<'agent, 'canister: 'agent, Out> AsyncCall<Out> for CallForward<'agent, 'canister, Out>
+impl<'agent, 'canister: 'agent, Out> AsyncCall<Out> for CallForwarder<'agent, 'canister, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
@@ -149,10 +154,10 @@ impl<'agent> Canister<'agent, Wallet> {
         self.query_("cycle_balance").build()
     }
 
-    /// Send cycles to another canister.
+    /// Send cycles to another (hopefully Wallet) canister.
     pub fn send_cycles<'canister: 'agent>(
         &'canister self,
-        destination: Canister<'agent>,
+        destination: &'_ Canister<'agent, Wallet>,
         amount: u64,
     ) -> impl 'agent + AsyncCall<()> {
         self.update_("send_cycles")
@@ -163,22 +168,53 @@ impl<'agent> Canister<'agent, Wallet> {
 
     /// Forward a call to another canister, including an amount of cycles
     /// from the wallet.
-    pub fn call<'canister: 'agent, Out>(
+    pub fn call<'canister: 'agent, Out, M: ToString>(
         &'canister self,
-        destination: &'agent Canister<'agent>,
-        method_name: &str,
+        destination: &'canister Canister<'canister>,
+        method_name: M,
         amount: u64,
-    ) -> CallForward<'agent, 'canister, Out>
+    ) -> CallForwarder<'agent, 'canister, Out>
     where
         Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
     {
-        CallForward {
+        CallForwarder {
             wallet: self,
-            destination,
+            destination: destination.canister_id_().clone(),
             method_name: method_name.to_string(),
             amount,
             arg: Argument::default(),
             phantom_out: std::marker::PhantomData,
         }
+    }
+
+    /// Forward a call using another call's builder. This takes an UpdateBuilder,
+    /// marshalls it to a buffer, and sends it through the wallet canister, adding
+    /// a separate amount.
+    pub fn call_forward<'canister: 'agent, Out: 'agent>(
+        &'canister self,
+        call: AsyncCaller<'agent, Out>,
+        amount: u64,
+    ) -> Result<impl 'agent + AsyncCall<Out>, AgentError>
+    where
+        Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
+    {
+        let UpdateBuilder {
+            canister_id,
+            method_name,
+            arg,
+            ..
+        } = call.build_call()?;
+        let mut argument = Argument::default();
+        argument.set_raw_arg(arg);
+
+        CallForwarder {
+            wallet: self,
+            destination: canister_id,
+            method_name,
+            amount,
+            arg: argument,
+            phantom_out: std::marker::PhantomData,
+        }
+        .build()
     }
 }
