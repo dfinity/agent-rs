@@ -69,7 +69,7 @@ jobs:
           ls -l /opt/ghc/
           export PATH=/opt/ghc/bin:$PATH
           cabal --version
-          ghc --version
+          ghc-${{ matrix.ghc }} --version
           mkdir -p $HOME/bin
           cd ic-ref/impl
           cabal update
