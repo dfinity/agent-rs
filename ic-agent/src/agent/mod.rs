@@ -25,6 +25,8 @@ use reqwest::Method;
 use serde::Serialize;
 use status::Status;
 
+use simple_asn1::ASN1Block::OctetString;
+use simple_asn1::{to_der, ASN1EncodeErr};
 use std::convert::TryFrom;
 use std::time::Duration;
 
@@ -277,13 +279,14 @@ impl Agent {
             .identity
             .sign(&msg, &sender)
             .map_err(AgentError::SigningError)?;
+        let sender_pubkey = der_encode_sender_pubkey(signature.public_key)?;
         let bytes = self
             .execute(
                 Method::POST,
                 "read",
                 Some(Envelope {
                     content: request,
-                    sender_pubkey: signature.public_key,
+                    sender_pubkey,
                     sender_sig: signature.signature,
                 }),
             )
@@ -302,13 +305,14 @@ impl Agent {
             .identity
             .sign(&msg, &sender)
             .map_err(AgentError::SigningError)?;
+        let sender_pubkey = der_encode_sender_pubkey(signature.public_key)?;
         let _ = self
             .execute(
                 Method::POST,
                 "submit",
                 Some(Envelope {
                     content: request,
-                    sender_pubkey: signature.public_key,
+                    sender_pubkey,
                     sender_sig: signature.signature,
                 }),
             )
@@ -420,6 +424,10 @@ impl Agent {
     pub fn query<S: ToString>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder {
         QueryBuilder::new(self, canister_id.clone(), method_name.to_string())
     }
+}
+
+fn der_encode_sender_pubkey(public_key: Vec<u8>) -> Result<Vec<u8>, ASN1EncodeErr> {
+    to_der(&OctetString(0, public_key))
 }
 
 /// A Query Request Builder.

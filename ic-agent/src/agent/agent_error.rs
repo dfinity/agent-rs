@@ -1,4 +1,5 @@
 use crate::RequestIdError;
+use simple_asn1::ASN1EncodeErr;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -60,6 +61,9 @@ pub enum AgentError {
 
     #[error("A tool returned a custom error: {0}")]
     CustomError(#[from] Box<dyn Send + Sync + std::error::Error>),
+
+    #[error("Unable to DER-encode public key: {0}")]
+    DerEncodingError(#[from] ASN1EncodeErr),
 }
 
 impl PartialEq for AgentError {
