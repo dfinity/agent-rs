@@ -441,7 +441,7 @@ fn der_encode_sender_pubkey(public_key: Vec<u8>) -> Result<Vec<u8>, ASN1EncodeEr
     let subject_public_key_info = Sequence(0, vec![algorithm, subject_public_key]);
     let x = to_der(&subject_public_key_info);
     eprintln!("key bytes: {:?}", &x.clone().unwrap().iter()
-        .map(|x|format!("{:X}",x)).collect::<Vec<String>>());
+        .map(|x|format!("{:02X}",x)).collect::<Vec<String>>());
     x
 }
 
