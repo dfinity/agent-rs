@@ -438,7 +438,7 @@ fn der_encode_sender_pubkey(public_key: Vec<u8>) -> Result<Vec<u8>, ASN1EncodeEr
     ]);
     let algorithm_identifier = ObjectIdentifier(0, id_ed25519);
     let subject_public_key_info =
-        Sequence(0, vec![algorithm_identifier, BitString(0, 0, public_key)]);
+        Sequence(0, vec![algorithm_identifier, BitString(0, public_key.len() * 8, public_key)]);
     to_der(&subject_public_key_info)
 }
 
