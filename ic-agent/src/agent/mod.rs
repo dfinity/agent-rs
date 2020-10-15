@@ -21,12 +21,13 @@ use crate::export::Principal;
 use crate::identity::Identity;
 use crate::{to_request_id, RequestId};
 use delay::Waiter;
+use num_bigint::BigUint;
 use reqwest::Method;
 use serde::Serialize;
+use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, Sequence};
+use simple_asn1::{to_der, ASN1EncodeErr, OID};
 use status::Status;
 
-use simple_asn1::ASN1Block::OctetString;
-use simple_asn1::{to_der, ASN1EncodeErr};
 use std::convert::TryFrom;
 use std::time::Duration;
 
@@ -427,7 +428,18 @@ impl Agent {
 }
 
 fn der_encode_sender_pubkey(public_key: Vec<u8>) -> Result<Vec<u8>, ASN1EncodeErr> {
-    to_der(&OctetString(0, public_key))
+    // see Section 4 "SubjectPublicKeyInfo" in https://tools.ietf.org/html/rfc8410
+
+    let id_ed25519 = OID::new(vec![
+        BigUint::from(1u32),
+        BigUint::from(3u32),
+        BigUint::from(101u32),
+        BigUint::from(112u32),
+    ]);
+    let algorithm_identifier = ObjectIdentifier(0, id_ed25519);
+    let subject_public_key_info =
+        Sequence(0, vec![algorithm_identifier, BitString(0, 0, public_key)]);
+    to_der(&subject_public_key_info)
 }
 
 /// A Query Request Builder.
