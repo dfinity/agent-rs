@@ -2,9 +2,9 @@ use crate::export::Principal;
 use crate::{Identity, Signature};
 use num_bigint::BigUint;
 use ring::signature::{Ed25519KeyPair, KeyPair};
+use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, Sequence};
+use simple_asn1::{to_der, ASN1EncodeErr, OID};
 use thiserror::Error;
-use simple_asn1::{OID, to_der, ASN1EncodeErr};
-use simple_asn1::ASN1Block::{Sequence, ObjectIdentifier, BitString};
 
 /// An error happened while reading a PEM file to create a BasicIdentity.
 #[derive(Error, Debug)]
@@ -23,7 +23,7 @@ pub enum PemError {
 /// A Basic Identity which sign using an ED25519 key pair.
 pub struct BasicIdentity {
     key_pair: Ed25519KeyPair,
-    der_encoded_public_key: Vec<u8>
+    der_encoded_public_key: Vec<u8>,
 }
 
 impl BasicIdentity {
@@ -40,7 +40,9 @@ impl BasicIdentity {
             .bytes()
             .collect::<Result<Vec<u8>, std::io::Error>>()?;
 
-        Ok(BasicIdentity::from_key_pair(Ed25519KeyPair::from_pkcs8(pem::parse(&bytes)?.contents.as_slice())?))
+        Ok(BasicIdentity::from_key_pair(Ed25519KeyPair::from_pkcs8(
+            pem::parse(&bytes)?.contents.as_slice(),
+        )?))
     }
 
     /// Create a BasicIdentity from a KeyPair from the ring crate.
@@ -48,7 +50,10 @@ impl BasicIdentity {
         let der_encoded_public_key = der_encode_public_key(key_pair.public_key().as_ref().to_vec())
             .expect("DER encoding error");
 
-        Self { key_pair, der_encoded_public_key }
+        Self {
+            key_pair,
+            der_encoded_public_key,
+        }
     }
 }
 
@@ -65,7 +70,7 @@ impl Identity for BasicIdentity {
         Ok(Signature {
             signature: signature.as_ref().to_vec(),
             public_key: public_key_bytes.as_ref().to_vec(),
-            der_encoded_public_key: self.der_encoded_public_key.clone()
+            der_encoded_public_key: self.der_encoded_public_key.clone(),
         })
     }
 }
@@ -83,7 +88,13 @@ fn der_encode_public_key(public_key: Vec<u8>) -> Result<Vec<u8>, ASN1EncodeErr> 
     let subject_public_key = BitString(0, public_key.len() * 8, public_key);
     let subject_public_key_info = Sequence(0, vec![algorithm, subject_public_key]);
     let x = to_der(&subject_public_key_info);
-    eprintln!("key bytes: {:?}", &x.clone().unwrap().iter()
-        .map(|x|format!("{:02X}",x)).collect::<Vec<String>>());
+    eprintln!(
+        "key bytes: {:?}",
+        &x.clone()
+            .unwrap()
+            .iter()
+            .map(|x| format!("{:02X}", x))
+            .collect::<Vec<String>>()
+    );
     x
 }
