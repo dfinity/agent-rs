@@ -49,6 +49,14 @@ impl BasicIdentity {
     pub fn from_key_pair(key_pair: Ed25519KeyPair) -> Self {
         let der_encoded_public_key = der_encode_public_key(key_pair.public_key().as_ref().to_vec())
             .expect("DER encoding error");
+        // eprintln!(
+        //     "key bytes: {:?}",
+        //     &der_encoded_public_key.clone()
+        //         .unwrap()
+        //         .iter()
+        //         .map(|x| format!("{:02X}", x))
+        //         .collect::<Vec<String>>()
+        // );
 
         Self {
             key_pair,
@@ -87,14 +95,5 @@ fn der_encode_public_key(public_key: Vec<u8>) -> Result<Vec<u8>, ASN1EncodeErr> 
     let algorithm = Sequence(0, vec![ObjectIdentifier(0, id_ed25519)]);
     let subject_public_key = BitString(0, public_key.len() * 8, public_key);
     let subject_public_key_info = Sequence(0, vec![algorithm, subject_public_key]);
-    let x = to_der(&subject_public_key_info);
-    eprintln!(
-        "key bytes: {:?}",
-        &x.clone()
-            .unwrap()
-            .iter()
-            .map(|x| format!("{:02X}", x))
-            .collect::<Vec<String>>()
-    );
-    x
+    to_der(&subject_public_key_info)
 }
