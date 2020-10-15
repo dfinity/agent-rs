@@ -7,8 +7,8 @@ pub use basic::{BasicIdentity, PemError};
 
 #[derive(Clone, Debug)]
 pub struct Signature {
-    pub public_key: Vec<u8>,
     pub der_encoded_public_key: Vec<u8>,
+    pub public_key: Vec<u8>,
     pub signature: Vec<u8>,
 }
 

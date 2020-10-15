@@ -21,11 +21,8 @@ use crate::export::Principal;
 use crate::identity::Identity;
 use crate::{to_request_id, RequestId};
 use delay::Waiter;
-//use num_bigint::BigUint;
 use reqwest::Method;
 use serde::Serialize;
-//use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, Sequence};
-//use simple_asn1::{to_der, ASN1EncodeErr, OID, der_encode};
 use status::Status;
 
 use std::convert::TryFrom;
@@ -280,14 +277,13 @@ impl Agent {
             .identity
             .sign(&msg, &sender)
             .map_err(AgentError::SigningError)?;
-        let sender_pubkey = signature.der_encoded_public_key;
         let bytes = self
             .execute(
                 Method::POST,
                 "read",
                 Some(Envelope {
                     content: request,
-                    sender_pubkey,
+                    sender_pubkey: signature.der_encoded_public_key,
                     sender_sig: signature.signature,
                 }),
             )
@@ -306,14 +302,13 @@ impl Agent {
             .identity
             .sign(&msg, &sender)
             .map_err(AgentError::SigningError)?;
-        let sender_pubkey = signature.der_encoded_public_key;
         let _ = self
             .execute(
                 Method::POST,
                 "submit",
                 Some(Envelope {
                     content: request,
-                    sender_pubkey,
+                    sender_pubkey: signature.der_encoded_public_key,
                     sender_sig: signature.signature,
                 }),
             )
@@ -426,24 +421,6 @@ impl Agent {
         QueryBuilder::new(self, canister_id.clone(), method_name.to_string())
     }
 }
-
-// fn der_encode_sender_pubkey(public_key: Vec<u8>) -> Result<Vec<u8>, ASN1EncodeErr> {
-//     // see Section 4 "SubjectPublicKeyInfo" in https://tools.ietf.org/html/rfc8410
-//
-//     let id_ed25519 = OID::new(vec![
-//         BigUint::from(1u32),
-//         BigUint::from(3u32),
-//         BigUint::from(101u32),
-//         BigUint::from(112u32),
-//     ]);
-//     let algorithm = Sequence(0, vec![ObjectIdentifier(0, id_ed25519)]);
-//     let subject_public_key = BitString(0, public_key.len() * 8, public_key);
-//     let subject_public_key_info = Sequence(0, vec![algorithm, subject_public_key]);
-//     let x = to_der(&subject_public_key_info);
-//     eprintln!("key bytes: {:?}", &x.clone().unwrap().iter()
-//         .map(|x|format!("{:02X}",x)).collect::<Vec<String>>());
-//     x
-// }
 
 /// A Query Request Builder.
 ///

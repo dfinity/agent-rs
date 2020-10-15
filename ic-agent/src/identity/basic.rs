@@ -3,7 +3,7 @@ use crate::{Identity, Signature};
 use num_bigint::BigUint;
 use ring::signature::{Ed25519KeyPair, KeyPair};
 use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, Sequence};
-use simple_asn1::{to_der, ASN1EncodeErr, OID};
+use simple_asn1::{to_der, OID};
 use thiserror::Error;
 
 /// An error happened while reading a PEM file to create a BasicIdentity.
@@ -47,16 +47,7 @@ impl BasicIdentity {
 
     /// Create a BasicIdentity from a KeyPair from the ring crate.
     pub fn from_key_pair(key_pair: Ed25519KeyPair) -> Self {
-        let der_encoded_public_key = der_encode_public_key(key_pair.public_key().as_ref().to_vec())
-            .expect("DER encoding error");
-        // eprintln!(
-        //     "key bytes: {:?}",
-        //     &der_encoded_public_key.clone()
-        //         .unwrap()
-        //         .iter()
-        //         .map(|x| format!("{:02X}", x))
-        //         .collect::<Vec<String>>()
-        // );
+        let der_encoded_public_key = der_encode_public_key(key_pair.public_key().as_ref().to_vec());
 
         Self {
             key_pair,
@@ -83,7 +74,7 @@ impl Identity for BasicIdentity {
     }
 }
 
-fn der_encode_public_key(public_key: Vec<u8>) -> Result<Vec<u8>, ASN1EncodeErr> {
+fn der_encode_public_key(public_key: Vec<u8>) -> Vec<u8> {
     // see Section 4 "SubjectPublicKeyInfo" in https://tools.ietf.org/html/rfc8410
 
     let id_ed25519 = OID::new(vec![
@@ -95,5 +86,5 @@ fn der_encode_public_key(public_key: Vec<u8>) -> Result<Vec<u8>, ASN1EncodeErr> 
     let algorithm = Sequence(0, vec![ObjectIdentifier(0, id_ed25519)]);
     let subject_public_key = BitString(0, public_key.len() * 8, public_key);
     let subject_public_key_info = Sequence(0, vec![algorithm, subject_public_key]);
-    to_der(&subject_public_key_info)
+    to_der(&subject_public_key_info).unwrap()
 }
