@@ -13,7 +13,6 @@ impl Identity for DummyIdentity {
         Ok(Signature {
             signature: vec![1; 32],
             public_key: vec![2; 32],
-            der_encoded_public_key: vec![3; 44],
         })
     }
 }

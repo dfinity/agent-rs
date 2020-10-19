@@ -283,7 +283,7 @@ impl Agent {
                 "read",
                 Some(Envelope {
                     content: request,
-                    sender_pubkey: signature.der_encoded_public_key,
+                    sender_pubkey: signature.public_key,
                     sender_sig: signature.signature,
                 }),
             )
@@ -308,7 +308,7 @@ impl Agent {
                 "submit",
                 Some(Envelope {
                     content: request,
-                    sender_pubkey: signature.der_encoded_public_key,
+                    sender_pubkey: signature.public_key,
                     sender_sig: signature.signature,
                 }),
             )

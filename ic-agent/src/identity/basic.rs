@@ -64,12 +64,10 @@ impl Identity for BasicIdentity {
         let signature = self.key_pair.sign(msg.as_ref());
         // At this point we shall validate the signature in this first
         // skeleton version.
-        let public_key_bytes = self.key_pair.public_key();
 
         Ok(Signature {
             signature: signature.as_ref().to_vec(),
-            public_key: public_key_bytes.as_ref().to_vec(),
-            der_encoded_public_key: self.der_encoded_public_key.clone(),
+            public_key: self.der_encoded_public_key.clone(),
         })
     }
 }
