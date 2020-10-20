@@ -26,3 +26,6 @@ thiserror = "1.0.20"
 [dev-dependencies]
 ring = "0.16.11"
 tokio = { version = "0.2.22", features = ["macros"] }
+
+[features]
+raw = []

@@ -497,10 +497,10 @@ impl<'agent> QueryBuilder<'agent> {
 /// if you want to wait or not.
 pub struct UpdateBuilder<'agent> {
     agent: &'agent Agent,
-    canister_id: Principal,
-    method_name: String,
-    arg: Vec<u8>,
-    ingress_expiry_datetime: Option<u64>,
+    pub canister_id: Principal,
+    pub method_name: String,
+    pub arg: Vec<u8>,
+    pub ingress_expiry_datetime: Option<u64>,
 }
 
 impl<'agent> UpdateBuilder<'agent> {

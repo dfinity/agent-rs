@@ -17,9 +17,16 @@ pub trait SyncCall<O>
 where
     O: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
+    /// Execute the call, return an array of bytes directly from the canister.
+    #[cfg(feature = "raw")]
+    async fn call_raw(self) -> Result<Vec<u8>, AgentError>;
+
     /// Execute the call, returning either the value returned by the canister, or an
     /// error returned by the Agent.
-    async fn call(self) -> Result<O, AgentError>;
+    async fn call(self) -> Result<O, AgentError>
+    where
+        Self: Sized + Sync + Send,
+        O: 'async_trait;
 }
 
 /// A type that implements asynchronous calls (ie. 'update' calls).
@@ -116,53 +123,70 @@ where
     /// eprintln!("{}", canister_id);
     /// # });
     /// ```
-    async fn and_then<Out2, R, AndThen>(
+    fn and_then<Out2, R, AndThen>(
         self,
         and_then: AndThen,
     ) -> AndThenAsyncCaller<Out, Out2, Self, R, AndThen>
     where
         Self: Sized + Sync + Send,
-        Out: 'async_trait,
         Out2: for<'de> ArgumentDecoder<'de> + Send + Sync,
         R: Future<Output = Result<Out2, AgentError>> + Send + Sync,
         AndThen: Sync + Send + Fn(Out) -> R,
     {
         AndThenAsyncCaller::new(self, and_then)
     }
+
+    fn map<Out2, Map>(self, map: Map) -> MappedAsyncCaller<Out, Out2, Self, Map>
+    where
+        Self: Sized + Sync + Send,
+        Out2: for<'de> ArgumentDecoder<'de> + Send + Sync,
+        Map: Sync + Send + Fn(Out) -> Out2,
+    {
+        MappedAsyncCaller::new(self, map)
+    }
 }
 
 /// A synchronous call encapsulation.
-#[derive(Clone)]
-pub struct SyncCaller<'agent> {
-    agent: &'agent Agent,
-    canister_id: Principal,
-    method_name: String,
-    arg: Vec<u8>,
-    expiry: Expiry,
+pub struct SyncCaller<'agent, Out>
+where
+    Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
+{
+    pub(crate) agent: &'agent Agent,
+    pub(crate) canister_id: Principal,
+    pub(crate) method_name: String,
+    pub(crate) arg: Result<Vec<u8>, AgentError>,
+    pub(crate) expiry: Expiry,
+    pub(crate) phantom_out: std::marker::PhantomData<Out>,
 }
 
-impl<'agent> SyncCaller<'agent> {
-    /// Perform the call, consuming the the abstraction.
-    async fn call<R>(self) -> Result<R, AgentError>
-    where
-        R: for<'de> ArgumentDecoder<'de> + Send + Sync,
-    {
-        self.agent
-            .query(&self.canister_id, &self.method_name)
-            .with_arg(&self.method_name)
-            .call()
-            .await
-            .and_then(|r| decode_args(&r).map_err(|e| AgentError::CandidError(Box::new(e))))
+impl<'agent, Out> SyncCaller<'agent, Out>
+where
+    Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
+{
+    /// Perform the call, consuming the the abstraction. This is a private method.
+    async fn call_raw(self) -> Result<Vec<u8>, AgentError> {
+        let mut builder = self.agent.query(&self.canister_id, &self.method_name);
+        self.expiry.apply_to_query(&mut builder);
+        builder.with_arg(&self.arg?);
+        builder.call().await
     }
 }
 
 #[async_trait]
-impl<'agent, O> SyncCall<O> for SyncCaller<'agent>
+impl<'agent, Out> SyncCall<Out> for SyncCaller<'agent, Out>
 where
-    O: 'agent + for<'de> ArgumentDecoder<'de> + Send + Sync,
+    Self: Sized,
+    Out: 'agent + for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
-    async fn call(self) -> Result<O, AgentError> {
-        Ok(self.call().await?)
+    #[cfg(feature = "raw")]
+    async fn call_raw(self) -> Result<Vec<u8>, AgentError> {
+        Ok(self.call_raw().await?)
+    }
+
+    async fn call(self) -> Result<Out, AgentError> {
+        let result = unsafe { self.call_raw().await }?;
+
+        decode_args(&result).map_err(|e| AgentError::CandidError(Box::new(e)))
     }
 }
 
@@ -183,17 +207,21 @@ impl<'agent, Out> AsyncCaller<'agent, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
-    fn build_call(self) -> Result<UpdateBuilder<'agent>, AgentError> {
+    /// Build an UpdateBuilder call that can be used directly with the [Agent]. This is
+    /// essentially downleveling this type into the lower level [ic-agent] abstraction.
+    pub fn build_call(self) -> Result<UpdateBuilder<'agent>, AgentError> {
         let mut builder = self.agent.update(&self.canister_id, &self.method_name);
         self.expiry.apply_to_update(&mut builder);
         builder.with_arg(&self.arg?);
         Ok(builder)
     }
 
+    /// Perform this call and returns .
     pub async fn call(self) -> Result<RequestId, AgentError> {
         self.build_call()?.call().await
     }
 
+    ///
     pub async fn call_and_wait<W>(self, waiter: W) -> Result<Out, AgentError>
     where
         W: Waiter,

@@ -1,4 +1,4 @@
-use crate::call::AsyncCaller;
+use crate::call::{AsyncCaller, SyncCaller};
 use candid::de::ArgumentDecoder;
 use candid::ser::IDLBuilder;
 use candid::CandidType;
@@ -111,18 +111,44 @@ pub struct Canister<'agent, T = ()> {
 }
 
 impl<'agent, T> Canister<'agent, T> {
+    /// Get the canister ID of this canister.
+    pub fn canister_id_<'canister: 'agent>(&'canister self) -> &Principal {
+        &self.canister_id
+    }
+
     /// Get the interface object from this canister. Sometimes those interfaces might have
     /// custom methods that are useful.
-    pub fn interface_(&self) -> &T {
+    pub fn interface_<'canister: 'agent>(&'canister self) -> &T {
         &self.interface
     }
 
     /// Create an AsyncCallBuilder to do an update call.
-    pub fn update_<'canister>(
+    pub fn update_<'canister: 'agent>(
         &'canister self,
         method_name: &str,
     ) -> AsyncCallBuilder<'agent, 'canister, T> {
         AsyncCallBuilder::new(self, method_name)
+    }
+
+    /// Create a SyncCallBuilder to do a query call.
+    pub fn query_<'canister: 'agent>(
+        &'canister self,
+        method_name: &str,
+    ) -> SyncCallBuilder<'agent, 'canister, T> {
+        SyncCallBuilder::new(self, method_name)
+    }
+}
+
+impl<'agent, T> Canister<'agent, T>
+where
+    T: Clone,
+{
+    pub fn clone_with_(&self, id: Principal) -> Self {
+        Self {
+            agent: self.agent,
+            canister_id: id,
+            interface: self.interface.clone(),
+        }
     }
 }
 
@@ -192,6 +218,67 @@ impl Argument {
 impl Default for Argument {
     fn default() -> Self {
         Argument(Ok(ArgumentType::Idl(IDLBuilder::new())))
+    }
+}
+
+/// A builder for a synchronous call (ie. query) to the Internet Computer.
+///
+/// See [SyncCaller] for a description of this structure once built.
+pub struct SyncCallBuilder<'agent, 'canister: 'agent, T> {
+    canister: &'canister Canister<'agent, T>,
+    method_name: String,
+    arg: Argument,
+}
+
+impl<'agent, 'canister: 'agent, T> SyncCallBuilder<'agent, 'canister, T> {
+    /// Create a new instance of an AsyncCallBuilder.
+    pub(super) fn new<M: ToString>(
+        canister: &'canister Canister<'agent, T>,
+        method_name: M,
+    ) -> Self {
+        Self {
+            canister,
+            method_name: method_name.to_string(),
+            arg: Default::default(),
+        }
+    }
+}
+
+impl<'agent, 'canister: 'agent, Interface> SyncCallBuilder<'agent, 'canister, Interface> {
+    /// Add an argument to the candid argument list. This requires Candid arguments, if
+    /// there is a raw argument set (using [with_arg_raw]), this will fail.
+    pub fn with_arg<Argument>(
+        mut self,
+        arg: Argument,
+    ) -> SyncCallBuilder<'agent, 'canister, Interface>
+    where
+        Argument: CandidType + Sync + Send,
+    {
+        self.arg.push_idl_arg(arg);
+        self
+    }
+
+    /// Replace the argument with raw argument bytes. This will overwrite the current
+    /// argument set, so calling this method twice will discard the first argument.
+    pub fn with_arg_raw(mut self, arg: Vec<u8>) -> SyncCallBuilder<'agent, 'canister, Interface> {
+        self.arg.set_raw_arg(arg);
+        self
+    }
+
+    /// Builds an [SyncCaller] from this builder's state.
+    pub fn build<Output>(self) -> SyncCaller<'canister, Output>
+    where
+        Output: for<'de> ArgumentDecoder<'de> + Send + Sync,
+    {
+        let c = self.canister;
+        SyncCaller {
+            agent: c.agent,
+            canister_id: c.canister_id.clone(),
+            method_name: self.method_name.clone(),
+            arg: self.arg.serialize(),
+            expiry: Default::default(),
+            phantom_out: std::marker::PhantomData,
+        }
     }
 }
 
