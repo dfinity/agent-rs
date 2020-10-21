@@ -30,7 +30,7 @@ jobs:
           # Personal Read-only Access Token created by hans.larsen@dfinity.org
           token: ${{ secrets.IC_REF_TOKEN }}
           path: ic-ref
-          ref: ${{ matrix.spec }}
+          ref: d9d402154a1301866547877157739c026c341303
       - uses: actions/checkout@v2
         with:
           repository: 'dfinity/wallet-rs'
