@@ -16,7 +16,7 @@ jobs:
         include:
           - build: linux-stable
             ghc: '8.8.4'
-            spec: 'release-0.11'
+            spec: 'master'
             os: ubuntu-latest
             rust: stable
 
