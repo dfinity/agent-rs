@@ -28,9 +28,18 @@ pub enum AsyncContent {
     },
 }
 
+//#[derive(Debug, Clone, Deserialize, Serialize)]
+//pub type ReadStatePath = Vec<u8>;
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "request_type")]
 pub enum SyncContent {
+    #[serde(rename = "read_state")]
+    ReadStateRequest {
+        ingress_expiry: u64,
+        #[serde(with = "serde_bytes")]
+        paths: Vec<u8>,
+    },
     #[serde(rename = "request_status")]
     RequestStatusRequest {
         ingress_expiry: u64,
@@ -49,11 +58,17 @@ pub enum SyncContent {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct RequestStatusResponse {
-    pub status: Status,
-    #[serde(rename = "time")]
-    pub time: u64,
+pub struct ReadStateResponse {
+    #[serde(with = "serde_bytes")]
+    pub certificate: Vec<u8>,
 }
+
+// #[derive(Debug, Clone, Deserialize, Serialize)]
+// pub struct RequestStatusResponse {
+//     pub status: Status,
+//     #[serde(rename = "time")]
+//     pub time: u64,
+// }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "status")]

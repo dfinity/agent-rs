@@ -270,6 +270,7 @@ impl Agent {
         let request_id = to_request_id(&request)?;
         let sender = match &request {
             SyncContent::QueryRequest { sender, .. } => sender,
+            SyncContent::ReadStateRequest { .. } => &anonymous,
             SyncContent::RequestStatusRequest { .. } => &anonymous,
         };
         let msg = self.construct_message(&request_id);
@@ -364,6 +365,39 @@ impl Agent {
             ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
         })
         .await
+    }
+
+    pub async fn read_state_raw(
+        &self,
+        paths: &Vec<u8>,
+        ingress_expiry_datetime: Option<u64>,
+    ) -> Result<RequestStatusResponse, AgentError> {
+        self.read_endpoint(SyncContent::ReadStateRequest {
+            paths: paths.clone(),
+            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
+        })
+            .await
+            .map(|response| match response {
+                replica_api::Status::Replied { reply } => {
+                    let reply = match reply {
+                        replica_api::RequestStatusResponseReplied::CallReply(reply) => {
+                            Replied::CallReplied(reply.arg)
+                        }
+                    };
+                    RequestStatusResponse::Replied { reply }
+                }
+                replica_api::Status::Rejected {
+                    reject_code,
+                    reject_message,
+                } => RequestStatusResponse::Rejected {
+                    reject_code,
+                    reject_message,
+                },
+                replica_api::Status::Unknown {} => RequestStatusResponse::Unknown,
+                replica_api::Status::Received {} => RequestStatusResponse::Received,
+                replica_api::Status::Processing {} => RequestStatusResponse::Processing,
+                replica_api::Status::Done {} => RequestStatusResponse::Done,
+            })
     }
 
     pub async fn request_status_raw(
