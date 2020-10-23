@@ -276,7 +276,7 @@ impl Agent {
         let request_id = to_request_id(&request)?;
         let sender = match &request {
             SyncContent::QueryRequest { sender, .. } => sender,
-            SyncContent::ReadStateRequest { .. } => &anonymous,
+            SyncContent::ReadStateRequest { sender, .. } => sender,
             SyncContent::RequestStatusRequest { .. } => &anonymous,
         };
         let msg = self.construct_message(&request_id);
@@ -375,13 +375,13 @@ impl Agent {
 
     pub async fn read_state_raw(
         &self,
-        paths: &Vec<Vec<Vec<u8>>>,
+        paths: Vec<Vec<Vec<u8>>>,
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestStatusResponse, AgentError> {
         let _read_state_response: ReadStateResponse =
         self.read_endpoint(SyncContent::ReadStateRequest {
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
-            paths: paths.clone(),
+            paths: paths,
             ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
         })
             .await?;
@@ -393,11 +393,12 @@ impl Agent {
         request_id: &RequestId,
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestStatusResponse, AgentError> {
-        let request_status_bytes = "request_status".as_bytes().to_vec();
-        let request_id_bytes = request_id.to_vec();
         let paths: Vec<Vec<Vec<u8>>> = vec!(
-            vec!(request_status_bytes, request_id_bytes),
+             vec!("request_status".as_bytes().to_vec(), request_id.to_vec()),
         );
+        // let paths: Vec<Vec<Vec<u8>>> = vec!(
+        //     vec!("time".as_bytes().to_vec()),
+        // );
         // let mut serialized_bytes = Vec::new();
         //
         // let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
@@ -409,7 +410,7 @@ impl Agent {
         // let s = format!("{:02x?}", &paths).replace(",", " ").replace("[","")
         //     .replace("]","");
 
-        let x = self.read_state_raw(&paths, ingress_expiry_datetime);
+        let x = self.read_state_raw(paths, ingress_expiry_datetime);
         let x = x.await;
         x
 
