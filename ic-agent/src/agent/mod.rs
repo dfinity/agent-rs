@@ -16,7 +16,7 @@ pub use response::{Replied, RequestStatusResponse};
 #[cfg(test)]
 mod agent_test;
 
-use crate::agent::replica_api::{AsyncContent, Envelope, SyncContent};
+use crate::agent::replica_api::{AsyncContent, Envelope, SyncContent, ReadStateResponse};
 use crate::export::Principal;
 use crate::identity::Identity;
 use crate::{to_request_id, RequestId};
@@ -211,6 +211,12 @@ impl Agent {
             serializer.self_describe()?;
             e.serialize(&mut serializer)?;
 
+            let _s = format!("{:02x?}", &serialized_bytes)
+                .replace(",", " ")
+                .replace("[","")
+                .replace("]","");
+
+
             body = Some(serialized_bytes);
         }
 
@@ -369,35 +375,17 @@ impl Agent {
 
     pub async fn read_state_raw(
         &self,
-        paths: &Vec<u8>,
+        paths: &Vec<Vec<Vec<u8>>>,
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestStatusResponse, AgentError> {
+        let _read_state_response: ReadStateResponse =
         self.read_endpoint(SyncContent::ReadStateRequest {
+            sender: self.identity.sender().map_err(AgentError::SigningError)?,
             paths: paths.clone(),
             ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
         })
-            .await
-            .map(|response| match response {
-                replica_api::Status::Replied { reply } => {
-                    let reply = match reply {
-                        replica_api::RequestStatusResponseReplied::CallReply(reply) => {
-                            Replied::CallReplied(reply.arg)
-                        }
-                    };
-                    RequestStatusResponse::Replied { reply }
-                }
-                replica_api::Status::Rejected {
-                    reject_code,
-                    reject_message,
-                } => RequestStatusResponse::Rejected {
-                    reject_code,
-                    reject_message,
-                },
-                replica_api::Status::Unknown {} => RequestStatusResponse::Unknown,
-                replica_api::Status::Received {} => RequestStatusResponse::Received,
-                replica_api::Status::Processing {} => RequestStatusResponse::Processing,
-                replica_api::Status::Done {} => RequestStatusResponse::Done,
-            })
+            .await?;
+        Ok(RequestStatusResponse::Unknown)
     }
 
     pub async fn request_status_raw(
@@ -405,32 +393,52 @@ impl Agent {
         request_id: &RequestId,
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestStatusResponse, AgentError> {
-        self.read_endpoint(SyncContent::RequestStatusRequest {
-            request_id: request_id.as_slice().into(),
-            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
-        })
-        .await
-        .map(|response| match response {
-            replica_api::Status::Replied { reply } => {
-                let reply = match reply {
-                    replica_api::RequestStatusResponseReplied::CallReply(reply) => {
-                        Replied::CallReplied(reply.arg)
-                    }
-                };
-                RequestStatusResponse::Replied { reply }
-            }
-            replica_api::Status::Rejected {
-                reject_code,
-                reject_message,
-            } => RequestStatusResponse::Rejected {
-                reject_code,
-                reject_message,
-            },
-            replica_api::Status::Unknown {} => RequestStatusResponse::Unknown,
-            replica_api::Status::Received {} => RequestStatusResponse::Received,
-            replica_api::Status::Processing {} => RequestStatusResponse::Processing,
-            replica_api::Status::Done {} => RequestStatusResponse::Done,
-        })
+        let request_status_bytes = "request_status".as_bytes().to_vec();
+        let request_id_bytes = request_id.to_vec();
+        let paths: Vec<Vec<Vec<u8>>> = vec!(
+            vec!(request_status_bytes, request_id_bytes),
+        );
+        // let mut serialized_bytes = Vec::new();
+        //
+        // let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
+        // serializer.self_describe()?;
+        // paths.serialize(&mut serializer)?;
+        //
+        // let paths = serialized_bytes;
+        //
+        // let s = format!("{:02x?}", &paths).replace(",", " ").replace("[","")
+        //     .replace("]","");
+
+        let x = self.read_state_raw(&paths, ingress_expiry_datetime);
+        let x = x.await;
+        x
+
+        // self.read_endpoint(SyncContent::RequestStatusRequest {
+        //     request_id: request_id.as_slice().into(),
+        //     ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
+        // })
+        // .await
+        // .map(|response| match response {
+        //     replica_api::Status::Replied { reply } => {
+        //         let reply = match reply {
+        //             replica_api::RequestStatusResponseReplied::CallReply(reply) => {
+        //                 Replied::CallReplied(reply.arg)
+        //             }
+        //         };
+        //         RequestStatusResponse::Replied { reply }
+        //     }
+        //     replica_api::Status::Rejected {
+        //         reject_code,
+        //         reject_message,
+        //     } => RequestStatusResponse::Rejected {
+        //         reject_code,
+        //         reject_message,
+        //     },
+        //     replica_api::Status::Unknown {} => RequestStatusResponse::Unknown,
+        //     replica_api::Status::Received {} => RequestStatusResponse::Received,
+        //     replica_api::Status::Processing {} => RequestStatusResponse::Processing,
+        //     replica_api::Status::Done {} => RequestStatusResponse::Done,
+        // })
     }
 
     /// Returns an UpdateBuilder enabling the construction of an update call without

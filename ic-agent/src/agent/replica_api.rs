@@ -37,8 +37,9 @@ pub enum SyncContent {
     #[serde(rename = "read_state")]
     ReadStateRequest {
         ingress_expiry: u64,
-        #[serde(with = "serde_bytes")]
-        paths: Vec<u8>,
+        sender: Principal,
+        //#[serde(with = "serde_bytes")]
+        paths: Vec<Vec<Vec<u8>>>,
     },
     #[serde(rename = "request_status")]
     RequestStatusRequest {
