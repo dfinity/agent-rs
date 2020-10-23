@@ -74,7 +74,7 @@ jobs:
           mkdir -p $HOME/bin
           cd ic-ref/impl
           cabal update
-          cabal install -w ghc-${{ matrix.ghc }} --overwrite-policy=always  --installdir=$HOME/bin
+          cabal install ic-ref -w ghc-${{ matrix.ghc }} --overwrite-policy=always  --installdir=$HOME/bin
 
       - name: Build universal-canister
         run: |
