@@ -212,7 +212,7 @@ impl Agent {
             e.serialize(&mut serializer)?;
 
             let _s = format!("{:02x?}", &serialized_bytes)
-                .replace(",", " ")
+                .replace(",", "")
                 .replace("[","")
                 .replace("]","");
 
