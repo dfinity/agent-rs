@@ -28,8 +28,86 @@ pub enum AsyncContent {
     },
 }
 
-//#[derive(Debug, Clone, Deserialize, Serialize)]
-//pub type ReadStatePath = Vec<u8>;
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct PathElement(Vec<u8>);
+
+impl PathElement {
+    pub fn new(v: Vec<u8>) -> Self {
+        Self(v)
+    }
+}
+
+// /// Vector TryFrom. The slice and array version of this trait are defined below.
+// impl TryFrom<Vec<u8>> for Principal {
+//     type Error = PrincipalError;
+//
+//     fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
+//         if let Some(last_byte) = bytes.last() {
+//             match PrincipalClass::try_from(*last_byte)? {
+//                 PrincipalClass::OpaqueId => Ok(Principal(PrincipalInner::OpaqueId(bytes))),
+//                 PrincipalClass::SelfAuthenticating => {
+//                     Ok(Principal(PrincipalInner::SelfAuthenticating(bytes)))
+//                 }
+//                 PrincipalClass::DerivedId => Ok(Principal(PrincipalInner::DerivedId(bytes))),
+//                 PrincipalClass::Anonymous => {
+//                     if bytes.len() == 1 {
+//                         Ok(Principal(PrincipalInner::Anonymous))
+//                     } else {
+//                         Err(PrincipalError::BufferTooLong())
+//                     }
+//                 }
+//                 PrincipalClass::Unassigned => Ok(Principal(PrincipalInner::Unassigned(bytes))),
+//             }
+//         } else {
+//             Ok(Principal(PrincipalInner::ManagementCanister))
+//         }
+//     }
+// }
+//
+// impl TryFrom<&Vec<u8>> for Principal {
+//     type Error = PrincipalError;
+//
+//     fn try_from(bytes: &Vec<u8>) -> Result<Self, Self::Error> {
+//         Self::try_from(bytes.as_slice())
+//     }
+// }
+//
+// /// Implement try_from for a generic sized slice.
+// impl TryFrom<&[u8]> for Principal {
+//     type Error = PrincipalError;
+//
+//     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+//         Self::try_from(bytes.to_vec())
+//     }
+// }
+//
+// impl AsRef<[u8]> for Principal {
+//     fn as_ref(&self) -> &[u8] {
+//         self.0.as_ref()
+//     }
+// }
+
+// Serialization
+#[cfg(feature = "serde")]
+impl serde::Serialize for PathElement {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if serializer.is_human_readable() {
+            self.to_text().serialize(serializer)
+        } else {
+            serializer.serialize_bytes(self.0.as_ref())
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for PathElement {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<PathElement, D::Error> {
+        use serde::de::Error;
+        deserializer
+            .deserialize_bytes(deserialize::PrincipalVisitor)
+            .map_err(D::Error::custom)
+    }
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "request_type")]
@@ -38,8 +116,7 @@ pub enum SyncContent {
     ReadStateRequest {
         ingress_expiry: u64,
         sender: Principal,
-        //#[serde(with = "serde_bytes")]
-        paths: Vec<Vec<Vec<u8>>>,
+        paths: Vec<Vec<serde_bytes::ByteBuf>>,
     },
     #[serde(rename = "request_status")]
     RequestStatusRequest {

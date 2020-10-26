@@ -16,7 +16,7 @@ pub use response::{Replied, RequestStatusResponse};
 #[cfg(test)]
 mod agent_test;
 
-use crate::agent::replica_api::{AsyncContent, Envelope, SyncContent, ReadStateResponse};
+use crate::agent::replica_api::{AsyncContent, Envelope, ReadStateResponse, SyncContent, PathElement};
 use crate::export::Principal;
 use crate::identity::Identity;
 use crate::{to_request_id, RequestId};
@@ -213,9 +213,8 @@ impl Agent {
 
             let _s = format!("{:02x?}", &serialized_bytes)
                 .replace(",", "")
-                .replace("[","")
-                .replace("]","");
-
+                .replace("[", "")
+                .replace("]", "");
 
             body = Some(serialized_bytes);
         }
@@ -375,15 +374,15 @@ impl Agent {
 
     pub async fn read_state_raw(
         &self,
-        paths: Vec<Vec<Vec<u8>>>,
+        paths: Vec<Vec<serde_bytes::ByteBuf>>,
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestStatusResponse, AgentError> {
-        let _read_state_response: ReadStateResponse =
-        self.read_endpoint(SyncContent::ReadStateRequest {
-            sender: self.identity.sender().map_err(AgentError::SigningError)?,
-            paths: paths,
-            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
-        })
+        let _read_state_response: ReadStateResponse = self
+            .read_endpoint(SyncContent::ReadStateRequest {
+                sender: self.identity.sender().map_err(AgentError::SigningError)?,
+                paths: paths,
+                ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
+            })
             .await?;
         Ok(RequestStatusResponse::Unknown)
     }
@@ -393,9 +392,19 @@ impl Agent {
         request_id: &RequestId,
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestStatusResponse, AgentError> {
-        let paths: Vec<Vec<Vec<u8>>> = vec!(
-             vec!("request_status".as_bytes().to_vec(), request_id.to_vec()),
-        );
+        // let paths: Vec<Vec<Vec<u8>>> = vec![vec![
+        //     "request_status".as_bytes().to_vec(),
+        //     request_id.to_vec(),
+        // ]];
+        // let paths: Vec<Vec<PathElement>> = vec![vec![
+        //     PathElement::new("request_status".as_bytes().to_vec()),
+        //     PathElement::new(request_id.to_vec()),
+        // ]];
+        let paths: Vec<Vec<serde_bytes::ByteBuf>> = vec![vec![
+            serde_bytes::ByteBuf::from("request_status".as_bytes().to_vec()),
+            serde_bytes::ByteBuf::from(request_id.to_vec()),
+        ]];
+        //let paths = vec![vec![self.identity.sender().ok().expect("x")]];
         // let paths: Vec<Vec<Vec<u8>>> = vec!(
         //     vec!("time".as_bytes().to_vec()),
         // );
