@@ -16,7 +16,9 @@ pub use response::{Replied, RequestStatusResponse};
 #[cfg(test)]
 mod agent_test;
 
-use crate::agent::replica_api::{AsyncContent, Envelope, ReadStateResponse, SyncContent, StateTreePath};
+use crate::agent::replica_api::{
+    AsyncContent, Envelope, ReadStateResponse, StateTreePath, SyncContent,
+};
 use crate::export::Principal;
 use crate::identity::Identity;
 use crate::{to_request_id, RequestId};
