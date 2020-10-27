@@ -382,7 +382,7 @@ impl Agent {
         let _read_state_response: ReadStateResponse = self
             .read_endpoint(SyncContent::ReadStateRequest {
                 sender: self.identity.sender().map_err(AgentError::SigningError)?,
-                paths: paths,
+                paths,
                 ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
             })
             .await?;
