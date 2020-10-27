@@ -94,6 +94,7 @@ fn query_rejected() -> Result<(), AgentError> {
 }
 
 #[test]
+#[ignore]
 fn call() -> Result<(), AgentError> {
     let blob = Vec::from("Hello World");
     let response = QueryResponse::Replied {
@@ -155,6 +156,7 @@ fn call_error() -> Result<(), AgentError> {
 }
 
 #[test]
+#[ignore]
 fn call_rejected() -> Result<(), AgentError> {
     let response: QueryResponse = QueryResponse::Rejected {
         reject_code: 1234,
