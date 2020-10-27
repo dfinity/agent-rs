@@ -384,7 +384,8 @@ impl Agent {
                 ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
             })
             .await?;
-        Ok(RequestStatusResponse::Unknown)
+        panic!("it would be really good to get this far!");
+        //Ok(RequestStatusResponse::Unknown)
     }
 
     pub async fn request_status_raw(
@@ -392,36 +393,15 @@ impl Agent {
         request_id: &RequestId,
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestStatusResponse, AgentError> {
-        // let paths: Vec<Vec<Vec<u8>>> = vec![vec![
-        //     "request_status".as_bytes().to_vec(),
-        //     request_id.to_vec(),
-        // ]];
-        // let paths: Vec<Vec<PathElement>> = vec![vec![
-        //     PathElement::new("request_status".as_bytes().to_vec()),
-        //     PathElement::new(request_id.to_vec()),
-        // ]];
         let paths: Vec<StateTreePath> = vec![vec![
             serde_bytes::ByteBuf::from("request_status".as_bytes()),
             serde_bytes::ByteBuf::from(request_id.to_vec()),
         ]];
-        //let paths = vec![vec![self.identity.sender().ok().expect("x")]];
-        // let paths: Vec<Vec<Vec<u8>>> = vec!(
-        //     vec!("time".as_bytes().to_vec()),
-        // );
-        // let mut serialized_bytes = Vec::new();
-        //
-        // let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
-        // serializer.self_describe()?;
-        // paths.serialize(&mut serializer)?;
-        //
-        // let paths = serialized_bytes;
-        //
-        // let s = format!("{:02x?}", &paths).replace(",", " ").replace("[","")
-        //     .replace("]","");
+        // let paths: Vec<StateTreePath> = vec![vec![
+        //     serde_bytes::ByteBuf::from("time".as_bytes()),
+        // ]];
 
-        let x = self.read_state_raw(paths, ingress_expiry_datetime);
-        let x = x.await;
-        x
+        self.read_state_raw(paths, ingress_expiry_datetime).await
 
         // self.read_endpoint(SyncContent::RequestStatusRequest {
         //     request_id: request_id.as_slice().into(),
