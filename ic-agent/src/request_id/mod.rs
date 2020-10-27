@@ -718,4 +718,46 @@ mod tests {
             "8781291c347db32a9d8c10eb62b710fce5a93be676474c42babc74c51858f94b"
         );
     }
+
+    /// A simple example with nested arrays and blobs
+    #[test]
+    fn array_example() {
+        #[derive(Serialize)]
+        struct NestedArraysExample {
+            sender: Principal,
+            paths: Vec<Vec<serde_bytes::ByteBuf>>,
+        };
+        let data = NestedArraysExample {
+            sender: Principal::try_from(&vec![0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
+            paths: vec![
+              vec![],
+              vec![serde_bytes::ByteBuf::from("".as_bytes())],
+              vec![serde_bytes::ByteBuf::from("hello".as_bytes()),
+                   serde_bytes::ByteBuf::from("world".as_bytes()),
+              ],
+            ],
+        };
+
+        let request_id = to_request_id(&data).unwrap();
+        assert_eq!(
+            hex::encode(request_id.0.to_vec()),
+            "f3a1b98b84b331f8d536d9509c8ec5116189acdeb9a0974d9d8c26cdacca65d5"
+        );
+
+        /* The above was generated using ic-ref as follows:
+
+        ~/dfinity/ic-ref/impl $ cabal repl ic-ref
+        Build profile: -w ghc-8.8.4 -O1
+        …
+        *Main> :set -XOverloadedStrings
+        *Main> :m + IC.HTTP.RequestId IC.HTTP.GenR
+        *Main IC.HTTP.RequestId IC.HTTP.GenR> import qualified Data.HashMap as HM
+        *Main IC.HTTP.RequestId IC.HTTP.GenR HM> let input = GRec (HM.fromList [("sender", GBlob "\0\0\0\0\0\0\x03\xD2"), ("paths", GList [ GList [], GList [GBlob ""], GList [GBlob "hello", GBlob "world"]])])
+        *Main IC.HTTP.RequestId IC.HTTP.GenR HM> putStrLn $ IC.Types.prettyBlob (requestId input )
+        0xf3a1b98b84b331f8d536d9509c8ec5116189acdeb9a0974d9d8c26cdacca65d5
+        */
+
+
+    }
+
 }
