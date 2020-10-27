@@ -16,7 +16,7 @@ pub use response::{Replied, RequestStatusResponse};
 #[cfg(test)]
 mod agent_test;
 
-use crate::agent::replica_api::{AsyncContent, Envelope, ReadStateResponse, SyncContent, PathElement};
+use crate::agent::replica_api::{AsyncContent, Envelope, ReadStateResponse, SyncContent, StateTreePath};
 use crate::export::Principal;
 use crate::identity::Identity;
 use crate::{to_request_id, RequestId};
@@ -374,7 +374,7 @@ impl Agent {
 
     pub async fn read_state_raw(
         &self,
-        paths: Vec<Vec<serde_bytes::ByteBuf>>,
+        paths: Vec<StateTreePath>,
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestStatusResponse, AgentError> {
         let _read_state_response: ReadStateResponse = self
@@ -400,8 +400,8 @@ impl Agent {
         //     PathElement::new("request_status".as_bytes().to_vec()),
         //     PathElement::new(request_id.to_vec()),
         // ]];
-        let paths: Vec<Vec<serde_bytes::ByteBuf>> = vec![vec![
-            serde_bytes::ByteBuf::from("request_status".as_bytes().to_vec()),
+        let paths: Vec<StateTreePath> = vec![vec![
+            serde_bytes::ByteBuf::from("request_status".as_bytes()),
             serde_bytes::ByteBuf::from(request_id.to_vec()),
         ]];
         //let paths = vec![vec![self.identity.sender().ok().expect("x")]];
