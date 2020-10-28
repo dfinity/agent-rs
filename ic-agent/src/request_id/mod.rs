@@ -751,7 +751,7 @@ mod tests {
         …
         *Main> :set -XOverloadedStrings
         *Main> :m + IC.HTTP.RequestId IC.HTTP.GenR
-        *Main IC.HTTP.RequestId IC.HTTP.GenR> import qualified Data.HashMap as HM
+        *Main IC.HTTP.RequestId IC.HTTP.GenR> import qualified Data.HashMap.Lazy as HM
         *Main IC.HTTP.RequestId IC.HTTP.GenR HM> let input = GRec (HM.fromList [("sender", GBlob "\0\0\0\0\0\0\x03\xD2"), ("paths", GList [ GList [], GList [GBlob ""], GList [GBlob "hello", GBlob "world"]])])
         *Main IC.HTTP.RequestId IC.HTTP.GenR HM> putStrLn $ IC.Types.prettyBlob (requestId input )
         0xf3a1b98b84b331f8d536d9509c8ec5116189acdeb9a0974d9d8c26cdacca65d5
