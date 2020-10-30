@@ -68,6 +68,95 @@ impl Serialize for RequestId {
     }
 }
 
+trait ElementEncoder {
+    fn add_kv(&mut self, _k: Sha256Hash, _v: Sha256Hash)
+    {
+        panic!("add_kv");
+    }
+
+    fn serialize_bytes(&mut self, _v: &[u8]) -> Result<(), RequestIdError>
+    {
+        Err(RequestIdError::InvalidState)
+    }
+
+    fn end(&mut self) -> Result<Option<Box<dyn ElementEncoder>>, RequestIdError> {
+        Err(RequestIdError::InvalidState)
+    }
+
+    fn finish(&mut self) -> Sha256Hash
+    {
+        panic!("finish");
+    }
+}
+
+struct FieldEncoder {
+    fields: BTreeMap<Sha256Hash, Sha256Hash>,
+    field_key_hash: Option<Sha256Hash>, // Only used in maps, not structs.
+    field_value_hash: Option<Sha256>,
+    parent: Option<Box<dyn ElementEncoder>>,
+}
+
+impl FieldEncoder {
+    fn new(parent: Option<Box<dyn ElementEncoder>>) -> FieldEncoder {
+        FieldEncoder {
+            fields: BTreeMap::new(),
+            field_key_hash: None,
+            field_value_hash: None,
+            parent
+        }
+    }
+}
+
+impl ElementEncoder for FieldEncoder {
+    fn add_kv(&mut self, key_hash: Sha256Hash, value_hash: Sha256Hash)
+    {
+        self.fields.insert(key_hash, value_hash);
+    }
+
+}
+
+struct ValueEncoder {
+    value_hash: Sha256,
+}
+
+impl ValueEncoder {
+    fn new() -> ValueEncoder {
+        ValueEncoder {
+            value_hash: Sha256::new(),
+        }
+    }
+}
+
+impl ElementEncoder for ValueEncoder {
+    fn finish(&mut self) -> Sha256Hash {
+        //let h = self.value_hash.finish();
+        std::mem::replace( &mut self.value_hash, Sha256::new()).finish()
+    }
+
+    fn serialize_bytes(&mut self, v: &[u8]) -> Result<(), RequestIdError> {
+        self.value_hash.update(v);
+        Ok(())
+    }
+}
+
+struct ArrayEncoder {
+    parent: Option<Box<dyn ElementEncoder>>,
+}
+
+impl ArrayEncoder {
+    fn new(parent: Option<Box<dyn ElementEncoder>>) -> ArrayEncoder {
+        ArrayEncoder {
+            parent
+        }
+    }
+}
+
+impl ElementEncoder for ArrayEncoder {
+    fn end(&mut self) -> Result<Option<Box<dyn ElementEncoder>>, RequestIdError> {
+        Ok(self.parent.take())
+    }
+}
+
 /// A Serde Serializer that collects fields and values in order to hash them later.
 /// We serialize the type to this structure, then use the trait to hash its content.
 /// It is a simple state machine that contains 3 states:
@@ -102,6 +191,7 @@ struct RequestIdSerializer {
     field_key_hash: Option<Sha256Hash>, // Only used in maps, not structs.
     field_value_hash: Option<Sha256>,
     hasher: Sha256,
+    element_encoder: Option<Box<dyn ElementEncoder>>,
 }
 
 impl RequestIdSerializer {
@@ -115,6 +205,9 @@ impl RequestIdSerializer {
     /// This can only be called once (it borrows self). Since this whole class is not public,
     /// it should not be a problem.
     pub fn finish(mut self) -> Result<RequestId, RequestIdError> {
+        if self.element_encoder.is_some() {
+
+        }
         if self.fields.is_some() {
             self.fields = None;
             Ok(RequestId(self.hasher.finish()))
@@ -131,17 +224,23 @@ impl RequestIdSerializer {
     where
         T: ?Sized + Serialize,
     {
-        if self.field_value_hash.is_some() {
-            return Err(RequestIdError::InvalidState);
-        }
+        let prev_encoder = self.element_encoder.take();
 
-        self.field_value_hash = Some(Sha256::new());
+        self.element_encoder = Some(Box::new(ValueEncoder::new()));
+
+        // if self.field_value_hash.is_some() {
+        //     return Err(RequestIdError::InvalidState);
+        // }
+
+        // self.field_value_hash = Some(Sha256::new());
         value.serialize(&mut *self)?;
-        if let Some(r) = self.field_value_hash.take() {
+        let result = if let Some(mut r) = self.element_encoder.take() {
             Ok(r.finish())
         } else {
             Err(RequestIdError::InvalidState)
-        }
+        };
+        self.element_encoder = prev_encoder;
+        result
     }
 }
 
@@ -152,6 +251,7 @@ impl Default for RequestIdSerializer {
             field_key_hash: None,
             field_value_hash: None,
             hasher: Sha256::new(),
+            element_encoder: None,
         }
     }
 }
@@ -256,11 +356,11 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
 
     /// Serialize a chunk of raw byte data.
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
-        match self.field_value_hash {
+        //self.element_encoder.map_or().unwrap().serialize_bytes(v)
+        match self.element_encoder {
             None => Err(RequestIdError::InvalidState),
-            Some(ref mut hash) => {
-                (*hash).update(v);
-                Ok(())
+            Some(ref mut element_encoder) => {
+                element_encoder.serialize_bytes(v)
             }
         }
     }
@@ -335,6 +435,14 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
     /// followed by zero or more calls to `serialize_element`, then a call to
     /// `end`.
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
+        // match self.element_encoder.take() {
+        //     Some(parent) => {
+        //         self.element_encoder = Some(Box::new(ArrayEncoder::new(Some(parent))));
+        //         Ok(self)
+        //     }
+        //     None => Err(RequestIdError::InvalidState)
+        // }
+        // //self.element_encoder = Some(Box::new(ArrayEncoder::new()));
         Ok(self)
     }
 
@@ -392,6 +500,7 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
         _len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
         if self.fields.is_none() {
+            self.element_encoder = Some(Box::new(FieldEncoder::new(self.element_encoder.take())));
             self.fields = Some(BTreeMap::new());
             Ok(self)
         } else {
@@ -435,12 +544,34 @@ impl<'a> ser::SerializeSeq for &'a mut RequestIdSerializer {
     where
         T: ?Sized + Serialize,
     {
-        value.serialize(&mut **self)
+        let mut prev_encoder = self.element_encoder.take();
+
+        self.element_encoder = Some(Box::new(ValueEncoder::new()));
+
+        let result = value.serialize(&mut **self);
+
+        let value_encoder = self.element_encoder.take();
+        let hash = value_encoder.unwrap().finish();
+
+        self.element_encoder = prev_encoder.take();
+
+        if let Some(ref mut element_encoder) = self.element_encoder {
+            element_encoder.serialize_bytes(&hash);
+        }
+
+        result
     }
 
     // Close the sequence.
     fn end(self) -> Result<Self::Ok, Self::Error> {
         Ok(())
+        // match self.element_encoder.take() {
+        //     Some(ref mut element_encoder) => {
+        //         self.element_encoder = element_encoder.end()?;
+        //         Ok(())
+        //     }
+        //     None => Err(RequestIdError::InvalidState)
+        // }
     }
 }
 
@@ -572,20 +703,52 @@ impl<'a> ser::SerializeStruct for &'a mut RequestIdSerializer {
     where
         T: ?Sized + Serialize,
     {
-        if self.field_value_hash.is_some() {
-            return Err(RequestIdError::InvalidState);
-        }
-
         let key_hash = self.hash_value(key)?;
         let value_hash = self.hash_value(value)?;
-
-        match self.fields {
+        // self.element_encoder.add_kv(key_hash, value_hash);
+        // return Ok(());
+        match self.element_encoder {
             None => Err(RequestIdError::InvalidState),
             Some(ref mut f) => {
-                f.insert(key_hash, value_hash);
+                f.as_mut().add_kv(key_hash, value_hash);
                 Ok(())
             }
         }
+        // if let Some(element_encoder) = &self.element_encoder {
+        //     element_encoder.add_kv(key_hash, value_hash);
+        // }
+        //return Ok(());
+        // else {
+        //     return Err(RequestIdError::InvalidState);
+        // }
+        // if self.field_value_hash.is_some() {
+        //     return Err(RequestIdError::InvalidState);
+        // }
+        // if let Some(element_encoder) = self.element_encoder.take() {
+        //     let key_hash = self.hash_value(key)?;
+        //     let value_hash = self.hash_value(value)?;
+        //
+        //     self.element_encoder = Some(element_encoder.add_kv(key_hash, value_hash));
+        //     return Ok(());
+        // }
+        // else {
+        //     return Err(RequestIdError::InvalidState);
+        // }
+        // if self.field_value_hash.is_some() {
+        //     return Err(RequestIdError::InvalidState);
+        // }
+        //
+        // let key_hash = self.hash_value(key)?;
+        // let value_hash = self.hash_value(value)?;
+        //
+        //
+        // match self.fields {
+        //     None => Err(RequestIdError::InvalidState),
+        //     Some(ref mut f) => {
+        //         f.insert(key_hash, value_hash);
+        //         Ok(())
+        //     }
+        // }
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
