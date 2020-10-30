@@ -69,27 +69,67 @@ impl Serialize for RequestId {
 }
 
 trait ElementEncoder {
+    ///
+    fn start_struct(self: Box<Self>) -> Result<Box<dyn ElementEncoder>, RequestIdError> {
+        Err(RequestIdError::UnsupportedStructInsideStruct)
+    }
+    /// Add a key/value pair
     fn add_kv(&mut self, _k: Sha256Hash, _v: Sha256Hash)
     {
         panic!("add_kv");
     }
 
+    ///
     fn serialize_bytes(&mut self, _v: &[u8]) -> Result<(), RequestIdError>
     {
         Err(RequestIdError::InvalidState)
     }
 
+    ///
     fn end(&mut self) -> Result<Option<Box<dyn ElementEncoder>>, RequestIdError> {
         Err(RequestIdError::InvalidState)
     }
 
+    ///
     fn finish(&mut self) -> Sha256Hash
     {
-        panic!("finish");
+        panic!("{} finish", self.name());
+    }
+
+    fn name(&self) -> String;
+}
+
+struct RequestIdEncoder {
+    hasher: Sha256,
+}
+
+impl RequestIdEncoder {
+    fn new() -> RequestIdEncoder {
+        RequestIdEncoder {
+            hasher: Sha256::new()
+        }
+    }
+}
+
+impl ElementEncoder for RequestIdEncoder {
+    fn start_struct(self: Box<Self>) -> Result<Box<dyn ElementEncoder>, RequestIdError> {
+        Ok(Box::new(FieldEncoder::new(Some(self))))
+    }
+
+    ///
+    fn finish(&mut self) -> Sha256Hash
+    {
+        std::mem::replace( &mut self.hasher, Sha256::new()).finish()
+    }
+
+    fn name(&self) -> String {
+        "RequestIsEncoder".to_string()
     }
 }
 
 struct FieldEncoder {
+    // We use a BTreeMap here as there is no indication that keys might not be duplicated,
+    // and we want to make sure they're overwritten in that case.
     fields: BTreeMap<Sha256Hash, Sha256Hash>,
     field_key_hash: Option<Sha256Hash>, // Only used in maps, not structs.
     field_value_hash: Option<Sha256>,
@@ -113,6 +153,31 @@ impl ElementEncoder for FieldEncoder {
         self.fields.insert(key_hash, value_hash);
     }
 
+    fn end(&mut self) -> Result<Option<Box<dyn ElementEncoder>>, RequestIdError> {
+        // Sort the fields.
+        let mut keyvalues: Vec<Vec<u8>> = self.fields
+            .keys()
+            .zip(self.fields.values())
+            .map(|(k, v)| {
+                let mut x = k.to_vec();
+                x.extend(v);
+                x
+            })
+            .collect();
+        keyvalues.sort();
+
+        if let Some(ref mut parent) = self.parent {
+            for kv in keyvalues {
+                parent.serialize_bytes(&kv);
+            }
+        }
+
+        Ok(self.parent.take())
+    }
+
+    fn name(&self) -> String {
+        "FieldEncoder".to_string()
+    }
 }
 
 struct ValueEncoder {
@@ -129,13 +194,15 @@ impl ValueEncoder {
 
 impl ElementEncoder for ValueEncoder {
     fn finish(&mut self) -> Sha256Hash {
-        //let h = self.value_hash.finish();
         std::mem::replace( &mut self.value_hash, Sha256::new()).finish()
     }
 
     fn serialize_bytes(&mut self, v: &[u8]) -> Result<(), RequestIdError> {
         self.value_hash.update(v);
         Ok(())
+    }
+    fn name(&self) -> String {
+        "ValueEncoder".to_string()
     }
 }
 
@@ -154,6 +221,9 @@ impl ArrayEncoder {
 impl ElementEncoder for ArrayEncoder {
     fn end(&mut self) -> Result<Option<Box<dyn ElementEncoder>>, RequestIdError> {
         Ok(self.parent.take())
+    }
+    fn name(&self) -> String {
+        "ArrayEncoder".to_string()
     }
 }
 
@@ -187,10 +257,10 @@ impl ElementEncoder for ArrayEncoder {
 struct RequestIdSerializer {
     // We use a BTreeMap here as there is no indication that keys might not be duplicated,
     // and we want to make sure they're overwritten in that case.
-    fields: Option<BTreeMap<Sha256Hash, Sha256Hash>>,
-    field_key_hash: Option<Sha256Hash>, // Only used in maps, not structs.
-    field_value_hash: Option<Sha256>,
-    hasher: Sha256,
+    // fields: Option<BTreeMap<Sha256Hash, Sha256Hash>>,
+    // field_key_hash: Option<Sha256Hash>, // Only used in maps, not structs.
+    // field_value_hash: Option<Sha256>,
+    // hasher: Sha256,
     element_encoder: Option<Box<dyn ElementEncoder>>,
 }
 
@@ -205,15 +275,17 @@ impl RequestIdSerializer {
     /// This can only be called once (it borrows self). Since this whole class is not public,
     /// it should not be a problem.
     pub fn finish(mut self) -> Result<RequestId, RequestIdError> {
-        if self.element_encoder.is_some() {
-
-        }
-        if self.fields.is_some() {
-            self.fields = None;
-            Ok(RequestId(self.hasher.finish()))
+        if let Some(ref mut element_encoder) = self.element_encoder {
+            Ok(RequestId(element_encoder.finish()))
         } else {
             Err(RequestIdError::EmptySerializer)
         }
+        // if self.fields.is_some() {
+        //     self.fields = None;
+        //     Ok(RequestId(self.hasher.finish()))
+        // } else {
+        //     Err(RequestIdError::EmptySerializer)
+        // }
     }
 
     /// Hash a single value, returning its sha256_hash. If there is already a value
@@ -247,11 +319,11 @@ impl RequestIdSerializer {
 impl Default for RequestIdSerializer {
     fn default() -> RequestIdSerializer {
         RequestIdSerializer {
-            fields: None,
-            field_key_hash: None,
-            field_value_hash: None,
-            hasher: Sha256::new(),
-            element_encoder: None,
+            // fields: None,
+            // field_key_hash: None,
+            // field_value_hash: None,
+            // hasher: Sha256::new(),
+            element_encoder: Some(Box::new(RequestIdEncoder::new())),
         }
     }
 }
@@ -368,10 +440,11 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
     /// Serialize a [`None`] value.
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
         // Compute the hash as if it was empty string or blob.
-        match self.field_value_hash {
-            None => Err(RequestIdError::InvalidState),
-            Some(ref mut _hash) => Ok(()),
-        }
+        // match self.field_value_hash {
+        //     None => Err(RequestIdError::InvalidState),
+        //     Some(ref mut _hash) => Ok(()),
+        // }
+        Ok(())
     }
 
     /// Serialize a [`Some(T)`] value.
@@ -483,12 +556,15 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
         // This is the same as struct, but unnamed. We will use the current_field field
         // here though, as serialize key and value are separate functions.
-        if self.fields.is_none() {
-            self.fields = Some(BTreeMap::new());
-            Ok(self)
-        } else {
-            Err(RequestIdError::UnsupportedStructInsideStruct)
-        }
+        let parent_encoder = self.element_encoder.take().unwrap();
+        self.element_encoder = Some(parent_encoder.start_struct()?);
+        Ok(self)
+        // if self.fields.is_none() {
+        //     self.fields = Some(BTreeMap::new());
+        //     Ok(self)
+        // } else {
+        //     Err(RequestIdError::UnsupportedStructInsideStruct)
+        // }
     }
 
     /// Begin to serialize a struct like `struct Rgb { r: u8, g: u8, b: u8 }`.
@@ -499,13 +575,17 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
         _name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
-        if self.fields.is_none() {
-            self.element_encoder = Some(Box::new(FieldEncoder::new(self.element_encoder.take())));
-            self.fields = Some(BTreeMap::new());
-            Ok(self)
-        } else {
-            Err(RequestIdError::UnsupportedStructInsideStruct)
-        }
+        let parent_encoder = self.element_encoder.take().unwrap();
+        self.element_encoder = Some(parent_encoder.start_struct()?);
+        Ok(self)
+
+        // if self.fields.is_none() {
+        //     self.element_encoder = Some(Box::new(FieldEncoder::new(parent_encoder)));
+        //     self.fields = Some(BTreeMap::new());
+        //     Ok(self)
+        // } else {
+        //     Err(RequestIdError::UnsupportedStructInsideStruct)
+        // }
     }
 
     /// Begin to serialize a struct variant like `E::S` in `enum E { S { r: u8,
@@ -658,13 +738,14 @@ impl<'a> ser::SerializeMap for &'a mut RequestIdSerializer {
     where
         T: ?Sized + Serialize,
     {
-        if self.field_key_hash.is_some() {
-            Err(RequestIdError::InvalidState)
-        } else {
-            let key_hash = self.hash_value(key)?;
-            self.field_key_hash = Some(key_hash);
-            Ok(())
-        }
+        panic!("to do");
+        // if self.field_key_hash.is_some() {
+        //     Err(RequestIdError::InvalidState)
+        // } else {
+        //     let key_hash = self.hash_value(key)?;
+        //     self.field_key_hash = Some(key_hash);
+        //     Ok(())
+        // }
     }
 
     // It doesn't make a difference whether the colon is printed at the end of
@@ -674,18 +755,19 @@ impl<'a> ser::SerializeMap for &'a mut RequestIdSerializer {
     where
         T: ?Sized + Serialize,
     {
-        let value_hash = self.hash_value(value)?;
-
-        match self.field_key_hash.take() {
-            None => Err(RequestIdError::InvalidState),
-            Some(key_hash) => match self.fields {
-                None => Err(RequestIdError::InvalidState),
-                Some(ref mut f) => {
-                    f.insert(key_hash, value_hash);
-                    Ok(())
-                }
-            },
-        }
+        panic!("to do");
+        // let value_hash = self.hash_value(value)?;
+        //
+        // match self.field_key_hash.take() {
+        //     None => Err(RequestIdError::InvalidState),
+        //     Some(key_hash) => match self.fields {
+        //         None => Err(RequestIdError::InvalidState),
+        //         Some(ref mut f) => {
+        //             f.insert(key_hash, value_hash);
+        //             Ok(())
+        //         }
+        //     },
+        // }
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
@@ -752,27 +834,41 @@ impl<'a> ser::SerializeStruct for &'a mut RequestIdSerializer {
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        if let Some(fields) = &self.fields {
-            // Sort the fields.
-            let mut keyvalues: Vec<Vec<u8>> = fields
-                .keys()
-                .zip(fields.values())
-                .map(|(k, v)| {
-                    let mut x = k.to_vec();
-                    x.extend(v);
-                    x
-                })
-                .collect();
-            keyvalues.sort();
-
-            for kv in keyvalues {
-                self.hasher.update(&kv);
+        match self.element_encoder.take() {
+            Some(ref mut element_encoder) => {
+                self.element_encoder = element_encoder.end()?;
+                Ok(())
             }
-
-            Ok(())
-        } else {
-            Err(RequestIdError::InvalidState)
+            None => Err(RequestIdError::InvalidState)
         }
+
+        // if let Some(ref mut element_encoder) = self.element_encoder {
+        //     element_encoder.end();
+        //     Ok(())
+        // } else {
+        //     Err(RequestIdError::InvalidState)
+        // }
+        // if let Some(fields) = &self.fields {
+        //     // Sort the fields.
+        //     let mut keyvalues: Vec<Vec<u8>> = fields
+        //         .keys()
+        //         .zip(fields.values())
+        //         .map(|(k, v)| {
+        //             let mut x = k.to_vec();
+        //             x.extend(v);
+        //             x
+        //         })
+        //         .collect();
+        //     keyvalues.sort();
+        //
+        //     for kv in keyvalues {
+        //         self.hasher.update(&kv);
+        //     }
+        //
+        //     Ok(())
+        // } else {
+        //     Err(RequestIdError::InvalidState)
+        // }
     }
 }
 
