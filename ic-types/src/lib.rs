@@ -5,4 +5,5 @@
 
 /// Principal related types and traits.
 pub mod principal;
+pub mod hash_tree;
 pub use principal::{Principal, PrincipalError};
