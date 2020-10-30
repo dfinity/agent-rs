@@ -82,6 +82,8 @@ trait ElementEncoder {
     ///
     fn serialize_bytes(&mut self, _v: &[u8]) -> Result<(), RequestIdError>
     {
+        panic!("{} serialize_bytes", self.name());
+
         Err(RequestIdError::InvalidState)
     }
 
@@ -120,6 +122,11 @@ impl ElementEncoder for RequestIdEncoder {
     fn finish(&mut self) -> Sha256Hash
     {
         std::mem::replace( &mut self.hasher, Sha256::new()).finish()
+    }
+
+    fn serialize_bytes(&mut self, v: &[u8]) -> Result<(), RequestIdError> {
+        self.hasher.update(v);
+        Ok(())
     }
 
     fn name(&self) -> String {
@@ -168,7 +175,7 @@ impl ElementEncoder for FieldEncoder {
 
         if let Some(ref mut parent) = self.parent {
             for kv in keyvalues {
-                parent.serialize_bytes(&kv);
+                parent.serialize_bytes(&kv)?;
             }
         }
 
@@ -636,7 +643,7 @@ impl<'a> ser::SerializeSeq for &'a mut RequestIdSerializer {
         self.element_encoder = prev_encoder.take();
 
         if let Some(ref mut element_encoder) = self.element_encoder {
-            element_encoder.serialize_bytes(&hash);
+            element_encoder.serialize_bytes(&hash)?;
         }
 
         result
