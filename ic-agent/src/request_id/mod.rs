@@ -994,7 +994,7 @@ mod tests {
             paths: Vec<Vec<serde_bytes::ByteBuf>>,
         };
         let data = NestedArraysExample {
-            sender: Principal::try_from(&vec![0, 0, 0, 0, 0, 0, 0x03, 0xD2]).unwrap(), // 1234 in u64
+            sender: Principal::try_from(&vec![0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
             paths: vec![
               vec![],
               vec![serde_bytes::ByteBuf::from("".as_bytes())],
@@ -1007,7 +1007,7 @@ mod tests {
         let request_id = to_request_id(&data).unwrap();
         assert_eq!(
             hex::encode(request_id.0.to_vec()),
-            "f3a1b98b84b331f8d536d9509c8ec5116189acdeb9a0974d9d8c26cdacca65d5"
+            "97d6f297aea699aec85d3377c7643ea66db810aba5c4372fbc2082c999f452dc"
         );
 
         /* The above was generated using ic-ref as follows:
@@ -1018,9 +1018,9 @@ mod tests {
         *Main> :set -XOverloadedStrings
         *Main> :m + IC.HTTP.RequestId IC.HTTP.GenR
         *Main IC.HTTP.RequestId IC.HTTP.GenR> import qualified Data.HashMap.Lazy as HM
-        *Main IC.HTTP.RequestId IC.HTTP.GenR HM> let input = GRec (HM.fromList [("sender", GBlob "\0\0\0\0\0\0\x03\xD2"), ("paths", GList [ GList [], GList [GBlob ""], GList [GBlob "hello", GBlob "world"]])])
+        *Main IC.HTTP.RequestId IC.HTTP.GenR HM> let input = GRec (HM.fromList [("sender", GBlob "\0\0\0\0\0\0\x04\xD2"), ("paths", GList [ GList [], GList [GBlob ""], GList [GBlob "hello", GBlob "world"]])])
         *Main IC.HTTP.RequestId IC.HTTP.GenR HM> putStrLn $ IC.Types.prettyBlob (requestId input )
-        0xf3a1b98b84b331f8d536d9509c8ec5116189acdeb9a0974d9d8c26cdacca65d5
+        0x97d6f297aea699aec85d3377c7643ea66db810aba5c4372fbc2082c999f452dc
         */
 
 
