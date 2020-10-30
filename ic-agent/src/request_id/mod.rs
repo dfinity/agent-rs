@@ -760,4 +760,68 @@ mod tests {
 
     }
 
+    /// A simple example with just an empty array
+    #[test]
+    fn array_example_empty_array() {
+        #[derive(Serialize)]
+        struct NestedArraysExample {
+            paths: Vec<Vec<serde_bytes::ByteBuf>>,
+        };
+        let data = NestedArraysExample {
+            paths: vec![
+            ],
+        };
+
+        let request_id = to_request_id(&data).unwrap();
+        assert_eq!(
+            hex::encode(request_id.0.to_vec()),
+            "99daa8c80a61e87ac1fdf9dd49e39963bfe4dafb2a45095ebf4cad72d916d5be"
+        );
+
+        /* The above was generated using ic-ref as follows:
+
+        ~/dfinity/ic-ref/impl $ cabal repl ic-ref
+        Build profile: -w ghc-8.8.4 -O1
+        …
+        *Main> :set -XOverloadedStrings
+        *Main> :m + IC.HTTP.RequestId IC.HTTP.GenR
+        *Main IC.HTTP.RequestId IC.HTTP.GenR> import qualified Data.HashMap as HM
+        *Main IC.HTTP.RequestId IC.HTTP.GenR HM> let input = GRec (HM.fromList [("paths", GList [])])
+        *Main IC.HTTP.RequestId IC.HTTP.GenR HM> putStrLn $ IC.Types.prettyBlob (requestId input )
+        0x99daa8c80a61e87ac1fdf9dd49e39963bfe4dafb2a45095ebf4cad72d916d5be
+        */
+    }
+
+    /// A simple example with an array that holds an empty array
+    #[test]
+    fn array_example_array_with_empty_array() {
+        #[derive(Serialize)]
+        struct NestedArraysExample {
+            paths: Vec<Vec<serde_bytes::ByteBuf>>,
+        };
+        let data = NestedArraysExample {
+            paths: vec![
+                vec![],
+            ],
+        };
+
+        let request_id = to_request_id(&data).unwrap();
+        assert_eq!(
+            hex::encode(request_id.0.to_vec()),
+            "ea01a9c3d3830db108e0a87995ea0d4183dc9c6e51324e9818fced5c57aa64f5"
+        );
+
+        /* The above was generated using ic-ref as follows:
+
+        ~/dfinity/ic-ref/impl $ cabal repl ic-ref
+        Build profile: -w ghc-8.8.4 -O1
+        …
+        *Main> :set -XOverloadedStrings
+        *Main> :m + IC.HTTP.RequestId IC.HTTP.GenR
+        *Main IC.HTTP.RequestId IC.HTTP.GenR> import qualified Data.HashMap.Lazy as HM
+        *Main IC.HTTP.RequestId IC.HTTP.GenR HM> let input = GRec (HM.fromList [("paths", GList [ GList [] ])])
+        *Main IC.HTTP.RequestId IC.HTTP.GenR HM> putStrLn $ IC.Types.prettyBlob (requestId input )
+        0xea01a9c3d3830db108e0a87995ea0d4183dc9c6e51324e9818fced5c57aa64f5
+        */
+    }
 }
