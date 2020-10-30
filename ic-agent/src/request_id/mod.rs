@@ -994,7 +994,7 @@ mod tests {
             paths: Vec<Vec<serde_bytes::ByteBuf>>,
         };
         let data = NestedArraysExample {
-            sender: Principal::try_from(&vec![0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
+            sender: Principal::try_from(&vec![0, 0, 0, 0, 0, 0, 0x03, 0xD2]).unwrap(), // 1234 in u64
             paths: vec![
               vec![],
               vec![serde_bytes::ByteBuf::from("".as_bytes())],
