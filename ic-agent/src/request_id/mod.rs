@@ -911,6 +911,7 @@ mod tests {
 
     /// A simple example with nested arrays and blobs
     #[test]
+    #[allow(clippy::string_lit_as_bytes)]
     fn array_example() {
         #[derive(Serialize)]
         struct NestedArraysExample {
