@@ -646,7 +646,20 @@ impl<'a> ser::SerializeMap for &'a mut RequestIdSerializer {
     where
         T: ?Sized + Serialize,
     {
-        panic!("to do");
+        let key_hash = self.hash_value(key)?;
+        match self.element_encoder {
+            Some(ElementEncoder::Fields(ref mut field_encoder)) => {
+                if field_encoder.field_key_hash.is_some() {
+                    Err(RequestIdError::InvalidState)
+                } else {
+
+                    field_encoder.field_key_hash = Some(key_hash);
+                    Ok(())
+                }
+            }
+            _ => Err(RequestIdError::InvalidState),
+        }
+
         // if self.field_key_hash.is_some() {
         //     Err(RequestIdError::InvalidState)
         // } else {
@@ -663,9 +676,20 @@ impl<'a> ser::SerializeMap for &'a mut RequestIdSerializer {
     where
         T: ?Sized + Serialize,
     {
-        panic!("to do");
-        // let value_hash = self.hash_value(value)?;
-        //
+        let value_hash = self.hash_value(value)?;
+        match self.element_encoder {
+            Some(ElementEncoder::Fields(ref mut field_encoder)) => {
+                match field_encoder.field_key_hash.take() {
+                    None => Err(RequestIdError::InvalidState),
+                    Some(key_hash) => {
+                        field_encoder.fields.insert(key_hash, value_hash);
+                        Ok(())
+                    },
+                }
+            }
+            _ => Err(RequestIdError::InvalidState),
+        }
+
         // match self.field_key_hash.take() {
         //     None => Err(RequestIdError::InvalidState),
         //     Some(key_hash) => match self.fields {
@@ -1009,4 +1033,22 @@ mod tests {
         0xea01a9c3d3830db108e0a87995ea0d4183dc9c6e51324e9818fced5c57aa64f5
         */
     }
+
+    /// Build a request ID from data in a map.
+    #[test]
+    fn map_example() {
+        let mut data = BTreeMap::new();
+        data.insert("request_type", "call");
+        data.insert("canister_id", "a principal / the canister id");
+        data.insert("method_name", "hello");
+        data.insert("arg", "some argument value");
+
+        // Hash taken from the example on the public spec.
+        let request_id = to_request_id(&data).unwrap();
+        assert_eq!(
+            hex::encode(request_id.0.to_vec()),
+            "8781291c347db32a9d8c10eb62b710fce5a93be676474c42babc74c51858f94b"
+        );
+    }
+
 }
