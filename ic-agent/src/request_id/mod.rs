@@ -78,14 +78,6 @@ struct RequestIdEncoder {
     hasher: Sha256,
 }
 
-impl RequestIdEncoder {
-    fn new() -> RequestIdEncoder {
-        RequestIdEncoder {
-            hasher: Sha256::new(),
-        }
-    }
-}
-
 struct FieldEncoder {
     // We use a BTreeMap here as there is no indication that keys might not be duplicated,
     // and we want to make sure they're overwritten in that case.
@@ -95,26 +87,30 @@ struct FieldEncoder {
     parent: Box<ElementEncoder>,
 }
 
-impl FieldEncoder {
-    fn new(parent: Box<ElementEncoder>) -> FieldEncoder {
-        FieldEncoder {
-            fields: BTreeMap::new(),
-            field_key_hash: None,
-            field_value_hash: None,
-            parent,
-        }
-    }
-}
-
 struct ValueEncoder {
     value_hash: Sha256,
 }
 
-impl ValueEncoder {
-    fn new() -> ValueEncoder {
-        ValueEncoder {
-            value_hash: Sha256::new(),
-        }
+impl ElementEncoder {
+    fn request_id() -> ElementEncoder {
+        ElementEncoder::RequestId(RequestIdEncoder {
+            hasher: Sha256::new(),
+        })
+    }
+
+    fn fields(parent: Box<ElementEncoder>) -> ElementEncoder {
+        ElementEncoder::Fields(FieldEncoder {
+            fields: BTreeMap::new(),
+            field_key_hash: None,
+            field_value_hash: None,
+            parent,
+        })
+    }
+
+    fn value() -> ElementEncoder {
+        ElementEncoder::Value(ValueEncoder {
+            value_hash: Sha256::new()
+        })
     }
 }
 
@@ -178,7 +174,7 @@ impl RequestIdSerializer {
     {
         let prev_encoder = self.element_encoder.take();
 
-        self.element_encoder = Some(ElementEncoder::Value(ValueEncoder::new()));
+        self.element_encoder = Some(ElementEncoder::value());
 
         value.serialize(&mut *self)?;
         let result = match self.element_encoder.take() {
@@ -228,7 +224,7 @@ impl RequestIdSerializer {
 impl Default for RequestIdSerializer {
     fn default() -> RequestIdSerializer {
         RequestIdSerializer {
-            element_encoder: Some(ElementEncoder::RequestId(RequestIdEncoder::new())),
+            element_encoder: Some(ElementEncoder::request_id()),
         }
     }
 }
@@ -460,9 +456,9 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
         let parent_encoder = self.element_encoder.take();
         match &parent_encoder {
             Some(ElementEncoder::RequestId(_)) => {
-                self.element_encoder = Some(ElementEncoder::Fields(FieldEncoder::new(Box::new(
-                    parent_encoder.unwrap(),
-                ))));
+                self.element_encoder = Some(ElementEncoder::fields(
+                    Box::new(parent_encoder.unwrap()),
+                ));
                 Ok(self)
             }
             _ => Err(RequestIdError::UnsupportedStructInsideStruct),
@@ -480,9 +476,9 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
         let parent_encoder = self.element_encoder.take();
         match &parent_encoder {
             Some(ElementEncoder::RequestId(_)) => {
-                self.element_encoder = Some(ElementEncoder::Fields(FieldEncoder::new(Box::new(
-                    parent_encoder.unwrap(),
-                ))));
+                self.element_encoder = Some(ElementEncoder::fields(
+                    Box::new(parent_encoder.unwrap()),
+                ));
                 Ok(self)
             }
             _ => Err(RequestIdError::UnsupportedStructInsideStruct),
@@ -527,7 +523,7 @@ impl<'a> ser::SerializeSeq for &'a mut RequestIdSerializer {
     {
         let mut prev_encoder = self.element_encoder.take();
 
-        self.element_encoder = Some(ElementEncoder::Value(ValueEncoder::new()));
+        self.element_encoder = Some(ElementEncoder::value());
 
         value.serialize(&mut **self)?;
 
