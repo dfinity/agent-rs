@@ -195,6 +195,41 @@ impl RequestIdSerializer {
         self.element_encoder = prev_encoder;
         result
     }
+
+    fn hash_fields(&mut self) -> Result<(), RequestIdError> {
+        match self.element_encoder.take() {
+            Some(ElementEncoder::Fields(fields_encoder)) => {
+                // Sort the fields.
+                let mut keyvalues: Vec<Vec<u8>> = fields_encoder
+                    .fields
+                    .keys()
+                    .zip(fields_encoder.fields.values())
+                    .map(|(k, v)| {
+                        let mut x = k.to_vec();
+                        x.extend(v);
+                        x
+                    })
+                    .collect();
+                keyvalues.sort();
+
+                let mut parent = *fields_encoder.parent;
+
+                match parent {
+                    ElementEncoder::RequestId(ref mut r) => {
+                        for kv in keyvalues {
+                            r.hasher.update(&kv);
+                        }
+                        Ok(())
+                    }
+                    _ => Err(RequestIdError::InvalidState),
+                }?;
+
+                self.element_encoder = Some(parent);
+                Ok(())
+            }
+            _ => Err(RequestIdError::InvalidState),
+        }
+    }
 }
 
 impl Default for RequestIdSerializer {
@@ -703,7 +738,7 @@ impl<'a> ser::SerializeMap for &'a mut RequestIdSerializer {
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
+        self.hash_fields()
     }
 }
 
@@ -764,38 +799,7 @@ impl<'a> ser::SerializeStruct for &'a mut RequestIdSerializer {
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        match self.element_encoder.take() {
-            Some(ElementEncoder::Fields(fields_encoder)) => {
-                // Sort the fields.
-                let mut keyvalues: Vec<Vec<u8>> = fields_encoder
-                    .fields
-                    .keys()
-                    .zip(fields_encoder.fields.values())
-                    .map(|(k, v)| {
-                        let mut x = k.to_vec();
-                        x.extend(v);
-                        x
-                    })
-                    .collect();
-                keyvalues.sort();
-
-                let mut parent = *fields_encoder.parent;
-
-                match parent {
-                    ElementEncoder::RequestId(ref mut r) => {
-                        for kv in keyvalues {
-                            r.hasher.update(&kv);
-                        }
-                        Ok(())
-                    }
-                    _ => Err(RequestIdError::InvalidState),
-                }?;
-
-                self.element_encoder = Some(parent);
-                Ok(())
-            }
-            _ => Err(RequestIdError::InvalidState),
-        }
+        self.hash_fields()
 
         // if let Some(ref mut element_encoder) = self.element_encoder {
         //     element_encoder.end();
@@ -1047,7 +1051,31 @@ mod tests {
         let request_id = to_request_id(&data).unwrap();
         assert_eq!(
             hex::encode(request_id.0.to_vec()),
-            "8781291c347db32a9d8c10eb62b710fce5a93be676474c42babc74c51858f94b"
+            "7464b9a1790d1d854986a188d1641543a61e343ef470b65dda37850c30c47b9f"
+        );
+    }
+
+    #[test]
+    fn map_example_baseline() {
+        #[derive(Serialize)]
+        struct PublicSpecExampleStruct {
+            request_type: &'static str,
+            canister_id: &'static str,
+            method_name: &'static str,
+            arg: &'static str,
+        };
+        let data = PublicSpecExampleStruct {
+            request_type: "call",
+            canister_id: "a principal / the canister id", // 1234 in u64
+            method_name: "hello",
+            arg: "some argument value",
+        };
+
+        // Hash taken from the example on the public spec.
+        let request_id = to_request_id(&data).unwrap();
+        assert_eq!(
+            hex::encode(request_id.0.to_vec()),
+            "7464b9a1790d1d854986a188d1641543a61e343ef470b65dda37850c30c47b9f"
         );
     }
 
