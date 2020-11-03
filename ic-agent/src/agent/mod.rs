@@ -379,14 +379,16 @@ impl Agent {
         paths: Vec<StateTreePath>,
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestStatusResponse, AgentError> {
-        let _read_state_response: ReadStateResponse = self
+        let read_state_response: ReadStateResponse = self
             .read_endpoint(SyncContent::ReadStateRequest {
                 sender: self.identity.sender().map_err(AgentError::SigningError)?,
                 paths,
                 ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
             })
             .await?;
-        panic!("it would be really good to get this far!");
+        let s = format!("certificate: {:02x?}", read_state_response.certificate).replace(",","");
+        eprintln!("{}", s);
+        panic!("successful query to read_state!  certificate = {:02x?}", read_state_response.certificate);
         //Ok(RequestStatusResponse::Unknown)
     }
 
