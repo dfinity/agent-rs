@@ -71,7 +71,7 @@ impl Serialize for RequestId {
 enum ElementEncoder {
     RequestId(RequestIdEncoder),
     Fields(FieldEncoder),
-    Value { value_hash: Sha256 },
+    Value(ValueEncoder),
 }
 
 struct RequestIdEncoder {
@@ -102,6 +102,18 @@ impl FieldEncoder {
             field_key_hash: None,
             field_value_hash: None,
             parent,
+        }
+    }
+}
+
+struct ValueEncoder {
+    value_hash: Sha256,
+}
+
+impl ValueEncoder {
+    fn new() -> ValueEncoder {
+        ValueEncoder {
+            value_hash: Sha256::new(),
         }
     }
 }
@@ -166,13 +178,11 @@ impl RequestIdSerializer {
     {
         let prev_encoder = self.element_encoder.take();
 
-        self.element_encoder = Some(ElementEncoder::Value {
-            value_hash: Sha256::new(),
-        });
+        self.element_encoder = Some(ElementEncoder::Value(ValueEncoder::new()));
 
         value.serialize(&mut *self)?;
         let result = match self.element_encoder.take() {
-            Some(ElementEncoder::Value { value_hash }) => Ok(value_hash.finish()),
+            Some(ElementEncoder::Value(value_encoder)) => Ok(value_encoder.value_hash.finish()),
             _ => Err(RequestIdError::InvalidState),
         };
         self.element_encoder = prev_encoder;
@@ -328,8 +338,8 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
                 request_id_encoder.hasher.update(v);
                 Ok(())
             }
-            Some(ElementEncoder::Value { ref mut value_hash }) => {
-                value_hash.update(v);
+            Some(ElementEncoder::Value(ref mut value_encoder)) => {
+                value_encoder.value_hash.update(v);
                 Ok(())
             }
             _ => Err(RequestIdError::InvalidState),
@@ -517,22 +527,20 @@ impl<'a> ser::SerializeSeq for &'a mut RequestIdSerializer {
     {
         let mut prev_encoder = self.element_encoder.take();
 
-        self.element_encoder = Some(ElementEncoder::Value {
-            value_hash: Sha256::new(),
-        });
+        self.element_encoder = Some(ElementEncoder::Value(ValueEncoder::new()));
 
         value.serialize(&mut **self)?;
 
         let value_encoder = self.element_encoder.take();
         let hash = match value_encoder {
-            Some(ElementEncoder::Value { value_hash }) => Ok(value_hash.finish()),
+            Some(ElementEncoder::Value(value_encoder)) => Ok(value_encoder.value_hash.finish()),
             _ => Err(RequestIdError::InvalidState),
         }?;
 
         self.element_encoder = prev_encoder.take();
         match self.element_encoder {
-            Some(ElementEncoder::Value { ref mut value_hash }) => {
-                value_hash.update(&hash);
+            Some(ElementEncoder::Value(ref mut value_encoder)) => {
+                value_encoder.value_hash.update(&hash);
                 Ok(())
             }
             _ => Err(RequestIdError::InvalidState),
