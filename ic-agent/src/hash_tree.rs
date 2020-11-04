@@ -11,6 +11,7 @@ use serde::{export::Formatter, Deserialize, Serialize};
 
 use openssl::sha::Sha256;
 
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fmt;
@@ -223,17 +224,8 @@ impl HashTree {
     }
 }
 
-/// An error indicating that a hash tree doesn't correspond to any LabeledTree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InvalidHashTreeError {
-    /// The hash tree contains a non-root leaf that is not a direct child of a
-    /// labeled node. For example:
-    ///
-    /// ```text
-    /// * - fork -- leaf X
-    ///          \
-    ///           ` leaf Y
-    /// ```
     UnlabeledLeaf,
 }
 
@@ -271,4 +263,69 @@ fn compute_fork_digest(left_digest: &Digest, right_digest: &Digest) -> Digest {
     hasher.update(&left_digest.0);
     hasher.update(&right_digest.0);
     hasher.finalize()
+}
+
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
+pub enum Simple<X> {
+    Leaf(X),
+    Node(BTreeMap<Label, Simple<X>>),
+}
+
+impl<X> Simple<X> {
+    fn lookup_rec(self: &Self, path: Path, pos: usize) -> Option<&X> {
+        if pos < path.len() {
+            match self {
+                Simple::Node(m) => match m.get(&path[pos]) {
+                    Some(t) => t.lookup_rec(path, pos + 1),
+                    None => None,
+                },
+                Simple::Leaf(_) => None,
+            }
+        } else {
+            match self {
+                Simple::Leaf(ref x) => Some(x),
+                _ => None,
+            }
+        }
+    }
+
+    // lookup a path, as in [public spec](https://hydra.dfinity.systems/latest/dfinity-ci-build/ic-ref.pr-218/public-spec/1/index.html#_lookup)
+    pub fn lookup(self: &Self, path: Path) -> Option<&X> {
+        self.lookup_rec(path, 0)
+    }
+}
+
+/// Simplify the HashTree into a Simple tree.
+impl TryFrom<HashTree> for Simple<Vec<u8>> {
+    type Error = InvalidHashTreeError;
+
+    fn try_from(root: HashTree) -> Result<Self, InvalidHashTreeError> {
+        fn collect_children(
+            t: HashTree,
+            children: &mut BTreeMap<Label, Simple<Vec<u8>>>,
+        ) -> Result<(), InvalidHashTreeError> {
+            match t {
+                HashTree::Leaf(_) => Err(InvalidHashTreeError::UnlabeledLeaf),
+                HashTree::Labeled(label, subtree) => {
+                    children.insert(label, (*subtree).try_into()?);
+                    Ok(())
+                }
+                HashTree::Fork(lr) => {
+                    collect_children(lr.0, children)?;
+                    collect_children(lr.1, children)
+                }
+                HashTree::Pruned(_) | HashTree::Empty => Ok(()),
+            }
+        }
+
+        Ok(match root {
+            HashTree::Leaf(data) => Simple::Leaf(data),
+            HashTree::Labeled(_, _) | HashTree::Fork(_) => {
+                let mut children = BTreeMap::new();
+                collect_children(root, &mut children)?;
+                Simple::Node(children)
+            }
+            HashTree::Pruned(_) | HashTree::Empty => Simple::Node(Default::default()),
+        })
+    }
 }
