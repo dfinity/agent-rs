@@ -12,9 +12,9 @@ use serde::{export::Formatter, Deserialize, Serialize};
 use openssl::sha::Sha256;
 
 use std::convert::TryFrom;
+use std::convert::TryInto;
 use std::fmt;
 use std::fmt::Debug;
-use std::convert::TryInto;
 
 const DOMAIN_HASHTREE_LEAF: &str = "ic-hashtree-leaf";
 const DOMAIN_HASHTREE_EMPTY_SUBTREE: &str = "ic-hashtree-empty";
