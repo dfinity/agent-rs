@@ -2,15 +2,14 @@
 
 #### Resources:
 
-- [Reference implementation in the replica](https://github.com/dfinity-lab/dfinity/tree/master/rs/crypto/tree_hash)
-
 - [Public spec link](https://hydra.dfinity.systems/latest/dfinity-ci-build/ic-ref.pr-218/public-spec/1/index.html#_encoding_of_certificates)
+
+- [Reference implementation in the replica](https://github.com/dfinity-lab/dfinity/tree/master/rs/crypto/tree_hash)
 
 */
 use serde::{export::Formatter, ser::SerializeSeq, Deserialize, Serialize, Serializer};
 use serde_bytes::Bytes;
 
-use ic_crypto_sha256::Sha256;
 use std::convert::TryFrom;
 use std::fmt;
 use std::fmt::Debug;
@@ -19,6 +18,11 @@ const DOMAIN_HASHTREE_LEAF: &str = "ic-hashtree-leaf";
 const DOMAIN_HASHTREE_EMPTY_SUBTREE: &str = "ic-hashtree-empty";
 const DOMAIN_HASHTREE_NODE: &str = "ic-hashtree-labeled";
 const DOMAIN_HASHTREE_FORK: &str = "ic-hashtree-fork";
+
+use openssl::sha::Sha256;
+
+/// Type alias for a sha256 result (ie. a u256).
+type Sha256Hash = [u8; 32];
 
 /// A blob used as a label in the tree.
 ///
@@ -180,12 +184,12 @@ impl AsRef<[u8]> for Digest {
     }
 }
 
-pub struct Hasher(Sha256);
+pub struct Hasher(Sha256Hash);
 
 impl Hasher {
     pub fn for_domain(domain: &str) -> Self {
         assert!(domain.len() < 256);
-        let mut hasher = Self(Sha256::new());
+        let mut hasher = Self(Sha256g::new());
         hasher.update(&[domain.len() as u8][..]);
         hasher.update(domain.as_bytes());
         hasher
