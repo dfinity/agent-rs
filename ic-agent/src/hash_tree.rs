@@ -7,19 +7,19 @@
 - [Reference implementation in the replica](https://github.com/dfinity-lab/dfinity/tree/master/rs/crypto/tree_hash)
 
 */
-use serde::{export::Formatter, ser::SerializeSeq, Deserialize, Serialize, Serializer};
-use serde_bytes::Bytes;
+use serde::{export::Formatter, Deserialize, Serialize};
+
+use openssl::sha::Sha256;
 
 use std::convert::TryFrom;
 use std::fmt;
 use std::fmt::Debug;
+use std::convert::TryInto;
 
 const DOMAIN_HASHTREE_LEAF: &str = "ic-hashtree-leaf";
 const DOMAIN_HASHTREE_EMPTY_SUBTREE: &str = "ic-hashtree-empty";
 const DOMAIN_HASHTREE_NODE: &str = "ic-hashtree-labeled";
 const DOMAIN_HASHTREE_FORK: &str = "ic-hashtree-fork";
-
-use openssl::sha::Sha256;
 
 /// Type alias for a sha256 result (ie. a u256).
 type Sha256Hash = [u8; 32];
@@ -184,35 +184,36 @@ impl AsRef<[u8]> for Digest {
     }
 }
 
-pub struct Hasher(Sha256Hash);
+pub struct Hasher(Sha256);
 
 impl Hasher {
     pub fn for_domain(domain: &str) -> Self {
         assert!(domain.len() < 256);
-        let mut hasher = Self(Sha256g::new());
+        let mut hasher = Self(Sha256::new());
         hasher.update(&[domain.len() as u8][..]);
         hasher.update(domain.as_bytes());
         hasher
     }
     pub fn update(&mut self, bytes: &[u8]) {
-        self.0.write(bytes);
+        self.0.update(bytes);
     }
     pub fn finalize(self) -> Digest {
         Digest(self.0.finish())
     }
 }
 
+/// Public spec [hash-tree](https://hydra.dfinity.systems/latest/dfinity-ci-build/ic-ref.pr-218/public-spec/1/index.html#_encoding_of_certificates)
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub enum MixedHashTree {
+pub enum HashTree {
     Empty,
-    Fork(Box<(MixedHashTree, MixedHashTree)>),
-    Labeled(Label, Box<MixedHashTree>),
+    Fork(Box<(HashTree, HashTree)>),
+    Labeled(Label, Box<HashTree>),
     Leaf(Vec<u8>),
     Pruned(Digest),
 }
 
-impl MixedHashTree {
-    /// Recomputes root hash of the full tree that this mixed tree was
+impl HashTree {
+    /// Recomputes root hash of the full tree that this hash tree was
     /// constructed from.
     pub fn digest(&self) -> Digest {
         match self {
