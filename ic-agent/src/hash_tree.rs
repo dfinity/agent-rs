@@ -272,7 +272,7 @@ pub enum Simple<X> {
 }
 
 impl<X> Simple<X> {
-    fn lookup_rec(self: &Self, path: Path, pos: usize) -> Option<&X> {
+    fn lookup_rec(&self, path: Path, pos: usize) -> Option<&X> {
         if pos < path.len() {
             match self {
                 Simple::Node(m) => match m.get(&path[pos]) {
@@ -290,7 +290,7 @@ impl<X> Simple<X> {
     }
 
     // lookup a path, as in [public spec](https://hydra.dfinity.systems/latest/dfinity-ci-build/ic-ref.pr-218/public-spec/1/index.html#_lookup)
-    pub fn lookup(self: &Self, path: Path) -> Option<&X> {
+    pub fn lookup(&self, path: Path) -> Option<&X> {
         self.lookup_rec(path, 0)
     }
 }
