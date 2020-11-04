@@ -21,9 +21,6 @@ const DOMAIN_HASHTREE_EMPTY_SUBTREE: &str = "ic-hashtree-empty";
 const DOMAIN_HASHTREE_NODE: &str = "ic-hashtree-labeled";
 const DOMAIN_HASHTREE_FORK: &str = "ic-hashtree-fork";
 
-/// Type alias for a sha256 result (ie. a u256).
-type Sha256Hash = [u8; 32];
-
 /// A blob used as a label in the tree.
 ///
 /// Most labels are expected to be printable ASCII strings, but some

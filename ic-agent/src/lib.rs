@@ -106,4 +106,5 @@ pub use agent::{agent_error::AgentError, nonce::NonceFactory, Agent, PasswordMan
 pub use identity::{Identity, Signature};
 pub use request_id::{to_request_id, RequestId, RequestIdError};
 
-mod hash_tree;
+// FIXME: not actually public
+pub mod hash_tree;
