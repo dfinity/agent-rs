@@ -1,5 +1,6 @@
 use crate::export::Principal;
 use serde::{Deserialize, Serialize};
+use crate::hash_tree::HashTree;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -60,6 +61,15 @@ pub enum SyncContent {
 pub struct ReadStateResponse {
     #[serde(with = "serde_bytes")]
     pub certificate: Vec<u8>,
+}
+
+/// A `Certificate` as defined in https://docs.dfinity.systems/public/#_certificate
+#[derive(Deserialize)]
+pub(crate) struct Certificate {
+    pub tree: HashTree,
+
+    #[serde(with = "serde_bytes")]
+    pub signature: Vec<u8>,
 }
 
 // #[derive(Debug, Clone, Deserialize, Serialize)]

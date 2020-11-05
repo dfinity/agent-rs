@@ -16,9 +16,7 @@ pub use response::{Replied, RequestStatusResponse};
 #[cfg(test)]
 mod agent_test;
 
-use crate::agent::replica_api::{
-    AsyncContent, Envelope, ReadStateResponse, StateTreePath, SyncContent,
-};
+use crate::agent::replica_api::{AsyncContent, Envelope, ReadStateResponse, StateTreePath, SyncContent, Certificate};
 use crate::export::Principal;
 use crate::identity::Identity;
 use crate::{to_request_id, RequestId};
@@ -29,6 +27,7 @@ use status::Status;
 
 use std::convert::TryFrom;
 use std::time::Duration;
+use crate::hash_tree::HashTree;
 
 const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 
@@ -386,8 +385,13 @@ impl Agent {
                 ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
             })
             .await?;
+
+
         let s = format!("certificate: {:02x?}", read_state_response.certificate).replace(",","");
         eprintln!("{}", s);
+
+        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
+            .map_err(AgentError::InvalidCborData)?;
         //panic!("successful query to read_state!  certificate = {:02x?}", read_state_response.certificate);
         Ok(read_state_response)
     }
