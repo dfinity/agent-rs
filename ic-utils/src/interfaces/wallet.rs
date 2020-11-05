@@ -168,7 +168,7 @@ impl<'agent> Canister<'agent, Wallet> {
 
     /// Forward a call to another canister, including an amount of cycles
     /// from the wallet.
-    pub fn call<'canister: 'agent, Out, M: ToString>(
+    pub fn call<'canister: 'agent, Out, M: Into<String>>(
         &'canister self,
         destination: &'canister Canister<'canister>,
         method_name: M,
@@ -180,7 +180,7 @@ impl<'agent> Canister<'agent, Wallet> {
         CallForwarder {
             wallet: self,
             destination: destination.canister_id_().clone(),
-            method_name: method_name.to_string(),
+            method_name: method_name.into(),
             amount,
             arg: Argument::default(),
             phantom_out: std::marker::PhantomData,

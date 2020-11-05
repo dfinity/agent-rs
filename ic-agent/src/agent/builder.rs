@@ -20,10 +20,10 @@ impl AgentBuilder {
     }
 
     /// Set the URL of the [Agent].
-    pub fn with_url<S: ToString>(self, url: S) -> Self {
+    pub fn with_url<S: Into<String>>(self, url: S) -> Self {
         AgentBuilder {
             config: AgentConfig {
-                url: url.to_string(),
+                url: url.into(),
                 ..self.config
             },
         }
