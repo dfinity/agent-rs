@@ -378,7 +378,7 @@ impl Agent {
         &self,
         paths: Vec<StateTreePath>,
         ingress_expiry_datetime: Option<u64>,
-    ) -> Result<RequestStatusResponse, AgentError> {
+    ) -> Result<ReadStateResponse, AgentError> {
         let read_state_response: ReadStateResponse = self
             .read_endpoint(SyncContent::ReadStateRequest {
                 sender: self.identity.sender().map_err(AgentError::SigningError)?,
@@ -388,8 +388,8 @@ impl Agent {
             .await?;
         let s = format!("certificate: {:02x?}", read_state_response.certificate).replace(",","");
         eprintln!("{}", s);
-        panic!("successful query to read_state!  certificate = {:02x?}", read_state_response.certificate);
-        //Ok(RequestStatusResponse::Unknown)
+        //panic!("successful query to read_state!  certificate = {:02x?}", read_state_response.certificate);
+        Ok(read_state_response)
     }
 
     pub async fn request_status_raw(
@@ -405,8 +405,9 @@ impl Agent {
         //     serde_bytes::ByteBuf::from("time".as_bytes()),
         // ]];
 
-        self.read_state_raw(paths, ingress_expiry_datetime).await
+        let read_state_response = self.read_state_raw(paths, ingress_expiry_datetime).await?;
 
+        panic!("incomplete");
         // self.read_endpoint(SyncContent::RequestStatusRequest {
         //     request_id: request_id.as_slice().into(),
         //     ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),

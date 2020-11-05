@@ -56,7 +56,7 @@ pub enum SyncContent {
     },
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct ReadStateResponse {
     #[serde(with = "serde_bytes")]
     pub certificate: Vec<u8>,

@@ -1,4 +1,4 @@
-use crate::agent::replica_api::{CallReply, QueryResponse};
+use crate::agent::replica_api::{CallReply, QueryResponse, ReadStateResponse, StateTreePath};
 use crate::agent::response::{Replied, RequestStatusResponse};
 use crate::agent::{AgentConfig, Status};
 use crate::export::Principal;
@@ -94,9 +94,11 @@ fn query_rejected() -> Result<(), AgentError> {
 }
 
 #[test]
-#[ignore]
 fn call() -> Result<(), AgentError> {
-    let blob = Vec::from("Hello World");
+    let read_state_response = ReadStateResponse {
+        certificate: vec![1, 2, 3],
+    };
+    let blob = serde_cbor::to_vec(&read_state_response)?;
     let response = QueryResponse::Replied {
         reply: CallReply { arg: blob.clone() },
     };
@@ -105,7 +107,7 @@ fn call() -> Result<(), AgentError> {
     let status_mock = mock("POST", "/api/v1/read")
         .with_status(200)
         .with_header("content-type", "application/cbor")
-        .with_body(serde_cbor::to_vec(&response)?)
+        .with_body(serde_cbor::to_vec(&read_state_response)?)
         .create();
 
     let agent = Agent::builder().with_url(&mockito::server_url()).build()?;
@@ -117,7 +119,12 @@ fn call() -> Result<(), AgentError> {
             .with_arg(&[])
             .call()
             .await?;
-        agent.request_status_raw(&request_id, None).await
+        let paths: Vec<StateTreePath> = vec![vec![
+            serde_bytes::ByteBuf::from("request_status".as_bytes()),
+            serde_bytes::ByteBuf::from(request_id.to_vec()),
+        ]];
+
+        agent.read_state_raw(paths, None).await
     });
 
     submit_mock.assert();
@@ -125,9 +132,7 @@ fn call() -> Result<(), AgentError> {
 
     assert_eq!(
         result?,
-        RequestStatusResponse::Replied {
-            reply: Replied::CallReplied(blob)
-        }
+        read_state_response
     );
 
     Ok(())
@@ -156,7 +161,6 @@ fn call_error() -> Result<(), AgentError> {
 }
 
 #[test]
-#[ignore]
 fn call_rejected() -> Result<(), AgentError> {
     let response: QueryResponse = QueryResponse::Rejected {
         reject_code: 1234,
