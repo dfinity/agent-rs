@@ -8,7 +8,7 @@ pub(crate) mod response;
 
 pub mod status;
 pub use agent_config::{AgentConfig, PasswordManager};
-pub use agent_error::AgentError;
+pub use agent_error::{AgentError, HttpErrorPayload};
 pub use builder::AgentBuilder;
 pub use nonce::NonceFactory;
 pub use response::{Replied, RequestStatusResponse};
@@ -258,14 +258,14 @@ impl Agent {
         }
 
         if status.is_client_error() || status.is_server_error() {
-            Err(AgentError::HttpError {
+            Err(AgentError::HttpError(HttpErrorPayload {
                 status: status.into(),
                 content_type: headers
                     .get(reqwest::header::CONTENT_TYPE)
                     .and_then(|value| value.to_str().ok())
                     .map(|x| x.to_string()),
                 content: body,
-            })
+            }))
         } else {
             Ok(body)
         }

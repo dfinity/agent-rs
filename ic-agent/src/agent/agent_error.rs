@@ -1,6 +1,7 @@
 use crate::hash_tree::InvalidHashTreeError;
 use crate::RequestIdError;
 use leb128::read;
+use std::fmt::{Debug, Formatter};
 use std::str::Utf8Error;
 use thiserror::Error;
 
@@ -42,12 +43,8 @@ pub enum AgentError {
         reject_message: String,
     },
 
-    #[error(r#"The replica returned an HTTP Error: status code {status}"#)]
-    HttpError {
-        status: u16,
-        content_type: Option<String>,
-        content: Vec<u8>,
-    },
+    #[error(r#"The replica returned an HTTP Error: status code {}"#, .0.status)]
+    HttpError(HttpErrorPayload),
 
     #[error("HTTP Authentication cannot be used in a non-secure URL (either HTTPS or localhost)")]
     CannotUseAuthenticationOnNonSecureUrl(),
@@ -80,4 +77,52 @@ impl PartialEq for AgentError {
         // don't implement Eq or PartialEq, so we cannot rely on derive.
         format!("{:?}", self) == format!("{:?}", other)
     }
+}
+
+pub struct HttpErrorPayload {
+    pub status: u16,
+    pub content_type: Option<String>,
+    pub content: Vec<u8>,
+}
+
+impl Debug for HttpErrorPayload {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            HttpErrorPayload {
+                status,
+                content_type,
+                content,
+            } if is_plain_text_utf8(content_type) => {
+                f.write_fmt(format_args!(
+                    "Agent Error: Http Error: status {}, content type {:?}, content: {}",
+                    status,
+                    content_type,
+                    String::from_utf8(content.to_vec()).unwrap_or_else(|from_utf8_err| format!(
+                        "(unable to decode content: {:#?})",
+                        from_utf8_err
+                    ))
+                ))?;
+            }
+            HttpErrorPayload {
+                status,
+                content_type,
+                content,
+            } => {
+                f.write_fmt(format_args!(
+                    "Agent Error: Http Error: status {}, content type {:?}, content: {:?}",
+                    status, content_type, content
+                ))?;
+            }
+        }
+        Ok(())
+    }
+}
+
+fn is_plain_text_utf8(content_type: &Option<String>) -> bool {
+    // text/plain is also sometimes returned by the replica (or ic-ref),
+    // depending on where in the stack the error happens.
+    matches!(
+        content_type.as_ref().and_then(|s|s.parse::<mime::Mime>().ok()),
+        Some(mt) if mt == mime::TEXT_PLAIN || mt == mime::TEXT_PLAIN_UTF_8
+    )
 }

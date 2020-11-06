@@ -2,7 +2,7 @@
 //!
 //! Contrary to ic-ref.rs, these tests are not meant to match any other tests. They're
 //! integration tests with a running IC-Ref.
-use ic_agent::AgentError;
+use ic_agent::{AgentError, HttpErrorPayload};
 use ic_utils::call::AsyncCall;
 use ic_utils::call::SyncCall;
 use ic_utils::{interfaces, Canister};
@@ -37,7 +37,7 @@ fn basic_expiry() {
             .await;
 
         match result.unwrap_err() {
-            AgentError::HttpError { status, .. } => assert_eq!(status, 400),
+            AgentError::HttpError(HttpErrorPayload { status, .. }) => assert_eq!(status, 400),
             x => assert!(false, "Was expecting an error, got {:?}", x),
         }
 
