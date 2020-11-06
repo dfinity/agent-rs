@@ -141,9 +141,7 @@ impl RequestIdSerializer {
     /// it should not be a problem.
     pub fn finish(mut self) -> Result<RequestId, RequestIdError> {
         match self.element_encoder {
-            Some(Hasher::RequestId(hasher)) => {
-                Ok(RequestId(hasher.finish()))
-            }
+            Some(Hasher::RequestId(hasher)) => Ok(RequestId(hasher.finish())),
             _ => Err(RequestIdError::EmptySerializer), // todo
         }
     }
@@ -449,8 +447,7 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
         let parent_encoder = self.element_encoder.take();
         match &parent_encoder {
             Some(Hasher::RequestId(_)) => {
-                self.element_encoder =
-                    Some(Hasher::fields(Box::new(parent_encoder.unwrap())));
+                self.element_encoder = Some(Hasher::fields(Box::new(parent_encoder.unwrap())));
                 Ok(self)
             }
             _ => Err(RequestIdError::UnsupportedStructInsideStruct),
@@ -869,9 +866,6 @@ mod tests {
         data.insert("arg", "some argument value");
 
         let error = to_request_id(&data).unwrap_err();
-        assert_eq!(
-            error,
-            RequestIdError::UnsupportedTypeMap
-        );
+        assert_eq!(error, RequestIdError::UnsupportedTypeMap);
     }
 }
