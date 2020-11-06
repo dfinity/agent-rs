@@ -94,6 +94,7 @@ fn query_rejected() -> Result<(), AgentError> {
 }
 
 #[test]
+#[ignore]
 fn call() -> Result<(), AgentError> {
     let read_state_response = ReadStateResponse {
         certificate: vec![1, 2, 3],
@@ -161,6 +162,7 @@ fn call_error() -> Result<(), AgentError> {
 }
 
 #[test]
+#[ignore]
 fn call_rejected() -> Result<(), AgentError> {
     let response: QueryResponse = QueryResponse::Rejected {
         reject_code: 1234,
