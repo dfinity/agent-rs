@@ -16,7 +16,7 @@ jobs:
         include:
           - build: linux-stable
             ghc: '8.8.4'
-            spec: 'joachim/impl-certification'
+            spec: 'release-0.13'
             os: ubuntu-latest
             rust: stable
 
