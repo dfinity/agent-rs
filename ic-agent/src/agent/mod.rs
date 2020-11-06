@@ -399,6 +399,7 @@ impl Agent {
         Ok(read_state_response)
     }
 
+    #[allow(clippy::string_lit_as_bytes)]
     pub async fn request_status_raw(
         &self,
         request_id: &RequestId,
@@ -448,7 +449,7 @@ fn convert_read_state_to_request_status(
     request_id: &RequestId,
 ) -> Result<RequestStatusResponse, AgentError> {
     let tree =
-        Simple::<Vec<u8>>::try_from(certificate.tree).map_err(|e| AgentError::HashTreeError(e))?;
+        Simple::<Vec<u8>>::try_from(certificate.tree).map_err(AgentError::HashTreeError)?;
 
     let path_status = vec![
         "request_status".into(),
