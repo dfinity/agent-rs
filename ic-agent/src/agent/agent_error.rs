@@ -1,5 +1,8 @@
 use crate::RequestIdError;
 use thiserror::Error;
+use crate::hash_tree::InvalidHashTreeError;
+use leb128::read;
+use std::str::Utf8Error;
 
 #[derive(Error, Debug)]
 pub enum AgentError {
@@ -14,6 +17,9 @@ pub enum AgentError {
 
     #[error("Invalid CBOR data, could not deserialize: {0}")]
     InvalidCborData(#[from] serde_cbor::Error),
+
+    #[error("Invalid HashTree")]
+    HashTreeError(InvalidHashTreeError),
 
     #[error("Cannot calculate a RequestID: {0}")]
     CannotCalculateRequestId(#[from] RequestIdError),
@@ -60,6 +66,12 @@ pub enum AgentError {
 
     #[error("A tool returned a custom error: {0}")]
     CustomError(#[from] Box<dyn Send + Sync + std::error::Error>),
+
+    #[error("Error read LEB128 value: {0}")]
+    Leb128ReadError(#[from] read::Error),
+
+    #[error("Error in UTF-8 string: {0}")]
+    Utf8ReadError(#[from] Utf8Error),
 }
 
 impl PartialEq for AgentError {

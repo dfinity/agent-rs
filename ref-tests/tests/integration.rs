@@ -82,6 +82,27 @@ fn canister_query() {
 
 #[ignore]
 #[test]
+fn canister_reject_call() {
+    with_universal_canister(|agent, wallet_id| async move {
+        let alice = interfaces::Wallet::create(&agent, wallet_id);
+        let bob = interfaces::Wallet::create(&agent, create_wallet_canister(&agent).await?);
+
+        let x = alice
+            .send_cycles(&bob, 1_000_000)
+            .call_and_wait(create_waiter())
+            .await;
+
+        assert_eq!(x, Err(AgentError::ReplicaError {
+            reject_code: 3,
+            reject_message: "method does not exist: send_cycles".to_string()
+        }));
+
+        Ok(())
+    });
+}
+
+#[ignore]
+#[test]
 fn wallet_canister_forward() {
     with_wallet_canister(|agent, wallet_id| async move {
         let wallet = interfaces::Wallet::create(&agent, wallet_id);

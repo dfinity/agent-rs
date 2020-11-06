@@ -27,7 +27,8 @@ use status::Status;
 
 use std::convert::TryFrom;
 use std::time::Duration;
-use crate::hash_tree::HashTree;
+use crate::hash_tree::{HashTree, Simple, Label};
+use std::str::from_utf8;
 
 const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 
@@ -392,6 +393,7 @@ impl Agent {
 
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
+        // todo: verify certificate
         //panic!("successful query to read_state!  certificate = {:02x?}", read_state_response.certificate);
         Ok(read_state_response)
     }
@@ -405,13 +407,65 @@ impl Agent {
             serde_bytes::ByteBuf::from("request_status".as_bytes()),
             serde_bytes::ByteBuf::from(request_id.to_vec()),
         ]];
-        // let paths: Vec<StateTreePath> = vec![vec![
-        //     serde_bytes::ByteBuf::from("time".as_bytes()),
-        // ]];
 
         let read_state_response = self.read_state_raw(paths, ingress_expiry_datetime).await?;
+        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
+            .map_err(AgentError::InvalidCborData)?;
+        let tree = Simple::<Vec<u8>>::try_from(cert.tree)
+            .map_err(|e|AgentError::HashTreeError(e))?;
 
-        panic!("incomplete");
+        //convert_state_to_status(&request_id)
+        let path_status = vec![
+            "request_status".into(),
+            serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
+            "status".into()
+        ];
+        let status = tree.lookup(path_status).and_then(|s|from_utf8(s).ok());
+        match status {
+            Some("done") => Ok(RequestStatusResponse::Done),
+            Some("processing") => Ok(RequestStatusResponse::Processing),
+            Some("received") => Ok(RequestStatusResponse::Received),
+            Some("rejected") => {
+                let path_reject_code = vec![
+                    "request_status".into(),
+                    serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
+                    "reject_code".into()
+                ];
+                let path_reject_message = vec![
+                    "request_status".into(),
+                    serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
+                    "reject_message".into()
+                ];
+                let reject_code = tree.lookup(path_reject_code);
+                let reject_message = tree.lookup(path_reject_message);
+                match (reject_code, reject_message) {
+                    (Some(reject_code), Some(reject_message)) => {
+                        let mut c = reject_code.clone();
+                        let mut readable = &c[..];
+                        let reject_code = leb128::read::unsigned(&mut readable)?;
+                        let reject_message = from_utf8(reject_message)?.to_string();
+                        Ok(RequestStatusResponse::Rejected {
+                            reject_code,
+                            reject_message
+                        })
+                    }
+                    _ => Err(AgentError::InvalidReplicaStatus)
+                }
+            }
+            Some("replied") => {
+                let path_reply = vec![
+                    "request_status".into(),
+                    serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
+                    "reply".into()
+                ];
+                let reply_data = tree.lookup(path_reply).unwrap().clone();
+                let reply = Replied::CallReplied(reply_data);
+                Ok(RequestStatusResponse::Replied { reply })
+            },
+            _ => Err(AgentError::InvalidReplicaStatus)
+        }
+
+
         // self.read_endpoint(SyncContent::RequestStatusRequest {
         //     request_id: request_id.as_slice().into(),
         //     ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
