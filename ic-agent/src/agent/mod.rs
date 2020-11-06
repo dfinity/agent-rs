@@ -27,7 +27,7 @@ use reqwest::Method;
 use serde::Serialize;
 use status::Status;
 
-use crate::hash_tree::{HashTree, Label, Simple};
+use crate::hash_tree::Simple;
 use std::convert::TryFrom;
 use std::str::from_utf8;
 use std::time::Duration;
@@ -392,7 +392,7 @@ impl Agent {
         let s = format!("certificate: {:02x?}", read_state_response.certificate).replace(",", "");
         eprintln!("{}", s);
 
-        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
+        let _cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
         // todo: verify certificate
         //panic!("successful query to read_state!  certificate = {:02x?}", read_state_response.certificate);
@@ -475,7 +475,7 @@ fn convert_read_state_to_request_status(
             let reject_message = tree.lookup(path_reject_message);
             match (reject_code, reject_message) {
                 (Some(reject_code), Some(reject_message)) => {
-                    let mut c = reject_code.clone();
+                    let c = reject_code.clone();
                     let mut readable = &c[..];
                     let reject_code = leb128::read::unsigned(&mut readable)?;
                     let reject_message = from_utf8(reject_message)?.to_string();
