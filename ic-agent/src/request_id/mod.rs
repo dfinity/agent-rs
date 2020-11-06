@@ -69,16 +69,21 @@ impl Serialize for RequestId {
 }
 
 enum Hasher {
+    /// The hasher for the overall request id.  This is the only part
+    /// that may directly contain a Struct.
     RequestId(Sha256),
-    Struct(StructHasher),
-    Value(Sha256),
-}
 
-struct StructHasher {
-    // We use a BTreeMap here as there is no indication that keys might not be duplicated,
-    // and we want to make sure they're overwritten in that case.
-    fields: BTreeMap<Sha256Hash, Sha256Hash>,
-    parent: Box<Hasher>,
+    /// A structure to be included in the hash.  May not contain other structures.
+    Struct {
+        // We use a BTreeMap here as there is no indication that keys might not be duplicated,
+        // and we want to make sure they're overwritten in that case.
+        fields: BTreeMap<Sha256Hash, Sha256Hash>,
+        parent: Box<Hasher>,
+    },
+
+    /// The hasher for a value.  Array elements will append the hash of their
+    /// contents into the hasher of the array.
+    Value(Sha256),
 }
 
 impl Hasher {
@@ -87,10 +92,10 @@ impl Hasher {
     }
 
     fn fields(parent: Box<Hasher>) -> Hasher {
-        Hasher::Struct(StructHasher {
+        Hasher::Struct {
             fields: BTreeMap::new(),
             parent,
-        })
+        }
     }
 
     fn value() -> Hasher {
@@ -169,12 +174,11 @@ impl RequestIdSerializer {
 
     fn hash_fields(&mut self) -> Result<(), RequestIdError> {
         match self.element_encoder.take() {
-            Some(Hasher::Struct(struct_hasher)) => {
+            Some(Hasher::Struct { fields, parent}) => {
                 // Sort the fields.
-                let mut keyvalues: Vec<Vec<u8>> = struct_hasher
-                    .fields
+                let mut keyvalues: Vec<Vec<u8>> = fields
                     .keys()
-                    .zip(struct_hasher.fields.values())
+                    .zip(fields.values())
                     .map(|(k, v)| {
                         let mut x = k.to_vec();
                         x.extend(v);
@@ -183,7 +187,7 @@ impl RequestIdSerializer {
                     .collect();
                 keyvalues.sort();
 
-                let mut parent = *struct_hasher.parent;
+                let mut parent = *parent;
 
                 match parent {
                     Hasher::RequestId(ref mut hasher) => {
@@ -631,9 +635,9 @@ impl<'a> ser::SerializeStruct for &'a mut RequestIdSerializer {
     {
         let key_hash = self.hash_value(key)?;
         let value_hash = self.hash_value(value)?;
-        match self.element_encoder {
-            Some(Hasher::Struct(ref mut struct_hasher)) => {
-                struct_hasher.fields.insert(key_hash, value_hash);
+        match &mut self.element_encoder {
+            Some(Hasher::Struct { fields, .. }) => {
+                fields.insert(key_hash, value_hash);
                 Ok(())
             }
             _ => Err(RequestIdError::InvalidState),
