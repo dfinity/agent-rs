@@ -78,8 +78,6 @@ struct StructHasher {
     // We use a BTreeMap here as there is no indication that keys might not be duplicated,
     // and we want to make sure they're overwritten in that case.
     fields: BTreeMap<Sha256Hash, Sha256Hash>,
-    field_key_hash: Option<Sha256Hash>, // Only used in maps, not structs.
-    field_value_hash: Option<Sha256>,
     parent: Box<Hasher>,
 }
 
@@ -91,8 +89,6 @@ impl Hasher {
     fn fields(parent: Box<Hasher>) -> Hasher {
         Hasher::Struct(StructHasher {
             fields: BTreeMap::new(),
-            field_key_hash: None,
-            field_value_hash: None,
             parent,
         })
     }
@@ -439,17 +435,7 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
     /// Begin to serialize a map. This call must be followed by zero or more
     /// calls to `serialize_key` and `serialize_value`, then a call to `end`.
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        // This is the same as struct, but unnamed. We will use the current_field field
-        // here though, as serialize key and value are separate functions.
-        let parent_encoder = self.element_encoder.take();
-        match &parent_encoder {
-            Some(Hasher::RequestId(_)) => {
-                self.element_encoder =
-                    Some(Hasher::fields(Box::new(parent_encoder.unwrap())));
-                Ok(self)
-            }
-            _ => Err(RequestIdError::UnsupportedStructInsideStruct),
-        }
+        Err(RequestIdError::UnsupportedTypeMap)
     }
 
     /// Begin to serialize a struct like `struct Rgb { r: u8, g: u8, b: u8 }`.
@@ -614,44 +600,21 @@ impl<'a> ser::SerializeMap for &'a mut RequestIdSerializer {
     // This can be done by using a different Serializer to serialize the key
     // (instead of `&mut **self`) and having that other serializer only
     // implement `serialize_str` and return an error on any other data type.
-    fn serialize_key<T>(&mut self, key: &T) -> Result<Self::Ok, Self::Error>
+    fn serialize_key<T>(&mut self, _key: &T) -> Result<Self::Ok, Self::Error>
     where
         T: ?Sized + Serialize,
     {
-        let key_hash = self.hash_value(key)?;
-        match self.element_encoder {
-            Some(Hasher::Struct(ref mut struct_hasher)) => {
-                if struct_hasher.field_key_hash.is_some() {
-                    Err(RequestIdError::InvalidState)
-                } else {
-                    struct_hasher.field_key_hash = Some(key_hash);
-                    Ok(())
-                }
-            }
-            _ => Err(RequestIdError::InvalidState),
-        }
+        Err(RequestIdError::UnsupportedTypeMap)
     }
 
     // It doesn't make a difference whether the colon is printed at the end of
     // `serialize_key` or at the beginning of `serialize_value`. In this case
     // the code is a bit simpler having it here.
-    fn serialize_value<T>(&mut self, value: &T) -> Result<Self::Ok, Self::Error>
+    fn serialize_value<T>(&mut self, _value: &T) -> Result<Self::Ok, Self::Error>
     where
         T: ?Sized + Serialize,
     {
-        let value_hash = self.hash_value(value)?;
-        match self.element_encoder {
-            Some(Hasher::Struct(ref mut struct_hasher)) => {
-                match struct_hasher.field_key_hash.take() {
-                    None => Err(RequestIdError::InvalidState),
-                    Some(key_hash) => {
-                        struct_hasher.fields.insert(key_hash, value_hash);
-                        Ok(())
-                    }
-                }
-            }
-            _ => Err(RequestIdError::InvalidState),
-        }
+        Err(RequestIdError::UnsupportedTypeMap)
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
@@ -892,44 +855,23 @@ mod tests {
         */
     }
 
-    /// Build a request ID from data in a map.
+    /// We do not support creating a request id from a map.
+    /// It adds complexity, and isn't that useful anyway because a real request would
+    /// have to have different kinds of values (strings, principals, arrays) and
+    /// we don't support the wrappers that would be required to make that work
+    /// with rust maps.
     #[test]
-    fn map_example() {
+    fn maps_are_not_supported() {
         let mut data = BTreeMap::new();
         data.insert("request_type", "call");
         data.insert("canister_id", "a principal / the canister id");
         data.insert("method_name", "hello");
         data.insert("arg", "some argument value");
 
-        // Hash taken from the example on the public spec.
-        let request_id = to_request_id(&data).unwrap();
+        let error = to_request_id(&data).unwrap_err();
         assert_eq!(
-            hex::encode(request_id.0.to_vec()),
-            "7464b9a1790d1d854986a188d1641543a61e343ef470b65dda37850c30c47b9f"
-        );
-    }
-
-    #[test]
-    fn map_example_baseline() {
-        #[derive(Serialize)]
-        struct PublicSpecExampleStruct {
-            request_type: &'static str,
-            canister_id: &'static str,
-            method_name: &'static str,
-            arg: &'static str,
-        };
-        let data = PublicSpecExampleStruct {
-            request_type: "call",
-            canister_id: "a principal / the canister id", // 1234 in u64
-            method_name: "hello",
-            arg: "some argument value",
-        };
-
-        // Hash taken from the example on the public spec.
-        let request_id = to_request_id(&data).unwrap();
-        assert_eq!(
-            hex::encode(request_id.0.to_vec()),
-            "7464b9a1790d1d854986a188d1641543a61e343ef470b65dda37850c30c47b9f"
+            error,
+            RequestIdError::UnsupportedTypeMap
         );
     }
 }
