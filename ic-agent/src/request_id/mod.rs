@@ -68,38 +68,28 @@ impl Serialize for RequestId {
     }
 }
 
-enum ElementEncoder {
-    RequestId(RequestIdEncoder),
-    Fields(FieldEncoder),
-    Value(ValueEncoder),
+enum Hasher {
+    RequestId(Sha256),
+    Struct(StructHasher),
+    Value(Sha256),
 }
 
-struct RequestIdEncoder {
-    hasher: Sha256,
-}
-
-struct FieldEncoder {
+struct StructHasher {
     // We use a BTreeMap here as there is no indication that keys might not be duplicated,
     // and we want to make sure they're overwritten in that case.
     fields: BTreeMap<Sha256Hash, Sha256Hash>,
     field_key_hash: Option<Sha256Hash>, // Only used in maps, not structs.
     field_value_hash: Option<Sha256>,
-    parent: Box<ElementEncoder>,
+    parent: Box<Hasher>,
 }
 
-struct ValueEncoder {
-    value_hash: Sha256,
-}
-
-impl ElementEncoder {
-    fn request_id() -> ElementEncoder {
-        ElementEncoder::RequestId(RequestIdEncoder {
-            hasher: Sha256::new(),
-        })
+impl Hasher {
+    fn request_id() -> Hasher {
+        Hasher::RequestId(Sha256::new())
     }
 
-    fn fields(parent: Box<ElementEncoder>) -> ElementEncoder {
-        ElementEncoder::Fields(FieldEncoder {
+    fn fields(parent: Box<Hasher>) -> Hasher {
+        Hasher::Struct(StructHasher {
             fields: BTreeMap::new(),
             field_key_hash: None,
             field_value_hash: None,
@@ -107,10 +97,8 @@ impl ElementEncoder {
         })
     }
 
-    fn value() -> ElementEncoder {
-        ElementEncoder::Value(ValueEncoder {
-            value_hash: Sha256::new(),
-        })
+    fn value() -> Hasher {
+        Hasher::Value(Sha256::new())
     }
 }
 
@@ -142,7 +130,7 @@ impl ElementEncoder {
 /// This does not validate whether a message is valid. This is very important as
 /// the message format might change faster than the ID calculation.
 struct RequestIdSerializer {
-    element_encoder: Option<ElementEncoder>,
+    element_encoder: Option<Hasher>,
 }
 
 impl RequestIdSerializer {
@@ -157,8 +145,8 @@ impl RequestIdSerializer {
     /// it should not be a problem.
     pub fn finish(mut self) -> Result<RequestId, RequestIdError> {
         match self.element_encoder {
-            Some(ElementEncoder::RequestId(request_id_encoder)) => {
-                Ok(RequestId(request_id_encoder.hasher.finish()))
+            Some(Hasher::RequestId(hasher)) => {
+                Ok(RequestId(hasher.finish()))
             }
             _ => Err(RequestIdError::EmptySerializer), // todo
         }
@@ -174,11 +162,11 @@ impl RequestIdSerializer {
     {
         let prev_encoder = self.element_encoder.take();
 
-        self.element_encoder = Some(ElementEncoder::value());
+        self.element_encoder = Some(Hasher::value());
 
         value.serialize(&mut *self)?;
         let result = match self.element_encoder.take() {
-            Some(ElementEncoder::Value(value_encoder)) => Ok(value_encoder.value_hash.finish()),
+            Some(Hasher::Value(hasher)) => Ok(hasher.finish()),
             _ => Err(RequestIdError::InvalidState),
         };
         self.element_encoder = prev_encoder;
@@ -187,12 +175,12 @@ impl RequestIdSerializer {
 
     fn hash_fields(&mut self) -> Result<(), RequestIdError> {
         match self.element_encoder.take() {
-            Some(ElementEncoder::Fields(fields_encoder)) => {
+            Some(Hasher::Struct(struct_hasher)) => {
                 // Sort the fields.
-                let mut keyvalues: Vec<Vec<u8>> = fields_encoder
+                let mut keyvalues: Vec<Vec<u8>> = struct_hasher
                     .fields
                     .keys()
-                    .zip(fields_encoder.fields.values())
+                    .zip(struct_hasher.fields.values())
                     .map(|(k, v)| {
                         let mut x = k.to_vec();
                         x.extend(v);
@@ -201,12 +189,12 @@ impl RequestIdSerializer {
                     .collect();
                 keyvalues.sort();
 
-                let mut parent = *fields_encoder.parent;
+                let mut parent = *struct_hasher.parent;
 
                 match parent {
-                    ElementEncoder::RequestId(ref mut r) => {
+                    Hasher::RequestId(ref mut hasher) => {
                         for kv in keyvalues {
-                            r.hasher.update(&kv);
+                            hasher.update(&kv);
                         }
                         Ok(())
                     }
@@ -224,7 +212,7 @@ impl RequestIdSerializer {
 impl Default for RequestIdSerializer {
     fn default() -> RequestIdSerializer {
         RequestIdSerializer {
-            element_encoder: Some(ElementEncoder::request_id()),
+            element_encoder: Some(Hasher::request_id()),
         }
     }
 }
@@ -330,12 +318,12 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
     /// Serialize a chunk of raw byte data.
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
         match self.element_encoder {
-            Some(ElementEncoder::RequestId(ref mut request_id_encoder)) => {
-                request_id_encoder.hasher.update(v);
+            Some(Hasher::RequestId(ref mut hasher)) => {
+                hasher.update(v);
                 Ok(())
             }
-            Some(ElementEncoder::Value(ref mut value_encoder)) => {
-                value_encoder.value_hash.update(v);
+            Some(Hasher::Value(ref mut hasher)) => {
+                hasher.update(v);
                 Ok(())
             }
             _ => Err(RequestIdError::InvalidState),
@@ -455,9 +443,9 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
         // here though, as serialize key and value are separate functions.
         let parent_encoder = self.element_encoder.take();
         match &parent_encoder {
-            Some(ElementEncoder::RequestId(_)) => {
+            Some(Hasher::RequestId(_)) => {
                 self.element_encoder =
-                    Some(ElementEncoder::fields(Box::new(parent_encoder.unwrap())));
+                    Some(Hasher::fields(Box::new(parent_encoder.unwrap())));
                 Ok(self)
             }
             _ => Err(RequestIdError::UnsupportedStructInsideStruct),
@@ -474,9 +462,9 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
     ) -> Result<Self::SerializeStruct, Self::Error> {
         let parent_encoder = self.element_encoder.take();
         match &parent_encoder {
-            Some(ElementEncoder::RequestId(_)) => {
+            Some(Hasher::RequestId(_)) => {
                 self.element_encoder =
-                    Some(ElementEncoder::fields(Box::new(parent_encoder.unwrap())));
+                    Some(Hasher::fields(Box::new(parent_encoder.unwrap())));
                 Ok(self)
             }
             _ => Err(RequestIdError::UnsupportedStructInsideStruct),
@@ -521,20 +509,20 @@ impl<'a> ser::SerializeSeq for &'a mut RequestIdSerializer {
     {
         let mut prev_encoder = self.element_encoder.take();
 
-        self.element_encoder = Some(ElementEncoder::value());
+        self.element_encoder = Some(Hasher::value());
 
         value.serialize(&mut **self)?;
 
         let value_encoder = self.element_encoder.take();
         let hash = match value_encoder {
-            Some(ElementEncoder::Value(value_encoder)) => Ok(value_encoder.value_hash.finish()),
+            Some(Hasher::Value(hasher)) => Ok(hasher.finish()),
             _ => Err(RequestIdError::InvalidState),
         }?;
 
         self.element_encoder = prev_encoder.take();
         match self.element_encoder {
-            Some(ElementEncoder::Value(ref mut value_encoder)) => {
-                value_encoder.value_hash.update(&hash);
+            Some(Hasher::Value(ref mut hasher)) => {
+                hasher.update(&hash);
                 Ok(())
             }
             _ => Err(RequestIdError::InvalidState),
@@ -632,11 +620,11 @@ impl<'a> ser::SerializeMap for &'a mut RequestIdSerializer {
     {
         let key_hash = self.hash_value(key)?;
         match self.element_encoder {
-            Some(ElementEncoder::Fields(ref mut field_encoder)) => {
-                if field_encoder.field_key_hash.is_some() {
+            Some(Hasher::Struct(ref mut struct_hasher)) => {
+                if struct_hasher.field_key_hash.is_some() {
                     Err(RequestIdError::InvalidState)
                 } else {
-                    field_encoder.field_key_hash = Some(key_hash);
+                    struct_hasher.field_key_hash = Some(key_hash);
                     Ok(())
                 }
             }
@@ -653,11 +641,11 @@ impl<'a> ser::SerializeMap for &'a mut RequestIdSerializer {
     {
         let value_hash = self.hash_value(value)?;
         match self.element_encoder {
-            Some(ElementEncoder::Fields(ref mut field_encoder)) => {
-                match field_encoder.field_key_hash.take() {
+            Some(Hasher::Struct(ref mut struct_hasher)) => {
+                match struct_hasher.field_key_hash.take() {
                     None => Err(RequestIdError::InvalidState),
                     Some(key_hash) => {
-                        field_encoder.fields.insert(key_hash, value_hash);
+                        struct_hasher.fields.insert(key_hash, value_hash);
                         Ok(())
                     }
                 }
@@ -684,8 +672,8 @@ impl<'a> ser::SerializeStruct for &'a mut RequestIdSerializer {
         let key_hash = self.hash_value(key)?;
         let value_hash = self.hash_value(value)?;
         match self.element_encoder {
-            Some(ElementEncoder::Fields(ref mut field_encoder)) => {
-                field_encoder.fields.insert(key_hash, value_hash);
+            Some(Hasher::Struct(ref mut struct_hasher)) => {
+                struct_hasher.fields.insert(key_hash, value_hash);
                 Ok(())
             }
             _ => Err(RequestIdError::InvalidState),
