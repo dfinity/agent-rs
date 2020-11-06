@@ -1,8 +1,8 @@
-use crate::RequestIdError;
-use thiserror::Error;
 use crate::hash_tree::InvalidHashTreeError;
+use crate::RequestIdError;
 use leb128::read;
 use std::str::Utf8Error;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum AgentError {

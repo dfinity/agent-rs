@@ -1,6 +1,6 @@
 use crate::export::Principal;
-use serde::{Deserialize, Serialize};
 use crate::hash_tree::HashTree;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]

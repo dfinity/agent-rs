@@ -92,10 +92,13 @@ fn canister_reject_call() {
             .call_and_wait(create_waiter())
             .await;
 
-        assert_eq!(x, Err(AgentError::ReplicaError {
-            reject_code: 3,
-            reject_message: "method does not exist: send_cycles".to_string()
-        }));
+        assert_eq!(
+            x,
+            Err(AgentError::ReplicaError {
+                reject_code: 3,
+                reject_message: "method does not exist: send_cycles".to_string()
+            })
+        );
 
         Ok(())
     });

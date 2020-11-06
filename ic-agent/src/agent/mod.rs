@@ -16,7 +16,9 @@ pub use response::{Replied, RequestStatusResponse};
 #[cfg(test)]
 mod agent_test;
 
-use crate::agent::replica_api::{AsyncContent, Envelope, ReadStateResponse, StateTreePath, SyncContent, Certificate};
+use crate::agent::replica_api::{
+    AsyncContent, Certificate, Envelope, ReadStateResponse, StateTreePath, SyncContent,
+};
 use crate::export::Principal;
 use crate::identity::Identity;
 use crate::{to_request_id, RequestId};
@@ -25,10 +27,10 @@ use reqwest::Method;
 use serde::Serialize;
 use status::Status;
 
+use crate::hash_tree::{HashTree, Label, Simple};
 use std::convert::TryFrom;
-use std::time::Duration;
-use crate::hash_tree::{HashTree, Simple, Label};
 use std::str::from_utf8;
+use std::time::Duration;
 
 const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 
@@ -387,8 +389,7 @@ impl Agent {
             })
             .await?;
 
-
-        let s = format!("certificate: {:02x?}", read_state_response.certificate).replace(",","");
+        let s = format!("certificate: {:02x?}", read_state_response.certificate).replace(",", "");
         eprintln!("{}", s);
 
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
@@ -442,16 +443,19 @@ impl Agent {
     }
 }
 
-fn convert_read_state_to_request_status(certificate: Certificate, request_id: &RequestId) -> Result<RequestStatusResponse, AgentError> {
-    let tree = Simple::<Vec<u8>>::try_from(certificate.tree)
-        .map_err(|e|AgentError::HashTreeError(e))?;
+fn convert_read_state_to_request_status(
+    certificate: Certificate,
+    request_id: &RequestId,
+) -> Result<RequestStatusResponse, AgentError> {
+    let tree =
+        Simple::<Vec<u8>>::try_from(certificate.tree).map_err(|e| AgentError::HashTreeError(e))?;
 
     let path_status = vec![
         "request_status".into(),
         serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
-        "status".into()
+        "status".into(),
     ];
-    let status = tree.lookup(path_status).and_then(|s|from_utf8(s).ok());
+    let status = tree.lookup(path_status).and_then(|s| from_utf8(s).ok());
     match status {
         Some("done") => Ok(RequestStatusResponse::Done),
         Some("processing") => Ok(RequestStatusResponse::Processing),
@@ -460,12 +464,12 @@ fn convert_read_state_to_request_status(certificate: Certificate, request_id: &R
             let path_reject_code = vec![
                 "request_status".into(),
                 serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
-                "reject_code".into()
+                "reject_code".into(),
             ];
             let path_reject_message = vec![
                 "request_status".into(),
                 serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
-                "reject_message".into()
+                "reject_message".into(),
             ];
             let reject_code = tree.lookup(path_reject_code);
             let reject_message = tree.lookup(path_reject_message);
@@ -477,26 +481,25 @@ fn convert_read_state_to_request_status(certificate: Certificate, request_id: &R
                     let reject_message = from_utf8(reject_message)?.to_string();
                     Ok(RequestStatusResponse::Rejected {
                         reject_code,
-                        reject_message
+                        reject_message,
                     })
                 }
-                _ => Err(AgentError::InvalidReplicaStatus)
+                _ => Err(AgentError::InvalidReplicaStatus),
             }
         }
         Some("replied") => {
             let path_reply = vec![
                 "request_status".into(),
                 serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
-                "reply".into()
+                "reply".into(),
             ];
             let reply_data = tree.lookup(path_reply).unwrap().clone();
             let reply = Replied::CallReplied(reply_data);
             Ok(RequestStatusResponse::Replied { reply })
-        },
-        _ => Err(AgentError::InvalidReplicaStatus)
+        }
+        _ => Err(AgentError::InvalidReplicaStatus),
     }
 }
-
 
 /// A Query Request Builder.
 ///

@@ -109,7 +109,7 @@ impl ElementEncoder {
 
     fn value() -> ElementEncoder {
         ElementEncoder::Value(ValueEncoder {
-            value_hash: Sha256::new()
+            value_hash: Sha256::new(),
         })
     }
 }
@@ -456,9 +456,8 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
         let parent_encoder = self.element_encoder.take();
         match &parent_encoder {
             Some(ElementEncoder::RequestId(_)) => {
-                self.element_encoder = Some(ElementEncoder::fields(
-                    Box::new(parent_encoder.unwrap()),
-                ));
+                self.element_encoder =
+                    Some(ElementEncoder::fields(Box::new(parent_encoder.unwrap())));
                 Ok(self)
             }
             _ => Err(RequestIdError::UnsupportedStructInsideStruct),
@@ -476,9 +475,8 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
         let parent_encoder = self.element_encoder.take();
         match &parent_encoder {
             Some(ElementEncoder::RequestId(_)) => {
-                self.element_encoder = Some(ElementEncoder::fields(
-                    Box::new(parent_encoder.unwrap()),
-                ));
+                self.element_encoder =
+                    Some(ElementEncoder::fields(Box::new(parent_encoder.unwrap())));
                 Ok(self)
             }
             _ => Err(RequestIdError::UnsupportedStructInsideStruct),

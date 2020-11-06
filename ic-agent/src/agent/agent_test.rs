@@ -131,10 +131,7 @@ fn call() -> Result<(), AgentError> {
     submit_mock.assert();
     status_mock.assert();
 
-    assert_eq!(
-        result?,
-        read_state_response
-    );
+    assert_eq!(result?, read_state_response);
 
     Ok(())
 }
