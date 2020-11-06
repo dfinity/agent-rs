@@ -189,8 +189,8 @@ impl RequestIdSerializer {
 
                 let mut parent = *parent;
 
-                match parent {
-                    Hasher::RequestId(ref mut hasher) => {
+                match &mut parent {
+                    Hasher::RequestId(hasher) => {
                         for kv in keyvalues {
                             hasher.update(&kv);
                         }
@@ -315,12 +315,12 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
 
     /// Serialize a chunk of raw byte data.
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
-        match self.element_encoder {
-            Some(Hasher::RequestId(ref mut hasher)) => {
+        match &mut self.element_encoder {
+            Some(Hasher::RequestId(hasher)) => {
                 hasher.update(v);
                 Ok(())
             }
-            Some(Hasher::Value(ref mut hasher)) => {
+            Some(Hasher::Value(hasher)) => {
                 hasher.update(v);
                 Ok(())
             }
@@ -331,10 +331,6 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
     /// Serialize a [`None`] value.
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
         // Compute the hash as if it was empty string or blob.
-        // match self.field_value_hash {
-        //     None => Err(RequestIdError::InvalidState),
-        //     Some(ref mut _hash) => Ok(()),
-        // }
         Ok(())
     }
 
@@ -507,8 +503,8 @@ impl<'a> ser::SerializeSeq for &'a mut RequestIdSerializer {
         }?;
 
         self.element_encoder = prev_encoder.take();
-        match self.element_encoder {
-            Some(Hasher::Value(ref mut hasher)) => {
+        match &mut self.element_encoder {
+            Some(Hasher::Value(hasher)) => {
                 hasher.update(&hash);
                 Ok(())
             }
