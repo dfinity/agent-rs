@@ -174,7 +174,7 @@ impl RequestIdSerializer {
 
     fn hash_fields(&mut self) -> Result<(), RequestIdError> {
         match self.element_encoder.take() {
-            Some(Hasher::Struct { fields, parent}) => {
+            Some(Hasher::Struct { fields, parent }) => {
                 // Sort the fields.
                 let mut keyvalues: Vec<Vec<u8>> = fields
                     .keys()
