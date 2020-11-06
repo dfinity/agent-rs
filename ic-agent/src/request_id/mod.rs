@@ -144,7 +144,7 @@ impl RequestIdSerializer {
     ///
     /// This can only be called once (it borrows self). Since this whole class is not public,
     /// it should not be a problem.
-    pub fn finish(mut self) -> Result<RequestId, RequestIdError> {
+    pub fn finish(self) -> Result<RequestId, RequestIdError> {
         match self.element_encoder {
             Some(Hasher::RequestId(hasher)) => Ok(RequestId(hasher.finish())),
             _ => Err(RequestIdError::EmptySerializer), // todo
