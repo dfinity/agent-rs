@@ -448,8 +448,7 @@ fn convert_read_state_to_request_status(
     certificate: Certificate,
     request_id: &RequestId,
 ) -> Result<RequestStatusResponse, AgentError> {
-    let tree =
-        Simple::<Vec<u8>>::try_from(certificate.tree).map_err(AgentError::HashTreeError)?;
+    let tree = Simple::<Vec<u8>>::try_from(certificate.tree).map_err(AgentError::HashTreeError)?;
 
     let path_status = vec![
         "request_status".into(),
