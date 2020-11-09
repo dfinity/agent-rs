@@ -389,8 +389,8 @@ impl Agent {
             })
             .await?;
 
-        let s = format!("certificate: {:02x?}", read_state_response.certificate).replace(",", "");
-        eprintln!("{}", s);
+        let _s = format!("certificate: {:02x?}", read_state_response.certificate).replace(",", "");
+        //eprintln!("{}", s);
 
         let _cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
