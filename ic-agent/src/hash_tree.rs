@@ -6,7 +6,8 @@
 //!
 //! cf https://docs.dfinity.systems/public/v/0.13.1/#_encoding_of_certificates
 use openssl::sha::Sha256;
-use serde::Serialize;
+use serde::{Deserializer, Serialize};
+use std::convert::TryFrom;
 
 /// Type alias for a sha256 result (ie. a u256).
 pub type Sha256Digest = [u8; 32];
@@ -99,6 +100,108 @@ impl HashTree {
         P: AsRef<[Label]>,
     {
         self.root.lookup_path(path.as_ref())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for HashTree {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de;
+
+        struct SeqVisitor;
+
+        impl<'de> de::Visitor<'de> for SeqVisitor {
+            type Value = HashTree;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str(
+                    "HashTree encoded as a sequence of the form \
+                     hash-tree ::= [0] | [1 hash-tree hash-tree] | [2 bytes hash-tree] | [3 bytes] | [4 hash]",
+                )
+            }
+
+            fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
+            where
+                V: SeqAccess<'de>,
+            {
+                let tag: u8 = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+
+                match tag {
+                    0 => {
+                        if let Some(de::IgnoredAny) = seq.next_element()? {
+                            return Err(de::Error::invalid_length(2, &self));
+                        }
+
+                        Ok(HashTree::Empty)
+                    }
+                    1 => {
+                        let left: HashTree = seq
+                            .next_element()?
+                            .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+                        let right: HashTree = seq
+                            .next_element()?
+                            .ok_or_else(|| de::Error::invalid_length(2, &self))?;
+
+                        if let Some(de::IgnoredAny) = seq.next_element()? {
+                            return Err(de::Error::invalid_length(4, &self));
+                        }
+
+                        Ok(HashTree::Fork(Box::new((left, right))))
+                    }
+                    2 => {
+                        let label: Label = seq
+                            .next_element()?
+                            .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+                        let subtree: HashTree = seq
+                            .next_element()?
+                            .ok_or_else(|| de::Error::invalid_length(2, &self))?;
+
+                        if let Some(de::IgnoredAny) = seq.next_element()? {
+                            return Err(de::Error::invalid_length(4, &self));
+                        }
+
+                        Ok(HashTree::Labeled(label, Box::new(subtree)))
+                    }
+                    3 => {
+                        let bytes: serde_bytes::ByteBuf = seq
+                            .next_element()?
+                            .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+
+                        if let Some(IgnoredAny) = seq.next_element()? {
+                            return Err(de::Error::invalid_length(3, &self));
+                        }
+
+                        Ok(HashTree::Leaf(bytes.into_vec()))
+                    }
+                    4 => {
+                        let digest_bytes: serde_bytes::ByteBuf = seq
+                            .next_element()?
+                            .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+
+                        if let Some(IgnoredAny) = seq.next_element()? {
+                            return Err(de::Error::invalid_length(3, &self));
+                        }
+
+                        let digest =
+                            Sha256Digest::try_from(digest_bytes.as_ref()).map_err(|err| {
+                                de::Error::invalid_length(err.len(), &"Expected digest blob")
+                            })?;
+
+                        Ok(HashTree::Pruned(digest))
+                    }
+                    _ => Err(de::Error::custom(format!(
+                        "Unknown tag: {}, expected the tag to be one of {{0, 1, 2, 3, 4}}",
+                        tag
+                    ))),
+                }
+            }
+        }
+
+        deserializer.deserialize_seq(SeqVisitor)
     }
 }
 
