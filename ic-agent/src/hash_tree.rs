@@ -293,10 +293,10 @@ impl HashTreeNode {
                                     LookupLabelResult::Absent
                                 }
                             }
-                            result @ _ => result,
+                            result => result,
                         }
                     }
-                    result @ _ => result,
+                    result => result,
                 }
             }
             HashTreeNode::Pruned(_) => LookupLabelResult::Unknown,
