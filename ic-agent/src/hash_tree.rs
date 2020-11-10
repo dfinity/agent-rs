@@ -300,7 +300,6 @@ impl HashTreeNode {
     /// This function is implemented with flattening in mind, ie. flattening the forks
     /// is not necessary.
     fn lookup_label(&self, label: &Label) -> LookupLabelResult {
-        eprintln!(". {:?}", self);
         match self {
             // If this node is a labeled node, check for the name. This assume a
             HashTreeNode::Labeled(l, node) => match label.cmp(l) {
