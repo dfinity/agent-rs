@@ -1,4 +1,3 @@
-use crate::hash_tree::InvalidHashTreeError;
 use crate::RequestIdError;
 use leb128::read;
 use std::fmt::{Debug, Formatter};
@@ -18,9 +17,6 @@ pub enum AgentError {
 
     #[error("Invalid CBOR data, could not deserialize: {0}")]
     InvalidCborData(#[from] serde_cbor::Error),
-
-    #[error("Invalid HashTree")]
-    HashTreeError(InvalidHashTreeError),
 
     #[error("Cannot calculate a RequestID: {0}")]
     CannotCalculateRequestId(#[from] RequestIdError),

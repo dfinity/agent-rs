@@ -27,7 +27,7 @@ use reqwest::Method;
 use serde::Serialize;
 use status::Status;
 
-use crate::hash_tree::Simple;
+use crate::hash_tree::LookupResult;
 use std::convert::TryFrom;
 use std::str::from_utf8;
 use std::time::Duration;
@@ -448,57 +448,67 @@ fn convert_read_state_to_request_status(
     certificate: Certificate,
     request_id: &RequestId,
 ) -> Result<RequestStatusResponse, AgentError> {
-    let tree = Simple::<Vec<u8>>::try_from(certificate.tree).map_err(AgentError::HashTreeError)?;
-
     let path_status = vec![
         "request_status".into(),
         serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
         "status".into(),
     ];
-    let status = tree.lookup(path_status).and_then(|s| from_utf8(s).ok());
-    match status {
-        Some("done") => Ok(RequestStatusResponse::Done),
-        Some("processing") => Ok(RequestStatusResponse::Processing),
-        Some("received") => Ok(RequestStatusResponse::Received),
-        Some("rejected") => {
-            let path_reject_code = vec![
-                "request_status".into(),
-                serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
-                "reject_code".into(),
-            ];
-            let path_reject_message = vec![
-                "request_status".into(),
-                serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
-                "reject_message".into(),
-            ];
-            let reject_code = tree.lookup(path_reject_code);
-            let reject_message = tree.lookup(path_reject_message);
-            match (reject_code, reject_message) {
-                (Some(reject_code), Some(reject_message)) => {
-                    let c = reject_code.clone();
-                    let mut readable = &c[..];
-                    let reject_code = leb128::read::unsigned(&mut readable)?;
-                    let reject_message = from_utf8(reject_message)?.to_string();
-                    Ok(RequestStatusResponse::Rejected {
-                        reject_code,
-                        reject_message,
-                    })
+    let lookup_result = certificate.tree.lookup_path(path_status);
+    match lookup_result {
+        LookupResult::Absent => Ok(RequestStatusResponse::Unknown),
+        LookupResult::Unknown => Ok(RequestStatusResponse::Unknown),
+        LookupResult::Found(v) => {
+            let status = from_utf8(v)?;
+            match status {
+                "done" => Ok(RequestStatusResponse::Done),
+                "processing" => Ok(RequestStatusResponse::Processing),
+                "received" => Ok(RequestStatusResponse::Received),
+                "rejected" => {
+                    let path_reject_code = vec![
+                        "request_status".into(),
+                        serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
+                        "reject_code".into(),
+                    ];
+                    let path_reject_message = vec![
+                        "request_status".into(),
+                        serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
+                        "reject_message".into(),
+                    ];
+                    let reject_code = certificate.tree.lookup_path(path_reject_code);
+                    let reject_message = certificate.tree.lookup_path(path_reject_message);
+                    match (reject_code, reject_message) {
+                        (LookupResult::Found(reject_code), LookupResult::Found(reject_message)) => {
+                            let mut readable = &reject_code[..];
+                            let reject_code = leb128::read::unsigned(&mut readable)?;
+                            let reject_message = from_utf8(reject_message)?.to_string();
+                            Ok(RequestStatusResponse::Rejected {
+                                reject_code,
+                                reject_message,
+                            })
+                        }
+                        _ => Err(AgentError::InvalidReplicaStatus),
+                    }
+                }
+                "replied" => {
+                    let path_reply = vec![
+                        "request_status".into(),
+                        serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
+                        "reply".into(),
+                    ];
+                    match certificate.tree.lookup_path(path_reply) {
+                        LookupResult::Absent => Err(AgentError::InvalidReplicaStatus),
+                        LookupResult::Unknown => Err(AgentError::InvalidReplicaStatus),
+                        LookupResult::Found(reply_data) => {
+                            let reply = Replied::CallReplied(Vec::from(reply_data));
+                            Ok(RequestStatusResponse::Replied { reply })
+                        }
+                        LookupResult::Error => Err(AgentError::InvalidReplicaStatus),
+                    }
                 }
                 _ => Err(AgentError::InvalidReplicaStatus),
             }
         }
-        Some("replied") => {
-            let path_reply = vec![
-                "request_status".into(),
-                serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
-                "reply".into(),
-            ];
-            let reply_data = tree.lookup(path_reply).unwrap().clone();
-            let reply = Replied::CallReplied(reply_data);
-            Ok(RequestStatusResponse::Replied { reply })
-        }
-        Some(_) => Err(AgentError::InvalidReplicaStatus),
-        None => Ok(RequestStatusResponse::Unknown),
+        LookupResult::Error => Ok(RequestStatusResponse::Unknown),
     }
 }
 
