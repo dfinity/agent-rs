@@ -332,8 +332,8 @@ impl TryFrom<HashTree> for Simple<Vec<u8>> {
 
 impl<'de> serde::de::Deserialize<'de> for HashTree {
     fn deserialize<D>(deserializer: D) -> Result<HashTree, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
+        where
+            D: serde::de::Deserializer<'de>,
     {
         use serde::de::{self, IgnoredAny, SeqAccess, Visitor};
 
@@ -350,8 +350,8 @@ impl<'de> serde::de::Deserialize<'de> for HashTree {
             }
 
             fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
-            where
-                V: SeqAccess<'de>,
+                where
+                    V: SeqAccess<'de>,
             {
                 let tag: u8 = seq
                     .next_element()?
