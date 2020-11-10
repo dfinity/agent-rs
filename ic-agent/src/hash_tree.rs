@@ -6,13 +6,15 @@
 //!
 //! cf https://docs.dfinity.systems/public/v/0.13.1/#_encoding_of_certificates
 use openssl::sha::Sha256;
-use serde::{Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
 /// Type alias for a sha256 result (ie. a u256).
 pub type Sha256Digest = [u8; 32];
 
-#[derive(Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Hash, Ord, PartialOrd, Eq, PartialEq, Deserialize)]
+#[serde(from = "&serde_bytes::Bytes")]
+#[serde(into = "serde_bytes::ByteBuf")]
 pub struct Label(Vec<u8>);
 
 impl Label {
@@ -22,12 +24,18 @@ impl Label {
     }
 }
 
+impl Into<serde_bytes::ByteBuf> for Label {
+    fn into(self) -> serde_bytes::ByteBuf {
+        serde_bytes::ByteBuf::from(self.as_bytes().to_vec())
+    }
+}
+
 impl<T> From<T> for Label
 where
-    T: Into<String>,
+    T: AsRef<[u8]>,
 {
     fn from(s: T) -> Self {
-        Self(s.into().as_bytes().to_vec())
+        Self(s.as_ref().to_vec())
     }
 }
 
@@ -106,14 +114,25 @@ impl HashTree {
 impl<'de> serde::Deserialize<'de> for HashTree {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'de>,
+        D: serde::Deserializer<'de>,
+    {
+        Ok(HashTree {
+            root: HashTreeNode::deserialize(deserializer)?,
+        })
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for HashTreeNode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
     {
         use serde::de;
 
         struct SeqVisitor;
 
         impl<'de> de::Visitor<'de> for SeqVisitor {
-            type Value = HashTree;
+            type Value = HashTreeNode;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str(
@@ -136,13 +155,13 @@ impl<'de> serde::Deserialize<'de> for HashTree {
                             return Err(de::Error::invalid_length(2, &self));
                         }
 
-                        Ok(HashTree::Empty)
+                        Ok(HashTreeNode::Empty())
                     }
                     1 => {
-                        let left: HashTree = seq
+                        let left: HashTreeNode = seq
                             .next_element()?
                             .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-                        let right: HashTree = seq
+                        let right: HashTreeNode = seq
                             .next_element()?
                             .ok_or_else(|| de::Error::invalid_length(2, &self))?;
 
@@ -150,13 +169,13 @@ impl<'de> serde::Deserialize<'de> for HashTree {
                             return Err(de::Error::invalid_length(4, &self));
                         }
 
-                        Ok(HashTree::Fork(Box::new((left, right))))
+                        Ok(HashTreeNode::Fork(Box::new((left, right))))
                     }
                     2 => {
                         let label: Label = seq
                             .next_element()?
                             .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-                        let subtree: HashTree = seq
+                        let subtree: HashTreeNode = seq
                             .next_element()?
                             .ok_or_else(|| de::Error::invalid_length(2, &self))?;
 
@@ -164,34 +183,37 @@ impl<'de> serde::Deserialize<'de> for HashTree {
                             return Err(de::Error::invalid_length(4, &self));
                         }
 
-                        Ok(HashTree::Labeled(label, Box::new(subtree)))
+                        Ok(HashTreeNode::Labeled(label, Box::new(subtree)))
                     }
                     3 => {
                         let bytes: serde_bytes::ByteBuf = seq
                             .next_element()?
                             .ok_or_else(|| de::Error::invalid_length(1, &self))?;
 
-                        if let Some(IgnoredAny) = seq.next_element()? {
+                        if let Some(de::IgnoredAny) = seq.next_element()? {
                             return Err(de::Error::invalid_length(3, &self));
                         }
 
-                        Ok(HashTree::Leaf(bytes.into_vec()))
+                        Ok(HashTreeNode::Leaf(bytes.into_vec()))
                     }
                     4 => {
                         let digest_bytes: serde_bytes::ByteBuf = seq
                             .next_element()?
                             .ok_or_else(|| de::Error::invalid_length(1, &self))?;
 
-                        if let Some(IgnoredAny) = seq.next_element()? {
+                        if let Some(de::IgnoredAny) = seq.next_element()? {
                             return Err(de::Error::invalid_length(3, &self));
                         }
 
                         let digest =
-                            Sha256Digest::try_from(digest_bytes.as_ref()).map_err(|err| {
-                                de::Error::invalid_length(err.len(), &"Expected digest blob")
+                            Sha256Digest::try_from(digest_bytes.as_ref()).map_err(|_| {
+                                de::Error::invalid_length(
+                                    digest_bytes.len(),
+                                    &"Expected digest blob",
+                                )
                             })?;
 
-                        Ok(HashTree::Pruned(digest))
+                        Ok(HashTreeNode::Pruned(digest))
                     }
                     _ => Err(de::Error::custom(format!(
                         "Unknown tag: {}, expected the tag to be one of {{0, 1, 2, 3, 4}}",
