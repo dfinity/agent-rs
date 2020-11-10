@@ -6,7 +6,7 @@
 //!
 //! cf https://docs.dfinity.systems/public/v/0.13.1/#_encoding_of_certificates
 use openssl::sha::Sha256;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use std::convert::TryFrom;
 
 /// Type alias for a sha256 result (ie. a u256).
@@ -111,6 +111,15 @@ impl HashTree {
     }
 }
 
+impl Serialize for HashTree {
+    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
+    where
+        S: Serializer,
+    {
+        self.root.serialize(serializer)
+    }
+}
+
 impl<'de> serde::Deserialize<'de> for HashTree {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -119,6 +128,259 @@ impl<'de> serde::Deserialize<'de> for HashTree {
         Ok(HashTree {
             root: HashTreeNode::deserialize(deserializer)?,
         })
+    }
+}
+
+/// Private type for label lookup result.
+#[derive(Debug)]
+enum LookupLabelResult<'node> {
+    /// The label is not part of this node's tree.
+    Absent,
+
+    /// Same as absent, but some leaves were pruned and so it's impossible to know.
+    Unknown,
+
+    /// The label was not found, but could still be somewhere else.
+    Continue,
+
+    /// The label was found. Contains a reference to the [HashTreeNode].
+    Found(&'node HashTreeNode),
+}
+
+/// A Node in the HashTree.
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) enum HashTreeNode {
+    Empty(),
+    Fork(Box<(HashTreeNode, HashTreeNode)>),
+    Labeled(Label, Box<HashTreeNode>),
+    Leaf(Vec<u8>),
+    Pruned(Sha256Digest),
+}
+
+impl std::fmt::Debug for HashTreeNode {
+    // Shows a nicer view to debug than the default debugger.
+    // Example:
+    //
+    // ```
+    // HashTree {
+    //     root: Fork(
+    //         Fork(
+    //             Label("a", Fork(
+    //                 Pruned(1b4feff9bef8131788b0c9dc6dbad6e81e524249c879e9f10f71ce3749f5a638),
+    //                 Label("y", Leaf("world")),
+    //             )),
+    //             Label("b", Pruned(7b32ac0c6ba8ce35ac82c255fc7906f7fc130dab2a090f80fe12f9c2cae83ba6)),
+    //         ),
+    //         Fork(
+    //             Pruned(ec8324b8a1f1ac16bd2e806edba78006479c9877fed4eb464a25485465af601d),
+    //             Label("d", Leaf("morning")),
+    //         ),
+    //     ),
+    // }
+    // ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn readable_print(f: &mut std::fmt::Formatter<'_>, v: &[u8]) -> std::fmt::Result {
+            // If it's utf8 then show as a string. If it's short, show hex. Otherwise,
+            // show length.
+            if let Ok(s) = std::str::from_utf8(v) {
+                f.write_str("\"")?;
+                f.write_str(s)?;
+                f.write_str("\"")
+            } else if v.len() <= 32 {
+                f.write_str("0x")?;
+                f.write_str(&hex::encode(v))
+            } else {
+                write!(f, "{} bytes", v.len())
+            }
+        }
+
+        match self {
+            HashTreeNode::Empty() => f.write_str("Empty"),
+            HashTreeNode::Fork(nodes) => f
+                .debug_tuple("Fork")
+                .field(&nodes.0)
+                .field(&nodes.1)
+                .finish(),
+            HashTreeNode::Leaf(v) => {
+                f.write_str("Leaf(")?;
+                readable_print(f, v)?;
+                f.write_str(")")
+            }
+            HashTreeNode::Labeled(l, node) => {
+                f.write_str("Label(")?;
+                readable_print(f, l.as_bytes())?;
+                f.write_str(", ")?;
+                node.fmt(f)?;
+                f.write_str(")")
+            }
+            HashTreeNode::Pruned(digest) => write!(f, "Pruned({})", hex::encode(digest)),
+        }
+    }
+}
+
+impl HashTreeNode {
+    /// Update a hasher with the domain separator (byte(|s|) . s).
+    #[inline]
+    fn domain_sep(&self, hasher: &mut Sha256) {
+        let domain_sep = match self {
+            HashTreeNode::Empty() => "ic-hashtree-empty",
+            HashTreeNode::Fork(_) => "ic-hashtree-fork",
+            HashTreeNode::Labeled(_, _) => "ic-hashtree-labeled",
+            HashTreeNode::Leaf(_) => "ic-hashtree-leaf",
+            HashTreeNode::Pruned(_) => return,
+        };
+        hasher.update(&[domain_sep.len() as u8]);
+        hasher.update(domain_sep.as_bytes());
+    }
+
+    /// Calculate the digest of this node only.
+    #[inline]
+    pub fn digest(&self) -> Sha256Digest {
+        let mut hasher = Sha256::new();
+        self.domain_sep(&mut hasher);
+
+        match self {
+            HashTreeNode::Empty() => {}
+            HashTreeNode::Fork(nodes) => {
+                hasher.update(&nodes.0.digest());
+                hasher.update(&nodes.1.digest());
+            }
+            HashTreeNode::Labeled(label, node) => {
+                hasher.update(&label.as_bytes());
+                hasher.update(&node.digest());
+            }
+            HashTreeNode::Leaf(bytes) => {
+                hasher.update(bytes);
+            }
+            HashTreeNode::Pruned(digest) => {
+                return *digest;
+            }
+        }
+
+        hasher.finish()
+    }
+
+    /// Lookup a single label, returning a reference to the labeled [HashTreeNode] node if found.
+    ///
+    /// This assumes a sorted hash tree, which is what the spec says the system should
+    /// return. It will stop when it finds a label that's greater than the one being looked
+    /// for.
+    ///
+    /// This function is implemented with flattening in mind, ie. flattening the forks
+    /// is not necessary.
+    fn lookup_label(&self, label: &Label) -> LookupLabelResult {
+        match self {
+            // If this node is a labeled node, check for the name. This assume a
+            HashTreeNode::Labeled(l, node) => match label.cmp(l) {
+                std::cmp::Ordering::Greater => LookupLabelResult::Continue,
+                std::cmp::Ordering::Equal => LookupLabelResult::Found(node.as_ref()),
+                // If this node has a smaller label than the one we're looking for, shortcut
+                // out of this search (sorted tree), we looked too far.
+                std::cmp::Ordering::Less => LookupLabelResult::Absent,
+            },
+            HashTreeNode::Fork(nodes) => {
+                let left_label = nodes.0.lookup_label(label);
+                match left_label {
+                    // On continue or unknown, look on the right side of the fork.
+                    // If it cannot be found on the right, return Unknown though.
+                    LookupLabelResult::Continue | LookupLabelResult::Unknown => {
+                        let right_label = nodes.1.lookup_label(label);
+                        match right_label {
+                            LookupLabelResult::Absent => {
+                                if matches!(left_label, LookupLabelResult::Unknown) {
+                                    LookupLabelResult::Unknown
+                                } else {
+                                    LookupLabelResult::Absent
+                                }
+                            }
+                            result @ _ => result,
+                        }
+                    }
+                    result @ _ => result,
+                }
+            }
+            HashTreeNode::Pruned(_) => LookupLabelResult::Unknown,
+            // Any other type of node and we need to look for more forks.
+            _ => LookupLabelResult::Continue,
+        }
+    }
+
+    /// Lookup the path for the current node only. If the node does not contain the label,
+    /// this will return [None], signifying that whatever process is recursively walking the
+    /// tree should continue with siblings of this node (if possible). If it returns
+    /// [Some] value, then it found an actual result and this may be propagated to the
+    /// original process doing the lookup.
+    ///
+    /// This assumes a sorted hash tree, which is what the spec says the system should return.
+    /// It will stop when it finds a label that's greater than the one being looked for.
+    fn lookup_path(&self, path: &[Label]) -> LookupResult {
+        use HashTreeNode::*;
+        use LookupResult::*;
+
+        if path.is_empty() {
+            match self {
+                Empty() => Absent,
+                Leaf(v) => Found(v),
+                Pruned(_) => Unknown,
+                Labeled(_, _) => Error,
+                Fork(_) => Error,
+            }
+        } else {
+            match self.lookup_label(&path[0]) {
+                LookupLabelResult::Unknown => Unknown,
+                LookupLabelResult::Absent | LookupLabelResult::Continue => match self {
+                    Empty() | Pruned(_) | Leaf(_) => Unknown,
+                    _ => Absent,
+                },
+                LookupLabelResult::Found(node) => node.lookup_path(&path[1..]),
+            }
+        }
+    }
+}
+
+impl serde::Serialize for HashTreeNode {
+    // Serialize a `MixedHashTree` per the CDDL of the public spec.
+    // See https://docs.dfinity.systems/public/certificates.cddl
+    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
+    where
+        S: Serializer,
+    {
+        use serde::ser::SerializeSeq;
+        use serde_bytes::Bytes;
+
+        match self {
+            HashTreeNode::Empty() => {
+                let mut seq = serializer.serialize_seq(Some(1))?;
+                seq.serialize_element(&0u8)?;
+                seq.end()
+            }
+            HashTreeNode::Fork(tree) => {
+                let mut seq = serializer.serialize_seq(Some(3))?;
+                seq.serialize_element(&1u8)?;
+                seq.serialize_element(&tree.0)?;
+                seq.serialize_element(&tree.1)?;
+                seq.end()
+            }
+            HashTreeNode::Labeled(label, tree) => {
+                let mut seq = serializer.serialize_seq(Some(3))?;
+                seq.serialize_element(&2u8)?;
+                seq.serialize_element(Bytes::new(label.as_bytes()))?;
+                seq.serialize_element(&tree)?;
+                seq.end()
+            }
+            HashTreeNode::Leaf(leaf_bytes) => {
+                let mut seq = serializer.serialize_seq(Some(2))?;
+                seq.serialize_element(&3u8)?;
+                seq.serialize_element(Bytes::new(leaf_bytes))?;
+                seq.end()
+            }
+            HashTreeNode::Pruned(digest) => {
+                let mut seq = serializer.serialize_seq(Some(2))?;
+                seq.serialize_element(&4u8)?;
+                seq.serialize_element(Bytes::new(digest))?;
+                seq.end()
+            }
+        }
     }
 }
 
@@ -224,132 +486,6 @@ impl<'de> serde::Deserialize<'de> for HashTreeNode {
         }
 
         deserializer.deserialize_seq(SeqVisitor)
-    }
-}
-
-/// Private type for label lookup result.
-enum LookupLabelResult<'node> {
-    /// The label is not part of this node's tree.
-    Absent,
-
-    /// The label was not found, but could still be somewhere else.
-    Continue,
-
-    /// The label was found. Contains a reference to the [HashTreeNode].
-    Found(&'node HashTreeNode),
-}
-
-/// A Node in the HashTree.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub(crate) enum HashTreeNode {
-    Empty(),
-    Fork(Box<(HashTreeNode, HashTreeNode)>),
-    Labeled(Label, Box<HashTreeNode>),
-    Leaf(Vec<u8>),
-    Pruned(Sha256Digest),
-}
-
-impl HashTreeNode {
-    /// Get the domain separator (byte(|s|) . s).
-    #[inline]
-    pub fn domain_sep(&self, hasher: &mut Sha256) {
-        let domain_sep = match self {
-            HashTreeNode::Empty() => "ic-hashtree-empty",
-            HashTreeNode::Fork(_) => "ic-hashtree-fork",
-            HashTreeNode::Labeled(_, _) => "ic-hashtree-labeled",
-            HashTreeNode::Leaf(_) => "ic-hashtree-leaf",
-            HashTreeNode::Pruned(_) => return,
-        };
-        hasher.update(&domain_sep.len().to_ne_bytes());
-        hasher.update(domain_sep.as_bytes());
-    }
-
-    /// Calculate the digest of this node only.
-    #[inline]
-    pub fn digest(&self) -> Sha256Digest {
-        let mut hasher = Sha256::new();
-        self.domain_sep(&mut hasher);
-
-        match self {
-            HashTreeNode::Empty() => {}
-            HashTreeNode::Fork(nodes) => {
-                hasher.update(&nodes.0.digest());
-                hasher.update(&nodes.1.digest());
-            }
-            HashTreeNode::Labeled(label, node) => {
-                hasher.update(&label.as_bytes());
-                hasher.update(&node.digest());
-            }
-            HashTreeNode::Leaf(bytes) => {
-                hasher.update(bytes);
-            }
-            HashTreeNode::Pruned(digest) => {
-                return *digest;
-            }
-        }
-
-        hasher.finish()
-    }
-
-    /// Lookup a single label, returning a reference to the labeled [HashTreeNode] node if found.
-    ///
-    /// This assumes a sorted hash tree, which is what the spec says the system should
-    /// return. It will stop when it finds a label that's greater than the one being looked
-    /// for.
-    ///
-    /// This function is implemented with flattening in mind, ie. flattening the forks
-    /// is not necessary.
-    fn lookup_label(&self, label: &Label) -> LookupLabelResult {
-        match self {
-            // If this node is a labeled node, check for the name. This assume a
-            HashTreeNode::Labeled(l, node) => match label.cmp(l) {
-                std::cmp::Ordering::Greater => LookupLabelResult::Continue,
-                std::cmp::Ordering::Equal => LookupLabelResult::Found(node.as_ref()),
-                // If this node has a smaller label than the one we're looking for, shortcut
-                // out of this search (sorted tree), we looked too far.
-                std::cmp::Ordering::Less => LookupLabelResult::Absent,
-            },
-            HashTreeNode::Fork(nodes) => match nodes.0.lookup_label(label) {
-                // On continue, look on the right side of the fork.
-                LookupLabelResult::Continue => nodes.1.lookup_label(label),
-                result @ LookupLabelResult::Absent => result,
-                result @ LookupLabelResult::Found(_) => result,
-            },
-            // Any other type of node and we need to look for more forks.
-            _ => LookupLabelResult::Continue,
-        }
-    }
-
-    /// Lookup the path for the current node only. If the node does not contain the label,
-    /// this will return [None], signifying that whatever process is recursively walking the
-    /// tree should continue with siblings of this node (if possible). If it returns
-    /// [Some] value, then it found an actual result and this may be propagated to the
-    /// original process doing the lookup.
-    ///
-    /// This assumes a sorted hash tree, which is what the spec says the system should return.
-    /// It will stop when it finds a label that's greater than the one being looked for.
-    fn lookup_path(&self, path: &[Label]) -> LookupResult {
-        match self {
-            HashTreeNode::Leaf(v) => {
-                if path.is_empty() {
-                    LookupResult::Found(v)
-                } else {
-                    LookupResult::Error
-                }
-            }
-            HashTreeNode::Empty() => LookupResult::Absent,
-            HashTreeNode::Pruned(_) => LookupResult::Unknown,
-            _ => match self.lookup_label(&path[0]) {
-                LookupLabelResult::Absent | LookupLabelResult::Continue => {
-                    if path.is_empty() {
-                        LookupResult::Absent
-                    } else {
-                        LookupResult::Error
-                    }
-                }
-                LookupLabelResult::Found(node) => node.lookup_path(&path[1..]),
-            },
-        }
     }
 }
 
