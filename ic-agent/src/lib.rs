@@ -108,6 +108,3 @@ pub use agent::{
 };
 pub use identity::{Identity, Signature};
 pub use request_id::{to_request_id, RequestId, RequestIdError};
-
-// FIXME: not actually public
-pub mod hash_tree;
