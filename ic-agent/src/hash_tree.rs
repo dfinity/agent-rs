@@ -124,7 +124,7 @@ impl<'de> serde::Deserialize<'de> for HashTree {
 
             fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
             where
-                V: SeqAccess<'de>,
+                V: de::SeqAccess<'de>,
             {
                 let tag: u8 = seq
                     .next_element()?
