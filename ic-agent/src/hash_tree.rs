@@ -353,44 +353,5 @@ impl HashTreeNode {
     }
 }
 
-#[test]
-fn works_with_example_from_spec() {
-    let tree = HashTree {
-        root: HashTreeNode::Fork(Box::new((
-            HashTreeNode::Labeled("label 1".into(), Box::new(HashTreeNode::Empty())),
-            HashTreeNode::Fork(Box::new((
-                HashTreeNode::Pruned([1; 32]),
-                HashTreeNode::Leaf(vec![1, 2, 3, 4, 5, 6]),
-            ))),
-        ))),
-    };
-
-    assert_eq!(
-        hex::encode(tree.digest().to_vec()),
-        "e40b2079db3811926c5325bf28b6cfe9682eed13d1a9479338accf60bbb0607f"
-    );
-}
-
-#[test]
-fn can_lookup_paths() {
-    let tree = HashTree {
-        root: HashTreeNode::Fork(Box::new((
-            HashTreeNode::Labeled("label 1".into(), Box::new(HashTreeNode::Empty())),
-            HashTreeNode::Fork(Box::new((
-                HashTreeNode::Pruned([1; 32]),
-                HashTreeNode::Fork(Box::new((
-                    HashTreeNode::Labeled(
-                        "label 2".into(),
-                        Box::new(HashTreeNode::Leaf(vec![1, 2, 3, 4, 5, 6])),
-                    ),
-                    HashTreeNode::Labeled("label 3".into(), Box::new(HashTreeNode::Empty())),
-                ))),
-            ))),
-        ))),
-    };
-
-    assert_eq!(
-        tree.lookup_path(["label 2".into()]),
-        LookupResult::Found(&[1, 2, 3, 4, 5, 6])
-    )
-}
+#[cfg(test)]
+mod hash_tree_tests;
