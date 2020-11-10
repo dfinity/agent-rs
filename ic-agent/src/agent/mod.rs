@@ -390,7 +390,7 @@ impl Agent {
             .await?;
 
         let _s = format!("certificate: {:02x?}", read_state_response.certificate).replace(",", "");
-        //eprintln!("{}", s);
+        // eprintln!("{}", s);
 
         let _cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
@@ -497,7 +497,8 @@ fn convert_read_state_to_request_status(
             let reply = Replied::CallReplied(reply_data);
             Ok(RequestStatusResponse::Replied { reply })
         }
-        _ => Err(AgentError::InvalidReplicaStatus),
+        Some(_) => Err(AgentError::InvalidReplicaStatus),
+        None => Ok(RequestStatusResponse::Unknown),
     }
 }
 
