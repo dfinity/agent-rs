@@ -108,3 +108,5 @@ pub use agent::{
 };
 pub use identity::{Identity, Signature};
 pub use request_id::{to_request_id, RequestId, RequestIdError};
+
+pub(crate) mod hash_tree;
