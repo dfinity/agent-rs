@@ -414,7 +414,7 @@ impl Agent {
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
 
-        convert_read_state_to_request_status(cert, request_id)
+        lookup_request_status(cert, request_id)
     }
 
     /// Returns an UpdateBuilder enabling the construction of an update call without
@@ -444,7 +444,7 @@ impl Agent {
     }
 }
 
-fn convert_read_state_to_request_status(
+fn lookup_request_status(
     certificate: Certificate,
     request_id: &RequestId,
 ) -> Result<RequestStatusResponse, AgentError> {
@@ -457,58 +457,65 @@ fn convert_read_state_to_request_status(
     match lookup_result {
         LookupResult::Absent => Ok(RequestStatusResponse::Unknown),
         LookupResult::Unknown => Ok(RequestStatusResponse::Unknown),
-        LookupResult::Found(v) => {
-            let status = from_utf8(v)?;
-            match status {
-                "done" => Ok(RequestStatusResponse::Done),
-                "processing" => Ok(RequestStatusResponse::Processing),
-                "received" => Ok(RequestStatusResponse::Received),
-                "rejected" => {
-                    let path_reject_code = vec![
-                        "request_status".into(),
-                        serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
-                        "reject_code".into(),
-                    ];
-                    let path_reject_message = vec![
-                        "request_status".into(),
-                        serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
-                        "reject_message".into(),
-                    ];
-                    let reject_code = certificate.tree.lookup_path(path_reject_code);
-                    let reject_message = certificate.tree.lookup_path(path_reject_message);
-                    match (reject_code, reject_message) {
-                        (LookupResult::Found(reject_code), LookupResult::Found(reject_message)) => {
-                            let mut readable = &reject_code[..];
-                            let reject_code = leb128::read::unsigned(&mut readable)?;
-                            let reject_message = from_utf8(reject_message)?.to_string();
-                            Ok(RequestStatusResponse::Rejected {
-                                reject_code,
-                                reject_message,
-                            })
-                        }
-                        _ => Err(AgentError::InvalidReplicaStatus),
-                    }
-                }
-                "replied" => {
-                    let path_reply = vec![
-                        "request_status".into(),
-                        serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
-                        "reply".into(),
-                    ];
-                    match certificate.tree.lookup_path(path_reply) {
-                        LookupResult::Absent => Err(AgentError::InvalidReplicaStatus),
-                        LookupResult::Unknown => Err(AgentError::InvalidReplicaStatus),
-                        LookupResult::Found(reply_data) => {
-                            let reply = Replied::CallReplied(Vec::from(reply_data));
-                            Ok(RequestStatusResponse::Replied { reply })
-                        }
-                        LookupResult::Error => Err(AgentError::InvalidReplicaStatus),
-                    }
-                }
-                _ => Err(AgentError::InvalidReplicaStatus),
-            }
-        }
+        LookupResult::Found(status) => match from_utf8(status)? {
+            "done" => Ok(RequestStatusResponse::Done),
+            "processing" => Ok(RequestStatusResponse::Processing),
+            "received" => Ok(RequestStatusResponse::Received),
+            "rejected" => lookup_rejection(&certificate, request_id),
+            "replied" => lookup_reply(certificate, request_id),
+            _ => Err(AgentError::InvalidReplicaStatus),
+        },
         LookupResult::Error => Ok(RequestStatusResponse::Unknown),
+    }
+}
+
+fn lookup_rejection(
+    certificate: &Certificate,
+    request_id: &RequestId,
+) -> Result<RequestStatusResponse, AgentError> {
+    let path_reject_code = vec![
+        "request_status".into(),
+        serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
+        "reject_code".into(),
+    ];
+    let path_reject_message = vec![
+        "request_status".into(),
+        serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
+        "reject_message".into(),
+    ];
+    let reject_code = certificate.tree.lookup_path(path_reject_code);
+    let reject_message = certificate.tree.lookup_path(path_reject_message);
+    match (reject_code, reject_message) {
+        (LookupResult::Found(reject_code), LookupResult::Found(reject_message)) => {
+            let mut readable = &reject_code[..];
+            let reject_code = leb128::read::unsigned(&mut readable)?;
+            let reject_message = from_utf8(reject_message)?.to_string();
+            Ok(RequestStatusResponse::Rejected {
+                reject_code,
+                reject_message,
+            })
+        }
+        _ => Err(AgentError::InvalidReplicaStatus),
+    }
+}
+
+fn lookup_reply(
+    certificate: Certificate,
+    request_id: &RequestId,
+) -> Result<RequestStatusResponse, AgentError> {
+    let path_reply = vec![
+        "request_status".into(),
+        serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
+        "reply".into(),
+    ];
+    match certificate.tree.lookup_path(path_reply) {
+        LookupResult::Absent => Err(AgentError::InvalidReplicaStatus),
+        LookupResult::Unknown => Err(AgentError::InvalidReplicaStatus),
+        LookupResult::Found(reply_data) => {
+            let reply = Replied::CallReplied(Vec::from(reply_data));
+            Ok(RequestStatusResponse::Replied { reply })
+        }
+        LookupResult::Error => Err(AgentError::InvalidReplicaStatus),
     }
 }
 
