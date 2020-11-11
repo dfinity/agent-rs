@@ -487,14 +487,12 @@ fn lookup_rejection(
         LookupResult::Found(reject_code) => {
             let mut readable = &reject_code[..];
             Ok(leb128::read::unsigned(&mut readable)?)
-        },
+        }
         _ => Err(AgentError::NoRejectCode),
     }?;
 
     let reject_message = match certificate.tree.lookup_path(path_reject_message) {
-        LookupResult::Found(m) => {
-            Ok(from_utf8(m)?.to_string())
-        },
+        LookupResult::Found(m) => Ok(from_utf8(m)?.to_string()),
         _ => Err(AgentError::NoRejectMessage),
     }?;
 

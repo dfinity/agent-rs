@@ -1,9 +1,9 @@
+use crate::hash_tree::Label;
 use crate::RequestIdError;
 use leb128::read;
 use std::fmt::{Debug, Formatter};
 use std::str::Utf8Error;
 use thiserror::Error;
-use crate::hash_tree::Label;
 
 #[derive(Error, Debug)]
 pub enum AgentError {
@@ -79,7 +79,6 @@ pub enum AgentError {
 
     #[error("The request status({0}) was invalid.")]
     InvalidRequestStatus(String),
-
 }
 
 impl PartialEq for AgentError {
