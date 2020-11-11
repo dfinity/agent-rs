@@ -1,5 +1,5 @@
 This is a convenience copy of the code in https://github.com/miracl/core
-produced from revision 9138019b73abe369b4ed8ac050d1da90b7d35c87 with these steps:
+produced from revision f9de005e0168f59a56afe177498b19f4d43f054f with these steps:
 
 * `cd rust/`
 * `python3 config64.py`
