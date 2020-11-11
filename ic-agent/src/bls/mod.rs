@@ -32,10 +32,10 @@ pub mod bls12381;
 
 #[test]
 fn bls_verify() {
-    use bls12381::bls::{core_verify, init, BLS_OK};
+    use bls12381::bls::{core_verify, init, BLS_FAIL, BLS_OK};
     let pk = hex::decode("a7623a93cdb56c4d23d99c14216afaab3dfd6d4f9eb3db23d038280b6d5cb2caaee2a19dd92c9df7001dede23bf036bc0f33982dfb41e8fa9b8e96b5dc3e83d55ca4dd146c7eb2e8b6859cb5a5db815db86810b8d12cee1588b5dbf34a4dc9a5").unwrap();
     let sig = hex::decode("b89e13a212c830586eaa9ad53946cd968718ebecc27eda849d9232673dcd4f440e8b5df39bf14a88048c15e16cbcaabe").unwrap();
-    let msg = "hello".to_owned().into_bytes();
     assert_eq!(init(), BLS_OK);
-    assert_eq!(core_verify(&sig, &msg, &pk), BLS_OK);
+    assert_eq!(core_verify(&sig, b"hello".as_ref(), &pk), BLS_OK);
+    assert_eq!(core_verify(&sig, b"hallo".as_ref(), &pk), BLS_FAIL);
 }
