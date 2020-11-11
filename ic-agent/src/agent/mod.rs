@@ -453,19 +453,18 @@ fn lookup_request_status(
         serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
         "status".into(),
     ];
-    let lookup_result = certificate.tree.lookup_path(path_status);
-    match lookup_result {
-        LookupResult::Absent => Ok(RequestStatusResponse::Unknown),
+    match certificate.tree.lookup_path(&path_status) {
+        LookupResult::Absent => Ok(RequestStatusResponse::Unknown), // ???
         LookupResult::Unknown => Ok(RequestStatusResponse::Unknown),
         LookupResult::Found(status) => match from_utf8(status)? {
             "done" => Ok(RequestStatusResponse::Done),
             "processing" => Ok(RequestStatusResponse::Processing),
             "received" => Ok(RequestStatusResponse::Received),
             "rejected" => lookup_rejection(&certificate, request_id),
-            "replied" => lookup_reply(certificate, request_id),
-            _ => Err(AgentError::InvalidReplicaStatus),
+            "replied" => lookup_reply(&certificate, request_id),
+            other => Err(AgentError::InvalidRequestStatus(other.to_string())),
         },
-        LookupResult::Error => Ok(RequestStatusResponse::Unknown),
+        LookupResult::Error => Err(AgentError::LookupPathError(path_status)),
     }
 }
 
@@ -483,24 +482,45 @@ fn lookup_rejection(
         serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
         "reject_message".into(),
     ];
-    let reject_code = certificate.tree.lookup_path(path_reject_code);
-    let reject_message = certificate.tree.lookup_path(path_reject_message);
-    match (reject_code, reject_message) {
-        (LookupResult::Found(reject_code), LookupResult::Found(reject_message)) => {
+
+    let reject_code = match certificate.tree.lookup_path(path_reject_code) {
+        LookupResult::Found(reject_code) => {
             let mut readable = &reject_code[..];
-            let reject_code = leb128::read::unsigned(&mut readable)?;
-            let reject_message = from_utf8(reject_message)?.to_string();
-            Ok(RequestStatusResponse::Rejected {
-                reject_code,
-                reject_message,
-            })
-        }
-        _ => Err(AgentError::InvalidReplicaStatus),
-    }
+            Ok(leb128::read::unsigned(&mut readable)?)
+        },
+        _ => Err(AgentError::NoRejectCode),
+    }?;
+
+    let reject_message = match certificate.tree.lookup_path(path_reject_message) {
+        LookupResult::Found(m) => {
+            Ok(from_utf8(m)?.to_string())
+        },
+        _ => Err(AgentError::NoRejectMessage),
+    }?;
+
+    Ok(RequestStatusResponse::Rejected {
+        reject_code,
+        reject_message,
+    })
+
+    // let reject_code = certificate.tree.lookup_path(path_reject_code);
+    // let reject_message = certificate.tree.lookup_path(path_reject_message);
+    // match (reject_code, reject_message) {
+    //     (LookupResult::Found(reject_code), LookupResult::Found(reject_message)) => {
+    //         let mut readable = &reject_code[..];
+    //         let reject_code = leb128::read::unsigned(&mut readable)?;
+    //         let reject_message = from_utf8(reject_message)?.to_string();
+    //         Ok(RequestStatusResponse::Rejected {
+    //             reject_code,
+    //             reject_message,
+    //         })
+    //     }
+    //     _ => Err(AgentError::InvalidReplicaStatus),
+    // }
 }
 
 fn lookup_reply(
-    certificate: Certificate,
+    certificate: &Certificate,
     request_id: &RequestId,
 ) -> Result<RequestStatusResponse, AgentError> {
     let path_reply = vec![
@@ -509,13 +529,11 @@ fn lookup_reply(
         "reply".into(),
     ];
     match certificate.tree.lookup_path(path_reply) {
-        LookupResult::Absent => Err(AgentError::InvalidReplicaStatus),
-        LookupResult::Unknown => Err(AgentError::InvalidReplicaStatus),
         LookupResult::Found(reply_data) => {
             let reply = Replied::CallReplied(Vec::from(reply_data));
             Ok(RequestStatusResponse::Replied { reply })
         }
-        LookupResult::Error => Err(AgentError::InvalidReplicaStatus),
+        _ => Err(AgentError::NoReply),
     }
 }
 

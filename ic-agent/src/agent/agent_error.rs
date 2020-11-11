@@ -3,6 +3,7 @@ use leb128::read;
 use std::fmt::{Debug, Formatter};
 use std::str::Utf8Error;
 use thiserror::Error;
+use crate::hash_tree::Label;
 
 #[derive(Error, Debug)]
 pub enum AgentError {
@@ -65,6 +66,20 @@ pub enum AgentError {
 
     #[error("Error in UTF-8 string: {0}")]
     Utf8ReadError(#[from] Utf8Error),
+
+    #[error("The request was rejected, but there was no reject code.")]
+    NoRejectCode,
+    #[error("The request was rejected, but there was no reject message.")]
+    NoRejectMessage,
+    #[error("The request status was 'replied', but there was no reply.")]
+    NoReply,
+
+    #[error("The lookup path ({0:?}) does not make sense for the certificate.")]
+    LookupPathError(Vec<Label>),
+
+    #[error("The request status({0}) was invalid.")]
+    InvalidRequestStatus(String),
+
 }
 
 impl PartialEq for AgentError {
