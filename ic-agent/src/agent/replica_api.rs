@@ -1,5 +1,5 @@
 use crate::export::Principal;
-use crate::hash_tree::HashTree;
+use crate::hash_tree::{HashTree, Label};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize)]
@@ -29,8 +29,6 @@ pub enum AsyncContent {
     },
 }
 
-pub type StateTreePath = Vec<serde_bytes::ByteBuf>;
-
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "request_type")]
 pub enum SyncContent {
@@ -38,7 +36,7 @@ pub enum SyncContent {
     ReadStateRequest {
         ingress_expiry: u64,
         sender: Principal,
-        paths: Vec<StateTreePath>,
+        paths: Vec<Vec<Label>>,
     },
     #[serde(rename = "request_status")]
     RequestStatusRequest {

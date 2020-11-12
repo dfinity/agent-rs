@@ -17,7 +17,7 @@ pub use response::{Replied, RequestStatusResponse};
 mod agent_test;
 
 use crate::agent::replica_api::{
-    AsyncContent, Certificate, Envelope, ReadStateResponse, StateTreePath, SyncContent,
+    AsyncContent, Certificate, Envelope, ReadStateResponse, SyncContent,
 };
 use crate::export::Principal;
 use crate::identity::Identity;
@@ -27,7 +27,7 @@ use reqwest::Method;
 use serde::Serialize;
 use status::Status;
 
-use crate::hash_tree::LookupResult;
+use crate::hash_tree::{LookupResult, Label};
 use std::convert::TryFrom;
 use std::str::from_utf8;
 use std::time::Duration;
@@ -373,7 +373,7 @@ impl Agent {
 
     async fn read_state_raw(
         &self,
-        paths: Vec<StateTreePath>,
+        paths: Vec<Vec<Label>>,
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<Certificate, AgentError> {
         let read_state_response: ReadStateResponse = self
@@ -396,9 +396,9 @@ impl Agent {
         request_id: &RequestId,
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestStatusResponse, AgentError> {
-        let paths: Vec<StateTreePath> = vec![vec![
-            serde_bytes::ByteBuf::from("request_status".as_bytes()),
-            serde_bytes::ByteBuf::from(request_id.to_vec()),
+        let paths: Vec<Vec<Label>> = vec![vec![
+            "request_status".into(),
+            serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
         ]];
 
         let cert = self.read_state_raw(paths, ingress_expiry_datetime).await?;
