@@ -147,7 +147,7 @@ impl RequestIdSerializer {
     pub fn finish(self) -> Result<RequestId, RequestIdError> {
         match self.element_encoder {
             Some(Hasher::RequestId(hasher)) => Ok(RequestId(hasher.finish())),
-            _ => Err(RequestIdError::EmptySerializer), // todo
+            _ => Err(RequestIdError::EmptySerializer),
         }
     }
 

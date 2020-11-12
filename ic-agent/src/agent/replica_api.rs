@@ -70,13 +70,6 @@ pub(crate) struct Certificate {
     pub signature: Vec<u8>,
 }
 
-// #[derive(Debug, Clone, Deserialize, Serialize)]
-// pub struct RequestStatusResponse {
-//     pub status: Status,
-//     #[serde(rename = "time")]
-//     pub time: u64,
-// }
-
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "status")]
 pub enum Status {

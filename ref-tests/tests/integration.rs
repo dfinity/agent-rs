@@ -83,17 +83,19 @@ fn canister_query() {
 #[ignore]
 #[test]
 fn canister_reject_call() {
+    // try to call a wallet method, but on the universal canister.
+    // this lets us look up the reject code and reject message in the certificate.
     with_universal_canister(|agent, wallet_id| async move {
         let alice = interfaces::Wallet::create(&agent, wallet_id);
         let bob = interfaces::Wallet::create(&agent, create_wallet_canister(&agent).await?);
 
-        let x = alice
+        let result = alice
             .send_cycles(&bob, 1_000_000)
             .call_and_wait(create_waiter())
             .await;
 
         assert_eq!(
-            x,
+            result,
             Err(AgentError::ReplicaError {
                 reject_code: 3,
                 reject_message: "method does not exist: send_cycles".to_string()
