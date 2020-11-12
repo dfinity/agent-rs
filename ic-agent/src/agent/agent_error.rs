@@ -61,7 +61,7 @@ pub enum AgentError {
     #[error("A tool returned a custom error: {0}")]
     CustomError(#[from] Box<dyn Send + Sync + std::error::Error>),
 
-    #[error("Error read LEB128 value: {0}")]
+    #[error("Error reading LEB128 value: {0}")]
     Leb128ReadError(#[from] read::Error),
 
     #[error("Error in UTF-8 string: {0}")]
@@ -76,7 +76,7 @@ pub enum AgentError {
     #[error("The lookup path ({0:?}) does not make sense for the certificate.")]
     LookupPathError(Vec<Label>),
 
-    #[error("The request status ({1}) at path {0:?} was invalid.")]
+    #[error("The request status ({1}) at path {0:?} is invalid.")]
     InvalidRequestStatus(Vec<Label>, String),
 }
 
