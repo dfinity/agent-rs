@@ -105,7 +105,7 @@ impl HttpErrorPayload {
                 f.write_fmt(format_args!(
                     "Http Error: status {}, content type {:?}, content: {}",
                     status,
-                    content_type,
+                    content_type.as_ref().unwrap(),
                     String::from_utf8(content.to_vec()).unwrap_or_else(|from_utf8_err| format!(
                         "(unable to decode content: {:#?})",
                         from_utf8_err
@@ -119,7 +119,9 @@ impl HttpErrorPayload {
             } => {
                 f.write_fmt(format_args!(
                     "Http Error: status {}, content type {:?}, content: {:?}",
-                    status, content_type, content
+                    status,
+                    content_type.as_ref().unwrap(),
+                    content
                 ))?;
             }
         }
