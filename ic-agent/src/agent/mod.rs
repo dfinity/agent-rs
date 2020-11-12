@@ -390,7 +390,6 @@ impl Agent {
         Ok(cert)
     }
 
-    #[allow(clippy::string_lit_as_bytes)]
     pub async fn request_status_raw(
         &self,
         request_id: &RequestId,
