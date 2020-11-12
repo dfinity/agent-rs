@@ -375,7 +375,7 @@ impl Agent {
         &self,
         paths: Vec<StateTreePath>,
         ingress_expiry_datetime: Option<u64>,
-    ) -> Result<ReadStateResponse, AgentError> {
+    ) -> Result<Certificate, AgentError> {
         let read_state_response: ReadStateResponse = self
             .read_endpoint(SyncContent::ReadStateRequest {
                 sender: self.identity.sender().map_err(AgentError::SigningError)?,
@@ -384,11 +384,10 @@ impl Agent {
             })
             .await?;
 
-        let _cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
+        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
         // todo: verify certificate
-        //panic!("successful query to read_state!  certificate = {:02x?}", read_state_response.certificate);
-        Ok(read_state_response)
+        Ok(cert)
     }
 
     #[allow(clippy::string_lit_as_bytes)]
@@ -402,9 +401,7 @@ impl Agent {
             serde_bytes::ByteBuf::from(request_id.to_vec()),
         ]];
 
-        let read_state_response = self.read_state_raw(paths, ingress_expiry_datetime).await?;
-        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
-            .map_err(AgentError::InvalidCborData)?;
+        let cert = self.read_state_raw(paths, ingress_expiry_datetime).await?;
 
         lookup_request_status(cert, request_id)
     }
@@ -496,21 +493,6 @@ fn lookup_rejection(
         reject_code,
         reject_message,
     })
-
-    // let reject_code = certificate.tree.lookup_path(path_reject_code);
-    // let reject_message = certificate.tree.lookup_path(path_reject_message);
-    // match (reject_code, reject_message) {
-    //     (LookupResult::Found(reject_code), LookupResult::Found(reject_message)) => {
-    //         let mut readable = &reject_code[..];
-    //         let reject_code = leb128::read::unsigned(&mut readable)?;
-    //         let reject_message = from_utf8(reject_message)?.to_string();
-    //         Ok(RequestStatusResponse::Rejected {
-    //             reject_code,
-    //             reject_message,
-    //         })
-    //     }
-    //     _ => Err(AgentError::InvalidReplicaStatus),
-    // }
 }
 
 fn lookup_reply(
