@@ -215,11 +215,6 @@ impl Agent {
             serializer.self_describe()?;
             e.serialize(&mut serializer)?;
 
-            let _s = format!("{:02x?}", &serialized_bytes)
-                .replace(",", "")
-                .replace("[", "")
-                .replace("]", "");
-
             body = Some(serialized_bytes);
         }
 
@@ -376,7 +371,7 @@ impl Agent {
         .await
     }
 
-    pub async fn read_state_raw(
+    async fn read_state_raw(
         &self,
         paths: Vec<StateTreePath>,
         ingress_expiry_datetime: Option<u64>,
@@ -388,9 +383,6 @@ impl Agent {
                 ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
             })
             .await?;
-
-        let _s = format!("certificate: {:02x?}", read_state_response.certificate).replace(",", "");
-        // eprintln!("{}", s);
 
         let _cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
@@ -454,7 +446,7 @@ fn lookup_request_status(
         "status".into(),
     ];
     match certificate.tree.lookup_path(&path_status) {
-        LookupResult::Absent => Ok(RequestStatusResponse::Unknown), // ???
+        LookupResult::Absent => Err(AgentError::LookupPathAbsent(path_status)),
         LookupResult::Unknown => Ok(RequestStatusResponse::Unknown),
         LookupResult::Found(status) => match from_utf8(status)? {
             "done" => Ok(RequestStatusResponse::Done),
@@ -462,7 +454,7 @@ fn lookup_request_status(
             "received" => Ok(RequestStatusResponse::Received),
             "rejected" => lookup_rejection(&certificate, request_id),
             "replied" => lookup_reply(&certificate, request_id),
-            other => Err(AgentError::InvalidRequestStatus(other.to_string())),
+            other => Err(AgentError::InvalidRequestStatus(path_status, other.to_string())),
         },
         LookupResult::Error => Err(AgentError::LookupPathError(path_status)),
     }
@@ -483,17 +475,21 @@ fn lookup_rejection(
         "reject_message".into(),
     ];
 
-    let reject_code = match certificate.tree.lookup_path(path_reject_code) {
+    let reject_code = match certificate.tree.lookup_path(&path_reject_code) {
+        LookupResult::Absent => Err(AgentError::LookupPathAbsent(path_reject_code)),
+        LookupResult::Unknown => Err(AgentError::LookupPathUnknown(path_reject_code)),
         LookupResult::Found(reject_code) => {
             let mut readable = &reject_code[..];
             Ok(leb128::read::unsigned(&mut readable)?)
         }
-        _ => Err(AgentError::NoRejectCode),
+        LookupResult::Error => Err(AgentError::LookupPathError(path_reject_code))
     }?;
 
-    let reject_message = match certificate.tree.lookup_path(path_reject_message) {
+    let reject_message = match certificate.tree.lookup_path(&path_reject_message) {
+        LookupResult::Absent => Err(AgentError::LookupPathAbsent(path_reject_message)),
+        LookupResult::Unknown => Err(AgentError::LookupPathUnknown(path_reject_message)),
         LookupResult::Found(m) => Ok(from_utf8(m)?.to_string()),
-        _ => Err(AgentError::NoRejectMessage),
+        LookupResult::Error => Err(AgentError::LookupPathError(path_reject_message))
     }?;
 
     Ok(RequestStatusResponse::Rejected {
@@ -526,12 +522,14 @@ fn lookup_reply(
         serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
         "reply".into(),
     ];
-    match certificate.tree.lookup_path(path_reply) {
+    match certificate.tree.lookup_path(&path_reply) {
+        LookupResult::Absent => Err(AgentError::LookupPathAbsent(path_reply)),
+        LookupResult::Unknown => Err(AgentError::LookupPathUnknown(path_reply)),
         LookupResult::Found(reply_data) => {
             let reply = Replied::CallReplied(Vec::from(reply_data));
             Ok(RequestStatusResponse::Replied { reply })
         }
-        _ => Err(AgentError::NoReply),
+        LookupResult::Error => Err(AgentError::LookupPathError(path_reply))
     }
 }
 

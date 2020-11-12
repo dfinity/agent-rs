@@ -1,7 +1,7 @@
 use crate::hash_tree::Label;
 use crate::RequestIdError;
 use leb128::read;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Formatter, Display};
 use std::str::Utf8Error;
 use thiserror::Error;
 
@@ -40,7 +40,7 @@ pub enum AgentError {
         reject_message: String,
     },
 
-    #[error(r#"The replica returned an HTTP Error: status code {}"#, .0.status)]
+    #[error("The replica returned an HTTP Error: {0}")]
     HttpError(HttpErrorPayload),
 
     #[error("HTTP Authentication cannot be used in a non-secure URL (either HTTPS or localhost)")]
@@ -67,18 +67,17 @@ pub enum AgentError {
     #[error("Error in UTF-8 string: {0}")]
     Utf8ReadError(#[from] Utf8Error),
 
-    #[error("The request was rejected, but there was no reject code.")]
-    NoRejectCode,
-    #[error("The request was rejected, but there was no reject message.")]
-    NoRejectMessage,
-    #[error("The request status was 'replied', but there was no reply.")]
-    NoReply,
+    #[error("The lookup path ({0:?}) is absent in the certificate.")]
+    LookupPathAbsent(Vec<Label>),
+
+    #[error("The lookup path ({0:?}) is unknown in the certificate.")]
+    LookupPathUnknown(Vec<Label>),
 
     #[error("The lookup path ({0:?}) does not make sense for the certificate.")]
     LookupPathError(Vec<Label>),
 
-    #[error("The request status({0}) was invalid.")]
-    InvalidRequestStatus(String),
+    #[error("The request status ({1}) at path {0:?} was invalid.")]
+    InvalidRequestStatus(Vec<Label>, String),
 }
 
 impl PartialEq for AgentError {
@@ -95,8 +94,8 @@ pub struct HttpErrorPayload {
     pub content: Vec<u8>,
 }
 
-impl Debug for HttpErrorPayload {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+impl HttpErrorPayload {
+    fn fmt_human_readable(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             HttpErrorPayload {
                 status,
@@ -104,7 +103,7 @@ impl Debug for HttpErrorPayload {
                 content,
             } if is_plain_text_utf8(content_type) => {
                 f.write_fmt(format_args!(
-                    "Agent Error: Http Error: status {}, content type {:?}, content: {}",
+                    "Http Error: status {}, content type {:?}, content: {}",
                     status,
                     content_type,
                     String::from_utf8(content.to_vec()).unwrap_or_else(|from_utf8_err| format!(
@@ -119,12 +118,24 @@ impl Debug for HttpErrorPayload {
                 content,
             } => {
                 f.write_fmt(format_args!(
-                    "Agent Error: Http Error: status {}, content type {:?}, content: {:?}",
+                    "Http Error: status {}, content type {:?}, content: {:?}",
                     status, content_type, content
                 ))?;
             }
         }
         Ok(())
+    }
+}
+
+impl Debug for HttpErrorPayload {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        self.fmt_human_readable(f)
+    }
+}
+
+impl Display for HttpErrorPayload {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        self.fmt_human_readable(f)
     }
 }
 

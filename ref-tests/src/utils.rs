@@ -2,7 +2,7 @@ use candid::CandidType;
 use delay::Delay;
 use ic_agent::export::Principal;
 use ic_agent::identity::BasicIdentity;
-use ic_agent::{Agent, AgentError, HttpErrorPayload};
+use ic_agent::Agent;
 use ic_utils::call::AsyncCall;
 use ic_utils::interfaces::ManagementCanister;
 use ring::signature::Ed25519KeyPair;
@@ -55,41 +55,11 @@ where
         let agent = create_agent(agent_identity)
             .await
             .expect("Could not create an agent.");
-        // match f(agent).await {
-        //     Ok(_) => {}
-        //     Err(e) => assert!(false, "{:?}", e),
-        // };
-
-        if let Err(e) = f(agent).await {
-            assert!(false, "{:?}", e);
-            match e.downcast_ref::<AgentError>() {
-                Some(AgentError::HttpError(HttpErrorPayload {
-                    status,
-                    content,
-                    content_type,
-                })) if is_plain_text_utf8(content_type) => assert!(
-                    false,
-                    "Agent Error: Http Error: status {}, content type {:?}, content: {}",
-                    status,
-                    content_type,
-                    String::from_utf8(content.to_vec()).unwrap_or_else(|from_utf8_err| format!(
-                        "(unable to decode content: {:#?})",
-                        from_utf8_err
-                    ))
-                ),
-                err => assert!(false, "{:?}", err),
-            }
+        match f(agent).await {
+            Ok(_) => {}
+            Err(e) => assert!(false, "{:?}", e),
         };
     })
-}
-
-fn is_plain_text_utf8(content_type: &Option<String>) -> bool {
-    // text/plain is also sometimes returned by the replica (or ic-ref),
-    // depending on where in the stack the error happens.
-    matches!(
-        content_type.as_ref().and_then(|s|s.parse::<mime::Mime>().ok()),
-        Some(mt) if mt == mime::TEXT_PLAIN || mt == mime::TEXT_PLAIN_UTF_8
-    )
 }
 
 pub async fn create_universal_canister(agent: &Agent) -> Result<Principal, Box<dyn Error>> {
