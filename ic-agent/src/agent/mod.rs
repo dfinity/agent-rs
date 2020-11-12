@@ -386,7 +386,7 @@ impl Agent {
 
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
-        // todo: verify certificate
+        // todo: verify certificate here
         Ok(cert)
     }
 
@@ -397,7 +397,7 @@ impl Agent {
     ) -> Result<RequestStatusResponse, AgentError> {
         let paths: Vec<Vec<Label>> = vec![vec![
             "request_status".into(),
-            serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
+            request_id.to_vec().into(),
         ]];
 
         let cert = self.read_state_raw(paths, ingress_expiry_datetime).await?;
@@ -438,7 +438,7 @@ fn lookup_request_status(
 ) -> Result<RequestStatusResponse, AgentError> {
     let path_status = vec![
         "request_status".into(),
-        serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
+        request_id.to_vec().into(),
         "status".into(),
     ];
     match certificate.tree.lookup_path(&path_status) {
@@ -465,12 +465,12 @@ fn lookup_rejection(
 ) -> Result<RequestStatusResponse, AgentError> {
     let path_reject_code = vec![
         "request_status".into(),
-        serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
+        request_id.to_vec().into(),
         "reject_code".into(),
     ];
     let path_reject_message = vec![
         "request_status".into(),
-        serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
+        request_id.to_vec().into(),
         "reject_message".into(),
     ];
 
@@ -503,7 +503,7 @@ fn lookup_reply(
 ) -> Result<RequestStatusResponse, AgentError> {
     let path_reply = vec![
         "request_status".into(),
-        serde_bytes::ByteBuf::from(request_id.to_vec()).into(),
+        request_id.to_vec().into(),
         "reply".into(),
     ];
     match certificate.tree.lookup_path(&path_reply) {
