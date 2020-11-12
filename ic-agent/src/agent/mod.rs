@@ -20,6 +20,7 @@ use crate::agent::replica_api::{
     AsyncContent, Certificate, Envelope, ReadStateResponse, SyncContent,
 };
 use crate::export::Principal;
+use crate::hash_tree::{Label, LookupResult};
 use crate::identity::Identity;
 use crate::{to_request_id, RequestId};
 use delay::Waiter;
@@ -27,7 +28,6 @@ use reqwest::Method;
 use serde::Serialize;
 use status::Status;
 
-use crate::hash_tree::{Label, LookupResult};
 use std::convert::TryFrom;
 use std::str::from_utf8;
 use std::time::Duration;
@@ -395,10 +395,8 @@ impl Agent {
         request_id: &RequestId,
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestStatusResponse, AgentError> {
-        let paths: Vec<Vec<Label>> = vec![vec![
-            "request_status".into(),
-            request_id.to_vec().into(),
-        ]];
+        let paths: Vec<Vec<Label>> =
+            vec![vec!["request_status".into(), request_id.to_vec().into()]];
 
         let cert = self.read_state_raw(paths, ingress_expiry_datetime).await?;
 
