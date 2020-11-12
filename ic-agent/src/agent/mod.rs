@@ -27,7 +27,7 @@ use reqwest::Method;
 use serde::Serialize;
 use status::Status;
 
-use crate::hash_tree::{LookupResult, Label};
+use crate::hash_tree::{Label, LookupResult};
 use std::convert::TryFrom;
 use std::str::from_utf8;
 use std::time::Duration;
@@ -451,7 +451,10 @@ fn lookup_request_status(
             "received" => Ok(RequestStatusResponse::Received),
             "rejected" => lookup_rejection(&certificate, request_id),
             "replied" => lookup_reply(&certificate, request_id),
-            other => Err(AgentError::InvalidRequestStatus(path_status, other.to_string())),
+            other => Err(AgentError::InvalidRequestStatus(
+                path_status,
+                other.to_string(),
+            )),
         },
         LookupResult::Error => Err(AgentError::LookupPathError(path_status)),
     }
@@ -479,14 +482,14 @@ fn lookup_rejection(
             let mut readable = &reject_code[..];
             Ok(leb128::read::unsigned(&mut readable)?)
         }
-        LookupResult::Error => Err(AgentError::LookupPathError(path_reject_code))
+        LookupResult::Error => Err(AgentError::LookupPathError(path_reject_code)),
     }?;
 
     let reject_message = match certificate.tree.lookup_path(&path_reject_message) {
         LookupResult::Absent => Err(AgentError::LookupPathAbsent(path_reject_message)),
         LookupResult::Unknown => Err(AgentError::LookupPathUnknown(path_reject_message)),
         LookupResult::Found(m) => Ok(from_utf8(m)?.to_string()),
-        LookupResult::Error => Err(AgentError::LookupPathError(path_reject_message))
+        LookupResult::Error => Err(AgentError::LookupPathError(path_reject_message)),
     }?;
 
     Ok(RequestStatusResponse::Rejected {
@@ -511,7 +514,7 @@ fn lookup_reply(
             let reply = Replied::CallReplied(Vec::from(reply_data));
             Ok(RequestStatusResponse::Replied { reply })
         }
-        LookupResult::Error => Err(AgentError::LookupPathError(path_reply))
+        LookupResult::Error => Err(AgentError::LookupPathError(path_reply)),
     }
 }
 
