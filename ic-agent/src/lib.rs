@@ -97,6 +97,10 @@
 //! generally available, additional details about the versions supported will
 //! be available here.
 //!
+#[allow(clippy::all)]
+#[allow(dead_code)]
+mod bls;
+
 pub mod agent;
 pub mod export;
 pub mod identity;
