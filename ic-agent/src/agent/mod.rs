@@ -26,6 +26,7 @@ use serde::Serialize;
 use status::Status;
 
 use std::convert::TryFrom;
+use std::sync::RwLock;
 use std::time::Duration;
 
 const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
@@ -97,6 +98,7 @@ pub struct Agent {
     identity: Box<dyn Identity + Send + Sync>,
     password_manager: Option<Box<dyn PasswordManager + Send + Sync>>,
     ingress_expiry_duration: Duration,
+    root_key: RwLock<Vec<u8>>,
 }
 
 impl Agent {
@@ -132,7 +134,16 @@ impl Agent {
             ingress_expiry_duration: config
                 .ingress_expiry_duration
                 .unwrap_or_else(|| Duration::from_secs(300)),
+            root_key: RwLock::new(vec![]),
         })
+    }
+
+    pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
+        let status = self.status().await?;
+        // todo something something
+        let mut x = self.root_key.write().unwrap();
+        *x = status.root_key.unwrap().clone();
+        Ok(())
     }
 
     fn get_expiry_date(&self) -> u64 {
