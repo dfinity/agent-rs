@@ -401,8 +401,12 @@ impl Agent {
 
     /// Returns an UpdateBuilder enabling the construction of an update call without
     /// passing all arguments.
-    pub fn update<S: ToString>(&self, canister_id: &Principal, method_name: S) -> UpdateBuilder {
-        UpdateBuilder::new(self, canister_id.clone(), method_name.to_string())
+    pub fn update<S: Into<String>>(
+        &self,
+        canister_id: &Principal,
+        method_name: S,
+    ) -> UpdateBuilder {
+        UpdateBuilder::new(self, canister_id.clone(), method_name.into())
     }
 
     /// Calls and returns the information returned by the status endpoint of a replica.
@@ -417,8 +421,8 @@ impl Agent {
 
     /// Returns a QueryBuilder enabling the construction of a query call without
     /// passing all arguments.
-    pub fn query<S: ToString>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder {
-        QueryBuilder::new(self, canister_id.clone(), method_name.to_string())
+    pub fn query<S: Into<String>>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder {
+        QueryBuilder::new(self, canister_id.clone(), method_name.into())
     }
 }
 

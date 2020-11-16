@@ -232,13 +232,13 @@ pub struct SyncCallBuilder<'agent, 'canister: 'agent, T> {
 
 impl<'agent, 'canister: 'agent, T> SyncCallBuilder<'agent, 'canister, T> {
     /// Create a new instance of an AsyncCallBuilder.
-    pub(super) fn new<M: ToString>(
+    pub(super) fn new<M: Into<String>>(
         canister: &'canister Canister<'agent, T>,
         method_name: M,
     ) -> Self {
         Self {
             canister,
-            method_name: method_name.to_string(),
+            method_name: method_name.into(),
             arg: Default::default(),
         }
     }
