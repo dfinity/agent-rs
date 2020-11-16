@@ -52,6 +52,9 @@ pub struct Status {
     /// Optional. The precise git revision of the Internet Computer implementation.
     pub impl_revision: Option<String>,
 
+    /// Optional.  The root key
+    pub root_key: Option<Vec<u8>>,
+
     /// Contains any additional values that the replica gave as status.
     pub values: BTreeMap<String, Box<Value>>,
 }
@@ -136,12 +139,20 @@ impl std::convert::TryFrom<&serde_cbor::Value> for Status {
                         None
                     }
                 });
+                let root_key: Option<Vec<u8>> = map.get("root_key").and_then(|v| {
+                    if let Value::Bytes(bytes) = v.as_ref() {
+                        Some(bytes.to_owned())
+                    } else {
+                        None
+                    }
+                });
 
                 Ok(Status {
                     ic_api_version,
                     impl_source,
                     impl_version,
                     impl_revision,
+                    root_key,
                     values: map,
                 })
             }
