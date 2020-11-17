@@ -78,6 +78,15 @@ pub enum AgentError {
 
     #[error("The request status ({1}) at path {0:?} is invalid.")]
     InvalidRequestStatus(Vec<Label>, String),
+
+    #[error("Certificate verification failed.")]
+    CertificateVerificationFailed(),
+
+    #[error(r#"BLS DER-encoded public key must be ${expected} bytes long, but is {actual} bytes long."#)]
+    DerKeyLengthMismatch { expected: usize, actual: usize },
+
+    #[error("BLS DER-encoded public key is invalid. Expected the following prefix: ${expected:?}, but got ${actual:?}")]
+    DerPrefixMismatch{ expected: Vec<u8>, actual: Vec<u8> },
 }
 
 impl PartialEq for AgentError {

@@ -16,9 +16,7 @@ pub use response::{Replied, RequestStatusResponse};
 #[cfg(test)]
 mod agent_test;
 
-use crate::agent::replica_api::{
-    AsyncContent, Certificate, Envelope, ReadStateResponse, SyncContent,
-};
+use crate::agent::replica_api::{AsyncContent, Certificate, Envelope, ReadStateResponse, SyncContent, Delegation};
 use crate::export::Principal;
 use crate::hash_tree::{Label, LookupResult};
 use crate::identity::Identity;
@@ -32,8 +30,12 @@ use std::convert::TryFrom;
 use std::str::from_utf8;
 use std::sync::RwLock;
 use std::time::Duration;
+use crate::bls::bls12381::bls;
 
 const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
+const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
+const DER_PREFIX: &[u8; 37] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00";
+const KEY_LENGTH: usize = 96;
 
 /// A low level Agent to make calls to a Replica endpoint.
 ///
@@ -395,8 +397,48 @@ impl Agent {
 
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
-        // todo: verify certificate here
+        self.verify(&cert)?;
         Ok(cert)
+    }
+
+    fn verify(&self, cert: &Certificate) -> Result<(), AgentError> {
+        bls::init(); // todo where to put this?
+        let root_hash = cert.tree.digest();
+        let der_key = self.check_delegation(&cert.delegation)?;
+        // self.root_key.read().unwrap().clone();
+        let sig = &cert.signature;
+        let key = extract_der(der_key)?;
+        let mut msg = vec![];
+        msg.extend_from_slice(IC_STATE_ROOT_DOMAIN_SEPARATOR);
+        msg.extend_from_slice(&root_hash);
+        let result = bls::core_verify(sig, &*msg, &*key);
+        if result != bls::BLS_OK {
+            Err(AgentError::CertificateVerificationFailed())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn check_delegation(&self, delegation: &Option<Delegation>) -> Result<Vec<u8>, AgentError> {
+        match delegation {
+            None => Ok(self.root_key.read().unwrap().clone()),
+            Some(delegation) => {
+                let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
+                    .map_err(AgentError::InvalidCborData)?;
+                self.verify(&cert)?;
+                let public_key_path = vec![
+                    "subnet".into(),
+                    delegation.subnet_id.clone().into(),
+                    "public_key".into(),
+                ];
+                match cert.tree.lookup_path(&public_key_path) {
+                    LookupResult::Absent => Err(AgentError::LookupPathAbsent(public_key_path)),
+                    LookupResult::Unknown => Err(AgentError::LookupPathAbsent(public_key_path)),
+                    LookupResult::Found(root_key) => Ok(root_key.to_vec()),
+                    LookupResult::Error => Err(AgentError::LookupPathError(public_key_path)),
+                }
+            }
+        }
     }
 
     pub async fn request_status_raw(
@@ -437,6 +479,21 @@ impl Agent {
     pub fn query<S: Into<String>>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder {
         QueryBuilder::new(self, canister_id.clone(), method_name.into())
     }
+}
+
+fn extract_der(buf: Vec<u8>) -> Result<Vec<u8>, AgentError> {
+    let expected_length = DER_PREFIX.len() + KEY_LENGTH;
+    if buf.len() != expected_length {
+        return Err(AgentError::DerKeyLengthMismatch { expected: expected_length, actual: buf.len() } );
+    }
+
+    let prefix = &buf[0..DER_PREFIX.len()];
+    if &prefix[..] != &DER_PREFIX[..] {
+        return Err(AgentError::DerPrefixMismatch { expected: DER_PREFIX.to_vec(), actual: prefix.to_vec() } );
+    }
+
+    let key = &buf[DER_PREFIX.len()..];
+    Ok(key.to_vec())
 }
 
 fn lookup_request_status(
