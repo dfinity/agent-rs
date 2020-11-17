@@ -16,7 +16,9 @@ pub use response::{Replied, RequestStatusResponse};
 #[cfg(test)]
 mod agent_test;
 
-use crate::agent::replica_api::{AsyncContent, Certificate, Envelope, ReadStateResponse, SyncContent, Delegation};
+use crate::agent::replica_api::{
+    AsyncContent, Certificate, Delegation, Envelope, ReadStateResponse, SyncContent,
+};
 use crate::export::Principal;
 use crate::hash_tree::{Label, LookupResult};
 use crate::identity::Identity;
@@ -26,11 +28,11 @@ use reqwest::Method;
 use serde::Serialize;
 use status::Status;
 
+use crate::bls::bls12381::bls;
 use std::convert::TryFrom;
 use std::str::from_utf8;
 use std::sync::RwLock;
 use std::time::Duration;
-use crate::bls::bls12381::bls;
 
 const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
@@ -484,12 +486,18 @@ impl Agent {
 fn extract_der(buf: Vec<u8>) -> Result<Vec<u8>, AgentError> {
     let expected_length = DER_PREFIX.len() + KEY_LENGTH;
     if buf.len() != expected_length {
-        return Err(AgentError::DerKeyLengthMismatch { expected: expected_length, actual: buf.len() } );
+        return Err(AgentError::DerKeyLengthMismatch {
+            expected: expected_length,
+            actual: buf.len(),
+        });
     }
 
     let prefix = &buf[0..DER_PREFIX.len()];
     if &prefix[..] != &DER_PREFIX[..] {
-        return Err(AgentError::DerPrefixMismatch { expected: DER_PREFIX.to_vec(), actual: prefix.to_vec() } );
+        return Err(AgentError::DerPrefixMismatch {
+            expected: DER_PREFIX.to_vec(),
+            actual: prefix.to_vec(),
+        });
     }
 
     let key = &buf[DER_PREFIX.len()..];
