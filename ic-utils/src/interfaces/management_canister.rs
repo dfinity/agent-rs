@@ -285,7 +285,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             canister_id: Principal,
         }
 
-        self.update_("create_canister")
+        self.update_("provisional_create_canister_with_cycles")
             .build()
             .map(|result: (Out,)| (result.0.canister_id,))
     }
