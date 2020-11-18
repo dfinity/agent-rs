@@ -75,6 +75,7 @@ static INIT_BLS: Once = Once::new();
 ///     .with_url(URL)
 ///     .with_identity(create_identity())
 ///     .build()?;
+///   agent.fetch_root_key().await?;
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 ///
 ///   let waiter = delay::Delay::builder()
