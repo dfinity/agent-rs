@@ -34,7 +34,7 @@ use std::str::from_utf8;
 use std::sync::RwLock;
 use std::time::Duration;
 
-const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
+const IC_REQUEST_DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 const DER_PREFIX: &[u8; 37] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00";
 const KEY_LENGTH: usize = 96;
@@ -118,6 +118,8 @@ impl Agent {
 
     /// Create an instance of an [`Agent`].
     pub fn new(config: AgentConfig) -> Result<Agent, AgentError> {
+        bls::init(); // todo where to put this? we need to call it once globally.
+
         let url = config.url;
         let mut tls_config = rustls::ClientConfig::new();
 
@@ -148,10 +150,15 @@ impl Agent {
 
     pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
         let status = self.status().await?;
-        // todo something something
-        let mut x = self.root_key.write().unwrap();
-        *x = status.root_key.unwrap().clone();
+        let root_key = status.root_key.ok_or_else(AgentError::NoRootKeyInStatus)?;
+        let mut write_guard = self.root_key.write().unwrap();
+        *write_guard = root_key;
         Ok(())
+    }
+
+    fn read_root_key(&self) -> Result<Vec<u8>, AgentError> {
+        let root_key = self.root_key.read().unwrap().clone();
+        Ok(root_key)
     }
 
     fn get_expiry_date(&self) -> u64 {
@@ -167,7 +174,7 @@ impl Agent {
 
     fn construct_message(&self, request_id: &RequestId) -> Vec<u8> {
         let mut buf = vec![];
-        buf.extend_from_slice(DOMAIN_SEPARATOR);
+        buf.extend_from_slice(IC_REQUEST_DOMAIN_SEPARATOR);
         buf.extend_from_slice(request_id.as_slice());
         buf
     }
@@ -404,15 +411,16 @@ impl Agent {
     }
 
     fn verify(&self, cert: &Certificate) -> Result<(), AgentError> {
-        bls::init(); // todo where to put this?
-        let root_hash = cert.tree.digest();
-        let der_key = self.check_delegation(&cert.delegation)?;
-        // self.root_key.read().unwrap().clone();
         let sig = &cert.signature;
-        let key = extract_der(der_key)?;
+
+        let root_hash = cert.tree.digest();
         let mut msg = vec![];
         msg.extend_from_slice(IC_STATE_ROOT_DOMAIN_SEPARATOR);
         msg.extend_from_slice(&root_hash);
+
+        let der_key = self.check_delegation(&cert.delegation)?;
+        let key = extract_der(der_key)?;
+
         let result = bls::core_verify(sig, &*msg, &*key);
         if result != bls::BLS_OK {
             Err(AgentError::CertificateVerificationFailed())
@@ -423,7 +431,7 @@ impl Agent {
 
     fn check_delegation(&self, delegation: &Option<Delegation>) -> Result<Vec<u8>, AgentError> {
         match delegation {
-            None => Ok(self.root_key.read().unwrap().clone()),
+            None => self.read_root_key(),
             Some(delegation) => {
                 let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;
@@ -493,7 +501,7 @@ fn extract_der(buf: Vec<u8>) -> Result<Vec<u8>, AgentError> {
     }
 
     let prefix = &buf[0..DER_PREFIX.len()];
-    if &prefix[..] != &DER_PREFIX[..] {
+    if prefix[..] != DER_PREFIX[..] {
         return Err(AgentError::DerPrefixMismatch {
             expected: DER_PREFIX.to_vec(),
             actual: prefix.to_vec(),

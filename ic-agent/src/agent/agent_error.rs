@@ -89,6 +89,9 @@ pub enum AgentError {
 
     #[error("BLS DER-encoded public key is invalid. Expected the following prefix: ${expected:?}, but got ${actual:?}")]
     DerPrefixMismatch { expected: Vec<u8>, actual: Vec<u8> },
+
+    #[error("The status response did not contain a root key")]
+    NoRootKeyInStatus(),
 }
 
 impl PartialEq for AgentError {
