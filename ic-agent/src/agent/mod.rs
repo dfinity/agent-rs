@@ -459,33 +459,8 @@ fn lookup_rejection(
     certificate: &Certificate,
     request_id: &RequestId,
 ) -> Result<RequestStatusResponse, AgentError> {
-    let path_reject_code = vec![
-        "request_status".into(),
-        request_id.to_vec().into(),
-        "reject_code".into(),
-    ];
-    let path_reject_message = vec![
-        "request_status".into(),
-        request_id.to_vec().into(),
-        "reject_message".into(),
-    ];
-
-    let reject_code = match certificate.tree.lookup_path(&path_reject_code) {
-        LookupResult::Absent => Err(AgentError::LookupPathAbsent(path_reject_code)),
-        LookupResult::Unknown => Err(AgentError::LookupPathUnknown(path_reject_code)),
-        LookupResult::Found(reject_code) => {
-            let mut readable = &reject_code[..];
-            Ok(leb128::read::unsigned(&mut readable)?)
-        }
-        LookupResult::Error => Err(AgentError::LookupPathError(path_reject_code)),
-    }?;
-
-    let reject_message = match certificate.tree.lookup_path(&path_reject_message) {
-        LookupResult::Absent => Err(AgentError::LookupPathAbsent(path_reject_message)),
-        LookupResult::Unknown => Err(AgentError::LookupPathUnknown(path_reject_message)),
-        LookupResult::Found(m) => Ok(from_utf8(m)?.to_string()),
-        LookupResult::Error => Err(AgentError::LookupPathError(path_reject_message)),
-    }?;
+    let reject_code = lookup_reject_code(certificate, request_id)?;
+    let reject_message = lookup_reject_message(certificate, request_id)?;
 
     Ok(RequestStatusResponse::Rejected {
         reject_code,
@@ -493,23 +468,53 @@ fn lookup_rejection(
     })
 }
 
+fn lookup_reject_code(
+    certificate: &Certificate,
+    request_id: &RequestId,
+) -> Result<u64, AgentError> {
+    let path = vec![
+        "request_status".into(),
+        request_id.to_vec().into(),
+        "reject_code".into(),
+    ];
+    let code = lookup_path(&certificate, path)?;
+    let mut readable = &code[..];
+    Ok(leb128::read::unsigned(&mut readable)?)
+}
+
+fn lookup_reject_message(
+    certificate: &Certificate,
+    request_id: &RequestId,
+) -> Result<String, AgentError> {
+    let path = vec![
+        "request_status".into(),
+        request_id.to_vec().into(),
+        "reject_message".into(),
+    ];
+    let msg = lookup_path(&certificate, path)?;
+    Ok(from_utf8(msg)?.to_string())
+}
+
 fn lookup_reply(
     certificate: &Certificate,
     request_id: &RequestId,
 ) -> Result<RequestStatusResponse, AgentError> {
-    let path_reply = vec![
+    let path = vec![
         "request_status".into(),
         request_id.to_vec().into(),
         "reply".into(),
     ];
-    match certificate.tree.lookup_path(&path_reply) {
-        LookupResult::Absent => Err(AgentError::LookupPathAbsent(path_reply)),
-        LookupResult::Unknown => Err(AgentError::LookupPathUnknown(path_reply)),
-        LookupResult::Found(reply_data) => {
-            let reply = Replied::CallReplied(Vec::from(reply_data));
-            Ok(RequestStatusResponse::Replied { reply })
-        }
-        LookupResult::Error => Err(AgentError::LookupPathError(path_reply)),
+    let reply_data = lookup_path(&certificate, path)?;
+    let reply = Replied::CallReplied(Vec::from(reply_data));
+    Ok(RequestStatusResponse::Replied { reply })
+}
+
+fn lookup_path(certificate: &Certificate, path: Vec<Label>) -> Result<&[u8], AgentError> {
+    match certificate.tree.lookup_path(&path) {
+        LookupResult::Absent => Err(AgentError::LookupPathAbsent(path)),
+        LookupResult::Unknown => Err(AgentError::LookupPathUnknown(path)),
+        LookupResult::Found(reply_data) => Ok(reply_data),
+        LookupResult::Error => Err(AgentError::LookupPathError(path)),
     }
 }
 
