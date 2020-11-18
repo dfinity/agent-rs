@@ -68,6 +68,41 @@ impl Serialize for RequestId {
     }
 }
 
+enum Hasher {
+    /// The hasher for the overall request id.  This is the only part
+    /// that may directly contain a Struct.
+    RequestId(Sha256),
+
+    /// A structure to be included in the hash.  May not contain other structures.
+    Struct {
+        // We use a BTreeMap here as there is no indication that keys might not be duplicated,
+        // and we want to make sure they're overwritten in that case.
+        fields: BTreeMap<Sha256Hash, Sha256Hash>,
+        parent: Box<Hasher>,
+    },
+
+    /// The hasher for a value.  Array elements will append the hash of their
+    /// contents into the hasher of the array.
+    Value(Sha256),
+}
+
+impl Hasher {
+    fn request_id() -> Hasher {
+        Hasher::RequestId(Sha256::new())
+    }
+
+    fn fields(parent: Box<Hasher>) -> Hasher {
+        Hasher::Struct {
+            fields: BTreeMap::new(),
+            parent,
+        }
+    }
+
+    fn value() -> Hasher {
+        Hasher::Value(Sha256::new())
+    }
+}
+
 /// A Serde Serializer that collects fields and values in order to hash them later.
 /// We serialize the type to this structure, then use the trait to hash its content.
 /// It is a simple state machine that contains 3 states:
@@ -96,12 +131,7 @@ impl Serialize for RequestId {
 /// This does not validate whether a message is valid. This is very important as
 /// the message format might change faster than the ID calculation.
 struct RequestIdSerializer {
-    // We use a BTreeMap here as there is no indication that keys might not be duplicated,
-    // and we want to make sure they're overwritten in that case.
-    fields: Option<BTreeMap<Sha256Hash, Sha256Hash>>,
-    field_key_hash: Option<Sha256Hash>, // Only used in maps, not structs.
-    field_value_hash: Option<Sha256>,
-    hasher: Sha256,
+    element_encoder: Option<Hasher>,
 }
 
 impl RequestIdSerializer {
@@ -114,12 +144,10 @@ impl RequestIdSerializer {
     ///
     /// This can only be called once (it borrows self). Since this whole class is not public,
     /// it should not be a problem.
-    pub fn finish(mut self) -> Result<RequestId, RequestIdError> {
-        if self.fields.is_some() {
-            self.fields = None;
-            Ok(RequestId(self.hasher.finish()))
-        } else {
-            Err(RequestIdError::EmptySerializer)
+    pub fn finish(self) -> Result<RequestId, RequestIdError> {
+        match self.element_encoder {
+            Some(Hasher::RequestId(hasher)) => Ok(RequestId(hasher.finish())),
+            _ => Err(RequestIdError::EmptySerializer),
         }
     }
 
@@ -131,16 +159,50 @@ impl RequestIdSerializer {
     where
         T: ?Sized + Serialize,
     {
-        if self.field_value_hash.is_some() {
-            return Err(RequestIdError::InvalidState);
-        }
+        let prev_encoder = self.element_encoder.take();
 
-        self.field_value_hash = Some(Sha256::new());
+        self.element_encoder = Some(Hasher::value());
+
         value.serialize(&mut *self)?;
-        if let Some(r) = self.field_value_hash.take() {
-            Ok(r.finish())
-        } else {
-            Err(RequestIdError::InvalidState)
+        let result = match self.element_encoder.take() {
+            Some(Hasher::Value(hasher)) => Ok(hasher.finish()),
+            _ => Err(RequestIdError::InvalidState),
+        };
+        self.element_encoder = prev_encoder;
+        result
+    }
+
+    fn hash_fields(&mut self) -> Result<(), RequestIdError> {
+        match self.element_encoder.take() {
+            Some(Hasher::Struct { fields, parent }) => {
+                // Sort the fields.
+                let mut keyvalues: Vec<Vec<u8>> = fields
+                    .keys()
+                    .zip(fields.values())
+                    .map(|(k, v)| {
+                        let mut x = k.to_vec();
+                        x.extend(v);
+                        x
+                    })
+                    .collect();
+                keyvalues.sort();
+
+                let mut parent = *parent;
+
+                match &mut parent {
+                    Hasher::RequestId(hasher) => {
+                        for kv in keyvalues {
+                            hasher.update(&kv);
+                        }
+                        Ok(())
+                    }
+                    _ => Err(RequestIdError::InvalidState),
+                }?;
+
+                self.element_encoder = Some(parent);
+                Ok(())
+            }
+            _ => Err(RequestIdError::InvalidState),
         }
     }
 }
@@ -148,10 +210,7 @@ impl RequestIdSerializer {
 impl Default for RequestIdSerializer {
     fn default() -> RequestIdSerializer {
         RequestIdSerializer {
-            fields: None,
-            field_key_hash: None,
-            field_value_hash: None,
-            hasher: Sha256::new(),
+            element_encoder: Some(Hasher::request_id()),
         }
     }
 }
@@ -256,22 +315,23 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
 
     /// Serialize a chunk of raw byte data.
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
-        match self.field_value_hash {
-            None => Err(RequestIdError::InvalidState),
-            Some(ref mut hash) => {
-                (*hash).update(v);
+        match &mut self.element_encoder {
+            Some(Hasher::RequestId(hasher)) => {
+                hasher.update(v);
                 Ok(())
             }
+            Some(Hasher::Value(hasher)) => {
+                hasher.update(v);
+                Ok(())
+            }
+            _ => Err(RequestIdError::InvalidState),
         }
     }
 
     /// Serialize a [`None`] value.
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
         // Compute the hash as if it was empty string or blob.
-        match self.field_value_hash {
-            None => Err(RequestIdError::InvalidState),
-            Some(ref mut _hash) => Ok(()),
-        }
+        Ok(())
     }
 
     /// Serialize a [`Some(T)`] value.
@@ -373,14 +433,7 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
     /// Begin to serialize a map. This call must be followed by zero or more
     /// calls to `serialize_key` and `serialize_value`, then a call to `end`.
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        // This is the same as struct, but unnamed. We will use the current_field field
-        // here though, as serialize key and value are separate functions.
-        if self.fields.is_none() {
-            self.fields = Some(BTreeMap::new());
-            Ok(self)
-        } else {
-            Err(RequestIdError::UnsupportedStructInsideStruct)
-        }
+        Err(RequestIdError::UnsupportedTypeMap)
     }
 
     /// Begin to serialize a struct like `struct Rgb { r: u8, g: u8, b: u8 }`.
@@ -391,11 +444,13 @@ impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
         _name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
-        if self.fields.is_none() {
-            self.fields = Some(BTreeMap::new());
-            Ok(self)
-        } else {
-            Err(RequestIdError::UnsupportedStructInsideStruct)
+        let parent_encoder = self.element_encoder.take();
+        match &parent_encoder {
+            Some(Hasher::RequestId(_)) => {
+                self.element_encoder = Some(Hasher::fields(Box::new(parent_encoder.unwrap())));
+                Ok(self)
+            }
+            _ => Err(RequestIdError::UnsupportedStructInsideStruct),
         }
     }
 
@@ -435,7 +490,26 @@ impl<'a> ser::SerializeSeq for &'a mut RequestIdSerializer {
     where
         T: ?Sized + Serialize,
     {
-        value.serialize(&mut **self)
+        let mut prev_encoder = self.element_encoder.take();
+
+        self.element_encoder = Some(Hasher::value());
+
+        value.serialize(&mut **self)?;
+
+        let value_encoder = self.element_encoder.take();
+        let hash = match value_encoder {
+            Some(Hasher::Value(hasher)) => Ok(hasher.finish()),
+            _ => Err(RequestIdError::InvalidState),
+        }?;
+
+        self.element_encoder = prev_encoder.take();
+        match &mut self.element_encoder {
+            Some(Hasher::Value(hasher)) => {
+                hasher.update(&hash);
+                Ok(())
+            }
+            _ => Err(RequestIdError::InvalidState),
+        }
     }
 
     // Close the sequence.
@@ -523,42 +597,25 @@ impl<'a> ser::SerializeMap for &'a mut RequestIdSerializer {
     // This can be done by using a different Serializer to serialize the key
     // (instead of `&mut **self`) and having that other serializer only
     // implement `serialize_str` and return an error on any other data type.
-    fn serialize_key<T>(&mut self, key: &T) -> Result<Self::Ok, Self::Error>
+    fn serialize_key<T>(&mut self, _key: &T) -> Result<Self::Ok, Self::Error>
     where
         T: ?Sized + Serialize,
     {
-        if self.field_key_hash.is_some() {
-            Err(RequestIdError::InvalidState)
-        } else {
-            let key_hash = self.hash_value(key)?;
-            self.field_key_hash = Some(key_hash);
-            Ok(())
-        }
+        Err(RequestIdError::UnsupportedTypeMap)
     }
 
     // It doesn't make a difference whether the colon is printed at the end of
     // `serialize_key` or at the beginning of `serialize_value`. In this case
     // the code is a bit simpler having it here.
-    fn serialize_value<T>(&mut self, value: &T) -> Result<Self::Ok, Self::Error>
+    fn serialize_value<T>(&mut self, _value: &T) -> Result<Self::Ok, Self::Error>
     where
         T: ?Sized + Serialize,
     {
-        let value_hash = self.hash_value(value)?;
-
-        match self.field_key_hash.take() {
-            None => Err(RequestIdError::InvalidState),
-            Some(key_hash) => match self.fields {
-                None => Err(RequestIdError::InvalidState),
-                Some(ref mut f) => {
-                    f.insert(key_hash, value_hash);
-                    Ok(())
-                }
-            },
-        }
+        Err(RequestIdError::UnsupportedTypeMap)
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
+        self.hash_fields()
     }
 }
 
@@ -572,44 +629,19 @@ impl<'a> ser::SerializeStruct for &'a mut RequestIdSerializer {
     where
         T: ?Sized + Serialize,
     {
-        if self.field_value_hash.is_some() {
-            return Err(RequestIdError::InvalidState);
-        }
-
         let key_hash = self.hash_value(key)?;
         let value_hash = self.hash_value(value)?;
-
-        match self.fields {
-            None => Err(RequestIdError::InvalidState),
-            Some(ref mut f) => {
-                f.insert(key_hash, value_hash);
+        match &mut self.element_encoder {
+            Some(Hasher::Struct { fields, .. }) => {
+                fields.insert(key_hash, value_hash);
                 Ok(())
             }
+            _ => Err(RequestIdError::InvalidState),
         }
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        if let Some(fields) = &self.fields {
-            // Sort the fields.
-            let mut keyvalues: Vec<Vec<u8>> = fields
-                .keys()
-                .zip(fields.values())
-                .map(|(k, v)| {
-                    let mut x = k.to_vec();
-                    x.extend(v);
-                    x
-                })
-                .collect();
-            keyvalues.sort();
-
-            for kv in keyvalues {
-                self.hasher.update(&kv);
-            }
-
-            Ok(())
-        } else {
-            Err(RequestIdError::InvalidState)
-        }
+        self.hash_fields()
     }
 }
 
@@ -717,5 +749,123 @@ mod tests {
             hex::encode(request_id.0.to_vec()),
             "8781291c347db32a9d8c10eb62b710fce5a93be676474c42babc74c51858f94b"
         );
+    }
+
+    /// A simple example with nested arrays and blobs
+    #[test]
+    #[allow(clippy::string_lit_as_bytes)]
+    fn array_example() {
+        #[derive(Serialize)]
+        struct NestedArraysExample {
+            sender: Principal,
+            paths: Vec<Vec<serde_bytes::ByteBuf>>,
+        };
+        let data = NestedArraysExample {
+            sender: Principal::try_from(&vec![0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
+            paths: vec![
+                vec![],
+                vec![serde_bytes::ByteBuf::from("".as_bytes())],
+                vec![
+                    serde_bytes::ByteBuf::from("hello".as_bytes()),
+                    serde_bytes::ByteBuf::from("world".as_bytes()),
+                ],
+            ],
+        };
+
+        let request_id = to_request_id(&data).unwrap();
+        assert_eq!(
+            hex::encode(request_id.0.to_vec()),
+            "97d6f297aea699aec85d3377c7643ea66db810aba5c4372fbc2082c999f452dc"
+        );
+
+        /* The above was generated using ic-ref as follows:
+
+        ~/dfinity/ic-ref/impl $ cabal repl ic-ref
+        Build profile: -w ghc-8.8.4 -O1
+        …
+        *Main> :set -XOverloadedStrings
+        *Main> :m + IC.HTTP.RequestId IC.HTTP.GenR
+        *Main IC.HTTP.RequestId IC.HTTP.GenR> import qualified Data.HashMap.Lazy as HM
+        *Main IC.HTTP.RequestId IC.HTTP.GenR HM> let input = GRec (HM.fromList [("sender", GBlob "\0\0\0\0\0\0\x04\xD2"), ("paths", GList [ GList [], GList [GBlob ""], GList [GBlob "hello", GBlob "world"]])])
+        *Main IC.HTTP.RequestId IC.HTTP.GenR HM> putStrLn $ IC.Types.prettyBlob (requestId input )
+        0x97d6f297aea699aec85d3377c7643ea66db810aba5c4372fbc2082c999f452dc
+        */
+    }
+
+    /// A simple example with just an empty array
+    #[test]
+    fn array_example_empty_array() {
+        #[derive(Serialize)]
+        struct NestedArraysExample {
+            paths: Vec<Vec<serde_bytes::ByteBuf>>,
+        };
+        let data = NestedArraysExample { paths: vec![] };
+
+        let request_id = to_request_id(&data).unwrap();
+        assert_eq!(
+            hex::encode(request_id.0.to_vec()),
+            "99daa8c80a61e87ac1fdf9dd49e39963bfe4dafb2a45095ebf4cad72d916d5be"
+        );
+
+        /* The above was generated using ic-ref as follows:
+
+        ~/dfinity/ic-ref/impl $ cabal repl ic-ref
+        Build profile: -w ghc-8.8.4 -O1
+        …
+        *Main> :set -XOverloadedStrings
+        *Main> :m + IC.HTTP.RequestId IC.HTTP.GenR
+        *Main IC.HTTP.RequestId IC.HTTP.GenR> import qualified Data.HashMap as HM
+        *Main IC.HTTP.RequestId IC.HTTP.GenR HM> let input = GRec (HM.fromList [("paths", GList [])])
+        *Main IC.HTTP.RequestId IC.HTTP.GenR HM> putStrLn $ IC.Types.prettyBlob (requestId input )
+        0x99daa8c80a61e87ac1fdf9dd49e39963bfe4dafb2a45095ebf4cad72d916d5be
+        */
+    }
+
+    /// A simple example with an array that holds an empty array
+    #[test]
+    fn array_example_array_with_empty_array() {
+        #[derive(Serialize)]
+        struct NestedArraysExample {
+            paths: Vec<Vec<serde_bytes::ByteBuf>>,
+        };
+        let data = NestedArraysExample {
+            paths: vec![vec![]],
+        };
+
+        let request_id = to_request_id(&data).unwrap();
+        assert_eq!(
+            hex::encode(request_id.0.to_vec()),
+            "ea01a9c3d3830db108e0a87995ea0d4183dc9c6e51324e9818fced5c57aa64f5"
+        );
+
+        /* The above was generated using ic-ref as follows:
+
+        ~/dfinity/ic-ref/impl $ cabal repl ic-ref
+        Build profile: -w ghc-8.8.4 -O1
+        …
+        *Main> :set -XOverloadedStrings
+        *Main> :m + IC.HTTP.RequestId IC.HTTP.GenR
+        *Main IC.HTTP.RequestId IC.HTTP.GenR> import qualified Data.HashMap.Lazy as HM
+        *Main IC.HTTP.RequestId IC.HTTP.GenR HM> let input = GRec (HM.fromList [("paths", GList [ GList [] ])])
+        *Main IC.HTTP.RequestId IC.HTTP.GenR HM> putStrLn $ IC.Types.prettyBlob (requestId input )
+        0xea01a9c3d3830db108e0a87995ea0d4183dc9c6e51324e9818fced5c57aa64f5
+        */
+    }
+
+    /// We do not support creating a request id from a map.
+    /// It adds complexity, and isn't that useful anyway because a real request would
+    /// have to have different kinds of values (strings, principals, arrays) and
+    /// we don't support the wrappers that would be required to make that work
+    /// with rust maps.
+    #[test]
+    fn maps_are_not_supported() {
+        let mut data = BTreeMap::new();
+        data.insert("request_type", "call");
+        data.insert("canister_id", "a principal / the canister id");
+        data.insert("method_name", "hello");
+        data.insert("arg", "some argument value");
+
+        let error = to_request_id(&data).unwrap_err();
+        assert_eq!(error, RequestIdError::UnsupportedTypeMap);
     }
 }

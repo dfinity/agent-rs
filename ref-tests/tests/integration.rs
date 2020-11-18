@@ -2,7 +2,7 @@
 //!
 //! Contrary to ic-ref.rs, these tests are not meant to match any other tests. They're
 //! integration tests with a running IC-Ref.
-use ic_agent::AgentError;
+use ic_agent::{AgentError, HttpErrorPayload};
 use ic_utils::call::AsyncCall;
 use ic_utils::call::SyncCall;
 use ic_utils::{interfaces, Canister};
@@ -37,7 +37,7 @@ fn basic_expiry() {
             .await;
 
         match result.unwrap_err() {
-            AgentError::HttpError { status, .. } => assert_eq!(status, 400),
+            AgentError::HttpError(HttpErrorPayload { status, .. }) => assert_eq!(status, 400),
             x => assert!(false, "Was expecting an error, got {:?}", x),
         }
 
@@ -78,6 +78,32 @@ fn canister_query() {
 
         Ok(())
     })
+}
+
+#[ignore]
+#[test]
+fn canister_reject_call() {
+    // try to call a wallet method, but on the universal canister.
+    // this lets us look up the reject code and reject message in the certificate.
+    with_universal_canister(|agent, wallet_id| async move {
+        let alice = interfaces::Wallet::create(&agent, wallet_id);
+        let bob = interfaces::Wallet::create(&agent, create_wallet_canister(&agent).await?);
+
+        let result = alice
+            .send_cycles(&bob, 1_000_000)
+            .call_and_wait(create_waiter())
+            .await;
+
+        assert_eq!(
+            result,
+            Err(AgentError::ReplicaError {
+                reject_code: 3,
+                reject_message: "method does not exist: send_cycles".to_string()
+            })
+        );
+
+        Ok(())
+    });
 }
 
 #[ignore]
