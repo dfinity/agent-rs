@@ -270,12 +270,10 @@ impl Agent {
     where
         A: serde::de::DeserializeOwned,
     {
-        let anonymous = Principal::anonymous();
         let request_id = to_request_id(&request)?;
         let sender = match &request {
             SyncContent::QueryRequest { sender, .. } => sender,
             SyncContent::ReadStateRequest { sender, .. } => sender,
-            SyncContent::RequestStatusRequest { .. } => &anonymous,
         };
         let msg = self.construct_message(&request_id);
         let signature = self

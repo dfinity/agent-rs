@@ -38,12 +38,6 @@ pub enum SyncContent {
         sender: Principal,
         paths: Vec<Vec<Label>>,
     },
-    #[serde(rename = "request_status")]
-    RequestStatusRequest {
-        ingress_expiry: u64,
-        #[serde(with = "serde_bytes")]
-        request_id: Vec<u8>,
-    },
     #[serde(rename = "query")]
     QueryRequest {
         ingress_expiry: u64,
