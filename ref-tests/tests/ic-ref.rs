@@ -91,7 +91,7 @@ mod management_canister {
         }
     }
 
-    //#[ignore]
+    #[ignore]
     #[test]
     fn management() {
         with_agent(|agent| async move {
