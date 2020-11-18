@@ -92,6 +92,9 @@ pub enum AgentError {
 
     #[error("The status response did not contain a root key")]
     NoRootKeyInStatus(),
+
+    #[error("Failed to initialize the BLS library")]
+    BlsInitializationFailure(),
 }
 
 impl PartialEq for AgentError {

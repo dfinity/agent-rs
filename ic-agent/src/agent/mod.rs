@@ -121,9 +121,7 @@ impl Agent {
 
     /// Create an instance of an [`Agent`].
     pub fn new(config: AgentConfig) -> Result<Agent, AgentError> {
-        INIT_BLS.call_once(|| {
-            bls::init();
-        });
+        initialize_bls()?;
 
         let url = config.url;
         let mut tls_config = rustls::ClientConfig::new();
@@ -495,6 +493,20 @@ impl Agent {
     /// passing all arguments.
     pub fn query<S: Into<String>>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder {
         QueryBuilder::new(self, canister_id.clone(), method_name.into())
+    }
+}
+
+fn initialize_bls() -> Result<(), AgentError> {
+    let mut init_err = None;
+    INIT_BLS.call_once(|| {
+        if bls::init() != bls::BLS_OK {
+            init_err = Some(AgentError::BlsInitializationFailure());
+        }
+    });
+    if let Some(init_err) = init_err {
+        Err(init_err)
+    } else {
+        Ok(())
     }
 }
 
