@@ -153,6 +153,8 @@ impl Agent {
         })
     }
 
+    /// Fetch the root key from the status endpoint.
+    /// It is not necessary to call this when communicating with "the" Internet Computer.
     pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
         let status = self.status().await?;
         let root_key = status.root_key.ok_or_else(AgentError::NoRootKeyInStatus)?;
