@@ -477,7 +477,7 @@ fn lookup_reject_code(
         request_id.to_vec().into(),
         "reject_code".into(),
     ];
-    let code = lookup_path(&certificate, path)?;
+    let code = lookup_value(&certificate, path)?;
     let mut readable = &code[..];
     Ok(leb128::read::unsigned(&mut readable)?)
 }
@@ -491,7 +491,7 @@ fn lookup_reject_message(
         request_id.to_vec().into(),
         "reject_message".into(),
     ];
-    let msg = lookup_path(&certificate, path)?;
+    let msg = lookup_value(&certificate, path)?;
     Ok(from_utf8(msg)?.to_string())
 }
 
@@ -504,16 +504,16 @@ fn lookup_reply(
         request_id.to_vec().into(),
         "reply".into(),
     ];
-    let reply_data = lookup_path(&certificate, path)?;
+    let reply_data = lookup_value(&certificate, path)?;
     let reply = Replied::CallReplied(Vec::from(reply_data));
     Ok(RequestStatusResponse::Replied { reply })
 }
 
-fn lookup_path(certificate: &Certificate, path: Vec<Label>) -> Result<&[u8], AgentError> {
+fn lookup_value(certificate: &Certificate, path: Vec<Label>) -> Result<&[u8], AgentError> {
     match certificate.tree.lookup_path(&path) {
         LookupResult::Absent => Err(AgentError::LookupPathAbsent(path)),
         LookupResult::Unknown => Err(AgentError::LookupPathUnknown(path)),
-        LookupResult::Found(reply_data) => Ok(reply_data),
+        LookupResult::Found(value) => Ok(value),
         LookupResult::Error => Err(AgentError::LookupPathError(path)),
     }
 }
