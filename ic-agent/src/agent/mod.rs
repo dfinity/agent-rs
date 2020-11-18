@@ -31,6 +31,7 @@ use status::Status;
 use crate::bls::bls12381::bls;
 use std::convert::TryFrom;
 use std::str::from_utf8;
+use std::sync::Once;
 use std::sync::RwLock;
 use std::time::Duration;
 
@@ -38,6 +39,8 @@ const IC_REQUEST_DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 const DER_PREFIX: &[u8; 37] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00";
 const KEY_LENGTH: usize = 96;
+
+static INIT_BLS: Once = Once::new();
 
 /// A low level Agent to make calls to a Replica endpoint.
 ///
@@ -118,7 +121,9 @@ impl Agent {
 
     /// Create an instance of an [`Agent`].
     pub fn new(config: AgentConfig) -> Result<Agent, AgentError> {
-        bls::init(); // todo where to put this? we need to call it once globally.
+        INIT_BLS.call_once(|| {
+            bls::init();
+        });
 
         let url = config.url;
         let mut tls_config = rustls::ClientConfig::new();
