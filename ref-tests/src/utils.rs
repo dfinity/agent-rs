@@ -105,8 +105,7 @@ pub async fn create_wallet_canister(agent: &Agent) -> Result<Principal, Box<dyn 
 
     #[derive(CandidType)]
     struct Input {
-        num_cycles: candid::Nat,
-        num_icpt: candid::Nat,
+        num_cycles: Option<candid::Nat>,
     }
 
     #[derive(Deserialize)]
