@@ -8,7 +8,7 @@ pub(crate) mod response;
 
 pub mod status;
 pub use agent_config::{AgentConfig, PasswordManager};
-pub use agent_error::AgentError;
+pub use agent_error::{AgentError, HttpErrorPayload};
 pub use builder::AgentBuilder;
 pub use nonce::NonceFactory;
 pub use response::{Replied, RequestStatusResponse};
@@ -16,8 +16,11 @@ pub use response::{Replied, RequestStatusResponse};
 #[cfg(test)]
 mod agent_test;
 
-use crate::agent::replica_api::{AsyncContent, Envelope, SyncContent};
+use crate::agent::replica_api::{
+    AsyncContent, Certificate, Envelope, ReadStateResponse, SyncContent,
+};
 use crate::export::Principal;
+use crate::hash_tree::{Label, LookupResult};
 use crate::identity::Identity;
 use crate::{to_request_id, RequestId};
 use delay::Waiter;
@@ -26,6 +29,7 @@ use serde::Serialize;
 use status::Status;
 
 use std::convert::TryFrom;
+use std::str::from_utf8;
 use std::time::Duration;
 
 const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
@@ -249,14 +253,14 @@ impl Agent {
         }
 
         if status.is_client_error() || status.is_server_error() {
-            Err(AgentError::HttpError {
+            Err(AgentError::HttpError(HttpErrorPayload {
                 status: status.into(),
                 content_type: headers
                     .get(reqwest::header::CONTENT_TYPE)
                     .and_then(|value| value.to_str().ok())
                     .map(|x| x.to_string()),
                 content: body,
-            })
+            }))
         } else {
             Ok(body)
         }
@@ -266,11 +270,10 @@ impl Agent {
     where
         A: serde::de::DeserializeOwned,
     {
-        let anonymous = Principal::anonymous();
         let request_id = to_request_id(&request)?;
         let sender = match &request {
             SyncContent::QueryRequest { sender, .. } => sender,
-            SyncContent::RequestStatusRequest { .. } => &anonymous,
+            SyncContent::ReadStateRequest { sender, .. } => sender,
         };
         let msg = self.construct_message(&request_id);
         let signature = self
@@ -366,37 +369,36 @@ impl Agent {
         .await
     }
 
+    async fn read_state_raw(
+        &self,
+        paths: Vec<Vec<Label>>,
+        ingress_expiry_datetime: Option<u64>,
+    ) -> Result<Certificate, AgentError> {
+        let read_state_response: ReadStateResponse = self
+            .read_endpoint(SyncContent::ReadStateRequest {
+                sender: self.identity.sender().map_err(AgentError::SigningError)?,
+                paths,
+                ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
+            })
+            .await?;
+
+        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
+            .map_err(AgentError::InvalidCborData)?;
+        // todo: verify certificate here
+        Ok(cert)
+    }
+
     pub async fn request_status_raw(
         &self,
         request_id: &RequestId,
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestStatusResponse, AgentError> {
-        self.read_endpoint(SyncContent::RequestStatusRequest {
-            request_id: request_id.as_slice().into(),
-            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
-        })
-        .await
-        .map(|response| match response {
-            replica_api::Status::Replied { reply } => {
-                let reply = match reply {
-                    replica_api::RequestStatusResponseReplied::CallReply(reply) => {
-                        Replied::CallReplied(reply.arg)
-                    }
-                };
-                RequestStatusResponse::Replied { reply }
-            }
-            replica_api::Status::Rejected {
-                reject_code,
-                reject_message,
-            } => RequestStatusResponse::Rejected {
-                reject_code,
-                reject_message,
-            },
-            replica_api::Status::Unknown {} => RequestStatusResponse::Unknown,
-            replica_api::Status::Received {} => RequestStatusResponse::Received,
-            replica_api::Status::Processing {} => RequestStatusResponse::Processing,
-            replica_api::Status::Done {} => RequestStatusResponse::Done,
-        })
+        let paths: Vec<Vec<Label>> =
+            vec![vec!["request_status".into(), request_id.to_vec().into()]];
+
+        let cert = self.read_state_raw(paths, ingress_expiry_datetime).await?;
+
+        lookup_request_status(cert, request_id)
     }
 
     /// Returns an UpdateBuilder enabling the construction of an update call without
@@ -423,6 +425,96 @@ impl Agent {
     /// passing all arguments.
     pub fn query<S: Into<String>>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder {
         QueryBuilder::new(self, canister_id.clone(), method_name.into())
+    }
+}
+
+fn lookup_request_status(
+    certificate: Certificate,
+    request_id: &RequestId,
+) -> Result<RequestStatusResponse, AgentError> {
+    let path_status = vec![
+        "request_status".into(),
+        request_id.to_vec().into(),
+        "status".into(),
+    ];
+    match certificate.tree.lookup_path(&path_status) {
+        LookupResult::Absent => Err(AgentError::LookupPathAbsent(path_status)),
+        LookupResult::Unknown => Ok(RequestStatusResponse::Unknown),
+        LookupResult::Found(status) => match from_utf8(status)? {
+            "done" => Ok(RequestStatusResponse::Done),
+            "processing" => Ok(RequestStatusResponse::Processing),
+            "received" => Ok(RequestStatusResponse::Received),
+            "rejected" => lookup_rejection(&certificate, request_id),
+            "replied" => lookup_reply(&certificate, request_id),
+            other => Err(AgentError::InvalidRequestStatus(
+                path_status,
+                other.to_string(),
+            )),
+        },
+        LookupResult::Error => Err(AgentError::LookupPathError(path_status)),
+    }
+}
+
+fn lookup_rejection(
+    certificate: &Certificate,
+    request_id: &RequestId,
+) -> Result<RequestStatusResponse, AgentError> {
+    let reject_code = lookup_reject_code(certificate, request_id)?;
+    let reject_message = lookup_reject_message(certificate, request_id)?;
+
+    Ok(RequestStatusResponse::Rejected {
+        reject_code,
+        reject_message,
+    })
+}
+
+fn lookup_reject_code(
+    certificate: &Certificate,
+    request_id: &RequestId,
+) -> Result<u64, AgentError> {
+    let path = vec![
+        "request_status".into(),
+        request_id.to_vec().into(),
+        "reject_code".into(),
+    ];
+    let code = lookup_value(&certificate, path)?;
+    let mut readable = &code[..];
+    Ok(leb128::read::unsigned(&mut readable)?)
+}
+
+fn lookup_reject_message(
+    certificate: &Certificate,
+    request_id: &RequestId,
+) -> Result<String, AgentError> {
+    let path = vec![
+        "request_status".into(),
+        request_id.to_vec().into(),
+        "reject_message".into(),
+    ];
+    let msg = lookup_value(&certificate, path)?;
+    Ok(from_utf8(msg)?.to_string())
+}
+
+fn lookup_reply(
+    certificate: &Certificate,
+    request_id: &RequestId,
+) -> Result<RequestStatusResponse, AgentError> {
+    let path = vec![
+        "request_status".into(),
+        request_id.to_vec().into(),
+        "reply".into(),
+    ];
+    let reply_data = lookup_value(&certificate, path)?;
+    let reply = Replied::CallReplied(Vec::from(reply_data));
+    Ok(RequestStatusResponse::Replied { reply })
+}
+
+fn lookup_value(certificate: &Certificate, path: Vec<Label>) -> Result<&[u8], AgentError> {
+    match certificate.tree.lookup_path(&path) {
+        LookupResult::Absent => Err(AgentError::LookupPathAbsent(path)),
+        LookupResult::Unknown => Err(AgentError::LookupPathUnknown(path)),
+        LookupResult::Found(value) => Ok(value),
+        LookupResult::Error => Err(AgentError::LookupPathError(path)),
     }
 }
 

@@ -21,6 +21,7 @@ delay = "0.3.0"
 hex = "0.4.0"
 ic-types = { path = "../ic-types", version = "0.1", features = [ "serde" ] }
 leb128 = "0.2.4"
+mime = "0.3.16"
 openssl = "0.10.24"
 rand = "0.7.2"
 reqwest = { version = "0.10.4", features = [ "blocking", "json", "rustls-tls" ] }
