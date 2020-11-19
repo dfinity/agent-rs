@@ -42,6 +42,9 @@ const KEY_LENGTH: usize = 96;
 
 static INIT_BLS: Once = Once::new();
 
+// todo: do not merge until this is the actual Sodium key
+const DEFAULT_ROOT_KEY: &[u8; 6] = &[1, 2, 3, 4, 5, 6];
+
 /// A low level Agent to make calls to a Replica endpoint.
 ///
 /// ```ignore
@@ -148,7 +151,7 @@ impl Agent {
             ingress_expiry_duration: config
                 .ingress_expiry_duration
                 .unwrap_or_else(|| Duration::from_secs(300)),
-            root_key: RwLock::new(vec![]),
+            root_key: RwLock::new(DEFAULT_ROOT_KEY.to_vec()),
         })
     }
 
@@ -447,7 +450,7 @@ impl Agent {
                     delegation.subnet_id.clone().into(),
                     "public_key".into(),
                 ];
-                lookup_value(&cert, public_key_path).map(|pk|pk.to_vec())
+                lookup_value(&cert, public_key_path).map(|pk| pk.to_vec())
             }
         }
     }
@@ -493,17 +496,13 @@ impl Agent {
 }
 
 fn initialize_bls() -> Result<(), AgentError> {
-    let mut init_err = None;
+    let mut result = Ok(());
     INIT_BLS.call_once(|| {
         if bls::init() != bls::BLS_OK {
-            init_err = Some(AgentError::BlsInitializationFailure());
+            result = Err(AgentError::BlsInitializationFailure());
         }
     });
-    if let Some(init_err) = init_err {
-        Err(init_err)
-    } else {
-        Ok(())
-    }
+    result
 }
 
 fn extract_der(buf: Vec<u8>) -> Result<Vec<u8>, AgentError> {

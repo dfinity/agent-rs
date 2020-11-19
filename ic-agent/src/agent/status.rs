@@ -52,7 +52,7 @@ pub struct Status {
     /// Optional. The precise git revision of the Internet Computer implementation.
     pub impl_revision: Option<String>,
 
-    /// Optional.  The root key
+    /// Optional.  The root (public) key used to verify certificates.
     pub root_key: Option<Vec<u8>>,
 
     /// Contains any additional values that the replica gave as status.
