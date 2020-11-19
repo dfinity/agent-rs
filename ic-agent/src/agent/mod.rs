@@ -447,12 +447,7 @@ impl Agent {
                     delegation.subnet_id.clone().into(),
                     "public_key".into(),
                 ];
-                match cert.tree.lookup_path(&public_key_path) {
-                    LookupResult::Absent => Err(AgentError::LookupPathAbsent(public_key_path)),
-                    LookupResult::Unknown => Err(AgentError::LookupPathAbsent(public_key_path)),
-                    LookupResult::Found(root_key) => Ok(root_key.to_vec()),
-                    LookupResult::Error => Err(AgentError::LookupPathError(public_key_path)),
-                }
+                lookup_value(&cert, public_key_path).map(|pk|pk.to_vec())
             }
         }
     }
