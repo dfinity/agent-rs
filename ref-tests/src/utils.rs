@@ -105,7 +105,7 @@ pub async fn create_wallet_canister(agent: &Agent) -> Result<Principal, Box<dyn 
 
     #[derive(CandidType)]
     struct Input {
-        num_cycles: Option<candid::Nat>,
+        amount: Option<candid::Nat>,
     }
 
     #[derive(Deserialize)]
@@ -118,7 +118,7 @@ pub async fn create_wallet_canister(agent: &Agent) -> Result<Principal, Box<dyn 
     // needing to be refilled for a couple of months.
     let (Output { canister_id },) = ic00
         .update_("provisional_create_canister_with_cycles")
-        .with_arg(Input { num_cycles: None })
+        .with_arg(Input { amount: None })
         .build()
         .call_and_wait(create_waiter())
         .await?;
