@@ -162,7 +162,7 @@ impl Agent {
         let root_key = status
             .root_key
             .clone()
-            .ok_or_else(|| AgentError::NoRootKeyInStatus(status))?;
+            .ok_or(AgentError::NoRootKeyInStatus(status))?;
         if let Ok(mut write_guard) = self.root_key.write() {
             *write_guard = root_key;
         }
