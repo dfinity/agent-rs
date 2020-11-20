@@ -15,12 +15,13 @@ pub use response::{Replied, RequestStatusResponse};
 
 #[cfg(test)]
 mod agent_test;
+mod response_authentication;
 
 use crate::agent::replica_api::{
     AsyncContent, Certificate, Delegation, Envelope, ReadStateResponse, SyncContent,
 };
 use crate::export::Principal;
-use crate::hash_tree::{Label, LookupResult};
+use crate::hash_tree::Label;
 use crate::identity::Identity;
 use crate::{to_request_id, RequestId};
 use delay::Waiter;
@@ -28,19 +29,16 @@ use reqwest::Method;
 use serde::Serialize;
 use status::Status;
 
+use crate::agent::response_authentication::{
+    extract_der, initialize_bls, lookup_request_status, lookup_value,
+};
 use crate::bls::bls12381::bls;
 use std::convert::TryFrom;
-use std::str::from_utf8;
-use std::sync::Once;
 use std::sync::RwLock;
 use std::time::Duration;
 
 const IC_REQUEST_DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
-const DER_PREFIX: &[u8; 37] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00";
-const KEY_LENGTH: usize = 96;
-
-static INIT_BLS: Once = Once::new();
 
 // todo: do not merge until this is the actual Sodium key
 const DEFAULT_ROOT_KEY: &[u8; 6] = &[1, 2, 3, 4, 5, 6];
@@ -155,19 +153,29 @@ impl Agent {
         })
     }
 
-    /// Fetch the root key from the status endpoint.
-    /// It is not necessary to call this when communicating with "the" Internet Computer.
+    /// Only an agent communicating with a local/custom instance of the Internet Computer
+    /// should call this method.
+    /// It is not necessary to call this when communicating with
+    /// the DFINITY foundation-managed Internet Computer.
     pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
         let status = self.status().await?;
-        let root_key = status.root_key.ok_or_else(AgentError::NoRootKeyInStatus)?;
-        let mut write_guard = self.root_key.write().unwrap();
-        *write_guard = root_key;
+        let root_key = status
+            .root_key
+            .clone()
+            .ok_or_else(|| AgentError::NoRootKeyInStatus(status))?;
+        if let Ok(mut write_guard) = self.root_key.write() {
+            *write_guard = root_key;
+        }
         Ok(())
     }
 
     fn read_root_key(&self) -> Result<Vec<u8>, AgentError> {
-        let root_key = self.root_key.read().unwrap().clone();
-        Ok(root_key)
+        if let Ok(read_lock) = self.root_key.read() {
+            let root_key = read_lock.clone();
+            Ok(root_key)
+        } else {
+            Err(AgentError::CouldNotReadRootKey())
+        }
     }
 
     fn get_expiry_date(&self) -> u64 {
@@ -492,127 +500,6 @@ impl Agent {
     /// passing all arguments.
     pub fn query<S: Into<String>>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder {
         QueryBuilder::new(self, canister_id.clone(), method_name.into())
-    }
-}
-
-fn initialize_bls() -> Result<(), AgentError> {
-    let mut result = Ok(());
-    INIT_BLS.call_once(|| {
-        if bls::init() != bls::BLS_OK {
-            result = Err(AgentError::BlsInitializationFailure());
-        }
-    });
-    result
-}
-
-fn extract_der(buf: Vec<u8>) -> Result<Vec<u8>, AgentError> {
-    let expected_length = DER_PREFIX.len() + KEY_LENGTH;
-    if buf.len() != expected_length {
-        return Err(AgentError::DerKeyLengthMismatch {
-            expected: expected_length,
-            actual: buf.len(),
-        });
-    }
-
-    let prefix = &buf[0..DER_PREFIX.len()];
-    if prefix[..] != DER_PREFIX[..] {
-        return Err(AgentError::DerPrefixMismatch {
-            expected: DER_PREFIX.to_vec(),
-            actual: prefix.to_vec(),
-        });
-    }
-
-    let key = &buf[DER_PREFIX.len()..];
-    Ok(key.to_vec())
-}
-
-fn lookup_request_status(
-    certificate: Certificate,
-    request_id: &RequestId,
-) -> Result<RequestStatusResponse, AgentError> {
-    let path_status = vec![
-        "request_status".into(),
-        request_id.to_vec().into(),
-        "status".into(),
-    ];
-    match certificate.tree.lookup_path(&path_status) {
-        LookupResult::Absent => Err(AgentError::LookupPathAbsent(path_status)),
-        LookupResult::Unknown => Ok(RequestStatusResponse::Unknown),
-        LookupResult::Found(status) => match from_utf8(status)? {
-            "done" => Ok(RequestStatusResponse::Done),
-            "processing" => Ok(RequestStatusResponse::Processing),
-            "received" => Ok(RequestStatusResponse::Received),
-            "rejected" => lookup_rejection(&certificate, request_id),
-            "replied" => lookup_reply(&certificate, request_id),
-            other => Err(AgentError::InvalidRequestStatus(
-                path_status,
-                other.to_string(),
-            )),
-        },
-        LookupResult::Error => Err(AgentError::LookupPathError(path_status)),
-    }
-}
-
-fn lookup_rejection(
-    certificate: &Certificate,
-    request_id: &RequestId,
-) -> Result<RequestStatusResponse, AgentError> {
-    let reject_code = lookup_reject_code(certificate, request_id)?;
-    let reject_message = lookup_reject_message(certificate, request_id)?;
-
-    Ok(RequestStatusResponse::Rejected {
-        reject_code,
-        reject_message,
-    })
-}
-
-fn lookup_reject_code(
-    certificate: &Certificate,
-    request_id: &RequestId,
-) -> Result<u64, AgentError> {
-    let path = vec![
-        "request_status".into(),
-        request_id.to_vec().into(),
-        "reject_code".into(),
-    ];
-    let code = lookup_value(&certificate, path)?;
-    let mut readable = &code[..];
-    Ok(leb128::read::unsigned(&mut readable)?)
-}
-
-fn lookup_reject_message(
-    certificate: &Certificate,
-    request_id: &RequestId,
-) -> Result<String, AgentError> {
-    let path = vec![
-        "request_status".into(),
-        request_id.to_vec().into(),
-        "reject_message".into(),
-    ];
-    let msg = lookup_value(&certificate, path)?;
-    Ok(from_utf8(msg)?.to_string())
-}
-
-fn lookup_reply(
-    certificate: &Certificate,
-    request_id: &RequestId,
-) -> Result<RequestStatusResponse, AgentError> {
-    let path = vec![
-        "request_status".into(),
-        request_id.to_vec().into(),
-        "reply".into(),
-    ];
-    let reply_data = lookup_value(&certificate, path)?;
-    let reply = Replied::CallReplied(Vec::from(reply_data));
-    Ok(RequestStatusResponse::Replied { reply })
-}
-
-fn lookup_value(certificate: &Certificate, path: Vec<Label>) -> Result<&[u8], AgentError> {
-    match certificate.tree.lookup_path(&path) {
-        LookupResult::Absent => Err(AgentError::LookupPathAbsent(path)),
-        LookupResult::Unknown => Err(AgentError::LookupPathUnknown(path)),
-        LookupResult::Found(value) => Ok(value),
-        LookupResult::Error => Err(AgentError::LookupPathError(path)),
     }
 }
 
