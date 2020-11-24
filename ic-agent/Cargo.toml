@@ -24,6 +24,7 @@ leb128 = "0.2.4"
 mime = "0.3.16"
 num-bigint = "0.2.6"
 openssl = "0.10.24"
+pkcs11 = "0.5.0"
 rand = "0.7.2"
 reqwest = { version = "0.10.4", features = [ "blocking", "json", "rustls-tls" ] }
 rustls = "0.18.0"
