@@ -1,12 +1,9 @@
 use crate::agent::replica_api::{CallReply, QueryResponse};
-use crate::agent::response::{Replied, RequestStatusResponse};
 use crate::agent::{AgentConfig, Status};
 use crate::export::Principal;
 use crate::{Agent, AgentError};
-use delay::Delay;
 use mockito::mock;
 use std::collections::BTreeMap;
-use std::time::Duration;
 
 #[test]
 fn query() -> Result<(), AgentError> {
@@ -94,45 +91,6 @@ fn query_rejected() -> Result<(), AgentError> {
 }
 
 #[test]
-fn call() -> Result<(), AgentError> {
-    let blob = Vec::from("Hello World");
-    let response = QueryResponse::Replied {
-        reply: CallReply { arg: blob.clone() },
-    };
-
-    let submit_mock = mock("POST", "/api/v1/submit").with_status(200).create();
-    let status_mock = mock("POST", "/api/v1/read")
-        .with_status(200)
-        .with_header("content-type", "application/cbor")
-        .with_body(serde_cbor::to_vec(&response)?)
-        .create();
-
-    let agent = Agent::builder().with_url(&mockito::server_url()).build()?;
-
-    let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-    let result = runtime.block_on(async {
-        let request_id = agent
-            .update(&Principal::management_canister(), "greet")
-            .with_arg(&[])
-            .call()
-            .await?;
-        agent.request_status_raw(&request_id, None).await
-    });
-
-    submit_mock.assert();
-    status_mock.assert();
-
-    assert_eq!(
-        result?,
-        RequestStatusResponse::Replied {
-            reply: Replied::CallReplied(blob)
-        }
-    );
-
-    Ok(())
-}
-
-#[test]
 fn call_error() -> Result<(), AgentError> {
     let submit_mock = mock("POST", "/api/v1/submit").with_status(500).create();
 
@@ -150,50 +108,6 @@ fn call_error() -> Result<(), AgentError> {
     submit_mock.assert();
 
     assert!(result.is_err());
-
-    Ok(())
-}
-
-#[test]
-fn call_rejected() -> Result<(), AgentError> {
-    let response: QueryResponse = QueryResponse::Rejected {
-        reject_code: 1234,
-        reject_message: "Rejected Message".to_string(),
-    };
-
-    let submit_mock = mock("POST", "/api/v1/submit").with_status(200).create();
-    let status_mock = mock("POST", "/api/v1/read")
-        .with_status(200)
-        .with_header("content-type", "application/cbor")
-        .with_body(serde_cbor::to_vec(&response)?)
-        .create();
-
-    let agent = Agent::new(AgentConfig {
-        url: mockito::server_url(),
-        ..Default::default()
-    })?;
-
-    let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-    let result = runtime.block_on(async {
-        agent
-            .update(&Principal::management_canister(), "greet")
-            .call_and_wait(Delay::timeout(Duration::from_millis(100)))
-            .await
-    });
-
-    match result {
-        Err(AgentError::ReplicaError {
-            reject_code: code,
-            reject_message: msg,
-        }) => {
-            assert_eq!(code, 1234);
-            assert_eq!(msg, "Rejected Message");
-        }
-        result => unreachable!("{:?}", result),
-    }
-
-    submit_mock.assert();
-    status_mock.assert();
 
     Ok(())
 }
