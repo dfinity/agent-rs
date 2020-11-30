@@ -1,3 +1,4 @@
+use crate::agent::status::Status;
 use crate::hash_tree::Label;
 use crate::RequestIdError;
 use leb128::read;
@@ -79,6 +80,26 @@ pub enum AgentError {
 
     #[error("The request status ({1}) at path {0:?} is invalid.")]
     InvalidRequestStatus(Vec<Label>, String),
+
+    #[error("Certificate verification failed.")]
+    CertificateVerificationFailed(),
+
+    #[error(
+        r#"BLS DER-encoded public key must be ${expected} bytes long, but is {actual} bytes long."#
+    )]
+    DerKeyLengthMismatch { expected: usize, actual: usize },
+
+    #[error("BLS DER-encoded public key is invalid. Expected the following prefix: ${expected:?}, but got ${actual:?}")]
+    DerPrefixMismatch { expected: Vec<u8>, actual: Vec<u8> },
+
+    #[error("The status response did not contain a root key.  Status: {0}")]
+    NoRootKeyInStatus(Status),
+
+    #[error("Could not read the root key")]
+    CouldNotReadRootKey(),
+
+    #[error("Failed to initialize the BLS library")]
+    BlsInitializationFailure(),
 }
 
 impl PartialEq for AgentError {

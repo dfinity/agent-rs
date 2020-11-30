@@ -62,6 +62,17 @@ pub(crate) struct Certificate {
 
     #[serde(with = "serde_bytes")]
     pub signature: Vec<u8>,
+
+    pub delegation: Option<Delegation>,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct Delegation {
+    #[serde(with = "serde_bytes")]
+    pub subnet_id: Vec<u8>,
+
+    #[serde(with = "serde_bytes")]
+    pub certificate: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
