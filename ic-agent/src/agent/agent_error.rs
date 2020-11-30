@@ -2,6 +2,7 @@ use crate::agent::status::Status;
 use crate::hash_tree::Label;
 use crate::RequestIdError;
 use leb128::read;
+use reqwest::StatusCode;
 use std::fmt::{Debug, Display, Formatter};
 use std::str::Utf8Error;
 use thiserror::Error;
@@ -125,8 +126,9 @@ impl HttpErrorPayload {
             } if is_plain_text_utf8(content_type) => {
                 f.write_fmt(format_args!(
                     "Http Error: status {}, content type {:?}, content: {}",
-                    status,
-                    content_type.as_ref().unwrap(),
+                    StatusCode::from_u16(*status)
+                        .map_or_else(|_| format!("{}", status), |code| format!("{}", code)),
+                    content_type.clone().unwrap_or_else(|| "".to_string()),
                     String::from_utf8(content.to_vec()).unwrap_or_else(|from_utf8_err| format!(
                         "(unable to decode content: {:#?})",
                         from_utf8_err
@@ -139,9 +141,10 @@ impl HttpErrorPayload {
                 content,
             } => {
                 f.write_fmt(format_args!(
-                    "Http Error: status {}, content type {:?}, content: {:?}",
-                    status,
-                    content_type.as_ref().unwrap(),
+                    r#"Http Error: status {}, content type {:?}, content: {:?}"#,
+                    StatusCode::from_u16(*status)
+                        .map_or_else(|_| format!("{}", status), |code| format!("{}", code)),
+                    content_type.clone().unwrap_or_else(|| "".to_string()),
                     content
                 ))?;
             }
@@ -169,4 +172,18 @@ fn is_plain_text_utf8(content_type: &Option<String>) -> bool {
         content_type.as_ref().and_then(|s|s.parse::<mime::Mime>().ok()),
         Some(mt) if mt == mime::TEXT_PLAIN || mt == mime::TEXT_PLAIN_UTF_8
     )
+}
+
+#[test]
+fn http_payload_works_with_content_type_none() {
+    let payload = HttpErrorPayload {
+        status: 420,
+        content_type: None,
+        content: vec![1, 2, 3],
+    };
+
+    assert_eq!(
+        format!("{}", AgentError::HttpError(payload)),
+        r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "", content: [1, 2, 3]"#,
+    );
 }
