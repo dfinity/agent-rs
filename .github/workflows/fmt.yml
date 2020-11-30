@@ -27,6 +27,7 @@ jobs:
         run: |
           rustup update ${{ matrix.rust }} --no-self-update
           rustup default ${{ matrix.rust }}
+          rustup component add rustfmt
       - name: Run Cargo Fmt
         run: cargo fmt --all -- --check
         env:
