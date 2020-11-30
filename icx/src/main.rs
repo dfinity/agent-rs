@@ -5,7 +5,7 @@ use clap::{crate_authors, crate_version, AppSettings, Clap};
 use ic_agent::agent::AgentConfig;
 use ic_agent::export::Principal;
 use ic_agent::identity::BasicIdentity;
-use ic_agent::{Agent, AgentError, Identity};
+use ic_agent::{Agent, AgentError, HttpErrorPayload, Identity};
 use ring::signature::Ed25519KeyPair;
 use std::convert::TryFrom;
 use std::error::Error;
@@ -280,11 +280,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     print_idl_blob(&blob, &t.output, &method_type)
                         .map_err(|e| format!("Invalid IDL blob: {}", e))?;
                 }
-                Err(AgentError::HttpError {
+                Err(AgentError::HttpError(HttpErrorPayload {
                     status,
                     content_type,
                     content,
-                }) => {
+                })) => {
                     eprintln!("Server returned an HTTP Error:\n  Code: {}", status);
                     match content_type.as_deref() {
                         None => eprintln!("  Content: {}", hex::encode(content)),

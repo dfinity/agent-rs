@@ -97,6 +97,7 @@ pub struct HashTree {
 impl HashTree {
     /// Recomputes root hash of the full tree that this hash tree was constructed from.
     #[inline]
+    #[allow(dead_code)]
     pub fn digest(&self) -> Sha256Digest {
         self.root.digest()
     }

@@ -57,6 +57,7 @@
 //!     .with_url(URL)
 //!     .with_identity(create_identity())
 //!     .build()?;
+//!   agent.fetch_root_key().await?;
 //!   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 //!
 //!   let waiter = delay::Delay::builder()
@@ -97,12 +98,19 @@
 //! generally available, additional details about the versions supported will
 //! be available here.
 //!
+#[allow(clippy::all)]
+#[allow(dead_code)]
+mod bls;
+
 pub mod agent;
 pub mod export;
 pub mod identity;
 pub mod request_id;
 
-pub use agent::{agent_error::AgentError, nonce::NonceFactory, Agent, PasswordManager};
+pub use agent::{
+    agent_error::AgentError, agent_error::HttpErrorPayload, nonce::NonceFactory, Agent,
+    PasswordManager,
+};
 pub use identity::{Identity, Signature};
 pub use request_id::{to_request_id, RequestId, RequestIdError};
 

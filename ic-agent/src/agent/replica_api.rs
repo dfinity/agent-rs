@@ -1,4 +1,5 @@
 use crate::export::Principal;
+use crate::hash_tree::{HashTree, Label};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize)]
@@ -31,11 +32,11 @@ pub enum AsyncContent {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "request_type")]
 pub enum SyncContent {
-    #[serde(rename = "request_status")]
-    RequestStatusRequest {
+    #[serde(rename = "read_state")]
+    ReadStateRequest {
         ingress_expiry: u64,
-        #[serde(with = "serde_bytes")]
-        request_id: Vec<u8>,
+        sender: Principal,
+        paths: Vec<Vec<Label>>,
     },
     #[serde(rename = "query")]
     QueryRequest {
@@ -48,11 +49,30 @@ pub enum SyncContent {
     },
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct RequestStatusResponse {
-    pub status: Status,
-    #[serde(rename = "time")]
-    pub time: u64,
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct ReadStateResponse {
+    #[serde(with = "serde_bytes")]
+    pub certificate: Vec<u8>,
+}
+
+/// A `Certificate` as defined in https://docs.dfinity.systems/public/#_certificate
+#[derive(Deserialize)]
+pub(crate) struct Certificate {
+    pub tree: HashTree,
+
+    #[serde(with = "serde_bytes")]
+    pub signature: Vec<u8>,
+
+    pub delegation: Option<Delegation>,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct Delegation {
+    #[serde(with = "serde_bytes")]
+    pub subnet_id: Vec<u8>,
+
+    #[serde(with = "serde_bytes")]
+    pub certificate: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
