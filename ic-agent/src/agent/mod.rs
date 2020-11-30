@@ -150,10 +150,13 @@ impl Agent {
         })
     }
 
-    /// Only an agent communicating with a local/custom instance of the Internet Computer
-    /// should call this method.
-    /// It is not necessary to call this when communicating with
-    /// the DFINITY foundation-managed Internet Computer.
+    /// Fetch the root key of the replica using its status end point, and update the agent's
+    /// root key. This only uses the agent's specific upstream replica, and does not ensure
+    /// the root key validity. In order to prevent any MITM attack, developers should try
+    /// to contact multiple replicas.
+    ///
+    /// The root key is necessary for validating state and certificates sent by the replica.
+    /// By default, it is set to [None] and validating methods will return an error.
     pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
         let status = self.status().await?;
         let root_key = status
