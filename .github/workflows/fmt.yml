@@ -5,7 +5,11 @@ on: [pull_request]
 jobs:
   test:
     name: fmt
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        rust: [ '1.47.0' ]
+        os: [ ubuntu-latest ]
 
     steps:
       - uses: actions/checkout@v2

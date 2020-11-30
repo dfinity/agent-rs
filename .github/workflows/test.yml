@@ -29,7 +29,6 @@ jobs:
         run: |
           rustup update ${{ matrix.rust }} --no-self-update
           rustup default ${{ matrix.rust }}
-          rustup component add rustfmt
 
       - name: Install dependencies (windows only)
         if: matrix.os == 'windows-latest'
