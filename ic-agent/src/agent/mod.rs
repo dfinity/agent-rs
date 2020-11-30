@@ -40,9 +40,6 @@ use std::time::Duration;
 const IC_REQUEST_DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 
-// todo: do not merge until this is the actual Sodium key
-const DEFAULT_ROOT_KEY: &[u8; 6] = &[1, 2, 3, 4, 5, 6];
-
 /// A low level Agent to make calls to a Replica endpoint.
 ///
 /// ```ignore
@@ -111,7 +108,7 @@ pub struct Agent {
     identity: Box<dyn Identity + Send + Sync>,
     password_manager: Option<Box<dyn PasswordManager + Send + Sync>>,
     ingress_expiry_duration: Duration,
-    root_key: RwLock<Vec<u8>>,
+    root_key: RwLock<Option<Vec<u8>>>,
 }
 
 impl Agent {
@@ -149,7 +146,7 @@ impl Agent {
             ingress_expiry_duration: config
                 .ingress_expiry_duration
                 .unwrap_or_else(|| Duration::from_secs(300)),
-            root_key: RwLock::new(DEFAULT_ROOT_KEY.to_vec()),
+            root_key: RwLock::new(None),
         })
     }
 
@@ -164,15 +161,18 @@ impl Agent {
             .clone()
             .ok_or(AgentError::NoRootKeyInStatus(status))?;
         if let Ok(mut write_guard) = self.root_key.write() {
-            *write_guard = root_key;
+            *write_guard = Some(root_key);
         }
         Ok(())
     }
 
     fn read_root_key(&self) -> Result<Vec<u8>, AgentError> {
         if let Ok(read_lock) = self.root_key.read() {
-            let root_key = read_lock.clone();
-            Ok(root_key)
+            if let Some(root_key) = read_lock.clone() {
+                Ok(root_key)
+            } else {
+                Err(AgentError::CouldNotReadRootKey())
+            }
         } else {
             Err(AgentError::CouldNotReadRootKey())
         }
