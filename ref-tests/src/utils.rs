@@ -55,6 +55,10 @@ where
         let agent = create_agent(agent_identity)
             .await
             .expect("Could not create an agent.");
+        agent
+            .fetch_root_key()
+            .await
+            .expect("could not fetch root key");
         match f(agent).await {
             Ok(_) => {}
             Err(e) => assert!(false, "{:?}", e),
