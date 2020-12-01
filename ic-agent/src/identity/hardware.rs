@@ -1,14 +1,15 @@
 use crate::{Identity, Signature};
 use ic_types::Principal;
 
-use openssl_sys::EC_KEY_new;
+//use openssl_sys::EC_KEY_new;
 use pkcs11::types::{
     CKA_CLASS, CKA_EC_PARAMS, CKA_EC_POINT, CKA_ID, CKA_KEY_TYPE, CKF_SERIAL_SESSION, CKK_EC,
-    CKO_PUBLIC_KEY, CK_ATTRIBUTE, CK_KEY_TYPE, CK_SESSION_HANDLE,
+    CKO_PUBLIC_KEY, CK_ATTRIBUTE, CK_KEY_TYPE, CK_OBJECT_HANDLE, CK_SESSION_HANDLE,
 };
 use pkcs11::Ctx;
-use simple_asn1::ASN1Block::OctetString;
-use simple_asn1::{from_der, ASN1DecodeErr};
+use num_bigint::BigUint;
+use simple_asn1::ASN1Block::{ObjectIdentifier, OctetString, Sequence, BitString};
+use simple_asn1::{from_der, OID, to_der};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -31,6 +32,7 @@ pub struct HardwareIdentity {
     key_id: String,
     ctx: Ctx,
     session_handle: CK_SESSION_HANDLE,
+    public_key: Vec<u8>
 }
 
 impl HardwareIdentity {
@@ -70,36 +72,82 @@ impl HardwareIdentity {
         let key_type = key_types[0];
         if kt == CKK_EC {
             println!("yay!");
-            let mut ec_point_length_attrs = vec![CK_ATTRIBUTE::new(CKA_EC_POINT)];
-            let (rv, ec_point_lengths) =
-                ctx.get_attribute_value(session_handle, object_handle, &mut ec_point_length_attrs)?;
-            let first = ec_point_lengths[0];
-            let mut ec_point = vec![1, 2, 3];
-            ec_point.resize(first.ulValueLen as usize, 0);
-            let mut ec_point_attrs =
-                vec![CK_ATTRIBUTE::new(CKA_EC_POINT).with_bytes(ec_point.as_slice())];
-            let (rv, ec_points) =
-                ctx.get_attribute_value(session_handle, object_handle, &mut ec_point_attrs)?;
-            let fd = from_der(ec_point.as_slice()).expect("der decode failed");
-            let fd0 = &fd[0];
-            if let OctetString(size, data) = fd0 {
-                // this fails:
-                //let d2 = from_der(data.as_slice()).expect("der decode(2) failed");
+            let ec_params = get_ec_params(&ctx, session_handle, object_handle)?;
+            let mut ec_point = get_ec_point(&ctx, session_handle, object_handle)?;
 
+            let bytes = vec![0x06_u8,
+                0x07_u8,
+                             0x2au8,
+                             0x86u8,
+                             0x48u8,
+                             0xceu8,
+                             0x3du8,
+                             0x02u8,
+                             0x01u8,
+            ];
+            let y = from_der(&bytes).unwrap();
+            let yy = &y[0];
+            if let ObjectIdentifier(usize, oid)= yy {
+                println!("oid bytes are {:?}", oid);
+            }
+
+            let bytes = vec![0x06_u8,
+                             0x08_u8,
+                             0x2au8,
+                             0x86u8,
+                             0x48u8,
+                             0xceu8,
+                             0x3du8,
+                             0x03u8,
+                             0x01u8,
+                             0x07u8,
+            ];
+            let y = from_der(&bytes).unwrap();
+            let yy = &y[0];
+            if let ObjectIdentifier(usize, oid)= yy {
+                println!("oid bytes are {:?}", oid);
+            }
+
+            // 2a8648ce3d0201 — ECDSA
+            let oid_ecdsa = OID::new(vec![
+                BigUint::from(1u32),
+                BigUint::from(2u32),
+                BigUint::from(840u32),
+                BigUint::from(10045u32),
+                BigUint::from(2u32),
+                BigUint::from(1u32),
+            ]);
+            // 2a8648ce3d030107 — curve secp256r1
+            let oid_curve_secp256r1 = OID::new(vec![
+                BigUint::from(1u32),
+                BigUint::from(2u32),
+                BigUint::from(840u32),
+                BigUint::from(10045u32),
+                BigUint::from(3u32),
+                BigUint::from(1u32),
+                BigUint::from(7u32),
+            ]);
+            let ec_param = Sequence(
+                0,
+                vec![
+                    ObjectIdentifier(0, oid_ecdsa),
+                    ObjectIdentifier(0, oid_curve_secp256r1),
+                ],
+            );
+            //let mut ec_point_bytes = vec![0u8]; // 0 means "no padding"
+            //ec_point_bytes.append(&mut ec_point);
+            let ec_point = BitString(0, ec_point.len() * 8, ec_point);
+            let public_key = Sequence(0, vec![ec_param, ec_point]);
+            let der = to_der(&public_key).unwrap();
+            {
                 let mut file = File::create("/Users/ericswanson/key.der").unwrap();
 
                 // Write a slice of bytes to the file
-                file.write_all(data.as_slice()).unwrap();
+                file.write_all(der.as_slice()).unwrap();
             }
 
-            // {
-            //     let mut file = File::create("/Users/ericswanson/key.der").unwrap();
-            //
-            //     // Write a slice of bytes to the file
-            //     file.write_all(ec_point.as_slice()).unwrap();
-            // }
-
             println!("what now");
+            der
         }
         Ok(HardwareIdentity {
             slot: 0,
@@ -108,6 +156,53 @@ impl HardwareIdentity {
             session_handle,
         })
     }
+}
+
+fn get_ec_point(
+    ctx: &Ctx,
+    session_handle: CK_SESSION_HANDLE,
+    object_handle: CK_OBJECT_HANDLE,
+) -> Result<Vec<u8>, HardwareIdentityError> {
+    let mut ec_point_length_attrs = vec![CK_ATTRIBUTE::new(CKA_EC_POINT)];
+    let (_rv, ec_point_lengths) =
+        ctx.get_attribute_value(session_handle, object_handle, &mut ec_point_length_attrs)?;
+    let first = ec_point_lengths[0];
+    let mut ec_point = vec![1, 2, 3];
+    ec_point.resize(first.ulValueLen as usize, 0);
+    let mut ec_point_attrs = vec![CK_ATTRIBUTE::new(CKA_EC_POINT).with_bytes(ec_point.as_slice())];
+    let (_rv, _ec_points) =
+        ctx.get_attribute_value(session_handle, object_handle, &mut ec_point_attrs)?;
+    let fd = from_der(ec_point.as_slice()).expect("der decode failed");
+    let fd0 = &fd[0];
+    if let OctetString(size, data) = fd0 {
+        // this fails:
+        //let d2 = from_der(data.as_slice()).expect("der decode(2) failed");
+
+        //let mut file = File::create("/Users/ericswanson/key.der").unwrap();
+
+        // Write a slice of bytes to the file
+        //file.write_all(data.as_slice()).unwrap();
+        Ok(data.clone())
+    } else {
+        unimplemented!("oh no");
+    }
+}
+
+fn get_ec_params(
+    ctx: &Ctx,
+    session_handle: CK_SESSION_HANDLE,
+    object_handle: CK_OBJECT_HANDLE,
+) -> Result<Vec<u8>, HardwareIdentityError> {
+    let mut attrs = vec![CK_ATTRIBUTE::new(CKA_EC_PARAMS)];
+    let (rv, ec_params_lengths) =
+        ctx.get_attribute_value(session_handle, object_handle, &mut attrs)?;
+    let first = ec_params_lengths[0];
+    let mut ec_params = vec![1_u8, 2, 3];
+    ec_params.resize(first.ulValueLen as usize, 0);
+    let mut attrs = vec![CK_ATTRIBUTE::new(CKA_EC_PARAMS).with_bytes(ec_params.as_slice())];
+    let (rv, xxx) = ctx.get_attribute_value(session_handle, object_handle, &mut attrs)?;
+    let ff = xxx[0];
+    Ok(ec_params)
 }
 
 impl Drop for HardwareIdentity {

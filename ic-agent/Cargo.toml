@@ -22,7 +22,7 @@ hex = "0.4.0"
 ic-types = { path = "../ic-types", version = "0.1", features = [ "serde" ] }
 leb128 = "0.2.4"
 mime = "0.3.16"
-num-bigint = "0.2.6"
+num-bigint = "0.3.1"
 openssl = "0.10.30"
 openssl-sys = "0.9.58"
 pkcs11 = "0.5.0"
