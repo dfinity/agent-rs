@@ -16,7 +16,7 @@ jobs:
         include:
           - build: linux-stable
             ghc: '8.8.4'
-            spec: 'release-0.11'
+            spec: 'release-0.13'
             os: ubuntu-latest
             rust: stable
 
@@ -75,7 +75,7 @@ jobs:
           mkdir -p $HOME/bin
           cd ic-ref/impl
           cabal update
-          cabal install -w ghc-${{ matrix.ghc }} --overwrite-policy=always  --installdir=$HOME/bin
+          cabal install exe:ic-ref -w ghc-${{ matrix.ghc }} --overwrite-policy=always  --installdir=$HOME/bin
 
       - name: Build universal-canister
         run: |

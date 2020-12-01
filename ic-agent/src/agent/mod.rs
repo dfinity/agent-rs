@@ -8,16 +8,20 @@ pub(crate) mod response;
 
 pub mod status;
 pub use agent_config::{AgentConfig, PasswordManager};
-pub use agent_error::AgentError;
+pub use agent_error::{AgentError, HttpErrorPayload};
 pub use builder::AgentBuilder;
 pub use nonce::NonceFactory;
 pub use response::{Replied, RequestStatusResponse};
 
 #[cfg(test)]
 mod agent_test;
+mod response_authentication;
 
-use crate::agent::replica_api::{AsyncContent, Envelope, SyncContent};
+use crate::agent::replica_api::{
+    AsyncContent, Certificate, Delegation, Envelope, ReadStateResponse, SyncContent,
+};
 use crate::export::Principal;
+use crate::hash_tree::Label;
 use crate::identity::Identity;
 use crate::{to_request_id, RequestId};
 use delay::Waiter;
@@ -25,10 +29,16 @@ use reqwest::Method;
 use serde::Serialize;
 use status::Status;
 
+use crate::agent::response_authentication::{
+    extract_der, initialize_bls, lookup_request_status, lookup_value,
+};
+use crate::bls::bls12381::bls;
 use std::convert::TryFrom;
+use std::sync::RwLock;
 use std::time::Duration;
 
-const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
+const IC_REQUEST_DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
+const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 
 /// A low level Agent to make calls to a Replica endpoint.
 ///
@@ -63,6 +73,7 @@ const DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 ///     .with_url(URL)
 ///     .with_identity(create_identity())
 ///     .build()?;
+///   agent.fetch_root_key().await?;
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 ///
 ///   let waiter = delay::Delay::builder()
@@ -97,6 +108,7 @@ pub struct Agent {
     identity: Box<dyn Identity + Send + Sync>,
     password_manager: Option<Box<dyn PasswordManager + Send + Sync>>,
     ingress_expiry_duration: Duration,
+    root_key: RwLock<Option<Vec<u8>>>,
 }
 
 impl Agent {
@@ -108,6 +120,8 @@ impl Agent {
 
     /// Create an instance of an [`Agent`].
     pub fn new(config: AgentConfig) -> Result<Agent, AgentError> {
+        initialize_bls()?;
+
         let url = config.url;
         let mut tls_config = rustls::ClientConfig::new();
 
@@ -132,7 +146,39 @@ impl Agent {
             ingress_expiry_duration: config
                 .ingress_expiry_duration
                 .unwrap_or_else(|| Duration::from_secs(300)),
+            root_key: RwLock::new(None),
         })
+    }
+
+    /// Fetch the root key of the replica using its status end point, and update the agent's
+    /// root key. This only uses the agent's specific upstream replica, and does not ensure
+    /// the root key validity. In order to prevent any MITM attack, developers should try
+    /// to contact multiple replicas.
+    ///
+    /// The root key is necessary for validating state and certificates sent by the replica.
+    /// By default, it is set to [None] and validating methods will return an error.
+    pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
+        let status = self.status().await?;
+        let root_key = status
+            .root_key
+            .clone()
+            .ok_or(AgentError::NoRootKeyInStatus(status))?;
+        if let Ok(mut write_guard) = self.root_key.write() {
+            *write_guard = Some(root_key);
+        }
+        Ok(())
+    }
+
+    fn read_root_key(&self) -> Result<Vec<u8>, AgentError> {
+        if let Ok(read_lock) = self.root_key.read() {
+            if let Some(root_key) = read_lock.clone() {
+                Ok(root_key)
+            } else {
+                Err(AgentError::CouldNotReadRootKey())
+            }
+        } else {
+            Err(AgentError::CouldNotReadRootKey())
+        }
     }
 
     fn get_expiry_date(&self) -> u64 {
@@ -148,7 +194,7 @@ impl Agent {
 
     fn construct_message(&self, request_id: &RequestId) -> Vec<u8> {
         let mut buf = vec![];
-        buf.extend_from_slice(DOMAIN_SEPARATOR);
+        buf.extend_from_slice(IC_REQUEST_DOMAIN_SEPARATOR);
         buf.extend_from_slice(request_id.as_slice());
         buf
     }
@@ -249,14 +295,14 @@ impl Agent {
         }
 
         if status.is_client_error() || status.is_server_error() {
-            Err(AgentError::HttpError {
+            Err(AgentError::HttpError(HttpErrorPayload {
                 status: status.into(),
                 content_type: headers
                     .get(reqwest::header::CONTENT_TYPE)
                     .and_then(|value| value.to_str().ok())
                     .map(|x| x.to_string()),
                 content: body,
-            })
+            }))
         } else {
             Ok(body)
         }
@@ -266,11 +312,10 @@ impl Agent {
     where
         A: serde::de::DeserializeOwned,
     {
-        let anonymous = Principal::anonymous();
         let request_id = to_request_id(&request)?;
         let sender = match &request {
             SyncContent::QueryRequest { sender, .. } => sender,
-            SyncContent::RequestStatusRequest { .. } => &anonymous,
+            SyncContent::ReadStateRequest { sender, .. } => sender,
         };
         let msg = self.construct_message(&request_id);
         let signature = self
@@ -366,37 +411,72 @@ impl Agent {
         .await
     }
 
+    async fn read_state_raw(
+        &self,
+        paths: Vec<Vec<Label>>,
+        ingress_expiry_datetime: Option<u64>,
+    ) -> Result<Certificate, AgentError> {
+        let read_state_response: ReadStateResponse = self
+            .read_endpoint(SyncContent::ReadStateRequest {
+                sender: self.identity.sender().map_err(AgentError::SigningError)?,
+                paths,
+                ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
+            })
+            .await?;
+
+        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
+            .map_err(AgentError::InvalidCborData)?;
+        self.verify(&cert)?;
+        Ok(cert)
+    }
+
+    fn verify(&self, cert: &Certificate) -> Result<(), AgentError> {
+        let sig = &cert.signature;
+
+        let root_hash = cert.tree.digest();
+        let mut msg = vec![];
+        msg.extend_from_slice(IC_STATE_ROOT_DOMAIN_SEPARATOR);
+        msg.extend_from_slice(&root_hash);
+
+        let der_key = self.check_delegation(&cert.delegation)?;
+        let key = extract_der(der_key)?;
+
+        let result = bls::core_verify(sig, &*msg, &*key);
+        if result != bls::BLS_OK {
+            Err(AgentError::CertificateVerificationFailed())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn check_delegation(&self, delegation: &Option<Delegation>) -> Result<Vec<u8>, AgentError> {
+        match delegation {
+            None => self.read_root_key(),
+            Some(delegation) => {
+                let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
+                    .map_err(AgentError::InvalidCborData)?;
+                self.verify(&cert)?;
+                let public_key_path = vec![
+                    "subnet".into(),
+                    delegation.subnet_id.clone().into(),
+                    "public_key".into(),
+                ];
+                lookup_value(&cert, public_key_path).map(|pk| pk.to_vec())
+            }
+        }
+    }
+
     pub async fn request_status_raw(
         &self,
         request_id: &RequestId,
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestStatusResponse, AgentError> {
-        self.read_endpoint(SyncContent::RequestStatusRequest {
-            request_id: request_id.as_slice().into(),
-            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
-        })
-        .await
-        .map(|response| match response {
-            replica_api::Status::Replied { reply } => {
-                let reply = match reply {
-                    replica_api::RequestStatusResponseReplied::CallReply(reply) => {
-                        Replied::CallReplied(reply.arg)
-                    }
-                };
-                RequestStatusResponse::Replied { reply }
-            }
-            replica_api::Status::Rejected {
-                reject_code,
-                reject_message,
-            } => RequestStatusResponse::Rejected {
-                reject_code,
-                reject_message,
-            },
-            replica_api::Status::Unknown {} => RequestStatusResponse::Unknown,
-            replica_api::Status::Received {} => RequestStatusResponse::Received,
-            replica_api::Status::Processing {} => RequestStatusResponse::Processing,
-            replica_api::Status::Done {} => RequestStatusResponse::Done,
-        })
+        let paths: Vec<Vec<Label>> =
+            vec![vec!["request_status".into(), request_id.to_vec().into()]];
+
+        let cert = self.read_state_raw(paths, ingress_expiry_datetime).await?;
+
+        lookup_request_status(cert, request_id)
     }
 
     /// Returns an UpdateBuilder enabling the construction of an update call without

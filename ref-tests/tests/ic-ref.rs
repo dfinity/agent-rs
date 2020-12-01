@@ -13,7 +13,7 @@
 use ref_tests::universal_canister;
 use ref_tests::with_agent;
 
-const EXPECTED_IC_API_VERSION: &str = "0.12.0";
+const EXPECTED_IC_API_VERSION: &str = "0.13.2";
 
 #[ignore]
 #[test]
@@ -128,6 +128,7 @@ mod management_canister {
             let other_agent_identity = create_identity().await?;
             let other_agent_principal = other_agent_identity.sender()?;
             let other_agent = create_agent(other_agent_identity).await?;
+            other_agent.fetch_root_key().await?;
             let other_ic00 = ManagementCanister::create(&other_agent);
 
             // Reinstall with another agent should fail.
@@ -382,6 +383,7 @@ mod management_canister {
             // Create another agent with different identity.
             let other_agent_identity = create_identity().await?;
             let other_agent = create_agent(other_agent_identity).await?;
+            other_agent.fetch_root_key().await?;
             let other_ic00 = ManagementCanister::create(&other_agent);
 
             // Start as a wrong controller should fail.
