@@ -22,6 +22,7 @@ hex = "0.4.0"
 ic-types = { path = "../ic-types", version = "0.1", features = [ "serde" ] }
 leb128 = "0.2.4"
 mime = "0.3.16"
+num-bigint = "0.2.6"
 openssl = "0.10.24"
 rand = "0.7.2"
 reqwest = { version = "0.10.4", features = [ "blocking", "json", "rustls-tls" ] }
@@ -30,6 +31,7 @@ ring = { version = "0.16.11", features = ["std"] }
 serde = { version = "1.0.101", features = ["derive"] }
 serde_bytes = "0.11.2"
 serde_cbor = "0.11.1"
+simple_asn1 = "0.4.1"
 thiserror = "1.0.20"
 url = "2.1.0"
 webpki-roots = "0.20.0"
