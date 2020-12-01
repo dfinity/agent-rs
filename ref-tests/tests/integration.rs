@@ -147,10 +147,10 @@ fn wallet_canister_funds() {
             .await?;
 
         let (cycles,) = bob.cycle_balance().call().await?;
-        assert_eq!(cycles, 2 << 60 + 1_000_000);
+        assert_eq!(cycles, (2 << 60) + 1_000_000);
 
         let (cycles,) = alice.cycle_balance().call().await?;
-        assert_eq!(cycles, 2 << 60 - 1_000_000);
+        assert_eq!(cycles, (2 << 60) - 1_000_000);
 
         Ok(())
     });
