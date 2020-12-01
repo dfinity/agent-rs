@@ -369,6 +369,7 @@ mod tests {
             .with_identity(identity)
             .build()
             .unwrap();
+        agent.fetch_root_key().await.unwrap();
 
         let management_canister = Canister::builder()
             .with_agent(&agent)
