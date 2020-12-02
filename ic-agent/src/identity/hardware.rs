@@ -264,8 +264,8 @@ impl Identity for HardwareIdentity {
         //let sig_fin = sig_fin.unwrap();
 
         Ok(Signature {
-            signature,
             public_key: self.public_key.clone(),
+            signature,
         })
         // let signature = self.key_pair.sign(msg.as_ref());
         // // At this point we shall validate the signature in this first

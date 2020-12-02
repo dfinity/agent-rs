@@ -32,6 +32,7 @@ pub async fn create_hsm_identity() -> Result<HardwareIdentity, String> {
     let hid = HardwareIdentity::new(
         "/usr/local/lib/opensc-pkcs11.so".to_string(),
         "abcdef".to_string(),
+        "837235".to_string(),
     )
     .unwrap();
     Ok(hid)
