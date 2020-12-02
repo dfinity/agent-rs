@@ -1,8 +1,8 @@
 use candid::CandidType;
 use delay::Delay;
 use ic_agent::export::Principal;
-use ic_agent::identity::BasicIdentity;
-use ic_agent::Agent;
+use ic_agent::identity::{BasicIdentity, HardwareIdentity};
+use ic_agent::{Agent, Identity};
 use ic_utils::call::AsyncCall;
 use ic_utils::interfaces::ManagementCanister;
 use ring::signature::Ed25519KeyPair;
@@ -28,7 +28,19 @@ pub async fn create_identity() -> Result<BasicIdentity, String> {
     ))
 }
 
-pub async fn create_agent(identity: BasicIdentity) -> Result<Agent, String> {
+pub async fn create_hsm_identity() -> Result<HardwareIdentity, String> {
+    let hid = HardwareIdentity::new(
+        "/usr/local/lib/opensc-pkcs11.so".to_string(),
+        "abcdef".to_string(),
+    )
+    .unwrap();
+    Ok(hid)
+}
+
+pub async fn create_agent<I>(identity: I) -> Result<Agent, String>
+where
+    I: 'static + Identity + Send + Sync,
+{
     let port_env = std::env::var("IC_REF_PORT")
         .expect("Need to specify the IC_REF_PORT environment variable.");
     let port = port_env
@@ -49,7 +61,7 @@ where
 {
     let mut runtime = tokio::runtime::Runtime::new().expect("Could not create tokio runtime.");
     runtime.block_on(async {
-        let agent_identity = create_identity()
+        let agent_identity = create_hsm_identity()
             .await
             .expect("Could not create an identity.");
         let agent = create_agent(agent_identity)
