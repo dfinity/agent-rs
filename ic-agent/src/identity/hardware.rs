@@ -34,12 +34,13 @@ pub struct HardwareIdentity {
     key_id: String,
     ctx: Ctx,
     session_handle: CK_SESSION_HANDLE,
+    pin: String,
     public_key: Vec<u8>,
 }
 
 impl HardwareIdentity {
     // /usr/local/lib/opensc-pkcs11.s
-    pub fn new<P>(filename: P, xkey_id: String) -> Result<HardwareIdentity, HardwareIdentityError>
+    pub fn new<P>(filename: P, xkey_id: String, pin: String) -> Result<HardwareIdentity, HardwareIdentityError>
     where
         P: AsRef<Path>,
     {
@@ -55,6 +56,7 @@ impl HardwareIdentity {
             ctx,
             session_handle,
             public_key,
+            pin,
         })
     }
 }
@@ -239,10 +241,9 @@ impl Identity for HardwareIdentity {
         let token_info = token_info.unwrap();
         if token_info.flags & CKF_LOGIN_REQUIRED != 0 {
             println!("login required");
-            let pin = "837235";
             let r = self
                 .ctx
-                .login(self.session_handle, CKU_USER, Some("837235"));
+                .login(self.session_handle, CKU_USER, Some(&self.pin));
             r.unwrap();
         }
         let private_key_handle = get_private_key_handle(&self.ctx, self.session_handle);
@@ -258,12 +259,12 @@ impl Identity for HardwareIdentity {
             .sign_init(self.session_handle, &mechanism, private_key_handle);
         sign_init.unwrap();
         let sig = self.ctx.sign(self.session_handle, msg);
-        let sig = sig.unwrap();
+        let signature = sig.unwrap();
         //let sig_fin = self.ctx.sign_final(self.session_handle);
         //let sig_fin = sig_fin.unwrap();
 
         Ok(Signature {
-            signature: sig,
+            signature,
             public_key: self.public_key.clone(),
         })
         // let signature = self.key_pair.sign(msg.as_ref());
