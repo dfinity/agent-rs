@@ -16,6 +16,7 @@ use std::io::Write;
 use std::path::Path;
 use std::ptr;
 use thiserror::Error;
+use openssl::sha::Sha256;
 
 /// An error happened while reading a PEM file to create a BasicIdentity.
 #[derive(Error, Debug)]
@@ -47,6 +48,15 @@ impl HardwareIdentity {
         let ctx = Ctx::new_and_initialize(filename)?;
 
         let session_handle = open_session(&ctx)?;
+
+        let token_info = ctx.get_token_info(0);
+        let token_info = token_info.unwrap();
+        if token_info.flags & CKF_LOGIN_REQUIRED != 0 {
+            println!("login required");
+            let r = ctx
+                .login(session_handle, CKU_USER, Some(&pin));
+            r.unwrap();
+        }
 
         let public_key = get_public_key(&ctx, session_handle)?;
 
@@ -237,15 +247,9 @@ impl Identity for HardwareIdentity {
         Ok(Principal::self_authenticating(&self.public_key))
     }
     fn sign(&self, msg: &[u8], _principal: &Principal) -> Result<Signature, String> {
-        let token_info = self.ctx.get_token_info(0);
-        let token_info = token_info.unwrap();
-        if token_info.flags & CKF_LOGIN_REQUIRED != 0 {
-            println!("login required");
-            let r = self
-                .ctx
-                .login(self.session_handle, CKU_USER, Some(&self.pin));
-            r.unwrap();
-        }
+        let mut sha256 = Sha256::new();
+        sha256.update(msg);
+        let hash = sha256.finish();
         let private_key_handle = get_private_key_handle(&self.ctx, self.session_handle);
         let private_key_handle = private_key_handle.unwrap();
         //let mechanism = get_mechanism(&self.ctx, CKM_ECDSA)?;
@@ -258,7 +262,7 @@ impl Identity for HardwareIdentity {
             .ctx
             .sign_init(self.session_handle, &mechanism, private_key_handle);
         sign_init.unwrap();
-        let sig = self.ctx.sign(self.session_handle, msg);
+        let sig = self.ctx.sign(self.session_handle, &hash);
         let signature = sig.unwrap();
         //let sig_fin = self.ctx.sign_final(self.session_handle);
         //let sig_fin = sig_fin.unwrap();
