@@ -311,14 +311,10 @@ impl<'agent> Canister<'agent, ManagementCanister> {
         }
 
         self.update_("provisional_create_canister_with_cycles")
-            .with_arg(Argument {
-                amount
-            })
+            .with_arg(Argument { amount })
             .build()
             .map(|result: (Out,)| (result.0.canister_id,))
     }
-
-
 
     /// Deletes a canister.
     pub fn delete_canister<'canister: 'agent>(
