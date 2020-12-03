@@ -1,8 +1,9 @@
 use candid::CandidType;
 use delay::Delay;
 use ic_agent::export::Principal;
-use ic_agent::identity::{BasicIdentity, HardwareIdentity};
+use ic_agent::identity::BasicIdentity;
 use ic_agent::{Agent, Identity};
+use ic_identity_hsm::HardwareIdentity;
 use ic_utils::call::AsyncCall;
 use ic_utils::interfaces::ManagementCanister;
 use ring::signature::Ed25519KeyPair;

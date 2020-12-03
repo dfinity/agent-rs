@@ -1,7 +1,6 @@
-use crate::{Identity, Signature};
+use ic_agent::{Identity, Signature};
 use ic_types::Principal;
 
-//use openssl_sys::EC_KEY_new;
 use num_bigint::BigUint;
 use openssl::sha::Sha256;
 use pkcs11::types::{
@@ -11,7 +10,7 @@ use pkcs11::types::{
 };
 use pkcs11::Ctx;
 use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, OctetString, Sequence};
-use simple_asn1::{from_der, to_der, OID};
+use simple_asn1::{from_der, to_der, OID, ASN1DecodeErr, oid};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -23,9 +22,15 @@ use thiserror::Error;
 pub enum HardwareIdentityError {
     #[error(transparent)]
     PKCS11(#[from] pkcs11::errors::Error),
+
     // huh?
     // no method named `as_dyn_error` found for reference `&simple_asn1::ASN1DecodeErr` in the current scope
-    //#[error("ASN decode error {}", .0.display())]
+    #[error("ASN decode error {0}")]
+    //#[error(transparent)]
+    ASN1Decode(ASN1DecodeErr),
+
+    // also failes for the same reason
+    //#[error(transparent)]
     //ASN1Decode(#[from] ASN1DecodeErr),
 }
 
@@ -54,11 +59,11 @@ impl HardwareIdentity {
         let session_handle = open_session(&ctx)?;
 
         let token_info = ctx.get_token_info(0);
-        let token_info = token_info.unwrap();
+        let token_info = token_info?;
         if token_info.flags & CKF_LOGIN_REQUIRED != 0 {
             println!("login required");
             let r = ctx.login(session_handle, CKU_USER, Some(&pin));
-            r.unwrap();
+            r?;
         }
 
         let public_key = get_public_key(&ctx, session_handle)?;
@@ -132,14 +137,15 @@ fn get_public_key(
         }
 
         // 2a8648ce3d0201 — ECDSA
-        let oid_ecdsa = OID::new(vec![
-            BigUint::from(1u32),
-            BigUint::from(2u32),
-            BigUint::from(840u32),
-            BigUint::from(10045u32),
-            BigUint::from(2u32),
-            BigUint::from(1u32),
-        ]);
+        // let oid_ecdsa = OID::new(vec![
+        //     BigUint::from(1u32),
+        //     BigUint::from(2u32),
+        //     BigUint::from(840u32),
+        //     BigUint::from(10045u32),
+        //     BigUint::from(2u32),
+        //     BigUint::from(1u32),
+        // ]);
+        let oid_ecdsa = oid!(1, 2, 840, 10045, 2, 1);
         // 2a8648ce3d030107 — curve secp256r1
         let oid_curve_secp256r1 = OID::new(vec![
             BigUint::from(1u32),
@@ -253,36 +259,26 @@ impl Identity for HardwareIdentity {
         let mut sha256 = Sha256::new();
         sha256.update(msg);
         let hash = sha256.finish();
-        let private_key_handle = get_private_key_handle(&self.ctx, self.session_handle);
-        let private_key_handle = private_key_handle.unwrap();
-        //let mechanism = get_mechanism(&self.ctx, CKM_ECDSA)?;
+        let private_key_handle = get_private_key_handle(&self.ctx, self.session_handle)
+            .map_err(|e| format!("Failed to get private key handle: {}", e))?;
+
         let mechanism = CK_MECHANISM {
             mechanism: CKM_ECDSA,
             pParameter: ptr::null_mut(),
             ulParameterLen: 0,
         };
-        let sign_init = self
+        self.ctx
+            .sign_init(self.session_handle, &mechanism, private_key_handle)
+            .map_err(|e| format!("Failed to initialize signature: {}", e))?;
+        let signature = self
             .ctx
-            .sign_init(self.session_handle, &mechanism, private_key_handle);
-        sign_init.unwrap();
-        let sig = self.ctx.sign(self.session_handle, &hash);
-        let signature = sig.unwrap();
-        //let sig_fin = self.ctx.sign_final(self.session_handle);
-        //let sig_fin = sig_fin.unwrap();
+            .sign(self.session_handle, &hash)
+            .map_err(|e| format!("Failed to generate signature: {}", e))?;
 
         Ok(Signature {
             public_key: self.public_key.clone(),
             signature,
         })
-        // let signature = self.key_pair.sign(msg.as_ref());
-        // // At this point we shall validate the signature in this first
-        // // skeleton version.
-        // let public_key_bytes = self.key_pair.public_key();
-        //
-        // Ok(Signature {
-        //     signature: signature.as_ref().to_vec(),
-        //     public_key: public_key_bytes.as_ref().to_vec(),
-        // })
     }
 }
 
@@ -297,13 +293,14 @@ fn get_mechanism(
 
 #[cfg(test)]
 mod tests {
-    use crate::identity::HardwareIdentity;
+    use crate::HardwareIdentity;
 
     #[test]
     fn it_works() {
         let hid = HardwareIdentity::new(
             "/usr/local/lib/opensc-pkcs11.so".to_string(),
             "abcdef".to_string(),
+            "837235".to_string(),
         )
         .unwrap();
         assert_eq!(2 + 2, 4);

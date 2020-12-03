@@ -3,9 +3,7 @@ use crate::export::Principal;
 
 pub(crate) mod basic;
 pub(crate) mod dummy;
-pub(crate) mod hardware;
 pub use basic::{BasicIdentity, PemError};
-pub use hardware::HardwareIdentity;
 
 #[derive(Clone, Debug)]
 pub struct Signature {
