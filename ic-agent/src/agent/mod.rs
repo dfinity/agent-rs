@@ -353,13 +353,7 @@ impl Agent {
             sender_sig: signature.signature,
         };
         let s = format!("{:?}", envelope);
-        let _ = self
-            .execute(
-                Method::POST,
-                "submit",
-                Some(envelope),
-            )
-            .await?;
+        let _ = self.execute(Method::POST, "submit", Some(envelope)).await?;
 
         Ok(request_id)
     }

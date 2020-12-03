@@ -3,6 +3,7 @@ use ic_types::Principal;
 
 //use openssl_sys::EC_KEY_new;
 use num_bigint::BigUint;
+use openssl::sha::Sha256;
 use pkcs11::types::{
     CKA_CLASS, CKA_EC_PARAMS, CKA_EC_POINT, CKA_ID, CKA_KEY_TYPE, CKF_LOGIN_REQUIRED,
     CKF_SERIAL_SESSION, CKK_EC, CKM_ECDSA, CKO_PRIVATE_KEY, CKO_PUBLIC_KEY, CKU_USER, CK_ATTRIBUTE,
@@ -16,7 +17,6 @@ use std::io::Write;
 use std::path::Path;
 use std::ptr;
 use thiserror::Error;
-use openssl::sha::Sha256;
 
 /// An error happened while reading a PEM file to create a BasicIdentity.
 #[derive(Error, Debug)]
@@ -41,7 +41,11 @@ pub struct HardwareIdentity {
 
 impl HardwareIdentity {
     // /usr/local/lib/opensc-pkcs11.s
-    pub fn new<P>(filename: P, xkey_id: String, pin: String) -> Result<HardwareIdentity, HardwareIdentityError>
+    pub fn new<P>(
+        filename: P,
+        xkey_id: String,
+        pin: String,
+    ) -> Result<HardwareIdentity, HardwareIdentityError>
     where
         P: AsRef<Path>,
     {
@@ -53,8 +57,7 @@ impl HardwareIdentity {
         let token_info = token_info.unwrap();
         if token_info.flags & CKF_LOGIN_REQUIRED != 0 {
             println!("login required");
-            let r = ctx
-                .login(session_handle, CKU_USER, Some(&pin));
+            let r = ctx.login(session_handle, CKU_USER, Some(&pin));
             r.unwrap();
         }
 
