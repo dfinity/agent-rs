@@ -290,6 +290,36 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             .map(|result: (Out,)| (result.0.canister_id,))
     }
 
+    /// Until developers can convert real ICP tokens to provision a new canister with cycles,
+    /// the system provides the provisional_create_canister_with_cycles method.
+    /// It behaves as create_canister, but initializes the canister’s balance with amount fresh cycles
+    /// (using MAX_CANISTER_BALANCE if amount = null, else capping the balance at MAX_CANISTER_BALANCE).
+    /// Cycles added to this call via ic0.call_cycles_add are returned to the caller.
+    /// This method is only available in local development instances, and will be removed in the future.
+    pub fn provisional_create_canister_with_cycles<'canister: 'agent>(
+        &'canister self,
+        amount: Option<u64>,
+    ) -> impl 'agent + AsyncCall<(Principal,)> {
+        #[derive(CandidType)]
+        struct Argument {
+            amount: Option<u64>,
+        }
+
+        #[derive(Deserialize)]
+        struct Out {
+            canister_id: Principal,
+        }
+
+        self.update_("provisional_create_canister_with_cycles")
+            .with_arg(Argument {
+                amount
+            })
+            .build()
+            .map(|result: (Out,)| (result.0.canister_id,))
+    }
+
+
+
     /// Deletes a canister.
     pub fn delete_canister<'canister: 'agent>(
         &'canister self,
