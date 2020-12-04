@@ -3,90 +3,88 @@ use ic_types::Principal;
 
 use num_bigint::BigUint;
 use openssl::sha::Sha256;
-use pkcs11::types::{
-    CKA_CLASS, CKA_EC_PARAMS, CKA_EC_POINT, CKA_ID, CKA_KEY_TYPE, CKF_LOGIN_REQUIRED,
-    CKF_SERIAL_SESSION, CKK_EC, CKM_ECDSA, CKO_PRIVATE_KEY, CKO_PUBLIC_KEY, CKU_USER, CK_ATTRIBUTE,
-    CK_KEY_TYPE, CK_MECHANISM, CK_MECHANISM_TYPE, CK_OBJECT_HANDLE, CK_SESSION_HANDLE,
-};
+use pkcs11::types::{CKA_CLASS, CKA_EC_PARAMS, CKA_EC_POINT, CKA_ID, CKA_KEY_TYPE, CKF_LOGIN_REQUIRED, CKF_SERIAL_SESSION, CKK_EC, CKM_ECDSA, CKO_PRIVATE_KEY, CKO_PUBLIC_KEY, CKU_USER, CK_ATTRIBUTE, CK_KEY_TYPE, CK_MECHANISM, CK_OBJECT_HANDLE, CK_SESSION_HANDLE, CK_SLOT_ID};
 use pkcs11::Ctx;
 use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, OctetString, Sequence};
-use simple_asn1::{from_der, to_der, OID, ASN1DecodeErr, oid};
-use std::fs::File;
-use std::io::Write;
+use simple_asn1::{from_der, oid, to_der, ASN1DecodeErr, ASN1EncodeErr, OID};
 use std::path::Path;
 use std::ptr;
 use thiserror::Error;
 
-/// An error happened while reading a PEM file to create a BasicIdentity.
+/// An error happened related to a HardwareIdentity.
 #[derive(Error, Debug)]
 pub enum HardwareIdentityError {
     #[error(transparent)]
     PKCS11(#[from] pkcs11::errors::Error),
 
-    // huh?
-    // no method named `as_dyn_error` found for reference `&simple_asn1::ASN1DecodeErr` in the current scope
     #[error("ASN decode error {0}")]
-    //#[error(transparent)]
     ASN1Decode(ASN1DecodeErr),
 
-    // also failes for the same reason
-    //#[error(transparent)]
-    //ASN1Decode(#[from] ASN1DecodeErr),
+    #[error(transparent)]
+    ASN1Encode(#[from] ASN1EncodeErr),
+
+    #[error(transparent)]
+    KeyIdDecode(#[from] hex::FromHexError),
 }
 
 /// An identity based on an HSM
 pub struct HardwareIdentity {
-    slot: u16,
-    key_id: String,
+    key_id: Vec<u8>,
     ctx: Ctx,
     session_handle: CK_SESSION_HANDLE,
-    pin: String,
+    logged_in: bool,
     public_key: Vec<u8>,
 }
 
 impl HardwareIdentity {
+    /// Create an identity using a specific key on an HSM.
     // /usr/local/lib/opensc-pkcs11.s
     pub fn new<P>(
         filename: P,
-        xkey_id: String,
+        slot_id: u64,
+        key_id: String,
         pin: String,
     ) -> Result<HardwareIdentity, HardwareIdentityError>
     where
         P: AsRef<Path>,
     {
         let ctx = Ctx::new_and_initialize(filename)?;
-
-        let session_handle = open_session(&ctx)?;
-
-        let token_info = ctx.get_token_info(0);
-        let token_info = token_info?;
-        if token_info.flags & CKF_LOGIN_REQUIRED != 0 {
-            println!("login required");
-            let r = ctx.login(session_handle, CKU_USER, Some(&pin));
-            r?;
-        }
-
-        let public_key = get_public_key(&ctx, session_handle)?;
+        let session_handle = open_session(&ctx, slot_id)?;
+        let logged_in = login_if_required(&ctx, session_handle, &pin)?;
+        let key_id = key_id_to_bytes(&key_id)?;
+        let public_key = get_public_key(&ctx, session_handle, &key_id)?;
 
         Ok(HardwareIdentity {
-            slot: 0,
-            key_id: xkey_id,
+            key_id,
             ctx,
             session_handle,
+            logged_in,
             public_key,
-            pin,
         })
     }
 }
 
-fn open_session(ctx: &Ctx) -> Result<CK_SESSION_HANDLE, HardwareIdentityError> {
+fn login_if_required(
+    ctx: &Ctx,
+    session_handle: CK_SESSION_HANDLE,
+    pin: &str,
+) -> Result<bool, HardwareIdentityError> {
+    let token_info = ctx.get_token_info(0)?;
+    let login_required = token_info.flags & CKF_LOGIN_REQUIRED != 0;
+
+    if login_required {
+        ctx.login(session_handle, CKU_USER, Some(&pin))?;
+    }
+    Ok(login_required)
+}
+
+fn open_session(ctx: &Ctx, slot_id: CK_SLOT_ID) -> Result<CK_SESSION_HANDLE, HardwareIdentityError> {
     // equivalent of
     //    pkcs11-tool -r --slot $SLOT -y pubkey -d $KEY_ID > public_key.der
     // '-r'  read_object()
     // --slot $SLOT  opt_slot=int, opt_slot_set=1
     // -y pubkey     opt_object_class = CKO_PUBLIC_KEY;
     // -d $KEY_ID    opt_object_id opt_object_id_len
-    let slot_id = 0;
     let flags = CKF_SERIAL_SESSION;
     let application = None;
     let notify = None;
@@ -97,8 +95,9 @@ fn open_session(ctx: &Ctx) -> Result<CK_SESSION_HANDLE, HardwareIdentityError> {
 fn get_public_key(
     ctx: &Ctx,
     session_handle: CK_SESSION_HANDLE,
+    key_id: &[u8],
 ) -> Result<Vec<u8>, HardwareIdentityError> {
-    let key_id = b"\xab\xcd\xef";
+    //let key_id = b"\xab\xcd\xef";
     let object_class = CKO_PUBLIC_KEY;
     let attributes = [
         CK_ATTRIBUTE::new(CKA_ID).with_bytes(key_id),
@@ -113,73 +112,30 @@ fn get_public_key(
     let (kt_rv, key_types) =
         ctx.get_attribute_value(session_handle, object_handle, &mut attribute_types)?;
     let key_type = key_types[0];
-    if kt == CKK_EC {
-        println!("yay!");
-        let ec_params = get_ec_params(&ctx, session_handle, object_handle)?;
-        let mut ec_point = get_ec_point(&ctx, session_handle, object_handle)?;
-
-        let bytes = vec![
-            0x06_u8, 0x07_u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x02u8, 0x01u8,
-        ];
-        let y = from_der(&bytes).unwrap();
-        let yy = &y[0];
-        if let ObjectIdentifier(usize, oid) = yy {
-            println!("oid bytes are {:?}", oid);
-        }
-
-        let bytes = vec![
-            0x06_u8, 0x08_u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8,
-        ];
-        let y = from_der(&bytes).unwrap();
-        let yy = &y[0];
-        if let ObjectIdentifier(usize, oid) = yy {
-            println!("oid bytes are {:?}", oid);
-        }
-
-        // 2a8648ce3d0201 — ECDSA
-        // let oid_ecdsa = OID::new(vec![
-        //     BigUint::from(1u32),
-        //     BigUint::from(2u32),
-        //     BigUint::from(840u32),
-        //     BigUint::from(10045u32),
-        //     BigUint::from(2u32),
-        //     BigUint::from(1u32),
-        // ]);
-        let oid_ecdsa = oid!(1, 2, 840, 10045, 2, 1);
-        // 2a8648ce3d030107 — curve secp256r1
-        let oid_curve_secp256r1 = OID::new(vec![
-            BigUint::from(1u32),
-            BigUint::from(2u32),
-            BigUint::from(840u32),
-            BigUint::from(10045u32),
-            BigUint::from(3u32),
-            BigUint::from(1u32),
-            BigUint::from(7u32),
-        ]);
-        let ec_param = Sequence(
-            0,
-            vec![
-                ObjectIdentifier(0, oid_ecdsa),
-                ObjectIdentifier(0, oid_curve_secp256r1),
-            ],
-        );
-        //let mut ec_point_bytes = vec![0u8]; // 0 means "no padding"
-        //ec_point_bytes.append(&mut ec_point);
-        let ec_point = BitString(0, ec_point.len() * 8, ec_point);
-        let public_key = Sequence(0, vec![ec_param, ec_point]);
-        let der = to_der(&public_key).unwrap();
-        {
-            let mut file = File::create("/Users/ericswanson/key.der").unwrap();
-
-            // Write a slice of bytes to the file
-            file.write_all(der.as_slice()).unwrap();
-        }
-
-        println!("what now");
-        Ok(der)
-    } else {
-        unimplemented!("xxx");
+    if kt != CKK_EC {
+        unimplemented!("wrong key type");
     }
+    println!("yay!");
+    let expected = b"\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07";
+    let ec_params = get_ec_params(&ctx, session_handle, object_handle)?;
+    if ec_params != expected {
+        unimplemented!("oh no");
+    }
+    let mut ec_point = get_ec_point(&ctx, session_handle, object_handle)?;
+
+    let oid_ecdsa = oid!(1, 2, 840, 10045, 2, 1);
+    let oid_curve_secp256r1 = oid!(1, 2, 840, 10045, 3, 1, 7);
+    let ec_param = Sequence(
+        0,
+        vec![
+            ObjectIdentifier(0, oid_ecdsa),
+            ObjectIdentifier(0, oid_curve_secp256r1),
+        ],
+    );
+    let ec_point = BitString(0, ec_point.len() * 8, ec_point);
+    let public_key = Sequence(0, vec![ec_param, ec_point]);
+    let der = to_der(&public_key)?;
+    Ok(der)
 }
 
 fn get_ec_point(
@@ -199,13 +155,6 @@ fn get_ec_point(
     let fd = from_der(ec_point.as_slice()).expect("der decode failed");
     let fd0 = &fd[0];
     if let OctetString(size, data) = fd0 {
-        // this fails:
-        //let d2 = from_der(data.as_slice()).expect("der decode(2) failed");
-
-        //let mut file = File::create("/Users/ericswanson/key.der").unwrap();
-
-        // Write a slice of bytes to the file
-        //file.write_all(data.as_slice()).unwrap();
         Ok(data.clone())
     } else {
         unimplemented!("oh no");
@@ -221,7 +170,7 @@ fn get_ec_params(
     let (rv, ec_params_lengths) =
         ctx.get_attribute_value(session_handle, object_handle, &mut attrs)?;
     let first = ec_params_lengths[0];
-    let mut ec_params = vec![1_u8, 2, 3];
+    let mut ec_params = vec![];
     ec_params.resize(first.ulValueLen as usize, 0);
     let mut attrs = vec![CK_ATTRIBUTE::new(CKA_EC_PARAMS).with_bytes(ec_params.as_slice())];
     let (rv, xxx) = ctx.get_attribute_value(session_handle, object_handle, &mut attrs)?;
@@ -232,8 +181,9 @@ fn get_ec_params(
 fn get_private_key_handle(
     ctx: &Ctx,
     session_handle: CK_SESSION_HANDLE,
+    key_id: &[u8],
 ) -> Result<CK_OBJECT_HANDLE, HardwareIdentityError> {
-    let key_id = b"\xab\xcd\xef";
+    // let key_id = b"\xab\xcd\xef";
     let object_class = CKO_PRIVATE_KEY;
     let attributes = [
         CK_ATTRIBUTE::new(CKA_ID).with_bytes(key_id),
@@ -246,8 +196,17 @@ fn get_private_key_handle(
     Ok(object_handle)
 }
 
+fn key_id_to_bytes(s: &str) -> Result<Vec<u8>, HardwareIdentityError> {
+    let bytes = hex::decode(s)?;
+    Ok(bytes)
+}
+
 impl Drop for HardwareIdentity {
     fn drop(&mut self) {
+        if self.logged_in {
+            // necessary? probably not
+            self.ctx.logout(self.session_handle).unwrap();
+        }
         self.ctx.close_session(self.session_handle).unwrap();
     }
 }
@@ -259,7 +218,7 @@ impl Identity for HardwareIdentity {
         let mut sha256 = Sha256::new();
         sha256.update(msg);
         let hash = sha256.finish();
-        let private_key_handle = get_private_key_handle(&self.ctx, self.session_handle)
+        let private_key_handle = get_private_key_handle(&self.ctx, self.session_handle, &self.key_id)
             .map_err(|e| format!("Failed to get private key handle: {}", e))?;
 
         let mechanism = CK_MECHANISM {
@@ -282,27 +241,26 @@ impl Identity for HardwareIdentity {
     }
 }
 
-fn get_mechanism(
-    ctx: &Ctx,
-    mechanism_type: CK_MECHANISM_TYPE,
-) -> Result<CK_MECHANISM, HardwareIdentityError> {
-    //    ctx.get_mechanism_list()
-    //        ctx.get_mechanism_info()
-    unimplemented!()
-}
-
 #[cfg(test)]
 mod tests {
     use crate::HardwareIdentity;
+    use crate::hardware::key_id_to_bytes;
 
     #[test]
     fn it_works() {
         let hid = HardwareIdentity::new(
             "/usr/local/lib/opensc-pkcs11.so".to_string(),
+            0,
             "abcdef".to_string(),
             "837235".to_string(),
         )
         .unwrap();
         assert_eq!(2 + 2, 4);
+    }
+
+    #[test]
+    fn key_id_conversion_successful() {
+        let key_id_v = key_id_to_bytes("a53f61e3").unwrap();
+        assert_eq!(key_id_v, vec![0xa5, 0x3f, 0x61, 0xe3]);
     }
 }
