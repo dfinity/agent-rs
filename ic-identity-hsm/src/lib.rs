@@ -1,5 +1,5 @@
-pub(crate) mod hardware;
-pub use hardware::{HardwareIdentity, HardwareIdentityError};
+pub(crate) mod hsm;
+pub use hsm::{HardwareIdentity, HardwareIdentityError};
 
 #[cfg(test)]
 mod tests {
