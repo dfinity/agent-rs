@@ -71,7 +71,10 @@ pub struct HardwareIdentity {
 
 impl HardwareIdentity {
     /// Create an identity using a specific key on an HSM.
-    // /usr/local/lib/opensc-pkcs11.s
+    /// The filename will be something like /usr/local/lib/opensc-pkcs11.s
+    /// The key_id must refer to a ECDSA key with parameters prime256v1 (secp256r1)
+    /// The key must already have been created.  You can create one with pkcs11-tool:
+    /// $ pkcs11-tool -k --slot $SLOT -d $KEY_ID --key-type EC:prime256v1 --pin $PIN
     pub fn new<P>(
         filename: P,
         slot_id: u64,
@@ -97,6 +100,22 @@ impl HardwareIdentity {
     }
 }
 
+impl Identity for HardwareIdentity {
+    fn sender(&self) -> Result<Principal, String> {
+        Ok(Principal::self_authenticating(&self.public_key))
+    }
+    fn sign(&self, msg: &[u8], _principal: &Principal) -> Result<Signature, String> {
+        let hash = hash_message(msg);
+        let signature = self.sign_hash(&hash)?;
+
+        Ok(Signature {
+            public_key: self.public_key.clone(),
+            signature,
+        })
+    }
+}
+
+// We open a session for the duration of the lifetime of the HardwareIdentity.
 fn open_session(
     ctx: &Ctx,
     slot_id: CK_SLOT_ID,
@@ -108,6 +127,7 @@ fn open_session(
     Ok(session_handle)
 }
 
+// We might need to log in.  This requires the PIN.
 fn login_if_required(
     ctx: &Ctx,
     session_handle: CK_SESSION_HANDLE,
@@ -227,19 +247,19 @@ fn get_attribute_length(
     Ok(first.ulValueLen as usize)
 }
 
+// Get a variable-length attribute, by first reading its length and then the value.
 fn get_variable_length_attribute(
     ctx: &Ctx,
     session_handle: CK_SESSION_HANDLE,
     object_handle: CK_OBJECT_HANDLE,
     attribute_type: CK_ATTRIBUTE_TYPE,
 ) -> Result<Vec<u8>, HardwareIdentityError> {
-    let ec_params_length =
-        get_attribute_length(ctx, session_handle, object_handle, attribute_type)?;
-    let ec_params = vec![0; ec_params_length];
+    let length = get_attribute_length(ctx, session_handle, object_handle, attribute_type)?;
+    let value = vec![0; length];
 
-    let mut attrs = vec![CK_ATTRIBUTE::new(attribute_type).with_bytes(ec_params.as_slice())];
+    let mut attrs = vec![CK_ATTRIBUTE::new(attribute_type).with_bytes(value.as_slice())];
     ctx.get_attribute_value(session_handle, object_handle, &mut attrs)?;
-    Ok(ec_params)
+    Ok(value)
 }
 
 fn get_ec_params(
@@ -255,21 +275,22 @@ fn get_public_key_handle(
     session_handle: CK_SESSION_HANDLE,
     key_id: &KeyId,
 ) -> Result<CK_OBJECT_HANDLE, HardwareIdentityError> {
-    get_object_handle_by_key_id(ctx, session_handle, key_id, CKO_PUBLIC_KEY)
+    get_object_handle_for_key(ctx, session_handle, key_id, CKO_PUBLIC_KEY)
 }
 
 fn get_private_key_handle(
     ctx: &Ctx,
     session_handle: CK_SESSION_HANDLE,
-    key_id: &[u8],
+    key_id: &KeyId,
 ) -> Result<CK_OBJECT_HANDLE, HardwareIdentityError> {
-    get_object_handle_by_key_id(ctx, session_handle, key_id, CKO_PRIVATE_KEY)
+    get_object_handle_for_key(ctx, session_handle, key_id, CKO_PRIVATE_KEY)
 }
 
-fn get_object_handle_by_key_id(
+// Find a public or private key.
+fn get_object_handle_for_key(
     ctx: &Ctx,
     session_handle: CK_SESSION_HANDLE,
-    key_id: &[u8],
+    key_id: &KeyId,
     object_class: CK_OBJECT_CLASS,
 ) -> Result<CK_OBJECT_HANDLE, HardwareIdentityError> {
     let attributes = [
@@ -289,21 +310,6 @@ fn get_object_handle_by_key_id(
 fn str_to_key_id(s: &str) -> Result<KeyIdVec, HardwareIdentityError> {
     let bytes = hex::decode(s)?;
     Ok(bytes)
-}
-
-impl Identity for HardwareIdentity {
-    fn sender(&self) -> Result<Principal, String> {
-        Ok(Principal::self_authenticating(&self.public_key))
-    }
-    fn sign(&self, msg: &[u8], _principal: &Principal) -> Result<Signature, String> {
-        let hash = hash_message(msg);
-        let signature = self.sign_hash(&hash)?;
-
-        Ok(Signature {
-            public_key: self.public_key.clone(),
-            signature,
-        })
-    }
 }
 
 fn hash_message(msg: &[u8]) -> Sha256Hash {
