@@ -351,22 +351,9 @@ impl Drop for HardwareIdentity {
 #[cfg(test)]
 mod tests {
     use crate::hsm::str_to_key_id;
-    use crate::HardwareIdentity;
 
     #[test]
-    fn it_works() {
-        let _hid = HardwareIdentity::new(
-            "/usr/local/lib/opensc-pkcs11.so".to_string(),
-            0,
-            "abcdef",
-            "837235",
-        )
-        .unwrap();
-        assert_eq!(2 + 2, 4);
-    }
-
-    #[test]
-    fn key_id_conversion_successful() {
+    fn key_id_conversion() {
         let key_id_v = str_to_key_id("a53f61e3").unwrap();
         assert_eq!(key_id_v, vec![0xa5, 0x3f, 0x61, 0xe3]);
     }

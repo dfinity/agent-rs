@@ -9,7 +9,6 @@ edition = "2018"
 candid = "0.6.7"
 delay = "0.3.0"
 ic-agent = { path = "../ic-agent" }
-ic-identity-hsm = { path = "../ic-identity-hsm" }
 ic-utils = { path = "../ic-utils", features = ["raw"] }
 ring = "0.16.11"
 serde = { version = "1.0.101", features = ["derive"] }

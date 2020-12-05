@@ -347,13 +347,17 @@ impl Agent {
             .identity
             .sign(&msg, &sender)
             .map_err(AgentError::SigningError)?;
-        let envelope = Envelope {
-            content: request,
-            sender_pubkey: signature.public_key,
-            sender_sig: signature.signature,
-        };
-        let _s = format!("{:?}", envelope);
-        let _ = self.execute(Method::POST, "submit", Some(envelope)).await?;
+        let _ = self
+            .execute(
+                Method::POST,
+                "submit",
+                Some(Envelope {
+                    content: request,
+                    sender_pubkey: signature.public_key,
+                    sender_sig: signature.signature,
+                }),
+            )
+            .await?;
 
         Ok(request_id)
     }
