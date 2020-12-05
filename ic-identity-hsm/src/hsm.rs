@@ -77,7 +77,7 @@ impl HardwareIdentity {
     /// $ pkcs11-tool -k --slot $SLOT -d $KEY_ID --key-type EC:prime256v1 --pin $PIN
     pub fn new<P>(
         filename: P,
-        slot_id: u64,
+        slot_id: CK_SLOT_ID,
         key_id: &str,
         pin: &str,
     ) -> Result<HardwareIdentity, HardwareIdentityError>
