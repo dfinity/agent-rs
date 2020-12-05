@@ -221,9 +221,7 @@ fn get_ec_point(
 
     let blocks =
         from_der(der_encoded_ec_point.as_slice()).map_err(HardwareIdentityError::ASN1Decode)?;
-    let block = blocks
-        .get(0)
-        .ok_or_else(|| HardwareIdentityError::EcPointEmpty)?;
+    let block = blocks.get(0).ok_or(HardwareIdentityError::EcPointEmpty)?;
     if let OctetString(_size, data) = block {
         Ok(data.clone())
     } else {
@@ -243,7 +241,7 @@ fn get_attribute_length(
 
     let first = attributes
         .get(0)
-        .ok_or_else(|| HardwareIdentityError::AttributeNotFound(attribute_type))?;
+        .ok_or(HardwareIdentityError::AttributeNotFound(attribute_type))?;
     Ok(first.ulValueLen as usize)
 }
 
@@ -301,7 +299,7 @@ fn get_object_handle_for_key(
     let object_handles = ctx.find_objects(session_handle, 1)?;
     let object_handle = *object_handles
         .get(0)
-        .ok_or_else(|| HardwareIdentityError::KeyNotFound)?;
+        .ok_or(HardwareIdentityError::KeyNotFound)?;
     ctx.find_objects_final(session_handle)?;
     Ok(object_handle)
 }
