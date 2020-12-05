@@ -352,7 +352,7 @@ impl Agent {
             sender_pubkey: signature.public_key,
             sender_sig: signature.signature,
         };
-        let s = format!("{:?}", envelope);
+        let _s = format!("{:?}", envelope);
         let _ = self.execute(Method::POST, "submit", Some(envelope)).await?;
 
         Ok(request_id)
