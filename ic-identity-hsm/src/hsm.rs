@@ -32,6 +32,7 @@ pub enum HardwareIdentityError {
     #[error(transparent)]
     PKCS11(#[from] pkcs11::errors::Error),
 
+    // ASN1DecodeError does not implement the Error trait and so we cannot use #[from]
     #[error("ASN decode error {0}")]
     ASN1Decode(ASN1DecodeErr),
 
@@ -76,7 +77,7 @@ impl HardwareIdentity {
     /// The key must already have been created.  You can create one with pkcs11-tool:
     /// $ pkcs11-tool -k --slot $SLOT -d $KEY_ID --key-type EC:prime256v1 --pin $PIN
     pub fn new<P>(
-        filename: P,
+        pkcs11_lib_path: P,
         slot_id: CK_SLOT_ID,
         key_id: &str,
         pin: &str,
@@ -84,7 +85,7 @@ impl HardwareIdentity {
     where
         P: AsRef<Path>,
     {
-        let ctx = Ctx::new_and_initialize(filename)?;
+        let ctx = Ctx::new_and_initialize(pkcs11_lib_path)?;
         let session_handle = open_session(&ctx, slot_id)?;
         let logged_in = login_if_required(&ctx, session_handle, pin, slot_id)?;
         let key_id = str_to_key_id(key_id)?;
@@ -178,7 +179,10 @@ fn validate_key_type(
     session_handle: CK_SESSION_HANDLE,
     object_handle: CK_OBJECT_HANDLE,
 ) -> Result<(), HardwareIdentityError> {
-    // This value will be mutated.  `let mut` emits a warning, though.
+    // The call to ctx.get_attribute_value() will mutate kt!
+    // with_ck_ulong` stores &kt as a mutable pointer by casting it to CK_VOID_PTR, which is:
+    //      pub type CK_VOID_PTR = *mut CK_VOID;
+    // `let mut kt...` here emits a warning, unfortunately.
     let kt: CK_KEY_TYPE = 0;
 
     let mut attribute_types = vec![CK_ATTRIBUTE::new(CKA_KEY_TYPE).with_ck_ulong(&kt)];
