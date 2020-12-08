@@ -283,15 +283,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
                 canister_id: canister_id.clone(),
             })
             .build()
-            .map(|result: (StatusCallResult,)| {
-                (StatusCallResult {
-                    status: result.0.status,
-                    module_hash: result.0.module_hash,
-                    controller: result.0.controller,
-                    memory_size: result.0.memory_size,
-                    cycles: result.0.cycles,
-                },)
-            })
+            .map(|result: (StatusCallResult,)| (result.0,))
     }
 
     /// Create a canister, returning a caller that returns a Canister Id.
