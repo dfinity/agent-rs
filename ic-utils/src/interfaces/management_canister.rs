@@ -39,6 +39,15 @@ impl ManagementCanister {
     }
 }
 
+#[derive(Clone, Debug, Deserialize)]
+pub struct StatusCallResult {
+    status: CanisterStatus,
+    module_hash: Option<Vec<u8>>,
+    controller: Principal,
+    memory_size: u64,
+    cycles: u64,
+}
+
 /// The status of a Canister, whether it's running, in the process of stopping, or
 /// stopped.
 
@@ -257,15 +266,10 @@ impl<'agent> Canister<'agent, ManagementCanister> {
     pub fn canister_status<'canister: 'agent>(
         &'canister self,
         canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<(CanisterStatus,)> {
+    ) -> impl 'agent + AsyncCall<(StatusCallResult,)> {
         #[derive(CandidType)]
         struct In {
             canister_id: Principal,
-        }
-
-        #[derive(Deserialize)]
-        struct Out {
-            status: CanisterStatus,
         }
 
         self.update_("canister_status")
@@ -273,7 +277,15 @@ impl<'agent> Canister<'agent, ManagementCanister> {
                 canister_id: canister_id.clone(),
             })
             .build()
-            .map(|result: (Out,)| (result.0.status,))
+            .map(|result: (StatusCallResult,)| {
+                (StatusCallResult {
+                    status: result.0.status,
+                    module_hash: result.0.module_hash,
+                    controller: result.0.controller,
+                    memory_size: result.0.memory_size,
+                    cycles: result.0.cycles,
+                },)
+            })
     }
 
     /// Create a canister, returning a caller that returns a Canister Id.
@@ -286,6 +298,18 @@ impl<'agent> Canister<'agent, ManagementCanister> {
         }
 
         self.update_("create_canister")
+            .build()
+            .map(|result: (Out,)| (result.0.canister_id,))
+    }
+
+    ///
+    pub fn raw_rand<'canister: 'agent>(&'canister self) -> impl 'agent + AsyncCall<(Principal,)> {
+        #[derive(Deserialize)]
+        struct Out {
+            canister_id: Principal,
+        }
+
+        self.update_("raw_rand")
             .build()
             .map(|result: (Out,)| (result.0.canister_id,))
     }
@@ -314,6 +338,24 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             .with_arg(Argument { amount })
             .build()
             .map(|result: (Out,)| (result.0.canister_id,))
+    }
+
+    /// This method deposits the cycles included in this call into the specified canister.
+    /// Only the controller of the canister can deposit cycles.
+    pub fn deposit_cycles<'canister: 'agent>(
+        &'canister self,
+        canister_id: &Principal,
+    ) -> impl 'agent + AsyncCall<()> {
+        #[derive(CandidType)]
+        struct Argument {
+            canister_id: Principal,
+        }
+
+        self.update_("deposit_cycles")
+            .with_arg(Argument {
+                canister_id: canister_id.clone(),
+            })
+            .build()
     }
 
     /// Deletes a canister.
