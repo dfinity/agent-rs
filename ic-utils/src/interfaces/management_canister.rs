@@ -41,11 +41,11 @@ impl ManagementCanister {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct StatusCallResult {
-    status: CanisterStatus,
-    module_hash: Option<Vec<u8>>,
-    controller: Principal,
-    memory_size: u64,
-    cycles: u64,
+    pub status: CanisterStatus,
+    pub module_hash: Option<Vec<u8>>,
+    pub controller: Principal,
+    pub memory_size: u64,
+    pub cycles: u64,
 }
 
 impl std::fmt::Display for StatusCallResult {
