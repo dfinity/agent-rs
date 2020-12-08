@@ -48,6 +48,12 @@ pub struct StatusCallResult {
     cycles: u64,
 }
 
+impl std::fmt::Display for StatusCallResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self, f)
+    }
+}
+
 /// The status of a Canister, whether it's running, in the process of stopping, or
 /// stopped.
 

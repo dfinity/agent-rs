@@ -212,7 +212,7 @@ mod management_canister {
                 .canister_status(&canister_id)
                 .call_and_wait(create_waiter())
                 .await;
-            assert_eq!(result?.0, CanisterStatus::Running);
+            assert_eq!(result?.0.status, CanisterStatus::Running);
 
             // Stop should succeed.
             ic00.stop_canister(&canister_id)
@@ -224,7 +224,7 @@ mod management_canister {
                 .canister_status(&canister_id)
                 .call_and_wait(create_waiter())
                 .await;
-            assert_eq!(result?.0, CanisterStatus::Stopped);
+            assert_eq!(result?.0.status, CanisterStatus::Stopped);
 
             // Another stop is a noop
             ic00.stop_canister(&canister_id)
@@ -262,7 +262,7 @@ mod management_canister {
                 .canister_status(&canister_id)
                 .call_and_wait(create_waiter())
                 .await;
-            assert_eq!(result?.0, CanisterStatus::Running);
+            assert_eq!(result?.0.status, CanisterStatus::Running);
 
             // Can call update
             let result = agent
