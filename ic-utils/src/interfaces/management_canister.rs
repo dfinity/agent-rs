@@ -44,8 +44,8 @@ pub struct StatusCallResult {
     pub status: CanisterStatus,
     pub module_hash: Option<Vec<u8>>,
     pub controller: Principal,
-    pub memory_size: u64,
-    pub cycles: u64,
+    pub memory_size: candid::Nat,
+    pub cycles: candid::Nat,
 }
 
 impl std::fmt::Display for StatusCallResult {

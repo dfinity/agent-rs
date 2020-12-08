@@ -40,7 +40,9 @@ mod management_canister {
     use ic_agent::AgentError;
     use ic_agent::Identity;
     use ic_utils::call::AsyncCall;
-    use ic_utils::interfaces::management_canister::{CanisterStatus, InstallMode};
+    use ic_utils::interfaces::management_canister::{
+        CanisterStatus, InstallMode, StatusCallResult,
+    };
     use ic_utils::interfaces::ManagementCanister;
     use ref_tests::{create_agent, create_identity, create_waiter, with_agent};
 
@@ -342,9 +344,7 @@ mod management_canister {
                 }) if reject_message
                     == format!("canister no longer exists: {}", canister_id.to_text()) =>
                     true,
-                Ok((CanisterStatus::Stopped,)) => false,
-                Ok((CanisterStatus::Stopping,)) => false,
-                Ok((CanisterStatus::Running,)) => false,
+                Ok((StatusCallResult,)) => false,
                 _ => false,
             });
 
