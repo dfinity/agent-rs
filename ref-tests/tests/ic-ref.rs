@@ -13,7 +13,7 @@
 use ref_tests::universal_canister;
 use ref_tests::with_agent;
 
-const EXPECTED_IC_API_VERSION: &str = "0.14.1";
+const EXPECTED_IC_API_VERSION: &str = "0.14.0";
 
 #[ignore]
 #[test]
