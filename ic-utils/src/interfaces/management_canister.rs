@@ -39,6 +39,9 @@ impl ManagementCanister {
     }
 }
 
+/// The complete canister status information of a canister. This includes
+/// the CanisterStatus, a hash of the module installed on the canister (None if nothing installed),
+/// the contoller of the canister, the canisters memory size, and its balance in cycles.
 #[derive(Clone, Debug, Deserialize)]
 pub struct StatusCallResult {
     pub status: CanisterStatus,
@@ -56,7 +59,6 @@ impl std::fmt::Display for StatusCallResult {
 
 /// The status of a Canister, whether it's running, in the process of stopping, or
 /// stopped.
-
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum CanisterStatus {
@@ -300,14 +302,39 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             .map(|result: (Out,)| (result.0.canister_id,))
     }
 
-    /// This method takes no input and returns 32 pseudo-random bytes to the caller.
-    /// The return value is unknown to any part of the IC at time of the submission of this call.
-    /// A new return value is generated for each call to this method.
-    pub fn raw_rand<'canister: 'agent>(&'canister self) -> impl 'agent + AsyncCall<(Vec<u8>,)> {
-        #[derive(Deserialize)]
-        self.update_("raw_rand")
+    /// This method deposits the cycles included in this call into the specified canister.
+    /// Only the controller of the canister can deposit cycles.
+    pub fn deposit_cycles<'canister: 'agent>(
+        &'canister self,
+        canister_id: &Principal,
+    ) -> impl 'agent + AsyncCall<()> {
+        #[derive(CandidType)]
+        struct Argument {
+            canister_id: Principal,
+        }
+
+        self.update_("deposit_cycles")
+            .with_arg(Argument {
+                canister_id: canister_id.clone(),
+            })
             .build()
-            .map(|result: (Vec<u8>,)| (result.0,))
+    }
+
+    /// Deletes a canister.
+    pub fn delete_canister<'canister: 'agent>(
+        &'canister self,
+        canister_id: &Principal,
+    ) -> impl 'agent + AsyncCall<()> {
+        #[derive(CandidType)]
+        struct Argument {
+            canister_id: Principal,
+        }
+
+        self.update_("delete_canister")
+            .with_arg(Argument {
+                canister_id: canister_id.clone(),
+            })
+            .build()
     }
 
     /// Until developers can convert real ICP tokens to provision a new canister with cycles,
@@ -359,39 +386,14 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             .build()
     }
 
-    /// This method deposits the cycles included in this call into the specified canister.
-    /// Only the controller of the canister can deposit cycles.
-    pub fn deposit_cycles<'canister: 'agent>(
-        &'canister self,
-        canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<()> {
-        #[derive(CandidType)]
-        struct Argument {
-            canister_id: Principal,
-        }
-
-        self.update_("deposit_cycles")
-            .with_arg(Argument {
-                canister_id: canister_id.clone(),
-            })
+    /// This method takes no input and returns 32 pseudo-random bytes to the caller.
+    /// The return value is unknown to any part of the IC at time of the submission of this call.
+    /// A new return value is generated for each call to this method.
+    pub fn raw_rand<'canister: 'agent>(&'canister self) -> impl 'agent + AsyncCall<(Vec<u8>,)> {
+        #[derive(Deserialize)]
+        self.update_("raw_rand")
             .build()
-    }
-
-    /// Deletes a canister.
-    pub fn delete_canister<'canister: 'agent>(
-        &'canister self,
-        canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<()> {
-        #[derive(CandidType)]
-        struct Argument {
-            canister_id: Principal,
-        }
-
-        self.update_("delete_canister")
-            .with_arg(Argument {
-                canister_id: canister_id.clone(),
-            })
-            .build()
+            .map(|result: (Vec<u8>,)| (result.0,))
     }
 
     /// Starts a canister.
