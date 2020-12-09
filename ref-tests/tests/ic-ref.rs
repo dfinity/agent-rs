@@ -505,7 +505,7 @@ mod management_canister {
                 .await?;
 
             // this should fail but currently passes
-            assert_eq!(result.0.cycles.clone(), max_canister_balance);
+            assert_eq!(result.0.cycles, max_canister_balance);
 
             // TODO: enable this when provisional_create_canister_with_cycles is fixed
             // this should pass but currently fails
