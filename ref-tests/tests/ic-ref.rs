@@ -503,13 +503,7 @@ mod management_canister {
                 .canister_status(&canister_id_2)
                 .call_and_wait(create_waiter())
                 .await?;
-
-            // this should fail but currently passes
-            assert_eq!(result.0.cycles, max_canister_balance);
-
-            // TODO: enable this when provisional_create_canister_with_cycles is fixed
-            // this should pass but currently fails
-            // assert_eq!(result.0.cycles, amount);
+            assert_eq!(result.0.cycles, amount);
 
             Ok(())
         })

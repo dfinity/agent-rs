@@ -12,6 +12,7 @@ use std::str::FromStr;
 pub mod attributes;
 pub use attributes::ComputeAllocation;
 pub use attributes::MemoryAllocation;
+use std::convert::From;
 use std::convert::TryInto;
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
@@ -349,7 +350,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
     ) -> impl 'agent + AsyncCall<(Principal,)> {
         #[derive(CandidType)]
         struct Argument {
-            amount: Option<u64>,
+            amount: Option<candid::Nat>,
         }
 
         #[derive(Deserialize)]
@@ -358,7 +359,9 @@ impl<'agent> Canister<'agent, ManagementCanister> {
         }
 
         self.update_("provisional_create_canister_with_cycles")
-            .with_arg(Argument { amount })
+            .with_arg(Argument {
+                amount: amount.map(|v| candid::Nat::from(v)),
+            })
             .build()
             .map(|result: (Out,)| (result.0.canister_id,))
     }
