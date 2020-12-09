@@ -496,7 +496,8 @@ mod management_canister {
                 BigUint::from(max_canister_balance)
             );
 
-            //
+            // cycle balance should be amount specified to
+            // provisional_create_canister_with_cycles call
             let amount: u64 = 1 << 40; // 1099511627776
             let (canister_id_2,) = ic00
                 .provisional_create_canister_with_cycles(Some(amount))
