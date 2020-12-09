@@ -42,7 +42,6 @@ mod management_canister {
     use ic_utils::call::AsyncCall;
     use ic_utils::interfaces::management_canister::{CanisterStatus, InstallMode};
     use ic_utils::interfaces::ManagementCanister;
-    use num_bigint::BigUint;
     use openssl::sha::Sha256;
     use ref_tests::{create_agent, create_identity, create_waiter, with_agent};
 
@@ -479,7 +478,7 @@ mod management_canister {
                 .canister_status(&canister_id)
                 .call_and_wait(create_waiter())
                 .await?;
-            assert_eq!(BigUint::from(result.0.cycles), BigUint::from(0 as u64));
+            assert_eq!(result.0.cycles, 0 as u64);
 
             // cycle balance is max_canister_balance when creating with
             // provisional_create_canister_with_cycles(None)
@@ -491,10 +490,7 @@ mod management_canister {
                 .canister_status(&canister_id_1)
                 .call_and_wait(create_waiter())
                 .await?;
-            assert_eq!(
-                BigUint::from(result.0.cycles),
-                BigUint::from(max_canister_balance)
-            );
+            assert_eq!(result.0.cycles, max_canister_balance);
 
             // cycle balance should be amount specified to
             // provisional_create_canister_with_cycles call
@@ -509,13 +505,10 @@ mod management_canister {
                 .await?;
 
             // this should fail?
-            assert_eq!(
-                BigUint::from(result.0.cycles.clone()),
-                BigUint::from(max_canister_balance)
-            );
+            assert_eq!(result.0.cycles.clone(), max_canister_balance);
 
             // this should pass?
-            assert_eq!(BigUint::from(result.0.cycles), BigUint::from(amount));
+            assert_eq!(result.0.cycles, amount);
 
             Ok(())
         })
