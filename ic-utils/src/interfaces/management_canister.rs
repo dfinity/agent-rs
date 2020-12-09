@@ -300,16 +300,15 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             .map(|result: (Out,)| (result.0.canister_id,))
     }
 
-    ///
-    pub fn raw_rand<'canister: 'agent>(&'canister self) -> impl 'agent + AsyncCall<(Principal,)> {
+    /// This method takes no input and returns 32 pseudo-random bytes to the caller.
+    /// The return value is unknown to any part of the IC at time of the submission of this call.
+    /// A new return value is generated for each call to this method.
+    pub fn raw_rand<'canister: 'agent>(&'canister self) -> impl 'agent + AsyncCall<(Vec<u8>,)> {
         #[derive(Deserialize)]
-        struct Out {
-            canister_id: Principal,
-        }
 
         self.update_("raw_rand")
             .build()
-            .map(|result: (Out,)| (result.0.canister_id,))
+            .map(|result: (Vec<u8>,)| (result.0,))
     }
 
     /// Until developers can convert real ICP tokens to provision a new canister with cycles,
