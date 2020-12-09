@@ -44,8 +44,8 @@ mod management_canister {
         CanisterStatus, InstallMode, StatusCallResult,
     };
     use ic_utils::interfaces::ManagementCanister;
-    use ref_tests::{create_agent, create_identity, create_waiter, with_agent};
     use openssl::sha::Sha256;
+    use ref_tests::{create_agent, create_identity, create_waiter, with_agent};
 
     mod create_canister {
         use super::{create_waiter, with_agent};
@@ -206,7 +206,8 @@ mod management_canister {
             assert_eq!(result.0.module_hash, None);
 
             // Install wasm.
-            other_ic00.install_code(&canister_id_3, &canister_wasm)
+            other_ic00
+                .install_code(&canister_id_3, &canister_wasm)
                 .with_mode(InstallMode::Install)
                 .call_and_wait(create_waiter())
                 .await?;
