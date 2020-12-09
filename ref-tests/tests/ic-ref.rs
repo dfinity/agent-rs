@@ -45,6 +45,7 @@ mod management_canister {
     };
     use ic_utils::interfaces::ManagementCanister;
     use ref_tests::{create_agent, create_identity, create_waiter, with_agent};
+    use openssl::sha::Sha256;
 
     mod create_canister {
         use super::{create_waiter, with_agent};
@@ -183,10 +184,42 @@ mod management_canister {
                 .call_and_wait(create_waiter())
                 .await?;
 
+            // Reinstall over empty canister
             ic00.install_code(&canister_id_2, &canister_wasm)
                 .with_mode(InstallMode::Reinstall)
                 .call_and_wait(create_waiter())
                 .await?;
+
+            // Create an empty canister
+            let (canister_id_3,) = other_ic00
+                .create_canister()
+                .call_and_wait(create_waiter())
+                .await?;
+
+            // Check status for empty canister
+            let result = other_ic00
+                .canister_status(&canister_id_3)
+                .call_and_wait(create_waiter())
+                .await?;
+            assert_eq!(result.0.status, CanisterStatus::Running);
+            assert_eq!(result.0.controller, other_agent_principal);
+            assert_eq!(result.0.module_hash, None);
+
+            // Install wasm.
+            other_ic00.install_code(&canister_id_3, &canister_wasm)
+                .with_mode(InstallMode::Install)
+                .call_and_wait(create_waiter())
+                .await?;
+
+            // Check status after installing wasm and validate module_hash
+            let result = other_ic00
+                .canister_status(&canister_id_3)
+                .call_and_wait(create_waiter())
+                .await?;
+            let mut hasher = Sha256::new();
+            hasher.update(&canister_wasm);
+            let sha256_digest = hasher.finish();
+            assert_eq!(result.0.module_hash, Some(sha256_digest.into()));
 
             Ok(())
         })
