@@ -469,18 +469,9 @@ mod management_canister {
     fn randomness() {
         with_agent(|agent| async move {
             let ic00 = ManagementCanister::create(&agent);
-            let (rand_1,) = ic00
-                .raw_rand()
-                .call_and_wait(create_waiter())
-                .await?;
-            let (rand_2,) = ic00
-                .raw_rand()
-                .call_and_wait(create_waiter())
-                .await?;
-            let (rand_3,) = ic00
-                .raw_rand()
-                .call_and_wait(create_waiter())
-                .await?;
+            let (rand_1,) = ic00.raw_rand().call_and_wait(create_waiter()).await?;
+            let (rand_2,) = ic00.raw_rand().call_and_wait(create_waiter()).await?;
+            let (rand_3,) = ic00.raw_rand().call_and_wait(create_waiter()).await?;
 
             assert_eq!(rand_1.len(), 32);
             assert_eq!(rand_2.len(), 32);

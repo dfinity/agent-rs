@@ -305,7 +305,6 @@ impl<'agent> Canister<'agent, ManagementCanister> {
     /// A new return value is generated for each call to this method.
     pub fn raw_rand<'canister: 'agent>(&'canister self) -> impl 'agent + AsyncCall<(Vec<u8>,)> {
         #[derive(Deserialize)]
-
         self.update_("raw_rand")
             .build()
             .map(|result: (Vec<u8>,)| (result.0,))
