@@ -360,7 +360,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
 
         self.update_("provisional_create_canister_with_cycles")
             .with_arg(Argument {
-                amount: amount.map(|v| candid::Nat::from(v)),
+                amount: amount.map(candid::Nat::from),
             })
             .build()
             .map(|result: (Out,)| (result.0.canister_id,))
