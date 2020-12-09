@@ -338,6 +338,29 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             .map(|result: (Out,)| (result.0.canister_id,))
     }
 
+    /// Until developers can convert real ICP tokens to a top up an existing canister,
+    /// the system provides the provisional_top_up_canister method.
+    /// It adds amount cycles to the balance of canister identified by amount
+    /// (implicitly capping it at MAX_CANISTER_BALANCE).
+    pub fn provisional_top_up_canister<'canister: 'agent>(
+        &'canister self,
+        canister_id: &Principal,
+        amount: u64,
+    ) -> impl 'agent + AsyncCall<()> {
+        #[derive(CandidType)]
+        struct Argument {
+            canister_id: Principal,
+            amount: u64,
+        }
+
+        self.update_("provisional_top_up_canister")
+            .with_arg(Argument {
+                canister_id: canister_id.clone(),
+                amount,
+            })
+            .build()
+    }
+
     /// This method deposits the cycles included in this call into the specified canister.
     /// Only the controller of the canister can deposit cycles.
     pub fn deposit_cycles<'canister: 'agent>(
