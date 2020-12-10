@@ -1,5 +1,5 @@
 use crate::agent::NonceFactory;
-use crate::identity::dummy::DummyIdentity;
+use crate::identity::anonymous::AnonymousIdentity;
 use crate::identity::Identity;
 
 /// Implemented by the Agent environment to cache and update an HTTP Auth password.
@@ -34,7 +34,7 @@ impl Default for AgentConfig {
             // the agent.
             url: "-".to_owned(),
             nonce_factory: NonceFactory::random(),
-            identity: Box::new(DummyIdentity {}),
+            identity: Box::new(AnonymousIdentity {}),
             password_manager: None,
             ingress_expiry_duration: None,
         }
