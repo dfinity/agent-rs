@@ -134,43 +134,40 @@ fn wallet_canister_forward() {
     });
 }
 
-// This test is _really_ disabled as ic-ref seem to have an issue with cycle transfer.
-// We are investigating and will re-enable this.
-// TODO: re-enable this test when the issue of cycle transfer in ic-ref is fixed.
-// #[ignore]
-// #[test]
-// fn wallet_canister_funds() {
-//     with_wallet_canister(|agent, wallet_id| async move {
-//         let alice = interfaces::Wallet::create(&agent, wallet_id);
-//         let bob = interfaces::Wallet::create(&agent, create_wallet_canister(&agent).await?);
+#[ignore]
+#[test]
+fn wallet_canister_funds() {
+    with_wallet_canister(|agent, wallet_id| async move {
+        let alice = interfaces::Wallet::create(&agent, wallet_id);
+        let bob = interfaces::Wallet::create(&agent, create_wallet_canister(&agent).await?);
 
-//         let (alice_previous_balance,) = alice.wallet_balance().call().await?;
-//         let (bob_previous_balance,) = bob.wallet_balance().call().await?;
+        let (alice_previous_balance,) = alice.wallet_balance().call().await?;
+        let (bob_previous_balance,) = bob.wallet_balance().call().await?;
 
-//         alice
-//             .wallet_send(&bob, 1_000_000)
-//             .call_and_wait(create_waiter())
-//             .await?;
+        alice
+            .wallet_send(&bob, 1_000_000)
+            .call_and_wait(create_waiter())
+            .await?;
 
-//         let (bob_balance,) = bob.wallet_balance().call().await?;
+        let (bob_balance,) = bob.wallet_balance().call().await?;
 
-//         let (alice_balance,) = alice.wallet_balance().call().await?;
-//         eprintln!(
-//             "Alice previous: {}\n      current:  {}",
-//             alice_previous_balance.amount, alice_balance.amount
-//         );
-//         eprintln!(
-//             "Bob   previous: {}\n      current:  {}",
-//             bob_previous_balance.amount, bob_balance.amount
-//         );
-//         assert!(
-//             bob_balance.amount > bob_previous_balance.amount + 500_000,
-//             "Wrong: {} > {}",
-//             bob_balance.amount,
-//             bob_previous_balance.amount + 500_000
-//         );
-//         assert!(alice_balance.amount < alice_previous_balance.amount - 500_000);
+        let (alice_balance,) = alice.wallet_balance().call().await?;
+        eprintln!(
+            "Alice previous: {}\n      current:  {}",
+            alice_previous_balance.amount, alice_balance.amount
+        );
+        eprintln!(
+            "Bob   previous: {}\n      current:  {}",
+            bob_previous_balance.amount, bob_balance.amount
+        );
+        assert!(
+            bob_balance.amount > bob_previous_balance.amount + 500_000,
+            "Wrong: {} > {}",
+            bob_balance.amount,
+            bob_previous_balance.amount + 500_000
+        );
+        assert!(alice_balance.amount < alice_previous_balance.amount - 500_000);
 
-//         Ok(())
-//     });
-// }
+        Ok(())
+    });
+}

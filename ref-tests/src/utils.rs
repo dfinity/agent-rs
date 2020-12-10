@@ -104,9 +104,9 @@ pub async fn create_wallet_canister(agent: &Agent) -> Result<Principal, Box<dyn 
     };
 
     let ic00 = ManagementCanister::create(&agent);
-
+    let provisional_amount = 1 << 40;
     let (canister_id,) = ic00
-        .provisional_create_canister_with_cycles(None)
+        .provisional_create_canister_with_cycles(Some(provisional_amount))
         .call_and_wait(create_waiter())
         .await?;
 
