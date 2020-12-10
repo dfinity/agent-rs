@@ -143,34 +143,34 @@ fn wallet_canister_forward() {
 //     with_wallet_canister(|agent, wallet_id| async move {
 //         let alice = interfaces::Wallet::create(&agent, wallet_id);
 //         let bob = interfaces::Wallet::create(&agent, create_wallet_canister(&agent).await?);
-//
-//         let (alice_previous_balance,) = alice.cycle_balance().call().await?;
-//         let (bob_previous_balance,) = bob.cycle_balance().call().await?;
-//
+
+//         let (alice_previous_balance,) = alice.wallet_balance().call().await?;
+//         let (bob_previous_balance,) = bob.wallet_balance().call().await?;
+
 //         alice
-//             .send_cycles(&bob, 1_000_000)
+//             .wallet_send(&bob, 1_000_000)
 //             .call_and_wait(create_waiter())
 //             .await?;
-//
-//         let (bob_balance,) = bob.cycle_balance().call().await?;
-//
-//         let (alice_balance,) = alice.cycle_balance().call().await?;
+
+//         let (bob_balance,) = bob.wallet_balance().call().await?;
+
+//         let (alice_balance,) = alice.wallet_balance().call().await?;
 //         eprintln!(
 //             "Alice previous: {}\n      current:  {}",
-//             alice_previous_balance, alice_balance
+//             alice_previous_balance.amount, alice_balance.amount
 //         );
 //         eprintln!(
 //             "Bob   previous: {}\n      current:  {}",
-//             bob_previous_balance, bob_balance
+//             bob_previous_balance.amount, bob_balance.amount
 //         );
 //         assert!(
-//             bob_balance > bob_previous_balance + 500_000,
+//             bob_balance.amount > bob_previous_balance.amount + 500_000,
 //             "Wrong: {} > {}",
-//             bob_balance,
-//             bob_previous_balance + 500_000
+//             bob_balance.amount,
+//             bob_previous_balance.amount + 500_000
 //         );
-//         assert!(alice_balance < alice_previous_balance - 500_000);
-//
+//         assert!(alice_balance.amount < alice_previous_balance.amount - 500_000);
+
 //         Ok(())
 //     });
 // }
