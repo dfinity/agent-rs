@@ -90,7 +90,7 @@ fn canister_reject_call() {
         let bob = interfaces::Wallet::create(&agent, create_wallet_canister(&agent).await?);
 
         let result = alice
-            .send_cycles(&bob, 1_000_000)
+            .wallet_send(&bob, 1_000_000)
             .call_and_wait(create_waiter())
             .await;
 
@@ -98,7 +98,7 @@ fn canister_reject_call() {
             result,
             Err(AgentError::ReplicaError {
                 reject_code: 3,
-                reject_message: "method does not exist: send_cycles".to_string()
+                reject_message: "method does not exist: wallet_send".to_string()
             })
         );
 
