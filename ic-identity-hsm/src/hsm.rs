@@ -146,7 +146,7 @@ where
     let login_required = token_info.flags & CKF_LOGIN_REQUIRED != 0;
 
     if login_required {
-        let pin = pin_fn().map_err(|s| HardwareIdentityError::UserPinRequired(s))?;
+        let pin = pin_fn().map_err(HardwareIdentityError::UserPinRequired)?;
         ctx.login(session_handle, CKU_USER, Some(&pin))?;
     }
     Ok(login_required)
