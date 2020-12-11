@@ -264,6 +264,7 @@ impl<'agent> Canister<'agent, Wallet> {
         &'canister self,
         destination: &'canister Canister<'canister>,
         method_name: M,
+        arg: Argument,
         amount: u64,
     ) -> CallForwarder<'agent, 'canister, Out>
     where
@@ -274,7 +275,7 @@ impl<'agent> Canister<'agent, Wallet> {
             destination: destination.canister_id_().clone(),
             method_name: method_name.into(),
             amount,
-            arg: Argument::default(),
+            arg: arg,
             phantom_out: std::marker::PhantomData,
         }
     }
