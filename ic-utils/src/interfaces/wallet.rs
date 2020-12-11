@@ -275,7 +275,7 @@ impl<'agent> Canister<'agent, Wallet> {
             destination: destination.canister_id_().clone(),
             method_name: method_name.into(),
             amount,
-            arg: arg,
+            arg,
             phantom_out: std::marker::PhantomData,
         }
     }
