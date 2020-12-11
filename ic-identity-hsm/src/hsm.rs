@@ -59,6 +59,9 @@ pub enum HardwareIdentityError {
 
     #[error("Invalid EcParams.  Expected prime256v1 {:02x?}, actual is {:02x?}", .expected, .actual)]
     InvalidEcParams { expected: Vec<u8>, actual: Vec<u8> },
+
+    #[error("User PIN is required: {0}")]
+    UserPinRequired(String),
 }
 
 /// An identity based on an HSM
@@ -76,18 +79,19 @@ impl HardwareIdentity {
     /// The key_id must refer to a ECDSA key with parameters prime256v1 (secp256r1)
     /// The key must already have been created.  You can create one with pkcs11-tool:
     /// $ pkcs11-tool -k --slot $SLOT -d $KEY_ID --key-type EC:prime256v1 --pin $PIN
-    pub fn new<P>(
+    pub fn new<P, PinFn>(
         pkcs11_lib_path: P,
         slot_id: CK_SLOT_ID,
         key_id: &str,
-        pin: &str,
+        pin_fn: PinFn,
     ) -> Result<HardwareIdentity, HardwareIdentityError>
     where
         P: AsRef<Path>,
+        PinFn: FnOnce() -> Result<String, String>,
     {
         let ctx = Ctx::new_and_initialize(pkcs11_lib_path)?;
         let session_handle = open_session(&ctx, slot_id)?;
-        let logged_in = login_if_required(&ctx, session_handle, pin, slot_id)?;
+        let logged_in = login_if_required(&ctx, session_handle, pin_fn, slot_id)?;
         let key_id = str_to_key_id(key_id)?;
         let public_key = get_der_encoded_public_key(&ctx, session_handle, &key_id)?;
 
@@ -129,16 +133,20 @@ fn open_session(
 }
 
 // We might need to log in.  This requires the PIN.
-fn login_if_required(
+fn login_if_required<PinFn>(
     ctx: &Ctx,
     session_handle: CK_SESSION_HANDLE,
-    pin: &str,
+    pin_fn: PinFn,
     slot_id: CK_SLOT_ID,
-) -> Result<bool, HardwareIdentityError> {
+) -> Result<bool, HardwareIdentityError>
+where
+    PinFn: FnOnce() -> Result<String, String>,
+{
     let token_info = ctx.get_token_info(slot_id)?;
     let login_required = token_info.flags & CKF_LOGIN_REQUIRED != 0;
 
     if login_required {
+        let pin = pin_fn().map_err(|s| HardwareIdentityError::UserPinRequired(s))?;
         ctx.login(session_handle, CKU_USER, Some(&pin))?;
     }
     Ok(login_required)
