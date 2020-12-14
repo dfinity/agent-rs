@@ -5,7 +5,9 @@ on:
     branches:
       - next
   pull_request_target:
+    if: github.repository != 'dfinity/agent-rs'
   pull_request:
+    if: github.repository == 'dfinity/agent-rs'
 
 jobs:
   test:
