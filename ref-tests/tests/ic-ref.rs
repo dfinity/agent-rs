@@ -164,26 +164,26 @@ mod management_canister {
                 .await;
             assert!(matches!(result, Err(AgentError::HttpError(..))));
 
-            // Change controller.
-            ic00.set_controller(&canister_id, &other_agent_principal)
-                .call_and_wait(create_waiter())
-                .await?;
+            // // Change controller.
+            // ic00.set_controller(&canister_id, &other_agent_principal)
+            //     .call_and_wait(create_waiter())
+            //     .await?;
 
-            // Change controller with wrong controller should fail
-            let result = ic00
-                .set_controller(&canister_id, &other_agent_principal)
-                .call_and_wait(create_waiter())
-                .await;
-            assert!(matches!(result, Err(AgentError::HttpError(payload))
-                if String::from_utf8(payload.content.clone()).expect("Expected utf8")
-                    == *"Wrong sender"));
+            // // Change controller with wrong controller should fail
+            // let result = ic00
+            //     .set_controller(&canister_id, &other_agent_principal)
+            //     .call_and_wait(create_waiter())
+            //     .await;
+            // assert!(matches!(result, Err(AgentError::HttpError(payload))
+            //     if String::from_utf8(payload.content.clone()).expect("Expected utf8")
+            //         == *"Wrong sender"));
 
-            // Reinstall as new controller
-            other_ic00
-                .install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Reinstall)
-                .call_and_wait(create_waiter())
-                .await?;
+            // // Reinstall as new controller
+            // other_ic00
+            //     .install_code(&canister_id, &canister_wasm)
+            //     .with_mode(InstallMode::Reinstall)
+            //     .call_and_wait(create_waiter())
+            //     .await?;
 
             // Reinstall on empty should succeed.
             let (canister_id_2,) = ic00
@@ -648,22 +648,18 @@ mod extras {
     fn memory_allocation() {
         with_agent(|agent| async move {
             let ic00 = ManagementCanister::create(&agent);
-            let (canister_id,) = ic00
+            // Prevent creating with over 1 << 48. This does not contact the server.
+            let (_,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
                 .with_memory_allocation(1u64 << 50)
                 .call_and_wait(create_waiter())
                 .await?;
-            let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
 
-            // Prevent installing with over 1 << 48. This does not contact the server.
-            assert!(ic00
-                .install_code(&canister_id, &canister_wasm)
-                .call_and_wait(create_waiter())
-                .await
-                .is_err());
-
-            ic00.install_code(&canister_id, &canister_wasm)
+            let (_,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_memory_allocation(10 * 1024 * 1024u64)
                 .call_and_wait(create_waiter())
                 .await?;
 
@@ -680,15 +676,10 @@ mod extras {
             let ic00 = ManagementCanister::create(&agent);
             let ca = ComputeAllocation::try_from(10).unwrap();
 
-            let (canister_id,) = ic00
+            let (_,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
                 .with_compute_allocation(ca)
-                .call_and_wait(create_waiter())
-                .await?;
-            let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
-
-            ic00.install_code(&canister_id, &canister_wasm)
                 .call_and_wait(create_waiter())
                 .await?;
 

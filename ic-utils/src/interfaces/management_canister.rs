@@ -11,7 +11,6 @@ use strum_macros::{AsRefStr, EnumString};
 pub mod attributes;
 pub mod builders;
 pub use builders::{CreateCanisterBuilder, InstallCodeBuilder};
-use std::convert::From;
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub struct ManagementCanister;
@@ -21,7 +20,7 @@ pub struct ManagementCanister;
 pub enum MgmtMethod {
     CreateCanister,
     InstallCode,
-    SetController,
+    // SetController,
     StartCanister,
     StopCanister,
     CanisterStatus,
@@ -230,23 +229,23 @@ impl<'agent> Canister<'agent, ManagementCanister> {
         InstallCodeBuilder::builder(self, canister_id, wasm)
     }
 
-    /// Set controller for a canister.
-    pub fn set_controller<'canister: 'agent>(
-        &'canister self,
-        canister_id: &Principal,
-        new_controller: &Principal,
-    ) -> impl 'agent + AsyncCall<()> {
-        #[derive(CandidType)]
-        struct Argument {
-            canister_id: Principal,
-            new_controller: Principal,
-        }
-        self.update_(MgmtMethod::SetController.as_ref())
-            .with_arg(Argument {
-                canister_id: canister_id.clone(),
-                new_controller: new_controller.clone(),
-            })
-            .with_effective_canister_id(canister_id.to_owned())
-            .build()
-    }
+    // Set controller for a canister.
+    // pub fn set_controller<'canister: 'agent>(
+    //     &'canister self,
+    //     canister_id: &Principal,
+    //     new_controller: &Principal,
+    // ) -> impl 'agent + AsyncCall<()> {
+    //     #[derive(CandidType)]
+    //     struct Argument {
+    //         canister_id: Principal,
+    //         new_controller: Principal,
+    //     }
+    //     self.update_(MgmtMethod::SetController.as_ref())
+    //         .with_arg(Argument {
+    //             canister_id: canister_id.clone(),
+    //             new_controller: new_controller.clone(),
+    //         })
+    //         .with_effective_canister_id(canister_id.to_owned())
+    //         .build()
+    // }
 }
