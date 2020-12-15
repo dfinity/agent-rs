@@ -10,7 +10,7 @@ use strum_macros::{AsRefStr, EnumString};
 
 pub mod attributes;
 pub mod builders;
-pub use builders::{CreateCanisterBuilder, InstallCodeBuilder};
+pub use builders::{CreateCanisterBuilder, InstallCodeBuilder, UpdateCanisterBuilder};
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub struct ManagementCanister;
@@ -20,7 +20,6 @@ pub struct ManagementCanister;
 pub enum MgmtMethod {
     CreateCanister,
     InstallCode,
-    // SetController,
     StartCanister,
     StopCanister,
     CanisterStatus,
@@ -29,6 +28,7 @@ pub enum MgmtMethod {
     RawRand,
     ProvisionalCreateCanisterWithCycles,
     ProvisionalTopUpCanister,
+    UpdateCanisterSettings,
 }
 
 impl ManagementCanister {
@@ -59,10 +59,17 @@ impl ManagementCanister {
 #[derive(Clone, Debug, Deserialize)]
 pub struct StatusCallResult {
     pub status: CanisterStatus,
+    pub settings: DefiniteCanisterSettings,
     pub module_hash: Option<Vec<u8>>,
-    pub controller: Principal,
     pub memory_size: candid::Nat,
     pub cycles: candid::Nat,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct DefiniteCanisterSettings {
+    pub controller: Principal,
+    pub compute_allocation: candid::Nat,
+    pub memory_allocation: candid::Nat,
 }
 
 impl std::fmt::Display for StatusCallResult {
@@ -229,23 +236,11 @@ impl<'agent> Canister<'agent, ManagementCanister> {
         InstallCodeBuilder::builder(self, canister_id, wasm)
     }
 
-    // Set controller for a canister.
-    // pub fn set_controller<'canister: 'agent>(
-    //     &'canister self,
-    //     canister_id: &Principal,
-    //     new_controller: &Principal,
-    // ) -> impl 'agent + AsyncCall<()> {
-    //     #[derive(CandidType)]
-    //     struct Argument {
-    //         canister_id: Principal,
-    //         new_controller: Principal,
-    //     }
-    //     self.update_(MgmtMethod::SetController.as_ref())
-    //         .with_arg(Argument {
-    //             canister_id: canister_id.clone(),
-    //             new_controller: new_controller.clone(),
-    //         })
-    //         .with_effective_canister_id(canister_id.to_owned())
-    //         .build()
-    // }
+    /// Update one or more of a canister settings (i.e its controller, compute allocation, or memory allocation.)
+    pub fn update_canister_settings<'canister: 'agent>(
+        &'canister self,
+        canister_id: &Principal,
+    ) -> UpdateCanisterBuilder<'agent, 'canister, ManagementCanister> {
+        UpdateCanisterBuilder::builder(self, canister_id)
+    }
 }

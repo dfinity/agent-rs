@@ -9,7 +9,7 @@ use ic_agent::agent::ReplicaV2Transport;
 use ic_agent::export::Principal;
 use ic_agent::identity::BasicIdentity;
 use ic_agent::{agent, Agent, AgentError, Identity, RequestId};
-use ic_utils::interfaces::management_canister::builders::CanisterInstall;
+use ic_utils::interfaces::management_canister::builders::{CanisterInstall, CanisterSettings};
 use ic_utils::interfaces::management_canister::MgmtMethod;
 use ring::signature::Ed25519KeyPair;
 use std::collections::VecDeque;
@@ -268,6 +268,16 @@ pub fn get_effective_canister_id(
                 Ok(in_args.canister_id)
             }
             MgmtMethod::ProvisionalCreateCanisterWithCycles => Ok(Principal::management_canister()),
+            MgmtMethod::UpdateCanisterSettings => {
+                #[derive(CandidType, Deserialize)]
+                struct In {
+                    canister_id: Principal,
+                    settings: CanisterSettings,
+                }
+                let in_args = candid::Decode!(arg_value, In)
+                    .map_err(|err| format!("Candid decode err: {}", err))?;
+                Ok(in_args.canister_id)
+            }
         }
     } else {
         Ok(canister_id)

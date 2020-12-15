@@ -164,26 +164,28 @@ mod management_canister {
                 .await;
             assert!(matches!(result, Err(AgentError::HttpError(..))));
 
-            // // Change controller.
-            // ic00.set_controller(&canister_id, &other_agent_principal)
-            //     .call_and_wait(create_waiter())
-            //     .await?;
+            // Change controller.
+            ic00.update_canister_settings(&canister_id)
+                .with_controller(other_agent_principal.clone())
+                .call_and_wait(create_waiter())
+                .await?;
 
-            // // Change controller with wrong controller should fail
-            // let result = ic00
-            //     .set_controller(&canister_id, &other_agent_principal)
-            //     .call_and_wait(create_waiter())
-            //     .await;
-            // assert!(matches!(result, Err(AgentError::HttpError(payload))
-            //     if String::from_utf8(payload.content.clone()).expect("Expected utf8")
-            //         == *"Wrong sender"));
+            // Change controller with wrong controller should fail
+            let result = ic00
+                .update_canister_settings(&canister_id)
+                .with_controller(other_agent_principal.clone())
+                .call_and_wait(create_waiter())
+                .await;
+            assert!(matches!(result, Err(AgentError::HttpError(payload))
+                if String::from_utf8(payload.content.clone()).expect("Expected utf8")
+                    == *"Wrong sender"));
 
-            // // Reinstall as new controller
-            // other_ic00
-            //     .install_code(&canister_id, &canister_wasm)
-            //     .with_mode(InstallMode::Reinstall)
-            //     .call_and_wait(create_waiter())
-            //     .await?;
+            // Reinstall as new controller
+            other_ic00
+                .install_code(&canister_id, &canister_wasm)
+                .with_mode(InstallMode::Reinstall)
+                .call_and_wait(create_waiter())
+                .await?;
 
             // Reinstall on empty should succeed.
             let (canister_id_2,) = ic00
@@ -211,7 +213,7 @@ mod management_canister {
                 .call_and_wait(create_waiter())
                 .await?;
             assert_eq!(result.0.status, CanisterStatus::Running);
-            assert_eq!(result.0.controller, other_agent_principal);
+            assert_eq!(result.0.settings.controller, other_agent_principal);
             assert_eq!(result.0.module_hash, None);
 
             // Install wasm.

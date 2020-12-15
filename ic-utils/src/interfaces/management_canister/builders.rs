@@ -14,6 +14,13 @@ pub use super::attributes::MemoryAllocation;
 use std::convert::From;
 use std::convert::TryInto;
 
+#[derive(CandidType, Deserialize)]
+pub struct CanisterSettings {
+    pub controller: Option<Principal>,
+    pub compute_allocation: Option<candid::Nat>,
+    pub memory_allocation: Option<candid::Nat>,
+}
+
 pub struct CreateCanisterBuilder<'agent, 'canister: 'agent, T> {
     canister: &'canister Canister<'agent, T>,
     controller: Option<Result<Principal, AgentError>>,
@@ -129,13 +136,6 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
     /// Create an [AsyncCall] implementation that, when called, will create a
     /// canister.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<(Principal,)>, AgentError> {
-        #[derive(CandidType)]
-        struct CanisterSettings {
-            controller: Option<Principal>,
-            compute_allocation: Option<candid::Nat>,
-            memory_allocation: Option<candid::Nat>,
-        }
-
         let controller = match self.controller {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
             Some(Ok(x)) => Some(x),
@@ -346,6 +346,170 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
 #[async_trait]
 impl<'agent, 'canister: 'agent, T: Sync> AsyncCall<()>
     for InstallCodeBuilder<'agent, 'canister, T>
+{
+    async fn call(self) -> Result<RequestId, AgentError> {
+        self.build()?.call().await
+    }
+
+    async fn call_and_wait<W>(self, waiter: W) -> Result<(), AgentError>
+    where
+        W: Waiter,
+    {
+        self.build()?.call_and_wait(waiter).await
+    }
+}
+
+pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent, T> {
+    canister: &'canister Canister<'agent, T>,
+    canister_id: Principal,
+    controller: Option<Result<Principal, AgentError>>,
+    compute_allocation: Option<Result<ComputeAllocation, AgentError>>,
+    memory_allocation: Option<Result<MemoryAllocation, AgentError>>,
+}
+
+impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
+    /// Create an UpdateCanister builder, which is also an AsyncCall implementation.
+    pub fn builder(canister: &'canister Canister<'agent, T>, canister_id: &Principal) -> Self {
+        Self {
+            canister,
+            canister_id: canister_id.clone(),
+            controller: None,
+            compute_allocation: None,
+            memory_allocation: None,
+        }
+    }
+
+    /// Pass in an optional controller for the canister. If this is [None],
+    /// it will revert the controller to default.
+    pub fn with_optional_controller<C, E>(self, controller: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<Principal, Error = E>,
+    {
+        Self {
+            controller: controller.map(|ca| {
+                ca.try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+            }),
+            ..self
+        }
+    }
+
+    /// Pass in a designated controller for the canister.
+    pub fn with_controller<C, E>(self, controller: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<Principal, Error = E>,
+    {
+        self.with_optional_controller(Some(controller))
+    }
+
+    /// Pass in a compute allocation optional value for the canister. If this is [None],
+    /// it will revert the compute allocation to default.
+    pub fn with_optional_compute_allocation<C, E>(self, compute_allocation: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<ComputeAllocation, Error = E>,
+    {
+        Self {
+            compute_allocation: compute_allocation.map(|ca| {
+                ca.try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+            }),
+            ..self
+        }
+    }
+
+    /// Pass in a compute allocation value for the canister.
+    pub fn with_compute_allocation<C, E>(self, compute_allocation: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<ComputeAllocation, Error = E>,
+    {
+        self.with_optional_compute_allocation(Some(compute_allocation))
+    }
+
+    /// Pass in a memory allocation optional value for the canister. If this is [None],
+    /// it will revert the memory allocation to default.
+    pub fn with_optional_memory_allocation<E, C>(self, memory_allocation: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<MemoryAllocation, Error = E>,
+    {
+        Self {
+            memory_allocation: memory_allocation.map(|ma| {
+                ma.try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+            }),
+            ..self
+        }
+    }
+
+    /// Pass in a memory allocation value for the canister.
+    pub fn with_memory_allocation<C, E>(self, memory_allocation: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<MemoryAllocation, Error = E>,
+    {
+        self.with_optional_memory_allocation(Some(memory_allocation))
+    }
+
+    /// Create an [AsyncCall] implementation that, when called, will update a
+    /// canisters settings.
+    pub fn build(self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
+        #[derive(candid::CandidType)]
+        struct In {
+            canister_id: Principal,
+            settings: CanisterSettings,
+        }
+
+        let controller = match self.controller {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Ok(x)) => Some(x),
+            None => None,
+        };
+        let compute_allocation = match self.compute_allocation {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Ok(x)) => Some(candid::Nat::from(u8::from(x))),
+            None => None,
+        };
+        let memory_allocation = match self.memory_allocation {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Ok(x)) => Some(candid::Nat::from(u64::from(x))),
+            None => None,
+        };
+
+        Ok(self
+            .canister
+            .update_(MgmtMethod::UpdateCanisterSettings.as_ref())
+            .with_arg(In {
+                canister_id: self.canister_id.clone(),
+                settings: CanisterSettings {
+                    controller,
+                    compute_allocation,
+                    memory_allocation,
+                },
+            })
+            .build())
+    }
+
+    /// Make a call. This is equivalent to the [AsyncCall::call].
+    pub async fn call(self) -> Result<RequestId, AgentError> {
+        self.build()?.call().await
+    }
+
+    /// Make a call. This is equivalent to the [AsyncCall::call_and_wait].
+    pub async fn call_and_wait<W>(self, waiter: W) -> Result<(), AgentError>
+    where
+        W: Waiter,
+    {
+        self.build()?.call_and_wait(waiter).await
+    }
+}
+
+#[async_trait]
+impl<'agent, 'canister: 'agent, T: Sync> AsyncCall<()>
+    for UpdateCanisterBuilder<'agent, 'canister, T>
 {
     async fn call(self) -> Result<RequestId, AgentError> {
         self.build()?.call().await
