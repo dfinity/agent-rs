@@ -40,9 +40,8 @@ mod management_canister {
     use ic_agent::export::Principal;
     use ic_agent::AgentError;
     use ic_utils::call::AsyncCall;
-    use ic_utils::interfaces::management_canister::{
-        CanisterStatus, InstallMode, StatusCallResult,
-    };
+    use ic_utils::interfaces::management_canister::builders::InstallMode;
+    use ic_utils::interfaces::management_canister::{CanisterStatus, StatusCallResult};
     use ic_utils::interfaces::wallet::CreateResult;
     use ic_utils::interfaces::{ManagementCanister, Wallet};
     use ic_utils::{Argument, Canister};
@@ -55,7 +54,6 @@ mod management_canister {
         use super::{create_waiter, with_agent};
         use ic_agent::export::Principal;
         use ic_agent::AgentError;
-        use ic_utils::call::AsyncCall;
         use ic_utils::interfaces::ManagementCanister;
         use std::str::FromStr;
 
@@ -66,7 +64,8 @@ mod management_canister {
                 let ic00 = ManagementCanister::create(&agent);
 
                 let _ = ic00
-                    .provisional_create_canister_with_cycles(None)
+                    .create_canister()
+                    .as_provisional_create_with_amount(None)
                     .call_and_wait(create_waiter())
                     .await?;
 
@@ -109,7 +108,8 @@ mod management_canister {
             let ic00 = ManagementCanister::create(&agent);
 
             let (canister_id,) = ic00
-                .provisional_create_canister_with_cycles(None)
+                .create_canister()
+                .as_provisional_create_with_amount(None)
                 .call_and_wait(create_waiter())
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
@@ -187,7 +187,8 @@ mod management_canister {
 
             // Reinstall on empty should succeed.
             let (canister_id_2,) = ic00
-                .provisional_create_canister_with_cycles(None)
+                .create_canister()
+                .as_provisional_create_with_amount(None)
                 .call_and_wait(create_waiter())
                 .await?;
 
@@ -199,7 +200,8 @@ mod management_canister {
 
             // Create an empty canister
             let (canister_id_3,) = other_ic00
-                .provisional_create_canister_with_cycles(None)
+                .create_canister()
+                .as_provisional_create_with_amount(None)
                 .call_and_wait(create_waiter())
                 .await?;
 
@@ -239,7 +241,8 @@ mod management_canister {
         with_agent(|agent| async move {
             let ic00 = ManagementCanister::create(&agent);
             let (canister_id,) = ic00
-                .provisional_create_canister_with_cycles(None)
+                .create_canister()
+                .as_provisional_create_with_amount(None)
                 .call_and_wait(create_waiter())
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
@@ -401,7 +404,8 @@ mod management_canister {
         with_agent(|agent| async move {
             let ic00 = ManagementCanister::create(&agent);
             let (canister_id,) = ic00
-                .provisional_create_canister_with_cycles(None)
+                .create_canister()
+                .as_provisional_create_with_amount(None)
                 .call_and_wait(create_waiter())
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
@@ -495,7 +499,8 @@ mod management_canister {
             // cycle balance is max_canister_balance when creating with
             // provisional_create_canister_with_cycles(None)
             let (canister_id_1,) = ic00
-                .provisional_create_canister_with_cycles(None)
+                .create_canister()
+                .as_provisional_create_with_amount(None)
                 .call_and_wait(create_waiter())
                 .await?;
             let result = ic00
@@ -508,7 +513,8 @@ mod management_canister {
             // provisional_create_canister_with_cycles call
             let amount: u64 = 1 << 40; // 1099511627776
             let (canister_id_2,) = ic00
-                .provisional_create_canister_with_cycles(Some(amount))
+                .create_canister()
+                .as_provisional_create_with_amount(Some(amount))
                 .call_and_wait(create_waiter())
                 .await?;
             let result = ic00
@@ -633,8 +639,7 @@ mod simple_calls {
 }
 
 mod extras {
-    use ic_utils::call::AsyncCall;
-    use ic_utils::interfaces::management_canister::ComputeAllocation;
+    use ic_utils::interfaces::management_canister::builders::ComputeAllocation;
     use ic_utils::interfaces::ManagementCanister;
     use ref_tests::{create_waiter, with_agent};
 
@@ -644,7 +649,9 @@ mod extras {
         with_agent(|agent| async move {
             let ic00 = ManagementCanister::create(&agent);
             let (canister_id,) = ic00
-                .provisional_create_canister_with_cycles(None)
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_memory_allocation(1u64 << 50)
                 .call_and_wait(create_waiter())
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
@@ -652,13 +659,11 @@ mod extras {
             // Prevent installing with over 1 << 48. This does not contact the server.
             assert!(ic00
                 .install_code(&canister_id, &canister_wasm)
-                .with_memory_allocation(1u64 << 50)
                 .call_and_wait(create_waiter())
                 .await
                 .is_err());
 
             ic00.install_code(&canister_id, &canister_wasm)
-                .with_memory_allocation(10 * 1024 * 1024u64)
                 .call_and_wait(create_waiter())
                 .await?;
 
@@ -673,16 +678,17 @@ mod extras {
 
         with_agent(|agent| async move {
             let ic00 = ManagementCanister::create(&agent);
+            let ca = ComputeAllocation::try_from(10).unwrap();
+
             let (canister_id,) = ic00
-                .provisional_create_canister_with_cycles(None)
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_compute_allocation(ca)
                 .call_and_wait(create_waiter())
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
 
-            let ca = ComputeAllocation::try_from(10).unwrap();
-
             ic00.install_code(&canister_id, &canister_wasm)
-                .with_compute_allocation(ca)
                 .call_and_wait(create_waiter())
                 .await?;
 

@@ -7,7 +7,7 @@ use ic_agent::export::Principal;
 use ic_agent::AgentError;
 use ic_utils::call::AsyncCall;
 use ic_utils::call::SyncCall;
-use ic_utils::interfaces::management_canister::InstallMode;
+use ic_utils::interfaces::management_canister::builders::InstallMode;
 use ic_utils::interfaces::Wallet;
 use ic_utils::{Argument, Canister};
 use ref_tests::universal_canister::payload;
