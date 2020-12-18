@@ -179,7 +179,7 @@ fn format_as_text(content_type: &Option<String>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::{HttpErrorPayload, AgentError};
+    use crate::{AgentError, HttpErrorPayload};
 
     #[test]
     fn http_payload_works_with_content_type_none() {
@@ -207,7 +207,6 @@ mod tests {
             format!("{}", AgentError::HttpError(payload)),
             r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "text/plain", content: hello"#,
         );
-
     }
 
     #[test]
@@ -222,7 +221,6 @@ mod tests {
             format!("{}", AgentError::HttpError(payload)),
             r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "text/plain; charset=utf-8", content: hello"#,
         );
-
     }
 
     #[test]
@@ -237,6 +235,5 @@ mod tests {
             format!("{}", AgentError::HttpError(payload)),
             r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "text/html", content: world"#,
         );
-
     }
 }
