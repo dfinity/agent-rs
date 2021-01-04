@@ -123,7 +123,7 @@ impl HttpErrorPayload {
                 status,
                 content_type,
                 content,
-            } if format_as_text(content_type) => {
+            } if is_text(content_type) => {
                 f.write_fmt(format_args!(
                     "Http Error: status {}, content type {:?}, content: {}",
                     StatusCode::from_u16(*status)
@@ -165,7 +165,7 @@ impl Display for HttpErrorPayload {
     }
 }
 
-fn format_as_text(content_type: &Option<String>) -> bool {
+fn is_text(content_type: &Option<String>) -> bool {
     // Sometimes returned by the replica, or ic-ref, or ic-fe,
     // depending on where in the stack the error happens:
     //   text/plain
