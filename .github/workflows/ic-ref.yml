@@ -5,7 +5,9 @@ on:
     branches:
       - next
   pull_request_target:
+    if: github.repository != 'dfinity/agent-rs'
   pull_request:
+    if: github.repository == 'dfinity/agent-rs'
 
 jobs:
   test:
@@ -16,7 +18,7 @@ jobs:
         include:
           - build: linux-stable
             ghc: '8.8.4'
-            spec: 'release-0.13'
+            spec: '0.14.0'
             os: ubuntu-latest
             rust: 1.47.0
 
@@ -37,7 +39,7 @@ jobs:
           # Personal Read-only Access Token created by hans.larsen@dfinity.org
           token: ${{ secrets.IC_REF_TOKEN }}
           path: wallet-rs
-          ref: e41a91fc64857b5eb07b6ebb5ad4ff257536c69c
+          ref: c39ce85f9736a2b0496d91ebaf93f3f3cc4cb88f
 
       - name: Cache ~/.cabal/store
         uses: actions/cache@v2

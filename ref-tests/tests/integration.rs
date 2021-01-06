@@ -134,24 +134,43 @@ fn wallet_canister_forward() {
     });
 }
 
-#[ignore]
-#[test]
-fn wallet_canister_funds() {
-    with_wallet_canister(|agent, wallet_id| async move {
-        let alice = interfaces::Wallet::create(&agent, wallet_id);
-        let bob = interfaces::Wallet::create(&agent, create_wallet_canister(&agent).await?);
-
-        alice
-            .send_cycles(&bob, 1_000_000)
-            .call_and_wait(create_waiter())
-            .await?;
-
-        let (cycles,) = bob.cycle_balance().call().await?;
-        assert_eq!(cycles, 1_000_001_000_000);
-
-        let (cycles,) = alice.cycle_balance().call().await?;
-        assert_eq!(cycles, 999_999_000_000);
-
-        Ok(())
-    });
-}
+// This test is _really_ disabled as ic-ref seem to have an issue with cycle transfer.
+// We are investigating and will re-enable this.
+// TODO: re-enable this test when the issue of cycle transfer in ic-ref is fixed.
+// #[ignore]
+// #[test]
+// fn wallet_canister_funds() {
+//     with_wallet_canister(|agent, wallet_id| async move {
+//         let alice = interfaces::Wallet::create(&agent, wallet_id);
+//         let bob = interfaces::Wallet::create(&agent, create_wallet_canister(&agent).await?);
+//
+//         let (alice_previous_balance,) = alice.cycle_balance().call().await?;
+//         let (bob_previous_balance,) = bob.cycle_balance().call().await?;
+//
+//         alice
+//             .send_cycles(&bob, 1_000_000)
+//             .call_and_wait(create_waiter())
+//             .await?;
+//
+//         let (bob_balance,) = bob.cycle_balance().call().await?;
+//
+//         let (alice_balance,) = alice.cycle_balance().call().await?;
+//         eprintln!(
+//             "Alice previous: {}\n      current:  {}",
+//             alice_previous_balance, alice_balance
+//         );
+//         eprintln!(
+//             "Bob   previous: {}\n      current:  {}",
+//             bob_previous_balance, bob_balance
+//         );
+//         assert!(
+//             bob_balance > bob_previous_balance + 500_000,
+//             "Wrong: {} > {}",
+//             bob_balance,
+//             bob_previous_balance + 500_000
+//         );
+//         assert!(alice_balance < alice_previous_balance - 500_000);
+//
+//         Ok(())
+//     });
+// }

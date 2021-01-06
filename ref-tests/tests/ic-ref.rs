@@ -13,7 +13,7 @@
 use ref_tests::universal_canister;
 use ref_tests::with_agent;
 
-const EXPECTED_IC_API_VERSION: &str = "0.13.2";
+const EXPECTED_IC_API_VERSION: &str = "0.14.0";
 
 #[ignore]
 #[test]
@@ -42,6 +42,7 @@ mod management_canister {
     use ic_utils::call::AsyncCall;
     use ic_utils::interfaces::management_canister::{CanisterStatus, InstallMode};
     use ic_utils::interfaces::ManagementCanister;
+    use openssl::sha::Sha256;
     use ref_tests::{create_agent, create_identity, create_waiter, with_agent};
 
     mod create_canister {
@@ -128,6 +129,7 @@ mod management_canister {
             let other_agent_identity = create_identity().await?;
             let other_agent_principal = other_agent_identity.sender()?;
             let other_agent = create_agent(other_agent_identity).await?;
+            other_agent.fetch_root_key().await?;
             let other_ic00 = ManagementCanister::create(&other_agent);
 
             // Reinstall with another agent should fail.
@@ -180,10 +182,43 @@ mod management_canister {
                 .call_and_wait(create_waiter())
                 .await?;
 
+            // Reinstall over empty canister
             ic00.install_code(&canister_id_2, &canister_wasm)
                 .with_mode(InstallMode::Reinstall)
                 .call_and_wait(create_waiter())
                 .await?;
+
+            // Create an empty canister
+            let (canister_id_3,) = other_ic00
+                .create_canister()
+                .call_and_wait(create_waiter())
+                .await?;
+
+            // Check status for empty canister
+            let result = other_ic00
+                .canister_status(&canister_id_3)
+                .call_and_wait(create_waiter())
+                .await?;
+            assert_eq!(result.0.status, CanisterStatus::Running);
+            assert_eq!(result.0.controller, other_agent_principal);
+            assert_eq!(result.0.module_hash, None);
+
+            // Install wasm.
+            other_ic00
+                .install_code(&canister_id_3, &canister_wasm)
+                .with_mode(InstallMode::Install)
+                .call_and_wait(create_waiter())
+                .await?;
+
+            // Check status after installing wasm and validate module_hash
+            let result = other_ic00
+                .canister_status(&canister_id_3)
+                .call_and_wait(create_waiter())
+                .await?;
+            let mut hasher = Sha256::new();
+            hasher.update(&canister_wasm);
+            let sha256_digest = hasher.finish();
+            assert_eq!(result.0.module_hash, Some(sha256_digest.into()));
 
             Ok(())
         })
@@ -211,7 +246,7 @@ mod management_canister {
                 .canister_status(&canister_id)
                 .call_and_wait(create_waiter())
                 .await;
-            assert_eq!(result?.0, CanisterStatus::Running);
+            assert_eq!(result?.0.status, CanisterStatus::Running);
 
             // Stop should succeed.
             ic00.stop_canister(&canister_id)
@@ -223,7 +258,7 @@ mod management_canister {
                 .canister_status(&canister_id)
                 .call_and_wait(create_waiter())
                 .await;
-            assert_eq!(result?.0, CanisterStatus::Stopped);
+            assert_eq!(result?.0.status, CanisterStatus::Stopped);
 
             // Another stop is a noop
             ic00.stop_canister(&canister_id)
@@ -261,7 +296,7 @@ mod management_canister {
                 .canister_status(&canister_id)
                 .call_and_wait(create_waiter())
                 .await;
-            assert_eq!(result?.0, CanisterStatus::Running);
+            assert_eq!(result?.0.status, CanisterStatus::Running);
 
             // Can call update
             let result = agent
@@ -341,9 +376,7 @@ mod management_canister {
                 }) if reject_message
                     == format!("canister no longer exists: {}", canister_id.to_text()) =>
                     true,
-                Ok((CanisterStatus::Stopped,)) => false,
-                Ok((CanisterStatus::Stopping,)) => false,
-                Ok((CanisterStatus::Running,)) => false,
+                Ok((_status_call_result,)) => false,
                 _ => false,
             });
 
@@ -382,6 +415,7 @@ mod management_canister {
             // Create another agent with different identity.
             let other_agent_identity = create_identity().await?;
             let other_agent = create_agent(other_agent_identity).await?;
+            other_agent.fetch_root_key().await?;
             let other_ic00 = ManagementCanister::create(&other_agent);
 
             // Start as a wrong controller should fail.
@@ -423,6 +457,74 @@ mod management_canister {
                     reject_code: 5,
                     reject_message,
                 }) if reject_message.contains("is not authorized to manage canister")));
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn provisional_create_canister_with_cycles() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+            let max_canister_balance: u64 = 1152921504606846976;
+
+            // empty cycle balance on create
+            let (canister_id,) = ic00
+                .create_canister()
+                .call_and_wait(create_waiter())
+                .await?;
+            let result = ic00
+                .canister_status(&canister_id)
+                .call_and_wait(create_waiter())
+                .await?;
+            assert_eq!(result.0.cycles, 0_u64);
+
+            // cycle balance is max_canister_balance when creating with
+            // provisional_create_canister_with_cycles(None)
+            let (canister_id_1,) = ic00
+                .provisional_create_canister_with_cycles(None)
+                .call_and_wait(create_waiter())
+                .await?;
+            let result = ic00
+                .canister_status(&canister_id_1)
+                .call_and_wait(create_waiter())
+                .await?;
+            assert_eq!(result.0.cycles, max_canister_balance);
+
+            // cycle balance should be amount specified to
+            // provisional_create_canister_with_cycles call
+            let amount: u64 = 1 << 40; // 1099511627776
+            let (canister_id_2,) = ic00
+                .provisional_create_canister_with_cycles(Some(amount))
+                .call_and_wait(create_waiter())
+                .await?;
+            let result = ic00
+                .canister_status(&canister_id_2)
+                .call_and_wait(create_waiter())
+                .await?;
+            assert_eq!(result.0.cycles, amount);
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn randomness() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+            let (rand_1,) = ic00.raw_rand().call_and_wait(create_waiter()).await?;
+            let (rand_2,) = ic00.raw_rand().call_and_wait(create_waiter()).await?;
+            let (rand_3,) = ic00.raw_rand().call_and_wait(create_waiter()).await?;
+
+            assert_eq!(rand_1.len(), 32);
+            assert_eq!(rand_2.len(), 32);
+            assert_eq!(rand_3.len(), 32);
+
+            assert_ne!(rand_1, rand_2);
+            assert_ne!(rand_1, rand_3);
+            assert_ne!(rand_2, rand_3);
 
             Ok(())
         })

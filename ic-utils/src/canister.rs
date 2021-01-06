@@ -369,6 +369,7 @@ mod tests {
             .with_identity(identity)
             .build()
             .unwrap();
+        agent.fetch_root_key().await.unwrap();
 
         let management_canister = Canister::builder()
             .with_agent(&agent)
@@ -389,7 +390,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(format!("{}", status), "Running");
+        assert_eq!(format!("{}", status.status), "Running");
 
         let canister_wasm = b"\0asm\x01\0\0\0";
         management_canister
