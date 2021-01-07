@@ -123,7 +123,7 @@ impl HttpErrorPayload {
                 status,
                 content_type,
                 content,
-            } if is_plain_text_utf8(content_type) => {
+            } if is_text(content_type) => {
                 f.write_fmt(format_args!(
                     "Http Error: status {}, content type {:?}, content: {}",
                     StatusCode::from_u16(*status)
@@ -165,25 +165,75 @@ impl Display for HttpErrorPayload {
     }
 }
 
-fn is_plain_text_utf8(content_type: &Option<String>) -> bool {
-    // text/plain is also sometimes returned by the replica (or ic-ref),
-    // depending on where in the stack the error happens.
+fn is_text(content_type: &Option<String>) -> bool {
+    // Sometimes returned by the replica, or ic-ref, or ic-fe,
+    // depending on where in the stack the error happens:
+    //   text/plain
+    //   text/plain; charset=utf-8
+    //   text/html
     matches!(
         content_type.as_ref().and_then(|s|s.parse::<mime::Mime>().ok()),
-        Some(mt) if mt == mime::TEXT_PLAIN || mt == mime::TEXT_PLAIN_UTF_8
+        Some(mt) if mt.type_() == mime::TEXT
     )
 }
 
-#[test]
-fn http_payload_works_with_content_type_none() {
-    let payload = HttpErrorPayload {
-        status: 420,
-        content_type: None,
-        content: vec![1, 2, 3],
-    };
+#[cfg(test)]
+mod tests {
+    use crate::{AgentError, HttpErrorPayload};
 
-    assert_eq!(
-        format!("{}", AgentError::HttpError(payload)),
-        r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "", content: [1, 2, 3]"#,
-    );
+    #[test]
+    fn http_payload_works_with_content_type_none() {
+        let payload = HttpErrorPayload {
+            status: 420,
+            content_type: None,
+            content: vec![1, 2, 3],
+        };
+
+        assert_eq!(
+            format!("{}", AgentError::HttpError(payload)),
+            r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "", content: [1, 2, 3]"#,
+        );
+    }
+
+    #[test]
+    fn formats_text_plain() {
+        let payload = HttpErrorPayload {
+            status: 420,
+            content_type: Some("text/plain".to_string()),
+            content: vec![104, 101, 108, 108, 111],
+        };
+
+        assert_eq!(
+            format!("{}", AgentError::HttpError(payload)),
+            r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "text/plain", content: hello"#,
+        );
+    }
+
+    #[test]
+    fn formats_text_plain_charset_utf8() {
+        let payload = HttpErrorPayload {
+            status: 420,
+            content_type: Some("text/plain; charset=utf-8".to_string()),
+            content: vec![104, 101, 108, 108, 111],
+        };
+
+        assert_eq!(
+            format!("{}", AgentError::HttpError(payload)),
+            r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "text/plain; charset=utf-8", content: hello"#,
+        );
+    }
+
+    #[test]
+    fn formats_text_html() {
+        let payload = HttpErrorPayload {
+            status: 420,
+            content_type: Some("text/html".to_string()),
+            content: vec![119, 111, 114, 108, 100],
+        };
+
+        assert_eq!(
+            format!("{}", AgentError::HttpError(payload)),
+            r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "text/html", content: world"#,
+        );
+    }
 }
