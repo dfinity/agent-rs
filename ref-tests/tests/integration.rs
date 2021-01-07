@@ -7,10 +7,7 @@ use ic_utils::call::AsyncCall;
 use ic_utils::call::SyncCall;
 use ic_utils::{interfaces, Canister};
 use ref_tests::universal_canister::payload;
-use ref_tests::{
-    create_universal_canister, create_waiter, create_wallet_canister, with_universal_canister,
-    with_wallet_canister,
-};
+use ref_tests::{create_universal_canister, create_waiter, with_universal_canister};
 
 #[ignore]
 #[test]
@@ -79,98 +76,3 @@ fn canister_query() {
         Ok(())
     })
 }
-
-#[ignore]
-#[test]
-fn canister_reject_call() {
-    // try to call a wallet method, but on the universal canister.
-    // this lets us look up the reject code and reject message in the certificate.
-    with_universal_canister(|agent, wallet_id| async move {
-        let alice = interfaces::Wallet::create(&agent, wallet_id);
-        let bob = interfaces::Wallet::create(&agent, create_wallet_canister(&agent).await?);
-
-        let result = alice
-            .send_cycles(&bob, 1_000_000)
-            .call_and_wait(create_waiter())
-            .await;
-
-        assert_eq!(
-            result,
-            Err(AgentError::ReplicaError {
-                reject_code: 3,
-                reject_message: "method does not exist: send_cycles".to_string()
-            })
-        );
-
-        Ok(())
-    });
-}
-
-#[ignore]
-#[test]
-fn wallet_canister_forward() {
-    with_wallet_canister(|agent, wallet_id| async move {
-        let wallet = interfaces::Wallet::create(&agent, wallet_id);
-
-        let universal_id = create_universal_canister(&agent).await?;
-        let universal = Canister::builder()
-            .with_canister_id(universal_id)
-            .with_agent(&agent)
-            .build()?;
-
-        // Perform an "echo" call through the wallet canister.
-        // We encode the result in DIDL to decode it on the other side (would normally get
-        // a Vec<u8>).
-        let arg = payload()
-            .reply_data(b"DIDL\0\x01\x71\x0bHello World")
-            .build();
-
-        let forward = wallet
-            .call_forward::<(String,)>(universal.update_("update").with_arg_raw(arg).build(), 0)?;
-        let (result,) = forward.call_and_wait(create_waiter()).await.unwrap();
-
-        assert_eq!(result, "Hello World");
-        Ok(())
-    });
-}
-
-// This test is _really_ disabled as ic-ref seem to have an issue with cycle transfer.
-// We are investigating and will re-enable this.
-// TODO: re-enable this test when the issue of cycle transfer in ic-ref is fixed.
-// #[ignore]
-// #[test]
-// fn wallet_canister_funds() {
-//     with_wallet_canister(|agent, wallet_id| async move {
-//         let alice = interfaces::Wallet::create(&agent, wallet_id);
-//         let bob = interfaces::Wallet::create(&agent, create_wallet_canister(&agent).await?);
-//
-//         let (alice_previous_balance,) = alice.cycle_balance().call().await?;
-//         let (bob_previous_balance,) = bob.cycle_balance().call().await?;
-//
-//         alice
-//             .send_cycles(&bob, 1_000_000)
-//             .call_and_wait(create_waiter())
-//             .await?;
-//
-//         let (bob_balance,) = bob.cycle_balance().call().await?;
-//
-//         let (alice_balance,) = alice.cycle_balance().call().await?;
-//         eprintln!(
-//             "Alice previous: {}\n      current:  {}",
-//             alice_previous_balance, alice_balance
-//         );
-//         eprintln!(
-//             "Bob   previous: {}\n      current:  {}",
-//             bob_previous_balance, bob_balance
-//         );
-//         assert!(
-//             bob_balance > bob_previous_balance + 500_000,
-//             "Wrong: {} > {}",
-//             bob_balance,
-//             bob_previous_balance + 500_000
-//         );
-//         assert!(alice_balance < alice_previous_balance - 500_000);
-//
-//         Ok(())
-//     });
-// }

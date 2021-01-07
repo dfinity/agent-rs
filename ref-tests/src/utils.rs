@@ -93,48 +93,6 @@ pub async fn create_universal_canister(agent: &Agent) -> Result<Principal, Box<d
     Ok(canister_id)
 }
 
-pub async fn create_wallet_canister(agent: &Agent) -> Result<Principal, Box<dyn Error>> {
-    let canister_env = std::env::var("IC_WALLET_CANISTER_PATH")
-        .expect("Need to specify the IC_WALLET_CANISTER_PATH environment variable.");
-
-    let canister_path = Path::new(&canister_env);
-
-    let canister_wasm = if !canister_path.exists() {
-        panic!("Could not find the wallet canister WASM file.");
-    } else {
-        std::fs::read(&canister_path).expect("Could not read file.")
-    };
-
-    let ic00 = ManagementCanister::create(&agent);
-
-    #[derive(CandidType)]
-    struct Input {
-        amount: Option<candid::Nat>,
-    }
-
-    #[derive(Deserialize)]
-    struct Output {
-        canister_id: Principal,
-    }
-
-    // Specifying None for num_cycles will cause the canister to be created with
-    // sufficiently large number of cycles that should allow it to exist without
-    // needing to be refilled for a couple of months.
-    let (Output { canister_id },) = ic00
-        .update_("provisional_create_canister_with_cycles")
-        .with_arg(Input { amount: None })
-        .build()
-        .call_and_wait(create_waiter())
-        .await?;
-
-    ic00.install_code(&canister_id, &canister_wasm)
-        .with_raw_arg(vec![])
-        .call_and_wait(create_waiter())
-        .await?;
-
-    Ok(canister_id)
-}
-
 pub fn with_universal_canister<F, R>(f: F)
 where
     R: Future<Output = Result<(), Box<dyn Error>>>,
@@ -142,17 +100,6 @@ where
 {
     with_agent(|agent| async move {
         let canister_id = create_universal_canister(&agent).await?;
-        f(agent, canister_id).await
-    })
-}
-
-pub fn with_wallet_canister<F, R>(f: F)
-where
-    R: Future<Output = Result<(), Box<dyn Error>>>,
-    F: FnOnce(Agent, Principal) -> R,
-{
-    with_agent(|agent| async move {
-        let canister_id = create_wallet_canister(&agent).await?;
         f(agent, canister_id).await
     })
 }

@@ -33,13 +33,6 @@ jobs:
           token: ${{ secrets.IC_REF_TOKEN }}
           path: ic-ref
           ref: ${{ matrix.spec }}
-      - uses: actions/checkout@v2
-        with:
-          repository: 'dfinity/wallet-rs'
-          # Personal Read-only Access Token created by hans.larsen@dfinity.org
-          token: ${{ secrets.IC_REF_TOKEN }}
-          path: wallet-rs
-          ref: c39ce85f9736a2b0496d91ebaf93f3f3cc4cb88f
 
       - name: Cache ~/.cabal/store
         uses: actions/cache@v2
@@ -85,12 +78,6 @@ jobs:
           cargo build --target wasm32-unknown-unknown --release
           cp target/wasm32-unknown-unknown/release/universal_canister.wasm $HOME/canister.wasm
 
-      - name: Build wallet canister
-        run: |
-          cd wallet-rs/wallet
-          sh build.sh
-          cp target/wasm32-unknown-unknown/release/wallet-opt.wasm $HOME/wallet.wasm
-
       - name: Run Integration Tests
         run: |
           set -ex
@@ -98,7 +85,6 @@ jobs:
           sleep 1
           export IC_REF_PORT=$(cat $HOME/ic_ref_port)
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
-          export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
           cd main/ref-tests
           cargo test --all-features -- --ignored
           killall ic-ref
