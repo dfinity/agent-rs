@@ -116,35 +116,9 @@ pub struct CreateResult {
     pub canister_id: Principal,
 }
 
-#[derive(Deserialize)]
+#[derive(CandidType, Deserialize)]
 pub struct CallResult {
     pub r#return: Vec<u8>,
-}
-
-/// Due to https://github.com/dfinity/candid/issues/148 we need to manually
-/// implement CandidType trait (for now).
-/// TODO: reuse derive(CandidType) once the issue above is fixed.
-impl CandidType for CallResult {
-    fn id() -> TypeId {
-        TypeId::of::<Self>()
-    }
-
-    fn _ty() -> Type {
-        Type::Record(vec![Field {
-            id: Label::Named("return".to_owned()),
-            ty: Type::Vec(Box::new(Type::Nat8)),
-        }])
-    }
-
-    fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
-    where
-        S: Serializer,
-    {
-        use candid::types::Compound;
-
-        let mut compound = serializer.serialize_struct()?;
-        compound.serialize_element(&self.r#return)
-    }
 }
 
 impl Wallet {
