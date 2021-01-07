@@ -16,7 +16,7 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
 async-trait = "0.1.40"
-candid = "0.6.1"
+candid = "0.6.12"
 delay = "0.3.0"
 ic-agent = { path = "../ic-agent", version = "0.1.0" }
 ic-types = { path = "../ic-types", version = "0.1.2" }
