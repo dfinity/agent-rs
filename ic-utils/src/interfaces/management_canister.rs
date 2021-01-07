@@ -393,7 +393,6 @@ impl<'agent> Canister<'agent, ManagementCanister> {
     /// The return value is unknown to any part of the IC at time of the submission of this call.
     /// A new return value is generated for each call to this method.
     pub fn raw_rand<'canister: 'agent>(&'canister self) -> impl 'agent + AsyncCall<(Vec<u8>,)> {
-        #[derive(Deserialize)]
         self.update_("raw_rand")
             .build()
             .map(|result: (Vec<u8>,)| (result.0,))
