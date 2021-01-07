@@ -241,6 +241,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let arg = blob_from_arguments(t.arg_value.as_deref(), &t.arg, &method_type)?;
             let result = match &opts.subcommand {
                 SubCommand::Update(_) => {
+                    // We need to fetch the root key for updates.
+                    agent.fetch_root_key().await?;
+
                     let mut builder = agent.update(&t.canister_id, &t.method_name);
 
                     if let Some(d) = expire_after {

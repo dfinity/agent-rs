@@ -478,7 +478,7 @@ mod management_canister {
                 .canister_status(&canister_id)
                 .call_and_wait(create_waiter())
                 .await?;
-            assert_eq!(result.0.cycles, 0 as u64);
+            assert_eq!(result.0.cycles, 0_u64);
 
             // cycle balance is max_canister_balance when creating with
             // provisional_create_canister_with_cycles(None)
