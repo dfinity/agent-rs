@@ -1,8 +1,8 @@
 //! Types and traits dealing with identity across the Internet Computer.
 use crate::export::Principal;
 
-pub(crate) mod basic;
 pub(crate) mod anonymous;
+pub(crate) mod basic;
 pub use basic::{BasicIdentity, PemError};
 
 #[derive(Clone, Debug)]

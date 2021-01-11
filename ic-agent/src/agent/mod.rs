@@ -314,10 +314,7 @@ impl Agent {
     {
         let request_id = to_request_id(&request)?;
         let msg = self.construct_message(&request_id);
-        let signature = self
-            .identity
-            .sign(&msg)
-            .map_err(AgentError::SigningError)?;
+        let signature = self.identity.sign(&msg).map_err(AgentError::SigningError)?;
         let bytes = self
             .execute(
                 Method::POST,
@@ -336,10 +333,7 @@ impl Agent {
     async fn submit_endpoint(&self, request: AsyncContent) -> Result<RequestId, AgentError> {
         let request_id = to_request_id(&request)?;
         let msg = self.construct_message(&request_id);
-        let signature = self
-            .identity
-            .sign(&msg)
-            .map_err(AgentError::SigningError)?;
+        let signature = self.identity.sign(&msg).map_err(AgentError::SigningError)?;
         let _ = self
             .execute(
                 Method::POST,

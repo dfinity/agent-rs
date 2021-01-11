@@ -12,7 +12,7 @@ impl Identity for AnonymousIdentity {
     fn sign(&self, _blob: &[u8]) -> Result<Signature, String> {
         Ok(Signature {
             signature: None,
-            public_key: None
+            public_key: None,
         })
     }
 }
