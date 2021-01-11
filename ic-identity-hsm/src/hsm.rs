@@ -109,13 +109,13 @@ impl Identity for HardwareIdentity {
     fn sender(&self) -> Result<Principal, String> {
         Ok(Principal::self_authenticating(&self.public_key))
     }
-    fn sign(&self, msg: &[u8], _principal: &Principal) -> Result<Signature, String> {
+    fn sign(&self, msg: &[u8]) -> Result<Signature, String> {
         let hash = hash_message(msg);
         let signature = self.sign_hash(&hash)?;
 
         Ok(Signature {
-            public_key: self.public_key.clone(),
-            signature,
+            public_key: Some(self.public_key.clone()),
+            signature: Some(signature),
         })
     }
 }
