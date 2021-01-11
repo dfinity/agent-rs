@@ -54,7 +54,7 @@ impl AgentBuilder {
 
     /// Same as [with_identity], but provides a boxed implementation instead
     /// of a direct type.
-    pub fn with_boxed_identity(self, identity: Box<impl 'static + Identity + Send + Sync>) -> Self {
+    pub fn with_boxed_identity(self, identity: Box<dyn Identity + Send + Sync>) -> Self {
         AgentBuilder {
             config: AgentConfig {
                 identity,

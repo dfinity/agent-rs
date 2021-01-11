@@ -3,7 +3,8 @@ use crate::canister::{Argument, CanisterBuilder};
 use crate::Canister;
 use async_trait::async_trait;
 use candid::de::ArgumentDecoder;
-use candid::{decode_args, CandidType};
+use candid::types::{Field, Label, Serializer, Type, TypeId};
+use candid::{decode_args, CandidType, Deserialize};
 use delay::Waiter;
 use ic_agent::agent::UpdateBuilder;
 use ic_agent::export::Principal;
@@ -44,16 +45,25 @@ where
     }
 
     pub fn build(self) -> Result<impl 'agent + AsyncCall<Out>, AgentError> {
+        #[derive(CandidType)]
+        struct In {
+            canister: Principal,
+            method_name: String,
+            args: Vec<u8>,
+            cycles: u64,
+        }
         Ok(self
             .wallet
-            .update_("call")
-            .with_arg(self.destination)
-            .with_arg(self.method_name)
-            .with_arg(self.arg.serialize()?.to_vec())
-            .with_arg(self.amount)
+            .update_("wallet_call")
+            .with_arg(In {
+                canister: self.destination,
+                method_name: self.method_name,
+                args: self.arg.serialize()?.to_vec(),
+                cycles: self.amount,
+            })
             .build()
-            .and_then(|(result,): (Vec<u8>,)| async move {
-                decode_args::<Out>(result.as_slice())
+            .and_then(|(result,): (CallResult,)| async move {
+                decode_args::<Out>(result.r#return.as_slice())
                     .map_err(|e| AgentError::CandidError(Box::new(e)))
             }))
     }
@@ -88,8 +98,28 @@ where
 }
 
 /// A wallet canister interface, for the standard wallet provided by DFINITY.
-/// This interface implement most methods conveniently for the user.
+/// This interface implements most methods conveniently for the user.
 pub struct Wallet;
+
+#[derive(CandidType, Deserialize)]
+pub struct BalanceResult {
+    pub amount: u64,
+}
+
+#[derive(CandidType, Deserialize)]
+pub struct ReceiveResult {
+    pub accepted: u64,
+}
+
+#[derive(CandidType, Deserialize)]
+pub struct CreateResult {
+    pub canister_id: Principal,
+}
+
+#[derive(CandidType, Deserialize)]
+pub struct CallResult {
+    pub r#return: Vec<u8>,
+}
 
 impl Wallet {
     /// Create an instance of a [Canister] implementing the Wallet interface
@@ -150,20 +180,56 @@ impl<'agent> Canister<'agent, Wallet> {
     }
 
     /// Get the balance.
-    pub fn cycle_balance<'canister: 'agent>(&'canister self) -> impl 'agent + SyncCall<(u64,)> {
-        self.query_("cycle_balance").build()
+    pub fn wallet_balance<'canister: 'agent>(
+        &'canister self,
+    ) -> impl 'agent + SyncCall<(BalanceResult,)> {
+        self.query_("wallet_balance").build()
     }
 
     /// Send cycles to another (hopefully Wallet) canister.
-    pub fn send_cycles<'canister: 'agent>(
+    pub fn wallet_send<'canister: 'agent>(
         &'canister self,
         destination: &'_ Canister<'agent, Wallet>,
         amount: u64,
     ) -> impl 'agent + AsyncCall<()> {
-        self.update_("send_cycles")
-            .with_arg(destination.canister_id_())
-            .with_arg(amount)
+        #[derive(CandidType)]
+        struct In {
+            canister: Principal,
+            amount: u64,
+        }
+
+        self.update_("wallet_send")
+            .with_arg(In {
+                canister: destination.canister_id_().clone(),
+                amount,
+            })
             .build()
+    }
+
+    /// Send cycles to another (hopefully Wallet) canister.
+    pub fn wallet_receive<'canister: 'agent>(
+        &'canister self,
+    ) -> impl 'agent + AsyncCall<(ReceiveResult,)> {
+        self.update_("wallet_receive")
+            .build()
+            .map(|result: (ReceiveResult,)| (result.0,))
+    }
+
+    pub fn wallet_create_canister<'canister: 'agent>(
+        &'canister self,
+        cycles: u64,
+        controller: Option<Principal>,
+    ) -> impl 'agent + AsyncCall<(CreateResult,)> {
+        #[derive(CandidType)]
+        struct In {
+            cycles: u64,
+            controller: Option<Principal>,
+        }
+
+        self.update_("wallet_create_canister")
+            .with_arg(In { cycles, controller })
+            .build()
+            .map(|result: (CreateResult,)| (result.0,))
     }
 
     /// Forward a call to another canister, including an amount of cycles
@@ -172,6 +238,7 @@ impl<'agent> Canister<'agent, Wallet> {
         &'canister self,
         destination: &'canister Canister<'canister>,
         method_name: M,
+        arg: Argument,
         amount: u64,
     ) -> CallForwarder<'agent, 'canister, Out>
     where
@@ -182,7 +249,7 @@ impl<'agent> Canister<'agent, Wallet> {
             destination: destination.canister_id_().clone(),
             method_name: method_name.into(),
             amount,
-            arg: Argument::default(),
+            arg,
             phantom_out: std::marker::PhantomData,
         }
     }

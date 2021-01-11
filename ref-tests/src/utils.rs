@@ -1,4 +1,3 @@
-use candid::CandidType;
 use delay::Delay;
 use ic_agent::export::Principal;
 use ic_agent::identity::BasicIdentity;
@@ -6,7 +5,6 @@ use ic_agent::Agent;
 use ic_utils::call::AsyncCall;
 use ic_utils::interfaces::ManagementCanister;
 use ring::signature::Ed25519KeyPair;
-use serde::Deserialize;
 use std::error::Error;
 use std::future::Future;
 use std::path::Path;
@@ -106,24 +104,9 @@ pub async fn create_wallet_canister(agent: &Agent) -> Result<Principal, Box<dyn 
     };
 
     let ic00 = ManagementCanister::create(&agent);
-
-    #[derive(CandidType)]
-    struct Input {
-        amount: Option<candid::Nat>,
-    }
-
-    #[derive(Deserialize)]
-    struct Output {
-        canister_id: Principal,
-    }
-
-    // Specifying None for num_cycles will cause the canister to be created with
-    // sufficiently large number of cycles that should allow it to exist without
-    // needing to be refilled for a couple of months.
-    let (Output { canister_id },) = ic00
-        .update_("provisional_create_canister_with_cycles")
-        .with_arg(Input { amount: None })
-        .build()
+    let provisional_amount = 1 << 40;
+    let (canister_id,) = ic00
+        .provisional_create_canister_with_cycles(Some(provisional_amount))
         .call_and_wait(create_waiter())
         .await?;
 

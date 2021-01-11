@@ -2,10 +2,13 @@
 //!
 //! Contrary to ic-ref.rs, these tests are not meant to match any other tests. They're
 //! integration tests with a running IC-Ref.
+use ic_agent::export::Principal;
 use ic_agent::{AgentError, HttpErrorPayload};
 use ic_utils::call::AsyncCall;
 use ic_utils::call::SyncCall;
-use ic_utils::{interfaces, Canister};
+use ic_utils::interfaces::management_canister::{InstallMode, StatusCallResult};
+use ic_utils::interfaces::{ManagementCanister, Wallet};
+use ic_utils::{Argument, Canister};
 use ref_tests::universal_canister::payload;
 use ref_tests::{
     create_universal_canister, create_waiter, create_wallet_canister, with_universal_canister,
@@ -86,11 +89,11 @@ fn canister_reject_call() {
     // try to call a wallet method, but on the universal canister.
     // this lets us look up the reject code and reject message in the certificate.
     with_universal_canister(|agent, wallet_id| async move {
-        let alice = interfaces::Wallet::create(&agent, wallet_id);
-        let bob = interfaces::Wallet::create(&agent, create_wallet_canister(&agent).await?);
+        let alice = Wallet::create(&agent, wallet_id);
+        let bob = Wallet::create(&agent, create_wallet_canister(&agent).await?);
 
         let result = alice
-            .send_cycles(&bob, 1_000_000)
+            .wallet_send(&bob, 1_000_000)
             .call_and_wait(create_waiter())
             .await;
 
@@ -98,7 +101,7 @@ fn canister_reject_call() {
             result,
             Err(AgentError::ReplicaError {
                 reject_code: 3,
-                reject_message: "method does not exist: send_cycles".to_string()
+                reject_message: "method does not exist: wallet_send".to_string()
             })
         );
 
@@ -110,7 +113,7 @@ fn canister_reject_call() {
 #[test]
 fn wallet_canister_forward() {
     with_wallet_canister(|agent, wallet_id| async move {
-        let wallet = interfaces::Wallet::create(&agent, wallet_id);
+        let wallet = Wallet::create(&agent, wallet_id);
 
         let universal_id = create_universal_canister(&agent).await?;
         let universal = Canister::builder()
@@ -134,43 +137,87 @@ fn wallet_canister_forward() {
     });
 }
 
-// This test is _really_ disabled as ic-ref seem to have an issue with cycle transfer.
-// We are investigating and will re-enable this.
-// TODO: re-enable this test when the issue of cycle transfer in ic-ref is fixed.
-// #[ignore]
-// #[test]
-// fn wallet_canister_funds() {
-//     with_wallet_canister(|agent, wallet_id| async move {
-//         let alice = interfaces::Wallet::create(&agent, wallet_id);
-//         let bob = interfaces::Wallet::create(&agent, create_wallet_canister(&agent).await?);
-//
-//         let (alice_previous_balance,) = alice.cycle_balance().call().await?;
-//         let (bob_previous_balance,) = bob.cycle_balance().call().await?;
-//
-//         alice
-//             .send_cycles(&bob, 1_000_000)
-//             .call_and_wait(create_waiter())
-//             .await?;
-//
-//         let (bob_balance,) = bob.cycle_balance().call().await?;
-//
-//         let (alice_balance,) = alice.cycle_balance().call().await?;
-//         eprintln!(
-//             "Alice previous: {}\n      current:  {}",
-//             alice_previous_balance, alice_balance
-//         );
-//         eprintln!(
-//             "Bob   previous: {}\n      current:  {}",
-//             bob_previous_balance, bob_balance
-//         );
-//         assert!(
-//             bob_balance > bob_previous_balance + 500_000,
-//             "Wrong: {} > {}",
-//             bob_balance,
-//             bob_previous_balance + 500_000
-//         );
-//         assert!(alice_balance < alice_previous_balance - 500_000);
-//
-//         Ok(())
-//     });
-// }
+#[ignore]
+#[test]
+fn wallet_canister_create_and_install() {
+    with_wallet_canister(|agent, wallet_id| async move {
+        let wallet = Wallet::create(&agent, wallet_id);
+
+        let (create_result,) = wallet
+            .wallet_create_canister(1_000_000, None)
+            .call_and_wait(create_waiter())
+            .await?;
+
+        let ic00 = Canister::builder()
+            .with_agent(&agent)
+            .with_canister_id(Principal::management_canister())
+            .build()?;
+
+        #[derive(candid::CandidType)]
+        struct CanisterInstall {
+            mode: InstallMode,
+            canister_id: Principal,
+            wasm_module: Vec<u8>,
+            arg: Vec<u8>,
+            compute_allocation: Option<candid::Nat>,
+            memory_allocation: Option<candid::Nat>,
+        }
+
+        let install_config = CanisterInstall {
+            mode: InstallMode::Install,
+            canister_id: create_result.canister_id,
+            wasm_module: b"\0asm\x01\0\0\0".to_vec(),
+            arg: Argument::default().serialize()?,
+            compute_allocation: None,
+            memory_allocation: None,
+        };
+
+        let mut args = Argument::default();
+        args.push_idl_arg(install_config);
+
+        wallet
+            .call(&ic00, "install_code", args, 0)
+            .call_and_wait(create_waiter())
+            .await?;
+
+        Ok(())
+    });
+}
+
+#[ignore]
+#[test]
+fn wallet_canister_funds() {
+    with_wallet_canister(|agent, wallet_id| async move {
+        let alice = Wallet::create(&agent, wallet_id);
+        let bob = Wallet::create(&agent, create_wallet_canister(&agent).await?);
+
+        let (alice_previous_balance,) = alice.wallet_balance().call().await?;
+        let (bob_previous_balance,) = bob.wallet_balance().call().await?;
+
+        alice
+            .wallet_send(&bob, 1_000_000)
+            .call_and_wait(create_waiter())
+            .await?;
+
+        let (bob_balance,) = bob.wallet_balance().call().await?;
+
+        let (alice_balance,) = alice.wallet_balance().call().await?;
+        eprintln!(
+            "Alice previous: {}\n      current:  {}",
+            alice_previous_balance.amount, alice_balance.amount
+        );
+        eprintln!(
+            "Bob   previous: {}\n      current:  {}",
+            bob_previous_balance.amount, bob_balance.amount
+        );
+        assert!(
+            bob_balance.amount > bob_previous_balance.amount + 500_000,
+            "Wrong: {} > {}",
+            bob_balance.amount,
+            bob_previous_balance.amount + 500_000
+        );
+        assert!(alice_balance.amount < alice_previous_balance.amount - 500_000);
+
+        Ok(())
+    });
+}

@@ -3,7 +3,7 @@ use crate::{Identity, Signature};
 use num_bigint::BigUint;
 use ring::signature::{Ed25519KeyPair, KeyPair};
 use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, Sequence};
-use simple_asn1::{to_der, OID};
+use simple_asn1::{oid, to_der, OID};
 use thiserror::Error;
 
 /// An error happened while reading a PEM file to create a BasicIdentity.
@@ -75,12 +75,7 @@ impl Identity for BasicIdentity {
 fn der_encode_public_key(public_key: Vec<u8>) -> Vec<u8> {
     // see Section 4 "SubjectPublicKeyInfo" in https://tools.ietf.org/html/rfc8410
 
-    let id_ed25519 = OID::new(vec![
-        BigUint::from(1u32),
-        BigUint::from(3u32),
-        BigUint::from(101u32),
-        BigUint::from(112u32),
-    ]);
+    let id_ed25519 = oid!(1, 3, 101, 112);
     let algorithm = Sequence(0, vec![ObjectIdentifier(0, id_ed25519)]);
     let subject_public_key = BitString(0, public_key.len() * 8, public_key);
     let subject_public_key_info = Sequence(0, vec![algorithm, subject_public_key]);
