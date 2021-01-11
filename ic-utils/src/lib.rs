@@ -6,4 +6,4 @@ pub mod call;
 pub mod canister;
 pub mod interfaces;
 
-pub use canister::Canister;
+pub use canister::{Argument, Canister};

@@ -1,15 +1,15 @@
 //! Types and traits dealing with identity across the Internet Computer.
 use crate::export::Principal;
 
+pub(crate) mod anonymous;
 pub(crate) mod basic;
-pub(crate) mod dummy;
 pub use basic::{BasicIdentity, PemError};
 
 #[derive(Clone, Debug)]
 pub struct Signature {
     /// This is the DER-encoded public key.
-    pub public_key: Vec<u8>,
-    pub signature: Vec<u8>,
+    pub public_key: Option<Vec<u8>>,
+    pub signature: Option<Vec<u8>>,
 }
 
 /// An Identity takes a request id and returns the [Signature]. Since it
@@ -23,8 +23,6 @@ pub trait Identity: Send + Sync {
     fn sender(&self) -> Result<Principal, String>;
 
     /// Sign a blob, the concatenation of the domain separator & request ID,
-    /// creating the sender signature, with the principal passed in.
-    /// The principal should be
-    /// the same returned by the call to `sender()`.
-    fn sign(&self, blob: &[u8], principal: &Principal) -> Result<Signature, String>;
+    /// creating the sender signature.
+    fn sign(&self, blob: &[u8]) -> Result<Signature, String>;
 }
