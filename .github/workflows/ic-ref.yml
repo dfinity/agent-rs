@@ -5,9 +5,10 @@ on:
     branches:
       - next
   pull_request_target:
-    if: github.repository != 'dfinity/agent-rs'
+  # Also run on every pull_request that changes the workflow, as the repo.
   pull_request:
-    if: github.repository == 'dfinity/agent-rs'
+    paths:
+      - '.github/**'
 
 jobs:
   test:
