@@ -132,7 +132,7 @@ jobs:
           pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --test
           pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --list-slots
           pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --list-token-slots
-          pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH -k --login --slot $HSM_SLOT -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
+          pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH -k --login --slot-index $HSM_SLOT -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
           $HOME/bin/ic-ref --pick-port --write-port-to $HOME/ic_ref_port &
           sleep 1
           export IC_REF_PORT=$(cat $HOME/ic_ref_port)
