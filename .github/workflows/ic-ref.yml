@@ -107,8 +107,8 @@ jobs:
 
       - name: Install SoftHSM Linux
         #if: matrix.config.build == 'linux-stable'
+        #sudo add-apt-repository "deb http://archive.ubuntu.com/ubuntu/ eoan universe"
         run: |
-          sudo add-apt-repository "deb http://archive.ubuntu.com/ubuntu/ eoan universe"
           sudo apt-get install -f libsofthsm2 opensc-pkcs11
           sudo usermod -a -G softhsm $USER
           echo "INSTALLED_PKCS11_SOFTHSM_MODULE=/usr/lib/softhsm/libsofthsm2.so" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
