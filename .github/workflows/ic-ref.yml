@@ -112,6 +112,9 @@ jobs:
           sudo apt-get install -f libsofthsm2 opensc-pkcs11
           sudo usermod -a -G softhsm $USER
           echo "INSTALLED_PKCS11_SOFTHSM_MODULE=/usr/lib/softhsm/libsofthsm2.so" >>$GITHUB_ENV
+          echo "SOFTHSM2_CONF=$HOME/softhsm.conf" >>$GITHUB_ENV
+          echo "directories.tokendir = $HOME/softhsm/tokens/" >$HOME/softhsm.conf
+          mkdir -p $HOME/softhsm/tokens
 
       # ic-ref test only run on linux
       #- name: Install SoftHSM Macos
