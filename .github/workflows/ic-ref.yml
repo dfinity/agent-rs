@@ -105,23 +105,23 @@ jobs:
         env:
           RUST_BACKTRACE: 1
 
-      - name: Install SoftHSM (linux)
-        if: matrix.config.build == 'linux-stable'
-        run:|
+      - name: Install SoftHSM Linux
+        #if: matrix.config.build == 'linux-stable'
+        run: |
           sudo add-apt-repository "deb http://archive.ubuntu.com/ubuntu/ eoan universe"
           sudo apt-get install -f libsofthsm2 opensc-pkcs11
           sudo usermod -a -G softhsm $USER
           echo "INSTALLED_PKCS11_SOFTHSM_MODULE=/usr/lib/softhsm/libsofthsm2.so" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Install SoftHSM (macos)
-        if: matrix.config.os == 'macos-latest'
-        run:|
+      - name: Install SoftHSM Macos
+        #if: matrix.config.os == 'macos-latest'
+        run: |
           brew install -f softhsm opensc
           echo "INSTALLED_PKCS11_SOFTHSM_MODULE=/usr/local/lib/softhsm/libsofthsm2.so" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "PKCS11_TOOL=/Library/OpenSC/bin/pkcs11-tool" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           #echo "PKCS11_MODULE=/Library/OpenSC/lib/opensc-pkcs11.so" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Run Integration Tests (SoftHSM)
+      - name: Run Integration Tests with SoftHSM
         run: |
           set -ex
           softhsm2-util --init-token --slot 0 --label "agent-rs-token" --so-pin $HSM_SO_PIN --pin $HSM_PIN
@@ -139,7 +139,6 @@ jobs:
           HSM_PKCS11_LIBRARY_PATH: ${{ env.INSTALLED_PKCS11_SOFTHSM_MODULE }}
           HSM_SO_PIN: 123456
           HSM_PIN: 1234
-
 
       - name: Run Doc Tests
         run: |
