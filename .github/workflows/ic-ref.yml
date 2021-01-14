@@ -129,8 +129,6 @@ jobs:
         run: |
           set -ex
           softhsm2-util --init-token --slot $HSM_SLOT --label "agent-rs-token" --so-pin $HSM_SO_PIN --pin $HSM_PIN
-          echo "PATH: $PATH"
-          find / -name pkcs11-tool -print
           pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --test
           pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH -k --slot $HSM_SLOT -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
           $HOME/bin/ic-ref --pick-port --write-port-to $HOME/ic_ref_port &
