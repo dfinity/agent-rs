@@ -106,8 +106,7 @@ jobs:
           RUST_BACKTRACE: 1
 
       - name: Install SoftHSM (linux)
-        if: matrix.config.build = 'linux-stable'
-        uses: actions/checkout@v2
+        if: matrix.config.build == 'linux-stable'
         run:|
           sudo add-apt-repository "deb http://archive.ubuntu.com/ubuntu/ eoan universe"
           sudo apt-get install -f libsofthsm2 opensc-pkcs11
@@ -115,8 +114,7 @@ jobs:
           echo "INSTALLED_PKCS11_SOFTHSM_MODULE=/usr/lib/softhsm/libsofthsm2.so" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Install SoftHSM (macos)
-        if: matrix.config.os = 'macos-latest'
-        uses: actions/checkout@v2
+        if: matrix.config.os == 'macos-latest'
         run:|
           brew install -f softhsm opensc
           echo "INSTALLED_PKCS11_SOFTHSM_MODULE=/usr/local/lib/softhsm/libsofthsm2.so" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
