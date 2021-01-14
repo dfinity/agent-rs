@@ -103,24 +103,6 @@ impl HardwareIdentity {
             public_key,
         })
     }
-
-    // create an ECDSA key to be later used with the new() function.
-    pub fn create_key<P, PinFn>(
-        pkcs11_lib_path: P,
-        slot_id: CK_SLOT_ID,
-        key_id: &str,
-        pin_fn: PinFn,
-    ) -> Result<(), HardwareIdentityError>
-    where
-        P: AsRef<Path>,
-        PinFn: FnOnce() -> Result<String, String>,
-    {
-        let ctx = Ctx::new_and_initialize(pkcs11_lib_path)?;
-        let session_handle = open_session(&ctx, slot_id)?;
-        let logged_in = login_if_required(&ctx, session_handle, pin_fn, slot_id)?;
-        let key_id = str_to_key_id(key_id)?;
-        Ok(())
-    }
 }
 
 impl Identity for HardwareIdentity {
