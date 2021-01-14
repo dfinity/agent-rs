@@ -113,13 +113,14 @@ jobs:
           sudo usermod -a -G softhsm $USER
           echo "INSTALLED_PKCS11_SOFTHSM_MODULE=/usr/lib/softhsm/libsofthsm2.so" >>$GITHUB_ENV
 
-      - name: Install SoftHSM Macos
-        #if: matrix.config.os == 'macos-latest'
-        run: |
-          brew install -f softhsm opensc
-          echo "INSTALLED_PKCS11_SOFTHSM_MODULE=/usr/local/lib/softhsm/libsofthsm2.so" >>$GITHUB_ENV
-          echo "PKCS11_TOOL=/Library/OpenSC/bin/pkcs11-tool" >>$GITHUB_ENV
-          #echo "PKCS11_MODULE=/Library/OpenSC/lib/opensc-pkcs11.so" >>$GITHUB_ENV
+      # ic-ref test only run on linux
+      #- name: Install SoftHSM Macos
+      #  if: matrix.config.os == 'macos-latest'
+      #  run: |
+      #    brew install -f softhsm opensc
+      #    echo "INSTALLED_PKCS11_SOFTHSM_MODULE=/usr/local/lib/softhsm/libsofthsm2.so" >>$GITHUB_ENV
+      #    echo "PKCS11_TOOL=/Library/OpenSC/bin/pkcs11-tool" >>$GITHUB_ENV
+      #    #echo "PKCS11_MODULE=/Library/OpenSC/lib/opensc-pkcs11.so" >>$GITHUB_ENV
 
       - name: Run Integration Tests with SoftHSM
         run: |
