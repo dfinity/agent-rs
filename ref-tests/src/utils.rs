@@ -1,13 +1,14 @@
 use delay::Delay;
 use ic_agent::export::Principal;
 use ic_agent::identity::BasicIdentity;
-use ic_agent::Agent;
+use ic_agent::{Agent, Identity};
 use ic_utils::call::AsyncCall;
 use ic_utils::interfaces::ManagementCanister;
 use ring::signature::Ed25519KeyPair;
 use std::error::Error;
 use std::future::Future;
 use std::path::Path;
+use ic_identity_hsm::HardwareIdentity;
 
 pub fn create_waiter() -> Delay {
     Delay::builder()
@@ -16,7 +17,32 @@ pub fn create_waiter() -> Delay {
         .build()
 }
 
-pub async fn create_identity() -> Result<BasicIdentity, String> {
+pub async fn create_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
+    if std::env::var("HSM_PKCS11_LIBRARY_PATH").is_ok() {
+        let id = create_hsm_identity().await?;
+        Ok(Box::new(id))
+    } else {
+        let id = create_basic_identity().await?;
+        Ok(Box::new(id))
+    }
+}
+
+pub async fn create_hsm_identity() -> Result<HardwareIdentity, String> {
+    let path = std::env::var("HSM_PKCS11_LIBRARY_PATH")
+        .expect("Need to specify the HSM_PKCS11_LIBRARY_PATH environment variable");
+    let slot = 0;
+    let key = std::env::var("HSM_KEY_ID")
+        .expect("Need to specify the HSM_KEY_ID environment variable");
+    HardwareIdentity::new(path, slot, &key, get_hsm_pin)
+        .map_err(|e|format!("Unable to create hw identity: {}", e))
+}
+
+fn get_hsm_pin() -> Result<String, String> {
+    std::env::var("HSM_PIN")
+        .map_err(|_| "There is no HSM_PIN environment variable.".to_string())
+}
+
+pub async fn create_basic_identity() -> Result<BasicIdentity, String> {
     let rng = ring::rand::SystemRandom::new();
     let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
         .expect("Could not generate a key pair.");
@@ -26,7 +52,7 @@ pub async fn create_identity() -> Result<BasicIdentity, String> {
     ))
 }
 
-pub async fn create_agent(identity: BasicIdentity) -> Result<Agent, String> {
+pub async fn create_agent(identity: Box<dyn Identity + Send + Sync>) -> Result<Agent, String> {
     let port_env = std::env::var("IC_REF_PORT")
         .expect("Need to specify the IC_REF_PORT environment variable.");
     let port = port_env
@@ -35,7 +61,7 @@ pub async fn create_agent(identity: BasicIdentity) -> Result<Agent, String> {
 
     Agent::builder()
         .with_url(format!("http://127.0.0.1:{}", port))
-        .with_identity(identity)
+        .with_boxed_identity(identity)
         .build()
         .map_err(|e| format!("{:?}", e))
 }

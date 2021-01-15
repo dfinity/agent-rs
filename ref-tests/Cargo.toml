@@ -9,6 +9,7 @@ edition = "2018"
 candid = "0.6.12"
 delay = "0.3.0"
 ic-agent = { path = "../ic-agent" }
+ic-identity-hsm = { path = "../ic-identity-hsm" }
 ic-utils = { path = "../ic-utils", features = ["raw"] }
 openssl = "0.10.24"
 ring = "0.16.11"
