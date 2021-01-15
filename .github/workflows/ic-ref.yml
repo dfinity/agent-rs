@@ -128,6 +128,7 @@ jobs:
       - name: Run Integration Tests with SoftHSM
         run: |
           set -ex
+          softhsm2-util --version
           softhsm2-util --init-token --slot $HSM_SLOT --label "agent-rs-token" --so-pin $HSM_SO_PIN --pin $HSM_PIN
           #pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --test
           #pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --list-slots
