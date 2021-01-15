@@ -60,14 +60,14 @@ impl Identity for BasicIdentity {
     fn sender(&self) -> Result<Principal, String> {
         Ok(Principal::self_authenticating(&self.der_encoded_public_key))
     }
-    fn sign(&self, msg: &[u8], _principal: &Principal) -> Result<Signature, String> {
+    fn sign(&self, msg: &[u8]) -> Result<Signature, String> {
         let signature = self.key_pair.sign(msg.as_ref());
         // At this point we shall validate the signature in this first
         // skeleton version.
 
         Ok(Signature {
-            signature: signature.as_ref().to_vec(),
-            public_key: self.der_encoded_public_key.clone(),
+            signature: Some(signature.as_ref().to_vec()),
+            public_key: Some(self.der_encoded_public_key.clone()),
         })
     }
 }
