@@ -34,7 +34,8 @@ pub async fn create_hsm_identity() -> Result<HardwareIdentity, String> {
     let key =
         std::env::var("HSM_KEY_ID").expect("Need to specify the HSM_KEY_ID environment variable");
     HardwareIdentity::new(path, slot, &key, get_hsm_pin)
-        .map_err(|e| format!("Unable to create hw identity: {}", e))
+        .map_err(|_|"unable to create hw identity".into())
+        //.map_err(|e| format!("Unable to create hw identity: {}", e))
 }
 
 fn get_hsm_pin() -> Result<String, String> {

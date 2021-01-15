@@ -38,7 +38,6 @@ fn spec_compliance_claimed() {
 
 mod management_canister {
     use ic_agent::AgentError;
-    use ic_agent::Identity;
     use ic_utils::call::AsyncCall;
     use ic_utils::interfaces::management_canister::{CanisterStatus, InstallMode};
     use ic_utils::interfaces::ManagementCanister;
