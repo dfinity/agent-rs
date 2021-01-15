@@ -129,6 +129,7 @@ jobs:
         run: |
           set -ex
           softhsm2-util --version
+          ls -l $HSM_PKCS11_LIBRARY_PATH
           softhsm2-util --init-token --slot $HSM_SLOT --label "agent-rs-token" --so-pin $HSM_SO_PIN --pin $HSM_PIN
           #pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --test
           #pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --list-slots
@@ -140,7 +141,7 @@ jobs:
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
           export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
           cd main/ref-tests
-          cargo test --all-features -- --ignored --nocapture
+          cargo test --all-features -- --ignored --nocapture --test-threads=1
           killall ic-ref
         env:
           RUST_BACKTRACE: 1
