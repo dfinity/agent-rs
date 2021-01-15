@@ -18,12 +18,12 @@ pub fn create_waiter() -> Delay {
 }
 
 pub async fn create_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
-    if std::env::var("HSM_PKCS11_LIBRARY_PATH").is_ok() {
-        let id = create_hsm_identity().await?;
-        Ok(Box::new(id))
+    if std::env::var("HSM_PKCS11_LIBRARY_PATHX").is_ok() {
+        let hsm = create_hsm_identity().await?;
+        Ok(Box::new(hsm))
     } else {
-        let id = create_basic_identity().await?;
-        Ok(Box::new(id))
+        let basic = create_basic_identity().await?;
+        Ok(Box::new(basic))
     }
 }
 
