@@ -125,16 +125,28 @@ jobs:
       #    echo "PKCS11_TOOL=/Library/OpenSC/bin/pkcs11-tool" >>$GITHUB_ENV
       #    #echo "PKCS11_MODULE=/Library/OpenSC/lib/opensc-pkcs11.so" >>$GITHUB_ENV
 
-      - name: Run Integration Tests with SoftHSM
+      - name: Set up SoftHSM
         run: |
           set -ex
           softhsm2-util --version
           ls -l $HSM_PKCS11_LIBRARY_PATH
           softhsm2-util --init-token --slot $HSM_SLOT --label "agent-rs-token" --so-pin $HSM_SO_PIN --pin $HSM_PIN
+          pkcs11-tool -L
           #pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --test
           #pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --list-slots
           #pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --list-token-slots
           pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH -k --login --slot-index $HSM_SLOT -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
+          pkcs11-tool -L
+        env:
+          RUST_BACKTRACE: 1
+          HSM_PKCS11_LIBRARY_PATH: ${{ env.INSTALLED_PKCS11_SOFTHSM_MODULE }}
+          HSM_SO_PIN: 123456
+          HSM_PIN: 1234
+          HSM_SLOT: 0
+          HSM_KEY_ID: abcdef
+
+      - name: Run Integration Tests with SoftHSM
+        run: |
           $HOME/bin/ic-ref --pick-port --write-port-to $HOME/ic_ref_port &
           sleep 1
           export IC_REF_PORT=$(cat $HOME/ic_ref_port)
