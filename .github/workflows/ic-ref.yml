@@ -130,7 +130,8 @@ jobs:
           set -ex
           softhsm2-util --version
           ls -l $HSM_PKCS11_LIBRARY_PATH
-          softhsm2-util --init-token --slot 0 --label "agent-rs-token" --so-pin $HSM_SO_PIN --pin $HSM_PIN
+          softhsm2-util --init-token --slot 0 --label "agent-rs-token-0" --so-pin $HSM_SO_PIN --pin $HSM_PIN
+          softhsm2-util --init-token --slot 1 --label "agent-rs-token-1" --so-pin $HSM_SO_PIN --pin $HSM_PIN
           pkcs11-tool -L --module $HSM_PKCS11_LIBRARY_PATH
           #pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --test
           #pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --list-slots
