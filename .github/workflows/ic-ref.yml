@@ -131,12 +131,12 @@ jobs:
           softhsm2-util --version
           ls -l $HSM_PKCS11_LIBRARY_PATH
           softhsm2-util --init-token --slot $HSM_SLOT --label "agent-rs-token" --so-pin $HSM_SO_PIN --pin $HSM_PIN
-          # no slots: pkcs11-tool -L
+          pkcs11-tool -L --module $HSM_PKCS11_LIBRARY_PATH
           #pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --test
           #pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --list-slots
           #pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --list-token-slots
           pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH -k --login --slot-index $HSM_SLOT -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
-          pkcs11-tool -L
+          pkcs11-tool -L --module $HSM_PKCS11_LIBRARY_PATH
         env:
           RUST_BACKTRACE: 1
           HSM_PKCS11_LIBRARY_PATH: ${{ env.INSTALLED_PKCS11_SOFTHSM_MODULE }}
