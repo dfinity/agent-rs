@@ -18,7 +18,7 @@ pub fn create_waiter() -> Delay {
 }
 
 pub async fn create_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
-    if std::env::var("HSM_PKCS11_LIBRARY_PATHX").is_ok() {
+    if std::env::var("HSM_PKCS11_LIBRARY_PATH").is_ok() {
         let hsm = create_hsm_identity().await?;
         Ok(Box::new(hsm))
     } else {

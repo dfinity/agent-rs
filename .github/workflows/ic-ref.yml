@@ -139,7 +139,7 @@ jobs:
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
           export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
           cd main/ref-tests
-          cargo test --all-features -- --ignored
+          cargo test --all-features -- --ignored --nocapture
           killall ic-ref
         env:
           RUST_BACKTRACE: 1

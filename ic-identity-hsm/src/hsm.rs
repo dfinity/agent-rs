@@ -89,12 +89,17 @@ impl HardwareIdentity {
         P: AsRef<Path>,
         PinFn: FnOnce() -> Result<String, String>,
     {
+        println!("Ctx::new_and_initialize...");
         let ctx = Ctx::new_and_initialize(pkcs11_lib_path)?;
+        println!("open_session...");
         let session_handle = open_session(&ctx, slot_id)?;
+        println!("login_if_required...");
         let logged_in = login_if_required(&ctx, session_handle, pin_fn, slot_id)?;
         let key_id = str_to_key_id(key_id)?;
+        println!("get_der_encoded_public_key...");
         let public_key = get_der_encoded_public_key(&ctx, session_handle, &key_id)?;
 
+        println!("return HardwareIdentity.");
         Ok(HardwareIdentity {
             key_id,
             ctx,
@@ -146,7 +151,9 @@ where
     let login_required = token_info.flags & CKF_LOGIN_REQUIRED != 0;
 
     if login_required {
+        println!("call pin_fn...");
         let pin = pin_fn().map_err(HardwareIdentityError::UserPinRequired)?;
+        println!("ctx.login()...");
         ctx.login(session_handle, CKU_USER, Some(&pin))?;
     }
     Ok(login_required)
