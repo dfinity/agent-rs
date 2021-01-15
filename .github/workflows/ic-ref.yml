@@ -125,7 +125,7 @@ jobs:
       #    echo "PKCS11_TOOL=/Library/OpenSC/bin/pkcs11-tool" >>$GITHUB_ENV
       #    #echo "PKCS11_MODULE=/Library/OpenSC/lib/opensc-pkcs11.so" >>$GITHUB_ENV
 
-      - name: Set up SoftHSM
+      - name: Run Integration Tests with SoftHSM
         run: |
           set -ex
           softhsm2-util --version
@@ -135,18 +135,10 @@ jobs:
           #pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --test
           #pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --list-slots
           #pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --list-token-slots
-          pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH -k --login --slot-index $HSM_SLOT -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
+          pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH -k --login --slot-index 0 -d aaaaaa --key-type EC:prime256v1 --pin $HSM_PIN
+          pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH -k --login --slot-index 1 -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
           pkcs11-tool -L --module $HSM_PKCS11_LIBRARY_PATH
-        env:
-          RUST_BACKTRACE: 1
-          HSM_PKCS11_LIBRARY_PATH: ${{ env.INSTALLED_PKCS11_SOFTHSM_MODULE }}
-          HSM_SO_PIN: 123456
-          HSM_PIN: 1234
-          HSM_SLOT: 0
-          HSM_KEY_ID: abcdef
 
-      - name: Run Integration Tests with SoftHSM
-        run: |
           $HOME/bin/ic-ref --pick-port --write-port-to $HOME/ic_ref_port &
           sleep 1
           export IC_REF_PORT=$(cat $HOME/ic_ref_port)
@@ -160,7 +152,7 @@ jobs:
           HSM_PKCS11_LIBRARY_PATH: ${{ env.INSTALLED_PKCS11_SOFTHSM_MODULE }}
           HSM_SO_PIN: 123456
           HSM_PIN: 1234
-          HSM_SLOT: 0
+          HSM_SLOT: 1
           HSM_KEY_ID: abcdef
 
       - name: Run Doc Tests
