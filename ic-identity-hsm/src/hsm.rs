@@ -64,7 +64,7 @@ pub enum HardwareIdentityError {
     UserPinRequired(String),
 
     #[error("No such slot index ({0}")]
-    NoSuchSlotIndex(usize)
+    NoSuchSlotIndex(usize),
 }
 
 /// An identity based on an HSM
@@ -132,8 +132,10 @@ impl Identity for HardwareIdentity {
 
 fn get_slot_id(ctx: &Ctx, slot_index: usize) -> Result<CK_SLOT_ID, HardwareIdentityError> {
     let slots = ctx.get_slot_list(true)?;
-    slots.get(slot_index).ok_or(HardwareIdentityError::NoSuchSlotIndex(slot_index))
-        .map(|x|x.clone())
+    slots
+        .get(slot_index)
+        .ok_or(HardwareIdentityError::NoSuchSlotIndex(slot_index))
+        .map(|x| x.clone())
 }
 
 // We open a session for the duration of the lifetime of the HardwareIdentity.
