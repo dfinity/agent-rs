@@ -32,7 +32,8 @@ pub async fn create_hsm_identity() -> Result<HardwareIdentity, String> {
         .expect("Need to specify the HSM_PKCS11_LIBRARY_PATH environment variable");
     let slot_index = std::env::var("HSM_SLOT_INDEX")
         .expect("Need to specify the HSM_SLOT_INDEX environment variable");
-    let slot_index = slot_index.parse::<usize>()
+    let slot_index = slot_index
+        .parse::<usize>()
         .expect("Unable to parse HSM_SLOT_INDEX value");
     let key =
         std::env::var("HSM_KEY_ID").expect("Need to specify the HSM_KEY_ID environment variable");
