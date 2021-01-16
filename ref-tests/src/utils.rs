@@ -30,10 +30,12 @@ pub async fn create_identity() -> Result<Box<dyn Identity + Send + Sync>, String
 pub async fn create_hsm_identity() -> Result<HardwareIdentity, String> {
     let path = std::env::var("HSM_PKCS11_LIBRARY_PATH")
         .expect("Need to specify the HSM_PKCS11_LIBRARY_PATH environment variable");
-    let slot = 0;
+    let slot_index = std::env::var("HSM_SLOT_INDEX")
+        .expect("Need to specify the HSM_SLOT_INDEX environment variable");
+    let slot_index = slot_index.into();
     let key =
         std::env::var("HSM_KEY_ID").expect("Need to specify the HSM_KEY_ID environment variable");
-    HardwareIdentity::new(path, slot, &key, get_hsm_pin)
+    HardwareIdentity::new(path, slot_index, &key, get_hsm_pin)
         //.map_err(|_| "unable to create hw identity".into())
         .map_err(|e| format!("Unable to create hw identity: {}", e))
 }

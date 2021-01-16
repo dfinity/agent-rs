@@ -62,6 +62,9 @@ pub enum HardwareIdentityError {
 
     #[error("User PIN is required: {0}")]
     UserPinRequired(String),
+
+    #[error("No such slot index ({0}")]
+    NoSuchSlotIndex(usize)
 }
 
 /// An identity based on an HSM
@@ -81,7 +84,7 @@ impl HardwareIdentity {
     /// $ pkcs11-tool -k --slot $SLOT -d $KEY_ID --key-type EC:prime256v1 --pin $PIN
     pub fn new<P, PinFn>(
         pkcs11_lib_path: P,
-        slot_id: CK_SLOT_ID,
+        slot_index: usize,
         key_id: &str,
         pin_fn: PinFn,
     ) -> Result<HardwareIdentity, HardwareIdentityError>
@@ -91,6 +94,8 @@ impl HardwareIdentity {
     {
         println!("Ctx::new_and_initialize...");
         let ctx = Ctx::new_and_initialize(pkcs11_lib_path)?;
+        println!("get_slot_id...");
+        let slot_id = get_slot_id(&ctx, slot_index)?;
         println!("open_session...");
         let session_handle = open_session(&ctx, slot_id)?;
         println!("login_if_required...");
@@ -123,6 +128,12 @@ impl Identity for HardwareIdentity {
             signature: Some(signature),
         })
     }
+}
+
+fn get_slot_id(ctx: &Ctx, slot_index: usize) -> Result<CK_SLOT_ID, HardwareIdentityError> {
+    let slots = ctx.get_slot_list(true)?;
+    slots.get(slot_index).ok_or(HardwareIdentityError::NoSuchSlotIndex(slot_index))
+        .map(|x|x.clone())
 }
 
 // We open a session for the duration of the lifetime of the HardwareIdentity.
