@@ -125,7 +125,7 @@ mod management_canister {
                 .await?;
 
             // Each agent has their own identity.
-            let other_agent_identity = create_identity().await?;
+            let other_agent_identity = create_identity(true).await?;
             let other_agent_principal = other_agent_identity.sender()?;
             let other_agent = create_agent(other_agent_identity).await?;
             other_agent.fetch_root_key().await?;
@@ -412,7 +412,7 @@ mod management_canister {
                 .await?;
 
             // Create another agent with different identity.
-            let other_agent_identity = create_identity().await?;
+            let other_agent_identity = create_identity(true).await?;
             let other_agent = create_agent(other_agent_identity).await?;
             other_agent.fetch_root_key().await?;
             let other_ic00 = ManagementCanister::create(&other_agent);

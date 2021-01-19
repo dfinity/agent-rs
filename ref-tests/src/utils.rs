@@ -17,8 +17,9 @@ pub fn create_waiter() -> Delay {
         .build()
 }
 
-pub async fn create_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
-    if std::env::var("HSM_PKCS11_LIBRARY_PATH").is_ok() {
+// avoid errors: Unable to create hw identity: PKCS#11: CKR_CRYPTOKI_ALREADY_INITIALIZED (0x191)
+pub async fn create_identity(force_basic: bool) -> Result<Box<dyn Identity + Send + Sync>, String> {
+    if std::env::var("HSM_PKCS11_LIBRARY_PATH").is_ok() && !force_basic {
         let hsm = create_hsm_identity().await?;
         Ok(Box::new(hsm))
     } else {
@@ -77,7 +78,7 @@ where
 {
     let mut runtime = tokio::runtime::Runtime::new().expect("Could not create tokio runtime.");
     runtime.block_on(async {
-        let agent_identity = create_identity()
+        let agent_identity = create_identity(false)
             .await
             .expect("Could not create an identity.");
         let agent = create_agent(agent_identity)
