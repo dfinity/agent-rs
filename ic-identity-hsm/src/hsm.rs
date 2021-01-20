@@ -125,8 +125,7 @@ impl Identity for HardwareIdentity {
 }
 
 fn get_slot_id(ctx: &Ctx, slot_index: usize) -> Result<CK_SLOT_ID, HardwareIdentityError> {
-    let slots = ctx.get_slot_list(true)?;
-    slots
+    ctx.get_slot_list(true)?
         .get(slot_index)
         .ok_or(HardwareIdentityError::NoSuchSlotIndex(slot_index))
         .map(|x| *x)
