@@ -10,6 +10,10 @@ use std::error::Error;
 use std::future::Future;
 use std::path::Path;
 
+const HSM_PKCS11_LIBRARY_PATH: &str = "HSM_PKCS11_LIBRARY_PATH";
+const HSM_SLOT_INDEX: &str = "HSM_SLOT_INDEX";
+const HSM_KEY_ID: &str = "HSM_KEY_ID";
+
 pub fn create_waiter() -> Delay {
     Delay::builder()
         .throttle(std::time::Duration::from_millis(5))
@@ -17,9 +21,15 @@ pub fn create_waiter() -> Delay {
         .build()
 }
 
-// avoid errors: Unable to create hw identity: PKCS#11: CKR_CRYPTOKI_ALREADY_INITIALIZED (0x191)
+// The SoftHSM library doesn't like to have two contexts created/initialized at once.
+// Trying to create two HardwareIdentity instances at the same time results in this error:
+//    Unable to create hw identity: PKCS#11: CKR_CRYPTOKI_ALREADY_INITIALIZED (0x191)
+//
+// To avoid this, we use a basic identity for any second identity in tests.
+//
+// A shared container of Ctx objects might be possible instead, but my rust-fu is inadequate.
 pub async fn create_identity(force_basic: bool) -> Result<Box<dyn Identity + Send + Sync>, String> {
-    if std::env::var("HSM_PKCS11_LIBRARY_PATH").is_ok() && !force_basic {
+    if std::env::var(HSM_PKCS11_LIBRARY_PATH).is_ok() && !force_basic {
         let hsm = create_hsm_identity().await?;
         Ok(Box::new(hsm))
     } else {
@@ -28,18 +38,17 @@ pub async fn create_identity(force_basic: bool) -> Result<Box<dyn Identity + Sen
     }
 }
 
+fn expect_env_var(name: &str) -> Result<String, String> {
+    std::env::var(name).map_err(|_| format!("Need to specify the {} environment variable", name))
+}
+
 pub async fn create_hsm_identity() -> Result<HardwareIdentity, String> {
-    let path = std::env::var("HSM_PKCS11_LIBRARY_PATH")
-        .expect("Need to specify the HSM_PKCS11_LIBRARY_PATH environment variable");
-    let slot_index = std::env::var("HSM_SLOT_INDEX")
-        .expect("Need to specify the HSM_SLOT_INDEX environment variable");
-    let slot_index = slot_index
+    let path = expect_env_var(HSM_PKCS11_LIBRARY_PATH)?;
+    let slot_index = expect_env_var(HSM_SLOT_INDEX)?
         .parse::<usize>()
         .expect("Unable to parse HSM_SLOT_INDEX value");
-    let key =
-        std::env::var("HSM_KEY_ID").expect("Need to specify the HSM_KEY_ID environment variable");
+    let key = expect_env_var(HSM_KEY_ID)?;
     HardwareIdentity::new(path, slot_index, &key, get_hsm_pin)
-        //.map_err(|_| "unable to create hw identity".into())
         .map_err(|e| format!("Unable to create hw identity: {}", e))
 }
 
