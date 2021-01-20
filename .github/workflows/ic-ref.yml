@@ -105,11 +105,11 @@ jobs:
         env:
           RUST_BACKTRACE: 1
 
-      - name: Install SoftHSM Linux
+      - name: Install and Configure SoftHSM
         run: |
+          set -ex
           sudo apt-get install -f libsofthsm2 opensc-pkcs11 opensc
           sudo usermod -a -G softhsm $USER
-          echo "INSTALLED_PKCS11_SOFTHSM_MODULE=/usr/lib/softhsm/libsofthsm2.so" >>$GITHUB_ENV
           echo "SOFTHSM2_CONF=$HOME/softhsm.conf" >>$GITHUB_ENV
           echo "directories.tokendir = $HOME/softhsm/tokens/" >$HOME/softhsm.conf
           mkdir -p $HOME/softhsm/tokens
@@ -131,7 +131,7 @@ jobs:
           killall ic-ref
         env:
           RUST_BACKTRACE: 1
-          HSM_PKCS11_LIBRARY_PATH: ${{ env.INSTALLED_PKCS11_SOFTHSM_MODULE }}
+          HSM_PKCS11_LIBRARY_PATH: /usr/lib/softhsm/libsofthsm2.so
           HSM_SO_PIN: 123456
           HSM_PIN: 1234
           HSM_SLOT_INDEX: 0
