@@ -106,8 +106,6 @@ jobs:
           RUST_BACKTRACE: 1
 
       - name: Install SoftHSM Linux
-        #if: matrix.config.build == 'linux-stable'
-        #sudo add-apt-repository "deb http://archive.ubuntu.com/ubuntu/ eoan universe"
         run: |
           sudo apt-get install -f libsofthsm2 opensc-pkcs11 opensc
           sudo usermod -a -G softhsm $USER
@@ -116,27 +114,12 @@ jobs:
           echo "directories.tokendir = $HOME/softhsm/tokens/" >$HOME/softhsm.conf
           mkdir -p $HOME/softhsm/tokens
 
-      # ic-ref test only run on linux
-      #- name: Install SoftHSM Macos
-      #  if: matrix.config.os == 'macos-latest'
-      #  run: |
-      #    brew install -f softhsm opensc
-      #    echo "INSTALLED_PKCS11_SOFTHSM_MODULE=/usr/local/lib/softhsm/libsofthsm2.so" >>$GITHUB_ENV
-      #    echo "PKCS11_TOOL=/Library/OpenSC/bin/pkcs11-tool" >>$GITHUB_ENV
-      #    #echo "PKCS11_MODULE=/Library/OpenSC/lib/opensc-pkcs11.so" >>$GITHUB_ENV
-
       - name: Run Integration Tests with SoftHSM
         run: |
           set -ex
-          softhsm2-util --version
-          ls -l $HSM_PKCS11_LIBRARY_PATH
-          softhsm2-util --init-token --slot $HSM_SLOT_INDEX --label "agent-rs-token-0" --so-pin $HSM_SO_PIN --pin $HSM_PIN
-          pkcs11-tool -L --module $HSM_PKCS11_LIBRARY_PATH
-          #pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --test
-          #pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --list-slots
-          #pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH --login --pin $HSM_PIN --list-token-slots
-          pkcs11-tool --module $HSM_PKCS11_LIBRARY_PATH -k --login --slot-index $HSM_SLOT_INDEX -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
-          pkcs11-tool -L --module $HSM_PKCS11_LIBRARY_PATH
+          softhsm2-util --init-token --slot $HSM_SLOT_INDEX --label "agent-rs-token" --so-pin $HSM_SO_PIN --pin $HSM_PIN
+          # create key:
+          pkcs11-tool -k --module $HSM_PKCS11_LIBRARY_PATH --login --slot-index $HSM_SLOT_INDEX -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
 
           $HOME/bin/ic-ref --pick-port --write-port-to $HOME/ic_ref_port &
           sleep 1
