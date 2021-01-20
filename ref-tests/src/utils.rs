@@ -13,6 +13,7 @@ use std::path::Path;
 const HSM_PKCS11_LIBRARY_PATH: &str = "HSM_PKCS11_LIBRARY_PATH";
 const HSM_SLOT_INDEX: &str = "HSM_SLOT_INDEX";
 const HSM_KEY_ID: &str = "HSM_KEY_ID";
+const HSM_PIN: &str = "HSM_PIN";
 
 pub fn create_waiter() -> Delay {
     Delay::builder()
@@ -46,14 +47,14 @@ pub async fn create_hsm_identity() -> Result<HardwareIdentity, String> {
     let path = expect_env_var(HSM_PKCS11_LIBRARY_PATH)?;
     let slot_index = expect_env_var(HSM_SLOT_INDEX)?
         .parse::<usize>()
-        .expect("Unable to parse HSM_SLOT_INDEX value");
+        .map_err(|e|format!("Unable to parse {} value: {}", HSM_SLOT_INDEX, e))?;
     let key = expect_env_var(HSM_KEY_ID)?;
     HardwareIdentity::new(path, slot_index, &key, get_hsm_pin)
         .map_err(|e| format!("Unable to create hw identity: {}", e))
 }
 
 fn get_hsm_pin() -> Result<String, String> {
-    std::env::var("HSM_PIN").map_err(|_| "There is no HSM_PIN environment variable.".to_string())
+    expect_env_var(HSM_PIN)
 }
 
 pub async fn create_basic_identity() -> Result<BasicIdentity, String> {
