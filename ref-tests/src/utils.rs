@@ -47,7 +47,7 @@ pub async fn create_hsm_identity() -> Result<HardwareIdentity, String> {
     let path = expect_env_var(HSM_PKCS11_LIBRARY_PATH)?;
     let slot_index = expect_env_var(HSM_SLOT_INDEX)?
         .parse::<usize>()
-        .map_err(|e|format!("Unable to parse {} value: {}", HSM_SLOT_INDEX, e))?;
+        .map_err(|e| format!("Unable to parse {} value: {}", HSM_SLOT_INDEX, e))?;
     let key = expect_env_var(HSM_KEY_ID)?;
     HardwareIdentity::new(path, slot_index, &key, get_hsm_pin)
         .map_err(|e| format!("Unable to create hw identity: {}", e))
