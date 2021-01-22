@@ -1,13 +1,19 @@
 use delay::Delay;
 use ic_agent::export::Principal;
 use ic_agent::identity::BasicIdentity;
-use ic_agent::Agent;
+use ic_agent::{Agent, Identity};
+use ic_identity_hsm::HardwareIdentity;
 use ic_utils::call::AsyncCall;
 use ic_utils::interfaces::ManagementCanister;
 use ring::signature::Ed25519KeyPair;
 use std::error::Error;
 use std::future::Future;
 use std::path::Path;
+
+const HSM_PKCS11_LIBRARY_PATH: &str = "HSM_PKCS11_LIBRARY_PATH";
+const HSM_SLOT_INDEX: &str = "HSM_SLOT_INDEX";
+const HSM_KEY_ID: &str = "HSM_KEY_ID";
+const HSM_PIN: &str = "HSM_PIN";
 
 pub fn create_waiter() -> Delay {
     Delay::builder()
@@ -16,17 +22,51 @@ pub fn create_waiter() -> Delay {
         .build()
 }
 
-pub async fn create_identity() -> Result<BasicIdentity, String> {
+pub async fn create_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
+    if std::env::var(HSM_PKCS11_LIBRARY_PATH).is_ok() {
+        create_hsm_identity().await
+    } else {
+        create_basic_identity().await
+    }
+}
+
+fn expect_env_var(name: &str) -> Result<String, String> {
+    std::env::var(name).map_err(|_| format!("Need to specify the {} environment variable", name))
+}
+
+pub async fn create_hsm_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
+    let path = expect_env_var(HSM_PKCS11_LIBRARY_PATH)?;
+    let slot_index = expect_env_var(HSM_SLOT_INDEX)?
+        .parse::<usize>()
+        .map_err(|e| format!("Unable to parse {} value: {}", HSM_SLOT_INDEX, e))?;
+    let key = expect_env_var(HSM_KEY_ID)?;
+    let id = HardwareIdentity::new(path, slot_index, &key, get_hsm_pin)
+        .map_err(|e| format!("Unable to create hw identity: {}", e))?;
+    Ok(Box::new(id))
+}
+
+fn get_hsm_pin() -> Result<String, String> {
+    expect_env_var(HSM_PIN)
+}
+
+// The SoftHSM library doesn't like to have two contexts created/initialized at once.
+// Trying to create two HardwareIdentity instances at the same time results in this error:
+//    Unable to create hw identity: PKCS#11: CKR_CRYPTOKI_ALREADY_INITIALIZED (0x191)
+//
+// To avoid this, we use a basic identity for any second identity in tests.
+//
+// A shared container of Ctx objects might be possible instead, but my rust-fu is inadequate.
+pub async fn create_basic_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
     let rng = ring::rand::SystemRandom::new();
     let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
         .expect("Could not generate a key pair.");
 
-    Ok(BasicIdentity::from_key_pair(
+    Ok(Box::new(BasicIdentity::from_key_pair(
         Ed25519KeyPair::from_pkcs8(key_pair.as_ref()).expect("Could not read the key pair."),
-    ))
+    )))
 }
 
-pub async fn create_agent(identity: BasicIdentity) -> Result<Agent, String> {
+pub async fn create_agent(identity: Box<dyn Identity + Send + Sync>) -> Result<Agent, String> {
     let port_env = std::env::var("IC_REF_PORT")
         .expect("Need to specify the IC_REF_PORT environment variable.");
     let port = port_env
@@ -35,7 +75,7 @@ pub async fn create_agent(identity: BasicIdentity) -> Result<Agent, String> {
 
     Agent::builder()
         .with_url(format!("http://127.0.0.1:{}", port))
-        .with_identity(identity)
+        .with_boxed_identity(identity)
         .build()
         .map_err(|e| format!("{:?}", e))
 }

@@ -18,7 +18,7 @@ jobs:
         include:
           - build: linux-stable
             ghc: '8.8.4'
-            spec: '0.14.0'
+            spec: '0.15.0'
             os: ubuntu-latest
             rust: 1.47.0
 
@@ -104,6 +104,38 @@ jobs:
           killall ic-ref
         env:
           RUST_BACKTRACE: 1
+
+      - name: Install and Configure SoftHSM
+        run: |
+          set -ex
+          sudo apt-get install -f libsofthsm2 opensc-pkcs11 opensc
+          sudo usermod -a -G softhsm $USER
+          echo "SOFTHSM2_CONF=$HOME/softhsm.conf" >>$GITHUB_ENV
+          echo "directories.tokendir = $HOME/softhsm/tokens/" >$HOME/softhsm.conf
+          mkdir -p $HOME/softhsm/tokens
+
+      - name: Run Integration Tests with SoftHSM
+        run: |
+          set -ex
+          softhsm2-util --init-token --slot $HSM_SLOT_INDEX --label "agent-rs-token" --so-pin $HSM_SO_PIN --pin $HSM_PIN
+          # create key:
+          pkcs11-tool -k --module $HSM_PKCS11_LIBRARY_PATH --login --slot-index $HSM_SLOT_INDEX -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
+
+          $HOME/bin/ic-ref --pick-port --write-port-to $HOME/ic_ref_port &
+          sleep 1
+          export IC_REF_PORT=$(cat $HOME/ic_ref_port)
+          export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
+          export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
+          cd main/ref-tests
+          cargo test --all-features -- --ignored --nocapture --test-threads=1
+          killall ic-ref
+        env:
+          RUST_BACKTRACE: 1
+          HSM_PKCS11_LIBRARY_PATH: /usr/lib/softhsm/libsofthsm2.so
+          HSM_SO_PIN: 123456
+          HSM_PIN: 1234
+          HSM_SLOT_INDEX: 0
+          HSM_KEY_ID: abcdef
 
       - name: Run Doc Tests
         run: |

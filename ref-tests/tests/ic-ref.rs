@@ -13,7 +13,7 @@
 use ref_tests::universal_canister;
 use ref_tests::with_agent;
 
-const EXPECTED_IC_API_VERSION: &str = "0.14.0";
+const EXPECTED_IC_API_VERSION: &str = "0.15.0";
 
 #[ignore]
 #[test]
@@ -38,12 +38,13 @@ fn spec_compliance_claimed() {
 
 mod management_canister {
     use ic_agent::AgentError;
-    use ic_agent::Identity;
     use ic_utils::call::AsyncCall;
     use ic_utils::interfaces::management_canister::{CanisterStatus, InstallMode};
     use ic_utils::interfaces::ManagementCanister;
     use openssl::sha::Sha256;
-    use ref_tests::{create_agent, create_identity, create_waiter, with_agent};
+    use ref_tests::{
+        create_agent, create_basic_identity, create_identity, create_waiter, with_agent,
+    };
 
     mod create_canister {
         use super::{create_waiter, with_agent};
@@ -126,7 +127,7 @@ mod management_canister {
                 .await?;
 
             // Each agent has their own identity.
-            let other_agent_identity = create_identity().await?;
+            let other_agent_identity = create_basic_identity().await?;
             let other_agent_principal = other_agent_identity.sender()?;
             let other_agent = create_agent(other_agent_identity).await?;
             other_agent.fetch_root_key().await?;
@@ -413,7 +414,7 @@ mod management_canister {
                 .await?;
 
             // Create another agent with different identity.
-            let other_agent_identity = create_identity().await?;
+            let other_agent_identity = create_basic_identity().await?;
             let other_agent = create_agent(other_agent_identity).await?;
             other_agent.fetch_root_key().await?;
             let other_ic00 = ManagementCanister::create(&other_agent);
