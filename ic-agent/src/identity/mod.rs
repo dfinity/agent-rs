@@ -3,7 +3,9 @@ use crate::export::Principal;
 
 pub(crate) mod anonymous;
 pub(crate) mod basic;
+pub(crate) mod secp256r1;
 pub use basic::{BasicIdentity, PemError};
+pub use secp256r1::Secp256r1Identity;
 
 #[derive(Clone, Debug)]
 pub struct Signature {
