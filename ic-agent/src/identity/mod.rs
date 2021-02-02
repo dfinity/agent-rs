@@ -3,6 +3,7 @@ use crate::export::Principal;
 
 pub(crate) mod anonymous;
 pub(crate) mod basic;
+pub use anonymous::AnonymousIdentity;
 pub use basic::{BasicIdentity, PemError};
 
 #[derive(Clone, Debug)]
