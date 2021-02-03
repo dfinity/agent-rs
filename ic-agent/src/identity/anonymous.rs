@@ -2,7 +2,7 @@ use crate::export::Principal;
 use crate::identity::Identity;
 use crate::Signature;
 
-pub(crate) struct AnonymousIdentity {}
+pub struct AnonymousIdentity;
 
 impl Identity for AnonymousIdentity {
     fn sender(&self) -> Result<Principal, String> {
