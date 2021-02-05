@@ -41,7 +41,7 @@ version = "0.8.1"
 optional = true
 
 [dev-dependencies]
-candid = "0.6.12"
+candid = "0.6.15"
 mockito = "0.27.0"
 proptest = "0.9.5"
 tokio = "0.2.22"
