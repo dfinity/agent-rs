@@ -17,11 +17,16 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 [dependencies]
 async-trait = "0.1.40"
 candid = "0.6.12"
-delay = "0.3.0"
 ic-agent = { path = "../ic-agent", version = "0.1.0" }
 ic-types = { path = "../ic-types", version = "0.1.2" }
 serde = "1.0.115"
 thiserror = "1.0.20"
+
+[dependencies.delay]
+version = "0.3.0"
+git = "https://github.com/p-shahi/rs-delay.git"
+branch = "pshahi/add-restart"
+rev = "ea35a3e4a36387409f4251a7bb67e41c769a3b2e"
 
 [dev-dependencies]
 ring = "0.16.11"

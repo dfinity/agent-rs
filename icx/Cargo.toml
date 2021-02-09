@@ -9,7 +9,6 @@ edition = "2018"
 [dependencies]
 candid = "0.6.12"
 clap = "3.0.0-beta.1"
-delay = "0.3.0"
 hex = "0.4.2"
 humantime = "2.0.1"
 ic-agent = { path = "../ic-agent" }
@@ -19,3 +18,9 @@ ring = "0.16.11"
 tokio = { version = "0.2.22", features = ["full"] }
 serde = "1.0.115"
 serde_json = "1.0.57"
+
+[dependencies.delay]
+version = "0.3.0"
+git = "https://github.com/p-shahi/rs-delay.git"
+branch = "pshahi/add-restart"
+rev = "ea35a3e4a36387409f4251a7bb67e41c769a3b2e"

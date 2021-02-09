@@ -627,7 +627,7 @@ impl<'agent> UpdateBuilder<'agent> {
             )
             .await?;
         waiter.start();
-
+        let mut request_accepted = false;
         loop {
             match self.agent.request_status_raw(&request_id).await? {
                 RequestStatusResponse::Replied {
@@ -643,8 +643,19 @@ impl<'agent> UpdateBuilder<'agent> {
                     })
                 }
                 RequestStatusResponse::Unknown => (),
-                RequestStatusResponse::Received => (),
-                RequestStatusResponse::Processing => (),
+                RequestStatusResponse::Received | RequestStatusResponse::Processing => {
+                    // The system will return Unknown until the request is accepted
+                    // and we generally cannot know how long that will take.
+                    // State transitions between Received and Processing may be
+                    // instantaneous. Therefore, once we know the request is accepted,
+                    // we restart the waiter so the request does not time out.
+                    if !request_accepted {
+                        waiter
+                            .restart()
+                            .map_err(|_| AgentError::WaiterRestartError())?;
+                        request_accepted = true;
+                    }
+                }
                 RequestStatusResponse::Done => {
                     return Err(AgentError::RequestStatusDoneNoReply(String::from(
                         request_id,
