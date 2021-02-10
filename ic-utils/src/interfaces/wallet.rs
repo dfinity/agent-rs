@@ -3,7 +3,6 @@ use crate::canister::{Argument, CanisterBuilder};
 use crate::Canister;
 use async_trait::async_trait;
 use candid::de::ArgumentDecoder;
-use candid::types::{Field, Label, Serializer, Type, TypeId};
 use candid::{decode_args, CandidType, Deserialize};
 use delay::Waiter;
 use ic_agent::agent::UpdateBuilder;
@@ -101,6 +100,64 @@ where
 /// This interface implements most methods conveniently for the user.
 pub struct Wallet;
 
+#[derive(CandidType, Debug, Deserialize)]
+pub enum EventKind {
+    CyclesSent {
+        to: Principal,
+        amount: u64,
+    },
+    CyclesReceived {
+        from: Principal,
+        amount: u64,
+    },
+    AddressAdded {
+        id: Principal,
+        name: Option<String>,
+        role: Role,
+    },
+    AddressRemoved {
+        id: Principal,
+    },
+    CanisterCreated {
+        canister: Principal,
+        cycles: u64,
+    },
+    CanisterCalled {
+        canister: Principal,
+        method_name: String,
+        cycles: u64,
+    },
+}
+
+#[derive(CandidType, Debug, Deserialize)]
+pub struct Event {
+    pub id: u32,
+    pub timestamp: u64,
+    pub kind: EventKind,
+}
+
+#[derive(CandidType, Debug, Deserialize)]
+pub enum Role {
+    Contact,
+    Custodian,
+    Controller,
+}
+
+#[derive(CandidType, Debug, Deserialize)]
+pub enum Kind {
+    Unknown,
+    User,
+    Canister,
+}
+
+#[derive(CandidType, Debug, Deserialize)]
+pub struct AddressEntry {
+    pub id: Principal,
+    pub name: Option<String>,
+    pub kind: Kind,
+    pub role: Role,
+}
+
 #[derive(CandidType, Deserialize)]
 pub struct BalanceResult {
     pub amount: u64,
@@ -141,19 +198,39 @@ impl Wallet {
 }
 
 impl<'agent> Canister<'agent, Wallet> {
-    /// Get the current controller's principal ID.
-    pub fn get_controller<'canister: 'agent>(
+    pub fn name<'canister: 'agent>(&'canister self) -> impl 'agent + SyncCall<(Option<String>,)> {
+        self.query_("name").build()
+    }
+
+    pub fn set_name<'canister: 'agent>(
         &'canister self,
-    ) -> impl 'agent + SyncCall<(Principal,)> {
-        self.query_("get_controller").build()
+        name: String,
+    ) -> impl 'agent + AsyncCall<()> {
+        self.update_("set_name").with_arg(name).build()
+    }
+
+    /// Get the current controller's principal ID.
+    pub fn get_controllers<'canister: 'agent>(
+        &'canister self,
+    ) -> impl 'agent + SyncCall<(Vec<Principal>,)> {
+        self.query_("get_controllers").build()
     }
 
     /// Transfer controller to another principal ID.
-    pub fn set_controller<'canister: 'agent>(
+    pub fn add_controller<'canister: 'agent>(
         &'canister self,
         principal: Principal,
     ) -> impl 'agent + AsyncCall<()> {
-        self.update_("set_controller").with_arg(principal).build()
+        self.update_("add_controller").with_arg(principal).build()
+    }
+
+    pub fn remove_controller<'canister: 'agent>(
+        &'canister self,
+        principal: Principal,
+    ) -> impl 'agent + AsyncCall<()> {
+        self.update_("remove_controller")
+            .with_arg(principal)
+            .build()
     }
 
     /// Get the list of custodians.
@@ -230,6 +307,46 @@ impl<'agent> Canister<'agent, Wallet> {
             .with_arg(In { cycles, controller })
             .build()
             .map(|result: (CreateResult,)| (result.0,))
+    }
+
+    pub fn add_address<'canister: 'agent>(
+        &'canister self,
+        address: AddressEntry,
+    ) -> impl 'agent + AsyncCall<()> {
+        self.update_("add_address").with_arg(address).build()
+    }
+
+    pub fn list_addresses<'canister: 'agent>(
+        &'canister self,
+    ) -> impl 'agent + SyncCall<(Vec<AddressEntry>,)> {
+        self.query_("list_addresses").build()
+    }
+
+    pub fn remove_address<'canister: 'agent>(
+        &'canister self,
+        principal: Principal,
+    ) -> impl 'agent + AsyncCall<()> {
+        self.update_("remove_address").with_arg(principal).build()
+    }
+
+    pub fn get_events<'canister: 'agent>(
+        &'canister self,
+        from: Option<u32>,
+        to: Option<u32>,
+    ) -> impl 'agent + SyncCall<(Vec<Event>,)> {
+        #[derive(CandidType)]
+        struct In {
+            from: Option<u32>,
+            to: Option<u32>,
+        }
+
+        let arg = if from.is_none() && to.is_none() {
+            None
+        } else {
+            Some(In { from, to })
+        };
+
+        self.query_("get_events").with_arg(arg).build()
     }
 
     /// Forward a call to another canister, including an amount of cycles
