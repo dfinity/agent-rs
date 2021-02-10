@@ -42,9 +42,7 @@ mod management_canister {
     use ic_utils::interfaces::management_canister::{CanisterStatus, InstallMode};
     use ic_utils::interfaces::ManagementCanister;
     use openssl::sha::Sha256;
-    use ref_tests::{
-        create_agent, create_basic_identity, create_identity, create_waiter, with_agent,
-    };
+    use ref_tests::{create_agent, create_basic_identity, create_waiter, with_agent};
 
     mod create_canister {
         use super::{create_waiter, with_agent};

@@ -6,13 +6,13 @@ use ic_agent::export::Principal;
 use ic_agent::{AgentError, HttpErrorPayload};
 use ic_utils::call::AsyncCall;
 use ic_utils::call::SyncCall;
-use ic_utils::interfaces::management_canister::{InstallMode, StatusCallResult};
-use ic_utils::interfaces::{ManagementCanister, Wallet};
+use ic_utils::interfaces::management_canister::InstallMode;
+use ic_utils::interfaces::Wallet;
 use ic_utils::{Argument, Canister};
 use ref_tests::universal_canister::payload;
 use ref_tests::{
-    create_universal_canister, create_waiter, create_wallet_canister, with_universal_canister,
-    with_wallet_canister,
+    create_agent, create_basic_identity, create_universal_canister, create_waiter,
+    create_wallet_canister, with_universal_canister, with_wallet_canister,
 };
 
 #[ignore]
@@ -217,6 +217,56 @@ fn wallet_canister_funds() {
             bob_previous_balance.amount + 500_000
         );
         assert!(alice_balance.amount < alice_previous_balance.amount - 500_000);
+
+        Ok(())
+    });
+}
+
+#[ignore]
+#[test]
+fn wallet_helper_functions() {
+    with_wallet_canister(|agent, wallet_id| async move {
+        // name
+        let wallet = Wallet::create(&agent, wallet_id);
+        let (name,) = wallet.name().call().await?;
+        assert!(name.is_none(), "Name should be none.");
+
+        let wallet_name = "Alice".to_string();
+
+        wallet
+            .set_name(wallet_name.clone())
+            .call_and_wait(create_waiter())
+            .await?;
+        let (name,) = wallet.name().call().await?;
+        assert_eq!(name, Some(wallet_name));
+
+        // controller
+        let other_agent_identity = create_basic_identity().await?;
+        let other_agent_principal = other_agent_identity.sender()?;
+        let other_agent = create_agent(other_agent_identity).await?;
+        other_agent.fetch_root_key().await?;
+
+        let (controller_list,) = wallet.get_controllers().call().await?;
+        assert_eq!(controller_list.len(), 1);
+        assert_ne!(&controller_list[0], &other_agent_principal);
+
+        wallet
+            .add_controller(other_agent_principal.clone())
+            .call_and_wait(create_waiter())
+            .await?;
+
+        let (controller_list,) = wallet.get_controllers().call().await?;
+        assert_eq!(controller_list.len(), 2);
+        assert_eq!(&controller_list[1], &other_agent_principal);
+
+        wallet
+            .remove_controller(other_agent_principal.clone())
+            .call_and_wait(create_waiter())
+            .await?;
+
+        let (controller_list,) = wallet.get_controllers().call().await?;
+        assert_eq!(controller_list.len(), 1);
+        assert_ne!(&controller_list[0], &other_agent_principal);
 
         Ok(())
     });
