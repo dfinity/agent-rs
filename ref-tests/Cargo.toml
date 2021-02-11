@@ -7,6 +7,7 @@ edition = "2018"
 
 [dependencies]
 candid = "0.6.12"
+delay = "0.3.1"
 ic-agent = { path = "../ic-agent" }
 ic-identity-hsm = { path = "../ic-identity-hsm" }
 ic-utils = { path = "../ic-utils", features = ["raw"] }
@@ -14,12 +15,6 @@ openssl = "0.10.24"
 ring = "0.16.11"
 serde = { version = "1.0.101", features = ["derive"] }
 tokio = "0.2.22"
-
-[dependencies.delay]
-version = "0.3.0"
-git = "https://github.com/p-shahi/rs-delay.git"
-branch = "pshahi/add-restart"
-rev = "ea35a3e4a36387409f4251a7bb67e41c769a3b2e"
 
 [dev-dependencies]
 serde_cbor = "0.11.1"
