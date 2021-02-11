@@ -257,11 +257,12 @@ fn wallet_helper_functions() {
 
         let (controller_list,) = wallet.get_controllers().call().await?;
         assert_eq!(controller_list.len(), 2);
-        assert!(
-            (controller_list[0] == other_agent_principal
-                || controller_list[1] == other_agent_principal),
-            "New controller should be added."
-        );
+        let added = if controller_list[0] == other_agent_principal {
+            true
+        } else {
+            controller_list[1] == other_agent_principal
+        };
+        assert!(added);
 
         wallet
             .remove_controller(other_agent_principal.clone())
