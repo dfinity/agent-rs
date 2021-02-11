@@ -398,16 +398,12 @@ impl Agent {
         .await
     }
 
-    async fn read_state_raw(
-        &self,
-        paths: Vec<Vec<Label>>,
-        ingress_expiry_datetime: Option<u64>,
-    ) -> Result<Certificate, AgentError> {
+    async fn read_state_raw(&self, paths: Vec<Vec<Label>>) -> Result<Certificate, AgentError> {
         let read_state_response: ReadStateResponse = self
             .read_endpoint(SyncContent::ReadStateRequest {
                 sender: self.identity.sender().map_err(AgentError::SigningError)?,
                 paths,
-                ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
+                ingress_expiry: self.get_expiry_date(),
             })
             .await?;
 
@@ -456,12 +452,11 @@ impl Agent {
     pub async fn request_status_raw(
         &self,
         request_id: &RequestId,
-        ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestStatusResponse, AgentError> {
         let paths: Vec<Vec<Label>> =
             vec![vec!["request_status".into(), request_id.to_vec().into()]];
 
-        let cert = self.read_state_raw(paths, ingress_expiry_datetime).await?;
+        let cert = self.read_state_raw(paths).await?;
 
         lookup_request_status(cert, request_id)
     }
@@ -632,13 +627,9 @@ impl<'agent> UpdateBuilder<'agent> {
             )
             .await?;
         waiter.start();
-
+        let mut request_accepted = false;
         loop {
-            match self
-                .agent
-                .request_status_raw(&request_id, self.ingress_expiry_datetime)
-                .await?
-            {
+            match self.agent.request_status_raw(&request_id).await? {
                 RequestStatusResponse::Replied {
                     reply: Replied::CallReplied(arg),
                 } => return Ok(arg),
@@ -652,8 +643,19 @@ impl<'agent> UpdateBuilder<'agent> {
                     })
                 }
                 RequestStatusResponse::Unknown => (),
-                RequestStatusResponse::Received => (),
-                RequestStatusResponse::Processing => (),
+                RequestStatusResponse::Received | RequestStatusResponse::Processing => {
+                    // The system will return Unknown until the request is accepted
+                    // and we generally cannot know how long that will take.
+                    // State transitions between Received and Processing may be
+                    // instantaneous. Therefore, once we know the request is accepted,
+                    // we restart the waiter so the request does not time out.
+                    if !request_accepted {
+                        waiter
+                            .restart()
+                            .map_err(|_| AgentError::WaiterRestartError())?;
+                        request_accepted = true;
+                    }
+                }
                 RequestStatusResponse::Done => {
                     return Err(AgentError::RequestStatusDoneNoReply(String::from(
                         request_id,
