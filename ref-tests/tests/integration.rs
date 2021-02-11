@@ -258,8 +258,8 @@ fn wallet_helper_functions() {
         let (controller_list,) = wallet.get_controllers().call().await?;
         assert_eq!(controller_list.len(), 2);
         assert!(
-            (&controller_list[0] == &other_agent_principal
-                || &controller_list[1] == &other_agent_principal),
+            (controller_list[0] == other_agent_principal
+                || controller_list[1] == other_agent_principal),
             "New controller should be added."
         );
 
