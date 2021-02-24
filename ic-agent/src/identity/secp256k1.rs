@@ -1,6 +1,6 @@
-use crate::{Identity, Signature};
-use crate::identity::error::PemError;
 use crate::export::Principal;
+use crate::identity::error::PemError;
+use crate::{Identity, Signature};
 
 use openssl::ec::EcKey;
 use openssl::error::ErrorStack;
@@ -54,13 +54,20 @@ impl Identity for Secp256k1Identity {
         // TODO: Investegate why the OpenSSL library returns Result type here.
         let type_ =
             MessageDigest::from_nid(Nid::SECP256K1).expect("Cannot construct message digest type.");
-        let private_key = PKey::from_ec_key(self.private_key.clone()).map_err(|err| err.to_string())?;
+        let private_key =
+            PKey::from_ec_key(self.private_key.clone()).map_err(|err| err.to_string())?;
         let public_key = Some(self.der_encoded_public_key.clone());
         let mut signer = Signer::new(type_, &private_key).map_err(|err| err.to_string())?;
         let mut hasher = Sha256::new();
         hasher.update(msg);
         signer.update(&hasher.finalize()[..]);
-        let signature = signer.sign_to_vec().map(Some).map_err(|err| err.to_string())?;
-        Ok(Signature { signature, public_key })
+        let signature = signer
+            .sign_to_vec()
+            .map(Some)
+            .map_err(|err| err.to_string())?;
+        Ok(Signature {
+            signature,
+            public_key,
+        })
     }
 }

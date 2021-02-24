@@ -1,6 +1,6 @@
-use crate::{Identity, Signature};
-use crate::identity::error::PemError;
 use crate::export::Principal;
+use crate::identity::error::PemError;
+use crate::{Identity, Signature};
 
 use num_bigint::BigUint;
 use ring::signature::{Ed25519KeyPair, KeyPair};
