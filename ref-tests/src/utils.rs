@@ -131,22 +131,31 @@ pub async fn create_universal_canister(agent: &Agent) -> Result<Principal, Box<d
     Ok(canister_id)
 }
 
-pub async fn create_wallet_canister(agent: &Agent) -> Result<Principal, Box<dyn Error>> {
+pub fn get_wallet_wasm_from_env() -> Vec<u8> {
     let canister_env = std::env::var("IC_WALLET_CANISTER_PATH")
         .expect("Need to specify the IC_WALLET_CANISTER_PATH environment variable.");
 
-    let canister_path = Path::new(&canister_env);
+    let canister_path = std::path::Path::new(&canister_env);
 
     let canister_wasm = if !canister_path.exists() {
         panic!("Could not find the wallet canister WASM file.");
     } else {
         std::fs::read(&canister_path).expect("Could not read file.")
     };
+    canister_wasm
+}
+
+pub async fn create_wallet_canister(
+    agent: &Agent,
+    cycles: Option<u64>,
+) -> Result<Principal, Box<dyn Error>> {
+    let canister_wasm = get_wallet_wasm_from_env();
 
     let ic00 = ManagementCanister::create(&agent);
-    let provisional_amount = 1 << 40;
+    // let provisional_amount = 1 << 40;
+
     let (canister_id,) = ic00
-        .provisional_create_canister_with_cycles(Some(provisional_amount))
+        .provisional_create_canister_with_cycles(cycles)
         .call_and_wait(create_waiter())
         .await?;
 
@@ -169,13 +178,13 @@ where
     })
 }
 
-pub fn with_wallet_canister<F, R>(f: F)
+pub fn with_wallet_canister<F, R>(cycles: Option<u64>, f: F)
 where
     R: Future<Output = Result<(), Box<dyn Error>>>,
     F: FnOnce(Agent, Principal) -> R,
 {
     with_agent(|agent| async move {
-        let canister_id = create_wallet_canister(&agent).await?;
+        let canister_id = create_wallet_canister(&agent, cycles).await?;
         f(agent, canister_id).await
     })
 }

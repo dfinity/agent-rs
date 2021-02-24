@@ -309,6 +309,35 @@ impl<'agent> Canister<'agent, Wallet> {
             .map(|result: (CreateResult,)| (result.0,))
     }
 
+    /// Create a wallet canister
+    pub fn wallet_create_wallet<'canister: 'agent>(
+        &'canister self,
+        cycles: u64,
+        controller: Option<Principal>,
+    ) -> impl 'agent + AsyncCall<(CreateResult,)> {
+        #[derive(CandidType)]
+        struct In {
+            cycles: u64,
+            controller: Option<Principal>,
+        }
+
+        self.update_("wallet_create_wallet")
+            .with_arg(In { cycles, controller })
+            .build()
+            .map(|result: (CreateResult,)| (result.0,))
+    }
+
+    /// Store the wallet WASM inside the wallet canister.
+    /// This is needed to enable wallet_create_wallet
+    pub fn wallet_store_wallet_wasm<'canister: 'agent>(
+        &'canister self,
+        wasm_module: Vec<u8>,
+    ) -> impl 'agent + AsyncCall<()> {
+        self.update_("wallet_store_wallet_wasm")
+            .with_arg(wasm_module)
+            .build()
+    }
+
     pub fn add_address<'canister: 'agent>(
         &'canister self,
         address: AddressEntry,
