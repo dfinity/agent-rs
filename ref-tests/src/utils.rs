@@ -135,14 +135,13 @@ pub fn get_wallet_wasm_from_env() -> Vec<u8> {
     let canister_env = std::env::var("IC_WALLET_CANISTER_PATH")
         .expect("Need to specify the IC_WALLET_CANISTER_PATH environment variable.");
 
-    let canister_path = std::path::Path::new(&canister_env);
+    let canister_path = Path::new(&canister_env);
 
-    let canister_wasm = if !canister_path.exists() {
+    if !canister_path.exists() {
         panic!("Could not find the wallet canister WASM file.");
     } else {
         std::fs::read(&canister_path).expect("Could not read file.")
-    };
-    canister_wasm
+    }
 }
 
 pub async fn create_wallet_canister(
@@ -152,7 +151,6 @@ pub async fn create_wallet_canister(
     let canister_wasm = get_wallet_wasm_from_env();
 
     let ic00 = ManagementCanister::create(&agent);
-    // let provisional_amount = 1 << 40;
 
     let (canister_id,) = ic00
         .provisional_create_canister_with_cycles(cycles)
