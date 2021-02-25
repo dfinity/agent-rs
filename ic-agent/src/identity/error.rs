@@ -2,7 +2,7 @@
 
 use thiserror::Error;
 
-/// An error happened while reading a PEM file to create a BasicIdentity.
+/// An error happened while reading a PEM file.
 #[derive(Error, Debug)]
 pub enum PemError {
     #[error(transparent)]
