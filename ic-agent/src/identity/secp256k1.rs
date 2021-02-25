@@ -2,15 +2,15 @@ use crate::export::Principal;
 use crate::identity::error::PemError;
 use crate::{Identity, Signature};
 
-use num_bigint::{BigInt, BigUint, Sign};
+use num_bigint::BigUint;
 use openssl::bn::BigNumContext;
 use openssl::ec::{EcKey, PointConversionForm};
+use openssl::ecdsa::EcdsaSig;
 use openssl::error::ErrorStack;
 use openssl::hash::MessageDigest;
 use openssl::nid::Nid;
 use openssl::pkey::{PKey, Private, Public};
 use openssl::sign::Signer;
-use sha2::{Digest, Sha256};
 use simple_asn1::ASN1Block;
 use simple_asn1::ASN1Block::{BitString, Integer, ObjectIdentifier, Sequence};
 use simple_asn1::{oid, to_der, OID};
@@ -57,20 +57,14 @@ impl Identity for Secp256k1Identity {
     fn sender(&self) -> Result<Principal, String> {
         Ok(Principal::self_authenticating(&self.der_encoded_public_key))
     }
+
     fn sign(&self, msg: &[u8]) -> Result<Signature, String> {
-        let type_ =
-            MessageDigest::from_nid(Nid::SECP256K1).expect("Cannot construct message digest type.");
-        let private_key =
-            PKey::from_ec_key(self.private_key.clone()).map_err(|err| err.to_string())?;
+        let ecdsa_sig = EcdsaSig::sign(msg, &self.private_key.clone())
+            .map_err(|err| format!("Cannot create secp256k1 signature: {}", err.to_string(),))?;
+        let signature = ecdsa_sig.to_der().map(Some).map_err(|err| {
+            format!("Cannot DER ecnode secp256k1 signature: {}", err.to_string(),)
+        })?;
         let public_key = Some(self.der_encoded_public_key.clone());
-        let mut signer = Signer::new(type_, &private_key).map_err(|err| err.to_string())?;
-        let mut hasher = Sha256::new();
-        hasher.update(msg);
-        signer.update(&hasher.finalize()[..]);
-        let signature = signer
-            .sign_to_vec()
-            .map(Some)
-            .map_err(|err| err.to_string())?;
         Ok(Signature {
             signature,
             public_key,
@@ -99,10 +93,10 @@ fn public_key_to_asn1_block(public_key: EcKey<Public>) -> Result<ASN1Block, Erro
 mod test {
     use super::*;
 
-    #[test]
-    fn test_from_pem() {
+    fn create_identity() -> Secp256k1Identity {
         // IDENTITY_FILE was generated from the the following commands:
         // > openssl ecparam -name secp256k1 -genkey -noout -out identity.pem
+        // > cat identity.pem
         const IDENTITY_FILE: &str = "-----BEGIN EC PARAMETERS-----
 BgUrgQQACg==
 -----END EC PARAMETERS-----
@@ -112,12 +106,19 @@ oUQDQgAEgO87rJ1ozzdMvJyZQ+GABDqUxGLvgnAnTlcInV3NuhuPv4O3VGzMGzeB
 N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
 -----END EC PRIVATE KEY-----
 ";
+
+        Secp256k1Identity::from_pem(IDENTITY_FILE.as_bytes())
+            .expect("Cannot create secp256k1 identity from PEM file.")
+    }
+
+    #[test]
+    fn test_from_pem() {
         // DER_ENCODED_PUBLIC_KEY was generated from the the following commands:
         // > openssl ec -in identity.pem -pubout -outform DER -out public.der
         // > hexdump -ve '1/1 "%.2x"' public.der
         const DER_ENCODED_PUBLIC_KEY: &str = "3056301006072a8648ce3d020106052b8104000a0342000480ef3bac9d68cf374cbc9c9943e180043a94c462ef8270274e57089d5dcdba1b8fbf83b7546ccc1b3781377776e9c4710fdf533ed9bcba8d8ebb32a14a2aba11";
-        let identity = Secp256k1Identity::from_pem(IDENTITY_FILE.as_bytes())
-            .expect("Cannot create secp256k1 identity from PEM file.");
-        assert!(DER_ENCODED_PUBLIC_KEY == hex::encode(identity.der_encoded_public_key))
+
+        let identity = create_identity();
+        assert!(DER_ENCODED_PUBLIC_KEY == hex::encode(identity.der_encoded_public_key));
     }
 }
