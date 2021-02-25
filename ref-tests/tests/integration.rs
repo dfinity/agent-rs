@@ -299,8 +299,10 @@ fn wallet_create_wallet() {
                 .call(&grandchild_wallet, "list_addresses", Argument::default(), 0)
                 .call_and_wait(create_waiter())
                 .await?;
-        assert_eq!(child_two_create_res.canister_id.clone().to_text(),
-            grandchild_address_entries[0].id.to_text());
+        assert_eq!(
+            child_two_create_res.canister_id.clone().to_text(),
+            grandchild_address_entries[0].id.to_text()
+        );
         eprintln!(
             "Grandchild wallet controller: {:?} with role: {:?}",
             grandchild_address_entries[0].id.to_text(),
