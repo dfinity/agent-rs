@@ -78,15 +78,11 @@ fn public_key_to_asn1_block(public_key: EcKey<Public>) -> Result<ASN1Block, Erro
         PointConversionForm::UNCOMPRESSED,
         &mut context,
     )?;
-    let asn1_metadata = Sequence(
-        0,
-        vec![
-            ObjectIdentifier(0, oid!(1, 2, 840, 10045, 2, 1)),
-            ObjectIdentifier(0, oid!(1, 3, 132, 0, 10)),
-        ],
-    );
-    let asn1_public_key = BitString(0, bytes.len() * 8, bytes);
-    Ok(Sequence(0, vec![asn1_metadata, asn1_public_key]))
+    let ec_public_key_id = ObjectIdentifier(0, oid!(1, 2, 840, 10045, 2, 1));
+    let secp256k1_id = ObjectIdentifier(0, oid!(1, 3, 132, 0, 10));
+    let metadata = Sequence(0, vec![ec_public_key_id, secp256k1_id]);
+    let data = BitString(0, bytes.len() * 8, bytes);
+    Ok(Sequence(0, vec![metadata, data]))
 }
 
 #[cfg(feature = "pem")]
@@ -117,7 +113,7 @@ N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
         let identity = Secp256k1Identity::from_pem(IDENTITY_FILE.as_bytes())
             .expect("Cannot create secp256k1 identity from PEM file.");
 
-        //
+        // Assert the DER-encoded public key matches what we would expect.
         assert!(DER_ENCODED_PUBLIC_KEY == hex::encode(identity.der_encoded_public_key));
     }
 }
