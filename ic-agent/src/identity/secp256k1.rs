@@ -40,11 +40,11 @@ impl Secp256k1Identity {
     pub fn from_private_key(private_key: EcKey<Private>) -> Self {
         let group = private_key.group();
         let public_key = EcKey::from_public_key(group, private_key.public_key())
-            .expect("Cannot derive secp256k1 public key.");   
+            .expect("Cannot derive secp256k1 public key.");
         let asn1_block = public_key_to_asn1_block(public_key.clone())
             .expect("Cannot ASN1 encode secp256k1 public key.");
-        let der_encoded_public_key = to_der(&asn1_block)
-            .expect("Cannot DER encode secp256k1 public key.");
+        let der_encoded_public_key =
+            to_der(&asn1_block).expect("Cannot DER encode secp256k1 public key.");
         Self {
             private_key,
             public_key,
@@ -80,17 +80,18 @@ impl Identity for Secp256k1Identity {
 
 fn public_key_to_asn1_block(public_key: EcKey<Public>) -> Result<ASN1Block, ErrorStack> {
     let mut context = BigNumContext::new()?;
-    let bytes = public_key
-        .public_key()
-        .to_bytes(
-            public_key.group(),
-            PointConversionForm::UNCOMPRESSED,
-            &mut context,
-        )?;
-    let asn1_metadata = Sequence(0, vec![
-        ObjectIdentifier(0, oid!(1, 2, 840, 10045, 2, 1)),
-        ObjectIdentifier(0, oid!(1, 3, 132, 0, 10)),
-    ]);
+    let bytes = public_key.public_key().to_bytes(
+        public_key.group(),
+        PointConversionForm::UNCOMPRESSED,
+        &mut context,
+    )?;
+    let asn1_metadata = Sequence(
+        0,
+        vec![
+            ObjectIdentifier(0, oid!(1, 2, 840, 10045, 2, 1)),
+            ObjectIdentifier(0, oid!(1, 3, 132, 0, 10)),
+        ],
+    );
     let asn1_public_key = BitString(0, bytes.len() * 8, bytes);
     Ok(Sequence(0, vec![asn1_metadata, asn1_public_key]))
 }
