@@ -27,7 +27,7 @@ pub enum AgentError {
     #[error("Cannot calculate a RequestID: {0}")]
     CannotCalculateRequestId(#[from] RequestIdError),
 
-    #[error("Could not reach the server")]
+    #[error("Could not reach the server: {0}")]
     ReqwestError(#[from] reqwest::Error),
 
     #[error("Candid returned an error: {0}")]
