@@ -7,12 +7,9 @@ use openssl::bn::BigNumContext;
 use openssl::ec::{EcKey, PointConversionForm};
 use openssl::ecdsa::EcdsaSig;
 use openssl::error::ErrorStack;
-use openssl::hash::MessageDigest;
-use openssl::nid::Nid;
-use openssl::pkey::{PKey, Private, Public};
-use openssl::sign::Signer;
+use openssl::pkey::{Private, Public};
 use simple_asn1::ASN1Block;
-use simple_asn1::ASN1Block::{BitString, Integer, ObjectIdentifier, Sequence};
+use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, Sequence};
 use simple_asn1::{oid, to_der, OID};
 
 #[derive(Clone, Debug)]
