@@ -91,7 +91,7 @@ fn public_key_to_asn1_block(public_key: EcKey<Public>) -> Result<ASN1Block, Erro
 }
 
 mod test {
-    use super::*;
+    use crate::identity::secp256k1::Secp256k1Identity;
 
     fn create_identity() -> Secp256k1Identity {
         // IDENTITY_FILE was generated from the the following commands:
