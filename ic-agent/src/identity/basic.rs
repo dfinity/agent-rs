@@ -1,6 +1,8 @@
 use crate::export::Principal;
-use crate::identity::error::PemError;
 use crate::{Identity, Signature};
+
+#[cfg(feature = "pem")]
+use crate::identity::error::PemError;
 
 use num_bigint::BigUint;
 use ring::signature::{Ed25519KeyPair, KeyPair};

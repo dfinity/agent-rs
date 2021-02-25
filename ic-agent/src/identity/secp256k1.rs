@@ -1,6 +1,8 @@
 use crate::export::Principal;
-use crate::identity::error::PemError;
 use crate::{Identity, Signature};
+
+#[cfg(feature = "pem")]
+use crate::identity::error::PemError;
 
 use num_bigint::BigUint;
 use openssl::bn::BigNumContext;
@@ -87,10 +89,12 @@ fn public_key_to_asn1_block(public_key: EcKey<Public>) -> Result<ASN1Block, Erro
     Ok(Sequence(0, vec![asn1_metadata, asn1_public_key]))
 }
 
+#[cfg(feature = "pem")]
 mod test {
-    use crate::identity::secp256k1::Secp256k1Identity;
+    use super::*;
 
-    fn create_identity() -> Secp256k1Identity {
+    #[test]
+    fn test_from_pem() {
         // IDENTITY_FILE was generated from the the following commands:
         // > openssl ecparam -name secp256k1 -genkey -noout -out identity.pem
         // > cat identity.pem
@@ -104,18 +108,16 @@ N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
 -----END EC PRIVATE KEY-----
 ";
 
-        Secp256k1Identity::from_pem(IDENTITY_FILE.as_bytes())
-            .expect("Cannot create secp256k1 identity from PEM file.")
-    }
-
-    #[test]
-    fn test_from_pem() {
         // DER_ENCODED_PUBLIC_KEY was generated from the the following commands:
         // > openssl ec -in identity.pem -pubout -outform DER -out public.der
         // > hexdump -ve '1/1 "%.2x"' public.der
         const DER_ENCODED_PUBLIC_KEY: &str = "3056301006072a8648ce3d020106052b8104000a0342000480ef3bac9d68cf374cbc9c9943e180043a94c462ef8270274e57089d5dcdba1b8fbf83b7546ccc1b3781377776e9c4710fdf533ed9bcba8d8ebb32a14a2aba11";
 
-        let identity = create_identity();
+        // Create a secp256k1 identity from a PEM file.
+        let identity = Secp256k1Identity::from_pem(IDENTITY_FILE.as_bytes())
+            .expect("Cannot create secp256k1 identity from PEM file.");
+
+        //
         assert!(DER_ENCODED_PUBLIC_KEY == hex::encode(identity.der_encoded_public_key));
     }
 }
