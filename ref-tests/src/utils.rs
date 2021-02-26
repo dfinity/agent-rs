@@ -4,8 +4,10 @@ use ic_agent::identity::BasicIdentity;
 use ic_agent::{Agent, Identity};
 use ic_identity_hsm::HardwareIdentity;
 use ic_utils::call::AsyncCall;
+use ic_utils::interfaces::management_canister::MemoryAllocation;
 use ic_utils::interfaces::ManagementCanister;
 use ring::signature::Ed25519KeyPair;
+use std::convert::TryFrom;
 use std::error::Error;
 use std::future::Future;
 use std::path::Path;
@@ -159,6 +161,10 @@ pub async fn create_wallet_canister(
 
     ic00.install_code(&canister_id, &canister_wasm)
         .with_raw_arg(vec![])
+        .with_memory_allocation(
+            MemoryAllocation::try_from(8000000000_u64)
+                .expect("Memory allocation must be between 0 and 2^48 (i.e 256TB), inclusively."),
+        )
         .call_and_wait(create_waiter())
         .await?;
 
