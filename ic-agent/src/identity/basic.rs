@@ -1,24 +1,13 @@
 use crate::export::Principal;
 use crate::{Identity, Signature};
+
+#[cfg(feature = "pem")]
+use crate::identity::error::PemError;
+
 use num_bigint::BigUint;
 use ring::signature::{Ed25519KeyPair, KeyPair};
 use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, Sequence};
 use simple_asn1::{oid, to_der, OID};
-use thiserror::Error;
-
-/// An error happened while reading a PEM file to create a BasicIdentity.
-#[derive(Error, Debug)]
-pub enum PemError {
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-
-    #[cfg(feature = "pem")]
-    #[error("An error occurred while reading the file: {0}")]
-    PemError(#[from] pem::PemError),
-
-    #[error("A key was rejected by Ring: {0}")]
-    KeyRejected(#[from] ring::error::KeyRejected),
-}
 
 /// A Basic Identity which sign using an ED25519 key pair.
 pub struct BasicIdentity {
