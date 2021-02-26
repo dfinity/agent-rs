@@ -25,7 +25,7 @@ mime = "0.3.16"
 num-bigint = "0.3.1"
 openssl = "0.10.32"
 rand = "0.7.2"
-reqwest = { version = "0.10.4", features = [ "blocking", "json", "rustls-tls" ] }
+reqwest = { version = "0.11.1", features = [ "blocking", "json", "rustls-tls" ] }
 rustls = "0.18.0"
 ring = { version = "0.16.11", features = ["std"] }
 serde = { version = "1.0.101", features = ["derive"] }
