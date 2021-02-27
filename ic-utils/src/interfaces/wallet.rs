@@ -268,7 +268,7 @@ impl<'agent> Canister<'agent, Wallet> {
         &'canister self,
         destination: &'_ Canister<'agent, Wallet>,
         amount: u64,
-    ) -> impl 'agent + AsyncCall<()> {
+    ) -> impl 'agent + AsyncCall<(Result<(), String>,)> {
         #[derive(CandidType)]
         struct In {
             canister: Principal,
@@ -296,7 +296,7 @@ impl<'agent> Canister<'agent, Wallet> {
         &'canister self,
         cycles: u64,
         controller: Option<Principal>,
-    ) -> impl 'agent + AsyncCall<(CreateResult,)> {
+    ) -> impl 'agent + AsyncCall<(Result<CreateResult, String>,)> {
         #[derive(CandidType)]
         struct In {
             cycles: u64,
@@ -306,7 +306,7 @@ impl<'agent> Canister<'agent, Wallet> {
         self.update_("wallet_create_canister")
             .with_arg(In { cycles, controller })
             .build()
-            .map(|result: (CreateResult,)| (result.0,))
+            .map(|result: (Result<CreateResult, String>,)| (result.0,))
     }
 
     /// Create a wallet canister
@@ -314,7 +314,7 @@ impl<'agent> Canister<'agent, Wallet> {
         &'canister self,
         cycles: u64,
         controller: Option<Principal>,
-    ) -> impl 'agent + AsyncCall<(CreateResult,)> {
+    ) -> impl 'agent + AsyncCall<(Result<CreateResult, String>,)> {
         #[derive(CandidType)]
         struct In {
             cycles: u64,
@@ -324,7 +324,7 @@ impl<'agent> Canister<'agent, Wallet> {
         self.update_("wallet_create_wallet")
             .with_arg(In { cycles, controller })
             .build()
-            .map(|result: (CreateResult,)| (result.0,))
+            .map(|result: (Result<CreateResult, String>,)| (result.0,))
     }
 
     /// Store the wallet WASM inside the wallet canister.
