@@ -241,7 +241,7 @@ fn wallet_create_and_set_controller() {
     });
 }
 
-// #[ignore]
+#[ignore]
 #[test]
 fn wallet_create_wallet() {
     with_wallet_canister(None, |agent, wallet_id| async move {
@@ -382,7 +382,7 @@ fn wallet_create_wallet() {
     });
 }
 
-// #[ignore]
+#[ignore]
 #[test]
 fn wallet_canister_funds() {
     let provisional_amount = 1 << 40;
