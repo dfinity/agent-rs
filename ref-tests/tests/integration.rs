@@ -138,7 +138,7 @@ fn wallet_canister_forward() {
     });
 }
 
-// #[ignore]
+#[ignore]
 #[test]
 fn wallet_canister_create_and_install() {
     with_wallet_canister(None, |agent, wallet_id| async move {
@@ -187,7 +187,7 @@ fn wallet_canister_create_and_install() {
     });
 }
 
-// #[ignore]
+#[ignore]
 #[test]
 fn wallet_create_and_set_controller() {
     with_wallet_canister(None, |agent, wallet_id| async move {
@@ -266,7 +266,6 @@ fn wallet_create_wallet() {
 
         let child_create_res = child_create_res?;
 
-
         eprintln!(
             "Created child wallet one.\nChild wallet one canister id: {:?}",
             child_create_res.canister_id.to_text()
@@ -340,10 +339,11 @@ fn wallet_create_wallet() {
         let mut args = Argument::default();
         args.push_idl_arg(create_args);
 
-        let (grandchild_create_res,): (Result<ic_utils::interfaces::wallet::CreateResult, String>,) = wallet
-            .call(&child_wallet_two, "wallet_create_wallet", args, 0)
-            .call_and_wait(create_waiter())
-            .await?;
+        let (grandchild_create_res,): (Result<ic_utils::interfaces::wallet::CreateResult, String>,) =
+            wallet
+                .call(&child_wallet_two, "wallet_create_wallet", args, 0)
+                .call_and_wait(create_waiter())
+                .await?;
         let grandchild_create_res = grandchild_create_res?;
         let grandchild_wallet = Canister::builder()
             .with_agent(&agent)
@@ -399,7 +399,8 @@ fn wallet_canister_funds() {
         alice
             .wallet_send(&bob, 1_000_000)
             .call_and_wait(create_waiter())
-            .await?.0?;
+            .await?
+            .0?;
 
         let (bob_balance,) = bob.wallet_balance().call().await?;
 

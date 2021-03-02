@@ -61,7 +61,8 @@ where
                 cycles: self.amount,
             })
             .build()
-            .and_then(|(result,): (CallResult,)| async move {
+            .and_then(|(result,): (Result<CallResult, String>,)| async move {
+                let result = result.map_err(AgentError::WalletCallFailed)?;
                 decode_args::<Out>(result.r#return.as_slice())
                     .map_err(|e| AgentError::CandidError(Box::new(e)))
             }))
