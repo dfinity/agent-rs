@@ -14,7 +14,7 @@ hyper = { version = "0.14.4", features = ["full"] }
 ic-agent = { path = "../ic-agent" }
 ic-types = { path = "../ic-types" }
 ic-utils = { path = "../ic-utils" }
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.2.0", features = ["full"] }
 serde = "1.0.115"
 serde_json = "1.0.57"
 url = "2.2.1"
