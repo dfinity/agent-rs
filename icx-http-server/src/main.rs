@@ -1,4 +1,5 @@
 use clap::{crate_authors, crate_version, AppSettings, Clap};
+use hyper::http::uri::Parts;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{body, Body, Client, Request, Response, Server, StatusCode, Uri};
 use ic_agent::export::Principal;
@@ -156,7 +157,6 @@ fn remove_hop_headers(
     }
     result
 }
-use hyper::http::uri::Parts;
 
 fn forward_uri<B>(forward_url: &str, req: &Request<B>) -> Result<Uri, Box<dyn Error>> {
     let uri = Uri::from_str(forward_url)?;
