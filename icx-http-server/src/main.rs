@@ -42,9 +42,8 @@ fn resolve_canister_id_from_hostname(hostname: &str) -> Option<Principal> {
     // Check if it's localhost or ic0.
     match url.host()?.split('.').collect::<Vec<&str>>().as_slice() {
         [.., maybe_canister_id, "localhost"] | [.., maybe_canister_id, "ic0", "app"] => {
-            match Principal::from_text(maybe_canister_id) {
-                Ok(canister_id) => return Some(canister_id),
-                _ => {}
+            if let Ok(canister_id) = Principal::from_text(maybe_canister_id) {
+                return Some(canister_id);
             }
         }
         _ => {}
@@ -244,7 +243,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let service = make_service_fn(|socket: &hyper::server::conn::AddrStream| {
         let ip_addr = socket.remote_addr();
-        let ip_addr = ip_addr.ip().clone();
+        let ip_addr = ip_addr.ip();
 
         // Select an agent.
         let replica_url_array = replicas.lock().unwrap();
