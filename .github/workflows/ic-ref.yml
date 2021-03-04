@@ -40,7 +40,7 @@ jobs:
           # Personal Read-only Access Token created by hans.larsen@dfinity.org
           token: ${{ secrets.IC_REF_TOKEN }}
           path: wallet-rs
-          ref: 4e07a51e5c8489870fd86cabe2987993f747f8dd
+          ref: 4a7561aaa17a90e9fccf95a4e17f4189ce5e8d63
 
       - name: Cache ~/.cabal/store
         uses: actions/cache@v2
