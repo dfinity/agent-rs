@@ -25,8 +25,8 @@ mime = "0.3.16"
 num-bigint = "0.3.1"
 openssl = "0.10.32"
 rand = "0.7.2"
-reqwest = { version = "0.10.4", features = [ "blocking", "json", "rustls-tls" ] }
-rustls = "0.18.0"
+reqwest = { version = "0.11", features = [ "blocking", "json", "rustls-tls" ] }
+rustls = "0.19.0"
 ring = { version = "0.16.11", features = ["std"] }
 serde = { version = "1.0.101", features = ["derive"] }
 serde_bytes = "0.11.2"
@@ -44,7 +44,7 @@ optional = true
 candid = "0.6.15"
 mockito = "0.27.0"
 proptest = "0.9.5"
-tokio = "0.2.22"
+tokio = { version = "1.2.0", features = ["full"] }
 
 [features]
 default = ["pem"]
