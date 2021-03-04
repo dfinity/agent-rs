@@ -2,7 +2,11 @@
 name = "ic-identity-hsm"
 version = "0.2.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
-edition = "2018"
+description = "Identity implementation for HSM for the ic-agent package."
+homepage = "https://docs.rs/ic-identity-hsm"
+documentation = "https://docs.rs/ic-identity-hsm"
+license = "Apache-2.0"
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
