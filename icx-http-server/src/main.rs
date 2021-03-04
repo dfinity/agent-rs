@@ -23,11 +23,11 @@ use std::sync::{Arc, Mutex};
 )]
 struct Opts {
     /// The address to bind to.
-    #[clap(default_value = "127.0.0.1:3000")]
+    #[clap(long, default_value = "127.0.0.1:3000")]
     address: SocketAddr,
 
     /// Some input. Because this isn't an Option<T> it's required to be used
-    #[clap(default_value = "http://localhost:8000/")]
+    #[clap(long, default_value = "http://localhost:8000/")]
     replica: Vec<String>,
 
     /// Whether or not this is run in a debug context (e.g. errors returned in responses
