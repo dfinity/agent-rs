@@ -85,7 +85,7 @@ where
     R: Future<Output = Result<(), Box<dyn Error>>>,
     F: FnOnce(Agent) -> R,
 {
-    let mut runtime = tokio::runtime::Runtime::new().expect("Could not create tokio runtime.");
+    let runtime = tokio::runtime::Runtime::new().expect("Could not create tokio runtime.");
     runtime.block_on(async {
         let agent_identity = create_identity()
             .await
