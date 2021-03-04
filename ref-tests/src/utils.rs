@@ -19,8 +19,7 @@ const HSM_PIN: &str = "HSM_PIN";
 
 pub fn create_waiter() -> Delay {
     Delay::builder()
-        .throttle(std::time::Duration::from_millis(5))
-        .timeout(std::time::Duration::from_secs(60 * 5))
+        .throttle(std::time::Duration::from_secs(5))
         .build()
 }
 

@@ -44,10 +44,11 @@ where
     }
 
     pub fn build(self) -> Result<impl 'agent + AsyncCall<Out>, AgentError> {
-        #[derive(CandidType)]
+        #[derive(CandidType, Deserialize)]
         struct In {
             canister: Principal,
             method_name: String,
+            #[serde(with = "serde_bytes")]
             args: Vec<u8>,
             cycles: u64,
         }
@@ -333,8 +334,13 @@ impl<'agent> Canister<'agent, Wallet> {
         &'canister self,
         wasm_module: Vec<u8>,
     ) -> impl 'agent + AsyncCall<()> {
+        #[derive(CandidType, Deserialize)]
+        struct In {
+            #[serde(with = "serde_bytes")]
+            wasm_module: Vec<u8>,
+        }
         self.update_("wallet_store_wallet_wasm")
-            .with_arg(wasm_module)
+            .with_arg(In { wasm_module })
             .build()
     }
 
