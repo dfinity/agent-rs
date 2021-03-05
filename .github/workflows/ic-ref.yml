@@ -88,6 +88,8 @@ jobs:
 
       - name: Build wallet canister
         run: |
+          set -ex
+          sudo apt-get install -f gzip
           cd wallet-rs/wallet
           sh build.sh
           cp target/wasm32-unknown-unknown/release/wallet-opt.wasm $HOME/wallet.wasm
