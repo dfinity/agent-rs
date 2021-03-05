@@ -86,6 +86,7 @@ fn public_key_to_asn1_block(public_key: EcKey<Public>) -> Result<ASN1Block, Erro
 }
 
 #[cfg(feature = "pem")]
+#[cfg(test)]
 mod test {
     use super::*;
 
