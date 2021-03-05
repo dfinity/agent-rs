@@ -2,8 +2,9 @@
 //!
 //! Contrary to ic-ref.rs, these tests are not meant to match any other tests. They're
 //! integration tests with a running IC-Ref.
+use ic_agent::agent::agent_error::HttpErrorPayload;
 use ic_agent::export::Principal;
-use ic_agent::{AgentError, HttpErrorPayload};
+use ic_agent::AgentError;
 use ic_utils::call::AsyncCall;
 use ic_utils::call::SyncCall;
 use ic_utils::interfaces::management_canister::InstallMode;

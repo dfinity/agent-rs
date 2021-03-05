@@ -2,7 +2,6 @@ use crate::agent::status::Status;
 use crate::hash_tree::Label;
 use crate::RequestIdError;
 use leb128::read;
-use reqwest::StatusCode;
 use std::fmt::{Debug, Display, Formatter};
 use std::str::Utf8Error;
 use thiserror::Error;
@@ -26,9 +25,6 @@ pub enum AgentError {
 
     #[error("Cannot calculate a RequestID: {0}")]
     CannotCalculateRequestId(#[from] RequestIdError),
-
-    #[error("Could not reach the server: {0}")]
-    ReqwestError(#[from] reqwest::Error),
 
     #[error("Candid returned an error: {0}")]
     CandidError(Box<dyn Send + Sync + std::error::Error>),
@@ -103,6 +99,12 @@ pub enum AgentError {
 
     #[error("Failed to initialize the BLS library")]
     BlsInitializationFailure(),
+
+    #[error("Missing replica facade in the builder.")]
+    MissingReplicaFacade(),
+
+    #[error("An error happened during communication with the replica: {0}")]
+    ReplicaV1FacadeError(Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl PartialEq for AgentError {
@@ -129,7 +131,7 @@ impl HttpErrorPayload {
             } if is_text(content_type) => {
                 f.write_fmt(format_args!(
                     "Http Error: status {}, content type {:?}, content: {}",
-                    StatusCode::from_u16(*status)
+                    http::StatusCode::from_u16(*status)
                         .map_or_else(|_| format!("{}", status), |code| format!("{}", code)),
                     content_type.clone().unwrap_or_else(|| "".to_string()),
                     String::from_utf8(content.to_vec()).unwrap_or_else(|from_utf8_err| format!(
@@ -145,7 +147,7 @@ impl HttpErrorPayload {
             } => {
                 f.write_fmt(format_args!(
                     r#"Http Error: status {}, content type {:?}, content: {:?}"#,
-                    StatusCode::from_u16(*status)
+                    http::StatusCode::from_u16(*status)
                         .map_or_else(|_| format!("{}", status), |code| format!("{}", code)),
                     content_type.clone().unwrap_or_else(|| "".to_string()),
                     content
@@ -182,7 +184,8 @@ fn is_text(content_type: &Option<String>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::{AgentError, HttpErrorPayload};
+    use super::HttpErrorPayload;
+    use crate::AgentError;
 
     #[test]
     fn http_payload_works_with_content_type_none() {

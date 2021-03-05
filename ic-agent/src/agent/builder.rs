@@ -1,5 +1,7 @@
-use crate::agent::AgentConfig;
-use crate::{Agent, AgentError, Identity, NonceFactory, PasswordManager};
+use crate::agent::http_facade::ReqwestHttpReplicaV1Facade;
+use crate::agent::{AgentConfig, ReplicaV1Facade};
+use crate::{Agent, AgentError, Identity, NonceFactory};
+use std::sync::Arc;
 
 pub struct AgentBuilder {
     config: AgentConfig,
@@ -20,10 +22,17 @@ impl AgentBuilder {
     }
 
     /// Set the URL of the [Agent].
+    #[cfg(feature = "reqwest")]
+    #[deprecated(since = "0.3.0", note = "Prefer using with_facade now.")]
     pub fn with_url<S: Into<String>>(self, url: S) -> Self {
-        AgentBuilder {
+        self.with_facade(ReqwestHttpReplicaV1Facade::create(url).unwrap())
+    }
+
+    /// Set a Replica facade to talk to serve as the replica interface.
+    pub fn with_facade<F: 'static + ReplicaV1Facade + Send + Sync>(self, facade: F) -> Self {
+        Self {
             config: AgentConfig {
-                url: url.into(),
+                facade: Some(Arc::new(facade)),
                 ..self.config
             },
         }
@@ -46,7 +55,7 @@ impl AgentBuilder {
     {
         AgentBuilder {
             config: AgentConfig {
-                identity: Box::new(identity),
+                identity: Arc::new(identity),
                 ..self.config
             },
         }
@@ -57,36 +66,7 @@ impl AgentBuilder {
     pub fn with_boxed_identity(self, identity: Box<dyn Identity + Send + Sync>) -> Self {
         AgentBuilder {
             config: AgentConfig {
-                identity,
-                ..self.config
-            },
-        }
-    }
-
-    /// Set the password manager. If the Agent makes a connection which requires an
-    /// HTTP Authentication, it will ask this provider for a username and password
-    /// pair.
-    pub fn with_password_manager<P>(self, password_manager: P) -> Self
-    where
-        P: 'static + PasswordManager + Send + Sync,
-    {
-        AgentBuilder {
-            config: AgentConfig {
-                password_manager: Some(Box::new(password_manager)),
-                ..self.config
-            },
-        }
-    }
-
-    /// Same as [with_password_manager], but provides a boxed implementation instead
-    /// of a direct type.
-    pub fn with_boxed_password_manager(
-        self,
-        password_manager: Box<impl 'static + PasswordManager + Send + Sync>,
-    ) -> Self {
-        AgentBuilder {
-            config: AgentConfig {
-                password_manager: Some(password_manager),
+                identity: Arc::from(identity),
                 ..self.config
             },
         }
