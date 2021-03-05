@@ -4,8 +4,10 @@ use ic_agent::identity::BasicIdentity;
 use ic_agent::{Agent, Identity};
 use ic_identity_hsm::HardwareIdentity;
 use ic_utils::call::AsyncCall;
+use ic_utils::interfaces::management_canister::MemoryAllocation;
 use ic_utils::interfaces::ManagementCanister;
 use ring::signature::Ed25519KeyPair;
+use std::convert::TryFrom;
 use std::error::Error;
 use std::future::Future;
 use std::path::Path;
@@ -17,8 +19,7 @@ const HSM_PIN: &str = "HSM_PIN";
 
 pub fn create_waiter() -> Delay {
     Delay::builder()
-        .throttle(std::time::Duration::from_millis(5))
-        .timeout(std::time::Duration::from_secs(60 * 5))
+        .throttle(std::time::Duration::from_secs(5))
         .build()
 }
 
@@ -131,27 +132,38 @@ pub async fn create_universal_canister(agent: &Agent) -> Result<Principal, Box<d
     Ok(canister_id)
 }
 
-pub async fn create_wallet_canister(agent: &Agent) -> Result<Principal, Box<dyn Error>> {
+pub fn get_wallet_wasm_from_env() -> Vec<u8> {
     let canister_env = std::env::var("IC_WALLET_CANISTER_PATH")
         .expect("Need to specify the IC_WALLET_CANISTER_PATH environment variable.");
 
     let canister_path = Path::new(&canister_env);
 
-    let canister_wasm = if !canister_path.exists() {
+    if !canister_path.exists() {
         panic!("Could not find the wallet canister WASM file.");
     } else {
         std::fs::read(&canister_path).expect("Could not read file.")
-    };
+    }
+}
+
+pub async fn create_wallet_canister(
+    agent: &Agent,
+    cycles: Option<u64>,
+) -> Result<Principal, Box<dyn Error>> {
+    let canister_wasm = get_wallet_wasm_from_env();
 
     let ic00 = ManagementCanister::create(&agent);
-    let provisional_amount = 1 << 40;
+
     let (canister_id,) = ic00
-        .provisional_create_canister_with_cycles(Some(provisional_amount))
+        .provisional_create_canister_with_cycles(cycles)
         .call_and_wait(create_waiter())
         .await?;
 
     ic00.install_code(&canister_id, &canister_wasm)
         .with_raw_arg(vec![])
+        .with_memory_allocation(
+            MemoryAllocation::try_from(8000000000_u64)
+                .expect("Memory allocation must be between 0 and 2^48 (i.e 256TB), inclusively."),
+        )
         .call_and_wait(create_waiter())
         .await?;
 
@@ -169,13 +181,13 @@ where
     })
 }
 
-pub fn with_wallet_canister<F, R>(f: F)
+pub fn with_wallet_canister<F, R>(cycles: Option<u64>, f: F)
 where
     R: Future<Output = Result<(), Box<dyn Error>>>,
     F: FnOnce(Agent, Principal) -> R,
 {
     with_agent(|agent| async move {
-        let canister_id = create_wallet_canister(&agent).await?;
+        let canister_id = create_wallet_canister(&agent, cycles).await?;
         f(agent, canister_id).await
     })
 }
