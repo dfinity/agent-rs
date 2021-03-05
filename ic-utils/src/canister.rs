@@ -27,7 +27,7 @@ pub struct CanisterBuilder<'agent, T = ()> {
     interface: T,
 }
 
-impl<'agent, T> CanisterBuilder<'agent, T> {
+impl<'agent, T> CanisterBuilder<'agent, T> where T: CanisterT<'agent>, {
     /// Attach a canister ID to this canister.
     pub fn with_canister_id<E, P>(self, canister_id: P) -> Self
     where
@@ -53,7 +53,7 @@ impl<'agent, T> CanisterBuilder<'agent, T> {
     }
 
     /// Create this canister abstraction after passing in all the necessary state.
-    pub fn build(self) -> Result<Canister<'agent, T>, CanisterBuilderError> {
+    pub fn build(self) -> Result<T, CanisterBuilderError> {
         let canister_id = if let Some(cid) = self.canister_id {
             cid?
         } else {
@@ -63,11 +63,7 @@ impl<'agent, T> CanisterBuilder<'agent, T> {
         let agent = self
             .agent
             .ok_or(CanisterBuilderError::MustSpecifyAnAgent())?;
-        Ok(Canister {
-            agent,
-            canister_id,
-            interface: self.interface,
-        })
+        Ok(T::build(canister_id, agent))
     }
 }
 
@@ -96,6 +92,28 @@ impl<'agent> CanisterBuilder<'agent, ()> {
             interface,
         }
     }
+}
+
+pub trait CanisterT<'agent> {
+    type Interface;
+
+    /// Get the canister ID of this canister.
+    fn canister_id_<'canister: 'agent>(&'canister self) -> &Principal;
+
+    /// Create an AsyncCallBuilder to do an update call.
+    fn update_<'canister: 'agent>(
+        &'canister self,
+        method_name: &str,
+    ) -> AsyncCallBuilder<'agent, 'canister, Self::Interface>;
+
+    /// Create a SyncCallBuilder to do a query call.
+    fn query_<'canister: 'agent>(
+        &'canister self,
+        method_name: &str,
+    ) -> SyncCallBuilder<'agent, 'canister, Self::Interface>;
+
+    fn build(caniter_id: Principal, agent: &Agent) -> Self;
+
 }
 
 /// Create an encapsulation of a Canister running on the Internet Computer.
