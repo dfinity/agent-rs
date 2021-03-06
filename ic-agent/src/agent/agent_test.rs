@@ -1,3 +1,6 @@
+// Disable these tests without the reqwest feature.
+#![cfg(feature = "reqwest")]
+
 use crate::agent::replica_api::{CallReply, QueryResponse};
 use crate::agent::Status;
 use crate::export::Principal;

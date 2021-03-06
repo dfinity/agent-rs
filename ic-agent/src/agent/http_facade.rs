@@ -1,5 +1,5 @@
 //! A [ReplicaFacade] that connects using a reqwest client.
-// #![cfg(feature = "reqwest")]
+#![cfg(feature = "reqwest")]
 
 use crate::agent::agent_error::HttpErrorPayload;
 use crate::AgentError;

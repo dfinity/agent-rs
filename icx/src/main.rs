@@ -423,7 +423,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     input.pop_front().unwrap(); // empty line.
                     line = input.pop_front().unwrap(); // envelope
                     let envelope = hex::decode(line)?;
-                    facade.submit(envelope, request_id.clone()).await?;
+                    facade.submit(envelope, request_id).await?;
                     eprint!("Request ID: ");
                     println!("0x{}", hex::encode(request_id.as_slice()));
                 }

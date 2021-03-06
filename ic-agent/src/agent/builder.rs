@@ -1,4 +1,3 @@
-use crate::agent::http_facade::ReqwestHttpReplicaV1Facade;
 use crate::agent::{AgentConfig, ReplicaV1Facade};
 use crate::{Agent, AgentError, Identity, NonceFactory};
 use std::sync::Arc;
@@ -25,6 +24,8 @@ impl AgentBuilder {
     #[cfg(feature = "reqwest")]
     #[deprecated(since = "0.3.0", note = "Prefer using with_facade now.")]
     pub fn with_url<S: Into<String>>(self, url: S) -> Self {
+        use crate::agent::http_facade::ReqwestHttpReplicaV1Facade;
+
         self.with_facade(ReqwestHttpReplicaV1Facade::create(url).unwrap())
     }
 

@@ -254,9 +254,7 @@ impl Agent {
         serializer.self_describe()?;
         envelope.serialize(&mut serializer)?;
 
-        self.facade
-            .submit(serialized_bytes, request_id.clone())
-            .await?;
+        self.facade.submit(serialized_bytes, request_id).await?;
         Ok(request_id)
     }
 
