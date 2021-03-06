@@ -95,7 +95,8 @@ impl<'agent> CanisterBuilder<'agent, ()> {
 }
 
 pub trait CanisterT<'agent> {
-    type Interface;
+
+    fn agent_<'canister: 'agent>(&'canister self) -> &Agent;
 
     /// Get the canister ID of this canister.
     fn canister_id_<'canister: 'agent>(&'canister self) -> &Principal;
@@ -104,15 +105,15 @@ pub trait CanisterT<'agent> {
     fn update_<'canister: 'agent>(
         &'canister self,
         method_name: &str,
-    ) -> AsyncCallBuilder<'agent, 'canister, Self::Interface>;
+    ) -> AsyncCallBuilder<'agent>;
 
-    /// Create a SyncCallBuilder to do a query call.
-    fn query_<'canister: 'agent>(
-        &'canister self,
-        method_name: &str,
-    ) -> SyncCallBuilder<'agent, 'canister, Self::Interface>;
+    // / Create a SyncCallBuilder to do a query call.
+    // fn query_<'canister: 'agent>(
+    //     &'canister self,
+    //     method_name: &str,
+    // ) -> SyncCallBuilder<'agent, 'canister, Self::Interface>;
 
-    fn build(caniter_id: Principal, agent: &Agent) -> Self;
+    fn build(canister_id: Principal, agent: &Agent) -> Self where Self: Sized;
 
 }
 
@@ -140,21 +141,21 @@ impl<'agent, T> Canister<'agent, T> {
         &self.interface
     }
 
-    /// Create an AsyncCallBuilder to do an update call.
-    pub fn update_<'canister: 'agent>(
-        &'canister self,
-        method_name: &str,
-    ) -> AsyncCallBuilder<'agent, 'canister, T> {
-        AsyncCallBuilder::new(self, method_name)
-    }
+    // /// Create an AsyncCallBuilder to do an update call.
+    // pub fn update_<'canister: 'agent>(
+    //     &'canister self,
+    //     method_name: &str,
+    // ) -> AsyncCallBuilder<'agent, 'canister> {
+    //     AsyncCallBuilder::new(self, method_name)
+    // }
 
-    /// Create a SyncCallBuilder to do a query call.
-    pub fn query_<'canister: 'agent>(
-        &'canister self,
-        method_name: &str,
-    ) -> SyncCallBuilder<'agent, 'canister, T> {
-        SyncCallBuilder::new(self, method_name)
-    }
+    // /// Create a SyncCallBuilder to do a query call.
+    // pub fn query_<'canister: 'agent>(
+    //     &'canister self,
+    //     method_name: &str,
+    // ) -> SyncCallBuilder<'agent, 'canister, T> {
+    //     SyncCallBuilder::new(self, method_name)
+    // }
 }
 
 impl<'agent, T> Canister<'agent, T>
@@ -303,18 +304,18 @@ impl<'agent, 'canister: 'agent, Interface> SyncCallBuilder<'agent, 'canister, In
 /// A builder for an asynchronous call (ie. update) to the Internet Computer.
 ///
 /// See [AsyncCaller] for a description of this structure.
-pub struct AsyncCallBuilder<'agent, 'canister: 'agent, T> {
-    canister: &'canister Canister<'agent, T>,
+pub struct AsyncCallBuilder<'agent> {
+    canister: &'agent dyn CanisterT<'agent>,
     method_name: String,
     arg: Argument,
 }
 
-impl<'agent, 'canister: 'agent, T> AsyncCallBuilder<'agent, 'canister, T> {
+impl<'agent> AsyncCallBuilder<'agent> {
     /// Create a new instance of an AsyncCallBuilder.
     pub(super) fn new(
-        canister: &'canister Canister<'agent, T>,
+        canister: &'agent dyn CanisterT<'agent>,
         method_name: &str,
-    ) -> AsyncCallBuilder<'agent, 'canister, T> {
+    ) -> Self {
         Self {
             canister,
             method_name: method_name.to_string(),
@@ -323,13 +324,13 @@ impl<'agent, 'canister: 'agent, T> AsyncCallBuilder<'agent, 'canister, T> {
     }
 }
 
-impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, Interface> {
+impl<'agent> AsyncCallBuilder<'agent> {
     /// Add an argument to the candid argument list. This requires Candid arguments, if
     /// there is a raw argument set (using [with_arg_raw]), this will fail.
     pub fn with_arg<Argument>(
         mut self,
         arg: Argument,
-    ) -> AsyncCallBuilder<'agent, 'canister, Interface>
+    ) -> AsyncCallBuilder<'agent>
     where
         Argument: CandidType + Sync + Send,
     {
@@ -339,20 +340,20 @@ impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, I
 
     /// Replace the argument with raw argument bytes. This will overwrite the current
     /// argument set, so calling this method twice will discard the first argument.
-    pub fn with_arg_raw(mut self, arg: Vec<u8>) -> AsyncCallBuilder<'agent, 'canister, Interface> {
+    pub fn with_arg_raw(mut self, arg: Vec<u8>) -> AsyncCallBuilder<'agent> {
         self.arg.set_raw_arg(arg);
         self
     }
 
     /// Builds an [AsyncCaller] from this builder's state.
-    pub fn build<Output>(self) -> AsyncCaller<'canister, Output>
+    pub fn build<Output>(self) -> AsyncCaller<'agent, Output>
     where
         Output: for<'de> ArgumentDecoder<'de> + Send + Sync,
     {
         let c = self.canister;
         AsyncCaller {
-            agent: c.agent,
-            canister_id: c.canister_id.clone(),
+            agent: c.agent_(),
+            canister_id: c.canister_id_().clone(),
             method_name: self.method_name.clone(),
             arg: self.arg.serialize(),
             expiry: Default::default(),

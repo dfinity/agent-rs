@@ -1,6 +1,6 @@
 use crate::call::{AsyncCall, AsyncCaller, SyncCall};
 use crate::canister::{Argument, CanisterBuilder};
-use crate::CanisterT;
+use crate::canister::{AsyncCallBuilder, CanisterT};
 use async_trait::async_trait;
 use candid::de::ArgumentDecoder;
 use candid::{decode_args, CandidType, Deserialize};
@@ -104,103 +104,127 @@ pub struct Wallet<'agent> {
     pub canister_id: Principal,
 }
 
-// #[derive(CandidType, Debug, Deserialize)]
-// pub enum EventKind {
-//     CyclesSent {
-//         to: Principal,
-//         amount: u64,
-//     },
-//     CyclesReceived {
-//         from: Principal,
-//         amount: u64,
-//     },
-//     AddressAdded {
-//         id: Principal,
-//         name: Option<String>,
-//         role: Role,
-//     },
-//     AddressRemoved {
-//         id: Principal,
-//     },
-//     CanisterCreated {
-//         canister: Principal,
-//         cycles: u64,
-//     },
-//     CanisterCalled {
-//         canister: Principal,
-//         method_name: String,
-//         cycles: u64,
-//     },
-// }
+#[derive(CandidType, Debug, Deserialize)]
+pub enum EventKind {
+    CyclesSent {
+        to: Principal,
+        amount: u64,
+    },
+    CyclesReceived {
+        from: Principal,
+        amount: u64,
+    },
+    AddressAdded {
+        id: Principal,
+        name: Option<String>,
+        role: Role,
+    },
+    AddressRemoved {
+        id: Principal,
+    },
+    CanisterCreated {
+        canister: Principal,
+        cycles: u64,
+    },
+    CanisterCalled {
+        canister: Principal,
+        method_name: String,
+        cycles: u64,
+    },
+}
 
-// #[derive(CandidType, Debug, Deserialize)]
-// pub struct Event {
-//     pub id: u32,
-//     pub timestamp: u64,
-//     pub kind: EventKind,
-// }
+#[derive(CandidType, Debug, Deserialize)]
+pub struct Event {
+    pub id: u32,
+    pub timestamp: u64,
+    pub kind: EventKind,
+}
 
-// #[derive(CandidType, Debug, Deserialize)]
-// pub enum Role {
-//     Contact,
-//     Custodian,
-//     Controller,
-// }
+#[derive(CandidType, Debug, Deserialize)]
+pub enum Role {
+    Contact,
+    Custodian,
+    Controller,
+}
 
-// #[derive(CandidType, Debug, Deserialize)]
-// pub enum Kind {
-//     Unknown,
-//     User,
-//     Canister,
-// }
+#[derive(CandidType, Debug, Deserialize)]
+pub enum Kind {
+    Unknown,
+    User,
+    Canister,
+}
 
-// #[derive(CandidType, Debug, Deserialize)]
-// pub struct AddressEntry {
-//     pub id: Principal,
-//     pub name: Option<String>,
-//     pub kind: Kind,
-//     pub role: Role,
-// }
+#[derive(CandidType, Debug, Deserialize)]
+pub struct AddressEntry {
+    pub id: Principal,
+    pub name: Option<String>,
+    pub kind: Kind,
+    pub role: Role,
+}
 
-// #[derive(CandidType, Deserialize)]
-// pub struct BalanceResult {
-//     pub amount: u64,
-// }
+#[derive(CandidType, Deserialize)]
+pub struct BalanceResult {
+    pub amount: u64,
+}
 
-// #[derive(CandidType, Deserialize)]
-// pub struct ReceiveResult {
-//     pub accepted: u64,
-// }
+#[derive(CandidType, Deserialize)]
+pub struct ReceiveResult {
+    pub accepted: u64,
+}
 
-// #[derive(CandidType, Deserialize)]
-// pub struct CreateResult {
-//     pub canister_id: Principal,
-// }
+#[derive(CandidType, Deserialize)]
+pub struct CreateResult {
+    pub canister_id: Principal,
+}
 
-// #[derive(CandidType, Deserialize)]
-// pub struct CallResult {
-//     pub r#return: Vec<u8>,
-// }
+#[derive(CandidType, Deserialize)]
+pub struct CallResult {
+    pub r#return: Vec<u8>,
+}
 
-impl Wallet {
-    /// Create an instance of a [Canister] implementing the Wallet interface
-    /// and pointing to the right Canister ID.
-    pub fn create(agent: &Agent, canister_id: Principal) -> Canister<Wallet> {
-        Canister::builder()
-            .with_agent(agent)
-            .with_canister_id(canister_id)
-            .with_interface(Wallet)
-            .build()
-            .unwrap()
+impl<'agent> Wallet<'agent> {
+    // Create an instance of a [Canister] implementing the Wallet interface
+    // and pointing to the right Canister ID.
+    pub fn create(agent: &Agent, canister_id: Principal) -> Wallet {
+        unimplemented!()
+        // Canister::builder()
+        //     .with_agent(agent)
+        //     .with_canister_id(canister_id)
+        //     .with_interface(Wallet)
+        //     .build()
+        //     .unwrap()
     }
 
     /// Creating a CanisterBuilder with the right interface and Canister Id. This can
     /// be useful, for example, for providing additional Builder information.
     pub fn with_agent(agent: &Agent) -> CanisterBuilder<Wallet> {
-        Canister::builder().with_agent(agent).with_interface(Wallet)
+        // Canister::builder().with_agent(agent).with_interface(Wallet)
+        unimplemented!()
     }
 }
 
+impl<'agent> CanisterT<'agent> for Wallet<'agent> {
+
+    fn agent_<'canister: 'agent>(&'canister self) -> &Agent {unimplemented!()}
+
+    /// Get the canister ID of this canister.
+    fn canister_id_<'canister: 'agent>(&'canister self) -> &Principal {unimplemented!()}
+
+    /// Create an AsyncCallBuilder to do an update call.
+    fn update_<'canister: 'agent>(
+        &'canister self,
+        method_name: &str,
+    ) -> AsyncCallBuilder<'agent> {unimplemented!()}
+
+    // / Create a SyncCallBuilder to do a query call.
+    // fn query_<'canister: 'agent>(
+    //     &'canister self,
+    //     method_name: &str,
+    // ) -> SyncCallBuilder<'agent, 'canister, Self::Interface> {unimplemented!()}
+
+    fn build(caniter_id: Principal, agent: &Agent) -> Self where Self: Sized {unimplemented!()}
+
+}
 // impl<'agent> Canister<'agent, Wallet> {
 //     pub fn name<'canister: 'agent>(&'canister self) -> impl 'agent + SyncCall<(Option<String>,)> {
 //         self.query_("name").build()
