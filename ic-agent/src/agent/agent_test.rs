@@ -1,5 +1,8 @@
+// Disable these tests without the reqwest feature.
+#![cfg(feature = "reqwest")]
+
 use crate::agent::replica_api::{CallReply, QueryResponse};
-use crate::agent::{AgentConfig, Status};
+use crate::agent::Status;
 use crate::export::Principal;
 use crate::{Agent, AgentError};
 use mockito::mock;
@@ -126,10 +129,7 @@ fn status() -> Result<(), AgentError> {
         .with_body(serde_cbor::to_vec(&response)?)
         .create();
 
-    let agent = Agent::new(AgentConfig {
-        url: mockito::server_url(),
-        ..Default::default()
-    })?;
+    let agent = Agent::builder().with_url(mockito::server_url()).build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async { agent.status().await });
 
@@ -152,10 +152,7 @@ fn status_okay() -> Result<(), AgentError> {
         .with_body(serde_cbor::to_vec(&response)?)
         .create();
 
-    let agent = Agent::new(AgentConfig {
-        url: mockito::server_url(),
-        ..Default::default()
-    })?;
+    let agent = Agent::builder().with_url(mockito::server_url()).build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(agent.status());
 
@@ -176,10 +173,7 @@ fn status_error() -> Result<(), AgentError> {
     // it is called.
     let _read_mock = mock("GET", "/api/v1/status").with_status(500).create();
 
-    let agent = Agent::new(AgentConfig {
-        url: mockito::server_url(),
-        ..Default::default()
-    })?;
+    let agent = Agent::builder().with_url(mockito::server_url()).build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async { agent.status().await });
 
