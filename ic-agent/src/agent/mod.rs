@@ -2,7 +2,7 @@
 pub(crate) mod agent_config;
 pub mod agent_error;
 pub(crate) mod builder;
-pub mod http_facade;
+pub mod http_transport;
 pub(crate) mod nonce;
 pub(crate) mod replica_api;
 pub(crate) mod response;
@@ -42,11 +42,16 @@ use std::time::Duration;
 const IC_REQUEST_DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 
-/// A facade that connects to the Replica and does requests. These requests can be of any type
-/// (does not have to be HTTP).
+/// A facade that connects to a Replica and does requests. These requests can be of any type
+/// (does not have to be HTTP). This trait is to inverse the control from the Agent over its
+/// connection code, and to resolve any direct dependencies to tokio or HTTP code from this
+/// crate.
+///
+/// An implementation of this trait for HTTP transport is implemented using Reqwest, with the
+/// feature flag `reqwest`. This might be deprecated in the future.
 ///
 /// Any error returned by these methods will bubble up to the code that called the [Agent].
-pub trait ReplicaV1Facade {
+pub trait ReplicaV1Transport {
     /// Sends a synchronous request to a Replica. This call includes the body of the request message
     /// itself (envelope).
     ///
@@ -141,7 +146,7 @@ pub struct Agent {
     identity: Arc<dyn Identity + Send + Sync>,
     ingress_expiry_duration: Duration,
     root_key: Arc<RwLock<Option<Vec<u8>>>>,
-    facade: Arc<dyn ReplicaV1Facade + Send + Sync>,
+    transport: Arc<dyn ReplicaV1Transport + Send + Sync>,
 }
 
 impl Agent {
@@ -162,7 +167,9 @@ impl Agent {
                 .ingress_expiry_duration
                 .unwrap_or_else(|| Duration::from_secs(300)),
             root_key: Arc::new(RwLock::new(None)),
-            facade: config.facade.ok_or_else(AgentError::MissingReplicaFacade)?,
+            transport: config
+                .transport
+                .ok_or_else(AgentError::MissingReplicaTransport)?,
         })
     }
 
@@ -234,7 +241,7 @@ impl Agent {
         serializer.self_describe()?;
         envelope.serialize(&mut serializer)?;
 
-        let bytes = self.facade.read(serialized_bytes).await?;
+        let bytes = self.transport.read(serialized_bytes).await?;
         serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
     }
 
@@ -254,7 +261,7 @@ impl Agent {
         serializer.self_describe()?;
         envelope.serialize(&mut serializer)?;
 
-        self.facade.submit(serialized_bytes, request_id).await?;
+        self.transport.submit(serialized_bytes, request_id).await?;
         Ok(request_id)
     }
 
@@ -382,7 +389,7 @@ impl Agent {
 
     /// Calls and returns the information returned by the status endpoint of a replica.
     pub async fn status(&self) -> Result<Status, AgentError> {
-        let bytes = self.facade.status().await?;
+        let bytes = self.transport.status().await?;
 
         let cbor: serde_cbor::Value =
             serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)?;

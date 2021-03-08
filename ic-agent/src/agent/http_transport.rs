@@ -1,4 +1,4 @@
-//! A [ReplicaFacade] that connects using a reqwest client.
+//! A [ReplicaV1Transport] that connects using a reqwest client.
 #![cfg(feature = "reqwest")]
 
 use crate::agent::agent_error::HttpErrorPayload;
@@ -24,14 +24,14 @@ pub trait PasswordManager {
     fn required(&self, url: &str) -> Result<(String, String), String>;
 }
 
-/// A ReplicaV1Facade using Reqwest to make HTTP calls to the internet computer.
-pub struct ReqwestHttpReplicaV1Facade {
+/// A [ReplicaV1Transport] using Reqwest to make HTTP calls to the internet computer.
+pub struct ReqwestHttpReplicaV1Transport {
     url: reqwest::Url,
     client: reqwest::Client,
     password_manager: Option<Box<dyn PasswordManager + Send + Sync>>,
 }
 
-impl ReqwestHttpReplicaV1Facade {
+impl ReqwestHttpReplicaV1Transport {
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
         let mut tls_config = rustls::ClientConfig::new();
 
@@ -101,14 +101,14 @@ impl ReqwestHttpReplicaV1Facade {
                     .expect("Could not clone a request."),
             )
             .await
-            .map_err(|x| AgentError::ReplicaV1FacadeError(Box::new(x)))?;
+            .map_err(|x| AgentError::TransportError(Box::new(x)))?;
 
         let http_status = response.status();
         let response_headers = response.headers().clone();
         let bytes = response
             .bytes()
             .await
-            .map_err(|x| AgentError::ReplicaV1FacadeError(Box::new(x)))?
+            .map_err(|x| AgentError::TransportError(Box::new(x)))?
             .to_vec();
 
         Ok((http_status, response_headers, bytes))
@@ -169,13 +169,13 @@ impl ReqwestHttpReplicaV1Facade {
     }
 }
 
-impl super::ReplicaV1Facade for ReqwestHttpReplicaV1Facade {
+impl super::ReplicaV1Transport for ReqwestHttpReplicaV1Transport {
     fn read<'a>(
         &'a self,
         envelope: Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
         async fn run(
-            s: &ReqwestHttpReplicaV1Facade,
+            s: &ReqwestHttpReplicaV1Transport,
             envelope: Vec<u8>,
         ) -> Result<Vec<u8>, AgentError> {
             s.execute(Method::POST, "read", Some(envelope)).await
@@ -189,7 +189,10 @@ impl super::ReplicaV1Facade for ReqwestHttpReplicaV1Facade {
         envelope: Vec<u8>,
         _request_id: RequestId,
     ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
-        async fn run(s: &ReqwestHttpReplicaV1Facade, envelope: Vec<u8>) -> Result<(), AgentError> {
+        async fn run(
+            s: &ReqwestHttpReplicaV1Transport,
+            envelope: Vec<u8>,
+        ) -> Result<(), AgentError> {
             s.execute(Method::POST, "submit", Some(envelope)).await?;
             Ok(())
         }
@@ -199,7 +202,7 @@ impl super::ReplicaV1Facade for ReqwestHttpReplicaV1Facade {
     fn status<'a>(
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(s: &ReqwestHttpReplicaV1Facade) -> Result<Vec<u8>, AgentError> {
+        async fn run(s: &ReqwestHttpReplicaV1Transport) -> Result<Vec<u8>, AgentError> {
             s.execute(Method::GET, "status", None).await
         }
 

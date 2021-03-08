@@ -3,8 +3,8 @@ use candid::types::{Function, Type};
 use candid::{check_prog, IDLArgs, IDLProg, TypeEnv};
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use ic_agent::agent::agent_error::HttpErrorPayload;
-use ic_agent::agent::http_facade::ReqwestHttpReplicaV1Facade;
-use ic_agent::agent::ReplicaV1Facade;
+use ic_agent::agent::http_transport::ReqwestHttpReplicaV1Transport;
+use ic_agent::agent::ReplicaV1Transport;
 use ic_agent::export::Principal;
 use ic_agent::identity::BasicIdentity;
 use ic_agent::{agent, Agent, AgentError, Identity, RequestId};
@@ -239,18 +239,16 @@ enum SerializeError {
     Success,
 }
 
-struct SerializingFacade;
+struct SerializingTransport;
 
-impl agent::ReplicaV1Facade for SerializingFacade {
+impl agent::ReplicaV1Transport for SerializingTransport {
     fn read<'a>(
         &'a self,
         envelope: Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(_: &SerializingFacade, envelope: Vec<u8>) -> Result<Vec<u8>, AgentError> {
+        async fn run(_: &SerializingTransport, envelope: Vec<u8>) -> Result<Vec<u8>, AgentError> {
             print!("read\n\n{}", hex::encode(envelope));
-            Err(AgentError::ReplicaV1FacadeError(
-                SerializeError::Success.into(),
-            ))
+            Err(AgentError::TransportError(SerializeError::Success.into()))
         }
 
         Box::pin(run(self, envelope))
@@ -262,7 +260,7 @@ impl agent::ReplicaV1Facade for SerializingFacade {
         request_id: RequestId,
     ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
         async fn run(
-            _: &SerializingFacade,
+            _: &SerializingTransport,
             envelope: Vec<u8>,
             request_id: RequestId,
         ) -> Result<(), AgentError> {
@@ -280,7 +278,7 @@ impl agent::ReplicaV1Facade for SerializingFacade {
     fn status<'a>(
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(_: &SerializingFacade) -> Result<Vec<u8>, AgentError> {
+        async fn run(_: &SerializingTransport) -> Result<Vec<u8>, AgentError> {
             Err(AgentError::MessageError(
                 "status calls not supported".to_string(),
             ))
@@ -300,10 +298,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         | SubCommand::Update(CallOpts {
             serialize: true, ..
-        }) => Agent::builder().with_facade(SerializingFacade),
-        _ => Agent::builder().with_facade(agent::http_facade::ReqwestHttpReplicaV1Facade::create(
-            opts.replica.clone(),
-        )?),
+        }) => Agent::builder().with_transport(SerializingTransport),
+        _ => Agent::builder().with_transport(
+            agent::http_transport::ReqwestHttpReplicaV1Transport::create(opts.replica.clone())?,
+        ),
     }
     .with_boxed_identity(Box::new(create_identity(opts.pem)))
     .build()?;
@@ -363,7 +361,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     print_idl_blob(&blob, &t.output, &method_type)
                         .map_err(|e| format!("Invalid IDL blob: {}", e))?;
                 }
-                Err(AgentError::ReplicaV1FacadeError(_)) => return Ok(()),
+                Err(AgentError::TransportError(_)) => return Ok(()),
                 Err(AgentError::HttpError(HttpErrorPayload {
                     status,
                     content_type,
@@ -407,13 +405,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 line = input.pop_front().unwrap();
             }
 
-            let facade = ReqwestHttpReplicaV1Facade::create(opts.replica)?;
+            let transport = ReqwestHttpReplicaV1Transport::create(opts.replica)?;
             match line.as_str() {
                 "read" => {
                     input.pop_front().unwrap(); // empty line.
                     line = input.pop_front().unwrap(); // envelope
                     let envelope = hex::decode(line)?;
-                    let result = facade.read(envelope).await?;
+                    let result = transport.read(envelope).await?;
                     eprint!("Result: ");
                     println!("{}", hex::encode(result));
                 }
@@ -423,7 +421,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     input.pop_front().unwrap(); // empty line.
                     line = input.pop_front().unwrap(); // envelope
                     let envelope = hex::decode(line)?;
-                    facade.submit(envelope, request_id).await?;
+                    transport.submit(envelope, request_id).await?;
                     eprint!("Request ID: ");
                     println!("0x{}", hex::encode(request_id.as_slice()));
                 }

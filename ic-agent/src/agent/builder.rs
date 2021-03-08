@@ -1,4 +1,4 @@
-use crate::agent::{AgentConfig, ReplicaV1Facade};
+use crate::agent::{AgentConfig, ReplicaV1Transport};
 use crate::{Agent, AgentError, Identity, NonceFactory};
 use std::sync::Arc;
 
@@ -22,18 +22,21 @@ impl AgentBuilder {
 
     /// Set the URL of the [Agent].
     #[cfg(feature = "reqwest")]
-    #[deprecated(since = "0.3.0", note = "Prefer using with_facade now.")]
+    #[deprecated(since = "0.3.0", note = "Prefer using with_transport().")]
     pub fn with_url<S: Into<String>>(self, url: S) -> Self {
-        use crate::agent::http_facade::ReqwestHttpReplicaV1Facade;
+        use crate::agent::http_transport::ReqwestHttpReplicaV1Transport;
 
-        self.with_facade(ReqwestHttpReplicaV1Facade::create(url).unwrap())
+        self.with_transport(ReqwestHttpReplicaV1Transport::create(url).unwrap())
     }
 
-    /// Set a Replica facade to talk to serve as the replica interface.
-    pub fn with_facade<F: 'static + ReplicaV1Facade + Send + Sync>(self, facade: F) -> Self {
+    /// Set a Replica transport to talk to serve as the replica interface.
+    pub fn with_transport<F: 'static + ReplicaV1Transport + Send + Sync>(
+        self,
+        transport: F,
+    ) -> Self {
         Self {
             config: AgentConfig {
-                facade: Some(Arc::new(facade)),
+                transport: Some(Arc::new(transport)),
                 ..self.config
             },
         }

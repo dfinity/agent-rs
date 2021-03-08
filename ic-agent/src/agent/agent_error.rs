@@ -100,11 +100,11 @@ pub enum AgentError {
     #[error("Failed to initialize the BLS library")]
     BlsInitializationFailure(),
 
-    #[error("Missing replica facade in the builder.")]
-    MissingReplicaFacade(),
+    #[error("Missing replica transport in the Agent Builder.")]
+    MissingReplicaTransport(),
 
     #[error("An error happened during communication with the replica: {0}")]
-    ReplicaV1FacadeError(Box<dyn std::error::Error + Send + Sync>),
+    TransportError(Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl PartialEq for AgentError {
