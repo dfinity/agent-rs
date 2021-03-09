@@ -10,6 +10,7 @@ use openssl::ec::{EcKey, PointConversionForm};
 use openssl::ecdsa::EcdsaSig;
 use openssl::error::ErrorStack;
 use openssl::pkey::{Private, Public};
+use openssl::sha::sha256;
 use simple_asn1::ASN1Block;
 use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, Sequence};
 use simple_asn1::{oid, to_der, OID};
@@ -58,7 +59,8 @@ impl Identity for Secp256k1Identity {
     }
 
     fn sign(&self, msg: &[u8]) -> Result<Signature, String> {
-        let ecdsa_sig = EcdsaSig::sign(msg, &self.private_key.clone())
+        let digest = sha256(msg);
+        let ecdsa_sig = EcdsaSig::sign(&digest, &self.private_key.clone())
             .map_err(|err| format!("Cannot create secp256k1 signature: {}", err.to_string(),))?;
         let r = ecdsa_sig.r().to_vec();
         let s = ecdsa_sig.s().to_vec();
