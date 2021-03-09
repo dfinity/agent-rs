@@ -124,7 +124,7 @@ N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
         assert!(DER_ENCODED_PUBLIC_KEY == hex::encode(identity.der_encoded_public_key.clone()));
 
         // Create a secp256k1 signature on the message "Hello World".
-        let message = "Hello World".as_bytes();
+        let message = b"Hello World";
         let signature = identity
             .sign(message)
             .expect("Cannot create secp256k1 signature.")
