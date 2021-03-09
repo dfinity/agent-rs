@@ -121,7 +121,7 @@ N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
             .expect("Cannot create secp256k1 identity from PEM file.");
 
         // Assert the DER-encoded secp256k1 public key matches what we would expect.
-        assert!(DER_ENCODED_PUBLIC_KEY == hex::encode(identity.der_encoded_public_key.clone()));
+        assert!(DER_ENCODED_PUBLIC_KEY == hex::encode(identity.der_encoded_public_key));
     }
 
     #[test]
