@@ -94,9 +94,10 @@ fn public_key_to_asn1_block(public_key: EcKey<Public>) -> Result<ASN1Block, Erro
 #[cfg(test)]
 mod test {
     use super::*;
+    use openssl::bn::BigNum;
 
     #[test]
-    fn test_from_pem() {
+    fn test_secp256k1_lifecycle() {
         // IDENTITY_FILE was generated from the the following commands:
         // > openssl ecparam -name secp256k1 -genkey -noout -out identity.pem
         // > cat identity.pem
@@ -119,7 +120,31 @@ N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
         let identity = Secp256k1Identity::from_pem(IDENTITY_FILE.as_bytes())
             .expect("Cannot create secp256k1 identity from PEM file.");
 
-        // Assert the DER-encoded public key matches what we would expect.
-        assert!(DER_ENCODED_PUBLIC_KEY == hex::encode(identity.der_encoded_public_key));
+        // Assert the DER-encoded secp256k1 public key matches what we would expect.
+        assert!(DER_ENCODED_PUBLIC_KEY == hex::encode(identity.der_encoded_public_key.clone()));
+
+        // Create a secp256k1 signature on the message "Hello World".
+        let message = "Hello World".as_bytes();
+        let signature = identity
+            .sign(message)
+            .expect("Cannot create secp256k1 signature.")
+            .signature
+            .expect("Cannot find secp256k1 signature bytes.");
+
+        // Import the secp256k1 signature into OpenSSL.
+        let r = BigNum::from_slice(&signature[0..32])
+            .expect("Cannot extract r component from secp256k1 signature bytes.");
+        let s = BigNum::from_slice(&signature[32..])
+            .expect("Cannot extract s component from secp256k1 signature bytes.");
+        let ecdsa_sig = EcdsaSig::from_private_components(r, s)
+            .expect("Cannot create secp256k1 signature from r and s components.");
+
+        // Assert the secp256k1 signature is valid.
+        let digest = sha256(message);
+        let public_key = identity.public_key;
+        let success = ecdsa_sig
+            .verify(&digest, &public_key)
+            .expect("Cannot verify secp256k1 signature.");
+        assert!(success);
     }
 }
