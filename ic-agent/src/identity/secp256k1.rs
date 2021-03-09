@@ -96,8 +96,7 @@ mod test {
     use super::*;
     use openssl::bn::BigNum;
 
-    #[test]
-    fn test_secp256k1_lifecycle() {
+    fn create_secp256k1_identity() -> Result<Secp256k1Identity, PemError> {
         // IDENTITY_FILE was generated from the the following commands:
         // > openssl ecparam -name secp256k1 -genkey -noout -out identity.pem
         // > cat identity.pem
@@ -111,17 +110,30 @@ N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
 -----END EC PRIVATE KEY-----
 ";
 
+        // Create a secp256k1 identity from a PEM file.
+        Secp256k1Identity::from_pem(IDENTITY_FILE.as_bytes())
+    }
+
+    #[test]
+    fn test_secp256k1_public_key() {
         // DER_ENCODED_PUBLIC_KEY was generated from the the following commands:
         // > openssl ec -in identity.pem -pubout -outform DER -out public.der
         // > hexdump -ve '1/1 "%.2x"' public.der
         const DER_ENCODED_PUBLIC_KEY: &str = "3056301006072a8648ce3d020106052b8104000a0342000480ef3bac9d68cf374cbc9c9943e180043a94c462ef8270274e57089d5dcdba1b8fbf83b7546ccc1b3781377776e9c4710fdf533ed9bcba8d8ebb32a14a2aba11";
 
         // Create a secp256k1 identity from a PEM file.
-        let identity = Secp256k1Identity::from_pem(IDENTITY_FILE.as_bytes())
-            .expect("Cannot create secp256k1 identity from PEM file.");
+        let identity =
+            create_secp256k1_identity().expect("Cannot create secp256k1 identity from PEM file.");
 
         // Assert the DER-encoded secp256k1 public key matches what we would expect.
         assert!(DER_ENCODED_PUBLIC_KEY == hex::encode(identity.der_encoded_public_key.clone()));
+    }
+
+    #[test]
+    fn test_secp256k1_signature() {
+        // Create a secp256k1 identity from a PEM file.
+        let identity =
+            create_secp256k1_identity().expect("Cannot create secp256k1 identity from PEM file.");
 
         // Create a secp256k1 signature on the message "Hello World".
         let message = b"Hello World";
