@@ -62,7 +62,10 @@ impl Identity for Secp256k1Identity {
             .map_err(|err| format!("Cannot create secp256k1 signature: {}", err.to_string(),))?;
         let r = ecdsa_sig.r().to_vec();
         let s = ecdsa_sig.s().to_vec();
-        let signature = Some([r, s].concat());
+        let mut bytes = [0; 64];
+        bytes[(32 - r.len())..32].clone_from_slice(&r);
+        bytes[(64 - s.len())..64].clone_from_slice(&s);
+        let signature = Some(bytes.to_vec());
         let public_key = Some(self.der_encoded_public_key.clone());
         Ok(Signature {
             signature,
