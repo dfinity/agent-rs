@@ -2,14 +2,21 @@ use candid::parser::value::IDLValue;
 use candid::types::{Function, Type};
 use candid::{check_prog, IDLArgs, IDLProg, TypeEnv};
 use clap::{crate_authors, crate_version, AppSettings, Clap};
-use ic_agent::agent::AgentConfig;
+use ic_agent::agent::agent_error::HttpErrorPayload;
+use ic_agent::agent::http_transport::ReqwestHttpReplicaV1Transport;
+use ic_agent::agent::ReplicaV1Transport;
 use ic_agent::export::Principal;
 use ic_agent::identity::BasicIdentity;
-use ic_agent::{Agent, AgentError, HttpErrorPayload, Identity};
+use ic_agent::{agent, Agent, AgentError, Identity, RequestId};
 use ring::signature::Ed25519KeyPair;
+use std::collections::VecDeque;
 use std::convert::TryFrom;
-use std::error::Error;
+use std::future::Future;
+use std::io::BufRead;
 use std::path::PathBuf;
+use std::pin::Pin;
+use std::str::FromStr;
+use thiserror::Error;
 
 #[derive(Clap)]
 #[clap(
@@ -48,6 +55,9 @@ enum SubCommand {
     /// Checks the `status` endpoints of the replica.
     Status,
 
+    /// Send a serialized request, taking from STDIN.
+    Send,
+
     /// Transform Principal from hex to new text.
     PrincipalConvert(PrincipalConvertOpts),
 }
@@ -58,6 +68,10 @@ struct CallOpts {
     /// The Canister ID to call.
     #[clap(parse(try_from_str), required = true)]
     canister_id: Principal,
+
+    /// Output the serialization of a message to STDOUT.
+    #[clap(long)]
+    serialize: bool,
 
     /// Path to a candid file to analyze the argument. Otherwise candid will parse the
     /// argument without type hint.
@@ -219,14 +233,78 @@ fn create_identity(maybe_pem: Option<PathBuf>) -> impl Identity {
     }
 }
 
+#[derive(Error, Debug)]
+enum SerializeError {
+    #[error("")]
+    Success,
+}
+
+struct SerializingTransport;
+
+impl agent::ReplicaV1Transport for SerializingTransport {
+    fn read<'a>(
+        &'a self,
+        envelope: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        async fn run(_: &SerializingTransport, envelope: Vec<u8>) -> Result<Vec<u8>, AgentError> {
+            print!("read\n\n{}", hex::encode(envelope));
+            Err(AgentError::TransportError(SerializeError::Success.into()))
+        }
+
+        Box::pin(run(self, envelope))
+    }
+
+    fn submit<'a>(
+        &'a self,
+        envelope: Vec<u8>,
+        request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
+        async fn run(
+            _: &SerializingTransport,
+            envelope: Vec<u8>,
+            request_id: RequestId,
+        ) -> Result<(), AgentError> {
+            print!(
+                "submit\n{}\n\n{}",
+                hex::encode(request_id.as_slice()),
+                hex::encode(envelope)
+            );
+            Err(AgentError::MessageError(String::new()))
+        }
+
+        Box::pin(run(self, envelope, request_id))
+    }
+
+    fn status<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        async fn run(_: &SerializingTransport) -> Result<Vec<u8>, AgentError> {
+            Err(AgentError::MessageError(
+                "status calls not supported".to_string(),
+            ))
+        }
+
+        Box::pin(run(self))
+    }
+}
+
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts: Opts = Opts::parse();
-    let agent = Agent::new(AgentConfig {
-        url: opts.replica,
-        identity: Box::new(create_identity(opts.pem)),
-        ..AgentConfig::default()
-    })?;
+
+    let agent = match &opts.subcommand {
+        SubCommand::Query(CallOpts {
+            serialize: true, ..
+        })
+        | SubCommand::Update(CallOpts {
+            serialize: true, ..
+        }) => Agent::builder().with_transport(SerializingTransport),
+        _ => Agent::builder().with_transport(
+            agent::http_transport::ReqwestHttpReplicaV1Transport::create(opts.replica.clone())?,
+        ),
+    }
+    .with_boxed_identity(Box::new(create_identity(opts.pem)))
+    .build()?;
 
     // You can handle information about subcommands by requesting their matches by name
     // (as below), requesting just the name used, or both at the same time
@@ -283,6 +361,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     print_idl_blob(&blob, &t.output, &method_type)
                         .map_err(|e| format!("Invalid IDL blob: {}", e))?;
                 }
+                Err(AgentError::TransportError(_)) => return Ok(()),
                 Err(AgentError::HttpError(HttpErrorPayload {
                     status,
                     content_type,
@@ -314,6 +393,44 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 let p = Principal::from_text(txt.as_str())
                     .expect("Could not transform into a Principal: {}");
                 eprintln!("Hexadecimal: {}", hex::encode(p.as_slice()));
+            }
+        }
+        SubCommand::Send => {
+            let mut input: VecDeque<String> = std::io::stdin()
+                .lock()
+                .lines()
+                .collect::<Result<VecDeque<String>, std::io::Error>>()?;
+            let mut line = input.pop_front().unwrap();
+            while line == "" {
+                line = input.pop_front().unwrap();
+            }
+
+            let transport = ReqwestHttpReplicaV1Transport::create(opts.replica)?;
+            match line.as_str() {
+                "read" => {
+                    input.pop_front().unwrap(); // empty line.
+                    line = input.pop_front().unwrap(); // envelope
+                    let envelope = hex::decode(line)?;
+                    let result = transport.read(envelope).await?;
+                    eprint!("Result: ");
+                    println!("{}", hex::encode(result));
+                }
+                "submit" => {
+                    line = input.pop_front().unwrap(); // request id.
+                    let request_id = RequestId::from_str(&line)?;
+                    input.pop_front().unwrap(); // empty line.
+                    line = input.pop_front().unwrap(); // envelope
+                    let envelope = hex::decode(line)?;
+                    transport.submit(envelope, request_id).await?;
+                    eprint!("Request ID: ");
+                    println!("0x{}", hex::encode(request_id.as_slice()));
+                }
+                other => {
+                    eprintln!(
+                        r#"Error: Invalid STDIN format. Unexpected line: "{}""#,
+                        other
+                    );
+                }
             }
         }
     }

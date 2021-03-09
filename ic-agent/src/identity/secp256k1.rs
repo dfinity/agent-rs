@@ -60,9 +60,9 @@ impl Identity for Secp256k1Identity {
     fn sign(&self, msg: &[u8]) -> Result<Signature, String> {
         let ecdsa_sig = EcdsaSig::sign(msg, &self.private_key.clone())
             .map_err(|err| format!("Cannot create secp256k1 signature: {}", err.to_string(),))?;
-        let signature = ecdsa_sig.to_der().map(Some).map_err(|err| {
-            format!("Cannot DER ecnode secp256k1 signature: {}", err.to_string(),)
-        })?;
+        let r = ecdsa_sig.r().to_vec();
+        let s = ecdsa_sig.s().to_vec();
+        let signature = Some([r, s].concat());
         let public_key = Some(self.der_encoded_public_key.clone());
         Ok(Signature {
             signature,
@@ -86,6 +86,7 @@ fn public_key_to_asn1_block(public_key: EcKey<Public>) -> Result<ASN1Block, Erro
 }
 
 #[cfg(feature = "pem")]
+#[cfg(test)]
 mod test {
     use super::*;
 

@@ -1,21 +1,22 @@
 //! The main Agent module. Contains the [Agent] type and all associated structures.
 pub(crate) mod agent_config;
-pub(crate) mod agent_error;
+pub mod agent_error;
 pub(crate) mod builder;
+pub mod http_transport;
 pub(crate) mod nonce;
 pub(crate) mod replica_api;
 pub(crate) mod response;
+mod response_authentication;
 
 pub mod status;
-pub use agent_config::{AgentConfig, PasswordManager};
-pub use agent_error::{AgentError, HttpErrorPayload};
+pub use agent_config::AgentConfig;
+pub use agent_error::AgentError;
 pub use builder::AgentBuilder;
 pub use nonce::NonceFactory;
 pub use response::{Replied, RequestStatusResponse};
 
 #[cfg(test)]
 mod agent_test;
-mod response_authentication;
 
 use crate::agent::replica_api::{
     AsyncContent, Certificate, Delegation, Envelope, ReadStateResponse, SyncContent,
@@ -25,7 +26,6 @@ use crate::hash_tree::Label;
 use crate::identity::Identity;
 use crate::{to_request_id, RequestId};
 use delay::Waiter;
-use reqwest::Method;
 use serde::Serialize;
 use status::Status;
 
@@ -34,11 +34,50 @@ use crate::agent::response_authentication::{
 };
 use crate::bls::bls12381::bls;
 use std::convert::TryFrom;
-use std::sync::RwLock;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 const IC_REQUEST_DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
+
+/// A facade that connects to a Replica and does requests. These requests can be of any type
+/// (does not have to be HTTP). This trait is to inverse the control from the Agent over its
+/// connection code, and to resolve any direct dependencies to tokio or HTTP code from this
+/// crate.
+///
+/// An implementation of this trait for HTTP transport is implemented using Reqwest, with the
+/// feature flag `reqwest`. This might be deprecated in the future.
+///
+/// Any error returned by these methods will bubble up to the code that called the [Agent].
+pub trait ReplicaV1Transport {
+    /// Sends a synchronous request to a Replica. This call includes the body of the request message
+    /// itself (envelope).
+    ///
+    /// This normally corresponds to the `/api/v1/read` endpoint.
+    fn read<'a>(
+        &'a self,
+        envelope: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
+
+    /// Sends an asynchronous request to a Replica. The Request ID is non-mutable and
+    /// depends on the content of the envelope.
+    ///
+    /// This normally corresponds to the `/api/v1/read` endpoint.
+    fn submit<'a>(
+        &'a self,
+        envelope: Vec<u8>,
+        request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>>;
+
+    /// Sends a status request to the Replica, returning whatever the replica returns.
+    /// In the current spec v1, this is a CBOR encoded status message, but we are not
+    /// making this API attach semantics to the response.
+    fn status<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
+}
 
 /// A low level Agent to make calls to a Replica endpoint.
 ///
@@ -101,14 +140,13 @@ const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 /// ```
 ///
 /// This agent does not understand Candid, and only acts on byte buffers.
+#[derive(Clone)]
 pub struct Agent {
-    url: reqwest::Url,
     nonce_factory: NonceFactory,
-    client: reqwest::Client,
-    identity: Box<dyn Identity + Send + Sync>,
-    password_manager: Option<Box<dyn PasswordManager + Send + Sync>>,
+    identity: Arc<dyn Identity + Send + Sync>,
     ingress_expiry_duration: Duration,
-    root_key: RwLock<Option<Vec<u8>>>,
+    root_key: Arc<RwLock<Option<Vec<u8>>>>,
+    transport: Arc<dyn ReplicaV1Transport + Send + Sync>,
 }
 
 impl Agent {
@@ -122,31 +160,16 @@ impl Agent {
     pub fn new(config: AgentConfig) -> Result<Agent, AgentError> {
         initialize_bls()?;
 
-        let url = config.url;
-        let mut tls_config = rustls::ClientConfig::new();
-
-        // Advertise support for HTTP/2
-        tls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-        // Mozilla CA root store
-        tls_config
-            .root_store
-            .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
-
         Ok(Agent {
-            url: reqwest::Url::parse(&url)
-                .and_then(|url| url.join("api/v1/"))
-                .map_err(|_| AgentError::InvalidReplicaUrl(url.clone()))?,
-            client: reqwest::Client::builder()
-                .use_preconfigured_tls(tls_config)
-                .build()
-                .expect("Could not create HTTP client."),
             nonce_factory: config.nonce_factory,
             identity: config.identity,
-            password_manager: config.password_manager,
             ingress_expiry_duration: config
                 .ingress_expiry_duration
                 .unwrap_or_else(|| Duration::from_secs(300)),
-            root_key: RwLock::new(None),
+            root_key: Arc::new(RwLock::new(None)),
+            transport: config
+                .transport
+                .ok_or_else(AgentError::MissingReplicaTransport)?,
         })
     }
 
@@ -199,115 +222,6 @@ impl Agent {
         buf
     }
 
-    async fn request(
-        &self,
-        http_request: reqwest::Request,
-    ) -> Result<(reqwest::StatusCode, reqwest::header::HeaderMap, Vec<u8>), AgentError> {
-        let response = self
-            .client
-            .execute(
-                http_request
-                    .try_clone()
-                    .expect("Could not clone a request."),
-            )
-            .await
-            .map_err(AgentError::from)?;
-
-        let http_status = response.status();
-        let response_headers = response.headers().clone();
-        let bytes = response.bytes().await?.to_vec();
-
-        Ok((http_status, response_headers, bytes))
-    }
-
-    fn maybe_add_authorization(
-        &self,
-        http_request: &mut reqwest::Request,
-        cached: bool,
-    ) -> Result<(), AgentError> {
-        if let Some(pm) = &self.password_manager {
-            let maybe_user_pass = if cached {
-                pm.cached(http_request.url().as_str())
-            } else {
-                pm.required(http_request.url().as_str()).map(Some)
-            };
-
-            if let Some((u, p)) = maybe_user_pass.map_err(AgentError::AuthenticationError)? {
-                let auth = base64::encode(&format!("{}:{}", u, p));
-                http_request.headers_mut().insert(
-                    reqwest::header::AUTHORIZATION,
-                    format!("Basic {}", auth).parse().unwrap(),
-                );
-            }
-        }
-        Ok(())
-    }
-
-    async fn execute<T: std::fmt::Debug + serde::Serialize>(
-        &self,
-        method: Method,
-        endpoint: &str,
-        envelope: Option<Envelope<T>>,
-    ) -> Result<Vec<u8>, AgentError> {
-        let mut body = None;
-        if let Some(e) = envelope {
-            let mut serialized_bytes = Vec::new();
-
-            let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
-            serializer.self_describe()?;
-            e.serialize(&mut serializer)?;
-
-            body = Some(serialized_bytes);
-        }
-
-        let url = self.url.join(endpoint)?;
-        let mut http_request = reqwest::Request::new(method, url);
-        http_request.headers_mut().insert(
-            reqwest::header::CONTENT_TYPE,
-            "application/cbor".parse().unwrap(),
-        );
-
-        self.maybe_add_authorization(&mut http_request, true)?;
-
-        *http_request.body_mut() = body.map(reqwest::Body::from);
-
-        let mut status;
-        let mut headers;
-        let mut body;
-        loop {
-            let request_result = self.request(http_request.try_clone().unwrap()).await?;
-            status = request_result.0;
-            headers = request_result.1;
-            body = request_result.2;
-
-            // If the server returned UNAUTHORIZED, and it is the first time we replay the call,
-            // check if we can get the username/password for the HTTP Auth.
-            if status == reqwest::StatusCode::UNAUTHORIZED {
-                if self.url.scheme() == "https" || self.url.host_str() == Some("localhost") {
-                    // If there is a password manager, get the username and password from it.
-                    self.maybe_add_authorization(&mut http_request, false)?;
-                } else {
-                    return Err(AgentError::CannotUseAuthenticationOnNonSecureUrl());
-                }
-            } else {
-                break;
-            }
-        }
-
-        if status.is_client_error() || status.is_server_error() {
-            Err(AgentError::HttpError(HttpErrorPayload {
-                status: status.into(),
-                content_type: headers
-                    .get(reqwest::header::CONTENT_TYPE)
-                    .and_then(|value| value.to_str().ok())
-                    .map(|x| x.to_string()),
-                content: body,
-            }))
-        } else {
-            Ok(body)
-        }
-    }
-
     async fn read_endpoint<A>(&self, request: SyncContent) -> Result<A, AgentError>
     where
         A: serde::de::DeserializeOwned,
@@ -315,18 +229,19 @@ impl Agent {
         let request_id = to_request_id(&request)?;
         let msg = self.construct_message(&request_id);
         let signature = self.identity.sign(&msg).map_err(AgentError::SigningError)?;
-        let bytes = self
-            .execute(
-                Method::POST,
-                "read",
-                Some(Envelope {
-                    content: request,
-                    sender_pubkey: signature.public_key,
-                    sender_sig: signature.signature,
-                }),
-            )
-            .await?;
 
+        let envelope = Envelope {
+            content: request,
+            sender_pubkey: signature.public_key,
+            sender_sig: signature.signature,
+        };
+
+        let mut serialized_bytes = Vec::new();
+        let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
+        serializer.self_describe()?;
+        envelope.serialize(&mut serializer)?;
+
+        let bytes = self.transport.read(serialized_bytes).await?;
         serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
     }
 
@@ -334,18 +249,19 @@ impl Agent {
         let request_id = to_request_id(&request)?;
         let msg = self.construct_message(&request_id);
         let signature = self.identity.sign(&msg).map_err(AgentError::SigningError)?;
-        let _ = self
-            .execute(
-                Method::POST,
-                "submit",
-                Some(Envelope {
-                    content: request,
-                    sender_pubkey: signature.public_key,
-                    sender_sig: signature.signature,
-                }),
-            )
-            .await?;
 
+        let envelope = Envelope {
+            content: request,
+            sender_pubkey: signature.public_key,
+            sender_sig: signature.signature,
+        };
+
+        let mut serialized_bytes = Vec::new();
+        let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
+        serializer.self_describe()?;
+        envelope.serialize(&mut serializer)?;
+
+        self.transport.submit(serialized_bytes, request_id).await?;
         Ok(request_id)
     }
 
@@ -473,7 +389,7 @@ impl Agent {
 
     /// Calls and returns the information returned by the status endpoint of a replica.
     pub async fn status(&self) -> Result<Status, AgentError> {
-        let bytes = self.execute::<()>(Method::GET, "status", None).await?;
+        let bytes = self.transport.status().await?;
 
         let cbor: serde_cbor::Value =
             serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)?;
