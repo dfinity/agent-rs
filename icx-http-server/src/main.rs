@@ -197,7 +197,7 @@ async fn forward_api(
 ) -> Result<Response<Body>, Box<dyn Error>> {
     let proxied_request = create_proxied_request(ip_addr, &replica_url, request)?;
 
-    let client = Client::new();
+    let client = Client::builder().build(hyper_tls::HttpsConnector::new());
     let response = client.request(proxied_request).await?;
     Ok(response)
 }

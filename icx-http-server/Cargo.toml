@@ -11,6 +11,7 @@ candid = "0.6.15"
 clap = "3.0.0-beta.2"
 delay = "0.3.1"
 hyper = { version = "0.14.4", features = ["full"] }
+hyper-tls = "0.5.0"
 ic-agent = { path = "../ic-agent" }
 ic-types = { path = "../ic-types" }
 ic-utils = { path = "../ic-utils" }
