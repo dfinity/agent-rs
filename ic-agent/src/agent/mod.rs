@@ -173,6 +173,15 @@ impl Agent {
         })
     }
 
+    pub fn switch_transport<F: 'static + ReplicaV1Transport + Send + Sync>(
+        self,
+        transport: F,
+    ) -> Agent {
+        let mut new_agent = self.clone();
+        new_agent.transport = Arc::new(transport);
+        new_agent
+    }
+
     /// Fetch the root key of the replica using its status end point, and update the agent's
     /// root key. This only uses the agent's specific upstream replica, and does not ensure
     /// the root key validity. In order to prevent any MITM attack, developers should try
