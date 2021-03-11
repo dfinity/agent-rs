@@ -173,13 +173,8 @@ impl Agent {
         })
     }
 
-    pub fn new_agent_with_transport<F: 'static + ReplicaV1Transport + Send + Sync>(
-        &self,
-        transport: F,
-    ) -> Agent {
-        let mut new_agent = self.clone();
-        new_agent.transport = Arc::new(transport);
-        new_agent
+    pub fn set_transport<F: 'static + ReplicaV1Transport + Send + Sync>(&mut self, transport: F) {
+        self.transport = Arc::new(transport);
     }
 
     /// Fetch the root key of the replica using its status end point, and update the agent's
