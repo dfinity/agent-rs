@@ -173,6 +173,7 @@ impl Agent {
         })
     }
 
+    /// Set the transport of the [`Agent`].
     pub fn set_transport<F: 'static + ReplicaV1Transport + Send + Sync>(&mut self, transport: F) {
         self.transport = Arc::new(transport);
     }
