@@ -12,7 +12,7 @@ pub struct HttpRequestCanister;
 #[derive(CandidType, Deserialize)]
 pub struct HeaderField(pub String, pub String);
 
-#[derive(CandidType)]
+#[derive(CandidType, Deserialize)]
 pub struct HttpRequest<'body> {
     pub method: String,
     pub url: String,

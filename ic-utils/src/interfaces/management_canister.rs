@@ -205,7 +205,7 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
     /// Create an [AsyncCall] implementation that, when called, will install the
     /// canister.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
-        #[derive(candid::CandidType)]
+        #[derive(candid::CandidType, Deserialize)]
         struct CanisterInstall {
             mode: InstallMode,
             canister_id: Principal,
