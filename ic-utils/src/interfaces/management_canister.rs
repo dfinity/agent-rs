@@ -209,7 +209,9 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
         struct CanisterInstall {
             mode: InstallMode,
             canister_id: Principal,
+            #[serde(with = "serde_bytes")]
             wasm_module: Vec<u8>,
+            #[serde(with = "serde_bytes")]
             arg: Vec<u8>,
             compute_allocation: Option<candid::Nat>,
             memory_allocation: Option<candid::Nat>,

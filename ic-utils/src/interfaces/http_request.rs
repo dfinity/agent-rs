@@ -17,6 +17,7 @@ pub struct HttpRequest<'body> {
     pub method: String,
     pub url: String,
     pub headers: Vec<HeaderField>,
+    #[serde(with = "serde_bytes")]
     pub body: &'body [u8],
 }
 
@@ -24,6 +25,7 @@ pub struct HttpRequest<'body> {
 pub struct HttpResponse {
     pub status_code: u16,
     pub headers: Vec<HeaderField>,
+    #[serde(with = "serde_bytes")]
     pub body: Vec<u8>,
 }
 
