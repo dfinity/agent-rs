@@ -1,7 +1,7 @@
 use crate::call::SyncCall;
 use crate::canister::CanisterBuilder;
 use crate::Canister;
-use candid::{CandidType, Deserialize};
+use candid::{CandidType, Deserialize, Nat};
 use ic_agent::export::Principal;
 use ic_agent::Agent;
 use std::fmt::Debug;
@@ -25,6 +25,18 @@ pub struct HttpResponse {
     pub status_code: u16,
     pub headers: Vec<HeaderField>,
     pub body: Vec<u8>,
+}
+
+#[derive(CandidType)]
+pub struct HttpGetChunkRequest {
+    pub url: String,
+    pub content_encoding: String,
+    pub index: Nat,
+}
+
+#[derive(CandidType, Deserialize)]
+pub struct HttpGetChunkResponse {
+    pub chunk: Vec<u8>,
 }
 
 impl HttpRequestCanister {
@@ -62,6 +74,21 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
                 url: url.into(),
                 headers,
                 body: body.as_ref(),
+            })
+            .build()
+    }
+
+    pub fn http_get_chunk<'canister: 'agent, U: Into<String>, E: Into<String>, N: Into<Nat>>(
+        &'canister self,
+        url: U,
+        content_encoding: E,
+        index: N,
+    ) -> impl 'agent + SyncCall<(HttpGetChunkResponse,)> {
+        self.query_("http_get_chunk")
+            .with_arg(HttpGetChunkRequest {
+                url: url.into(),
+                content_encoding: content_encoding.into(),
+                index: index.into(),
             })
             .build()
     }
