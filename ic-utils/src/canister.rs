@@ -1,5 +1,6 @@
 use crate::call::{AsyncCaller, SyncCaller};
 use candid::de::ArgumentDecoder;
+use candid::parser::value::IDLValue;
 use candid::ser::IDLBuilder;
 use candid::CandidType;
 use ic_agent::{Agent, AgentError};
@@ -192,6 +193,25 @@ impl Argument {
         }
     }
 
+    /// Add an IDL Argument. If the current value of Argument is Raw, will set the
+    /// result to an error. If the current value is an error, will do nothing.
+    pub fn push_value_arg(&mut self, arg: IDLValue) {
+        match self.0 {
+            Ok(ArgumentType::Idl(ref mut idl_builder)) => {
+                let result = idl_builder.value_arg(&arg);
+                if let Err(e) = result {
+                    self.0 = Err(AgentError::CandidError(Box::new(e)))
+                }
+            }
+            Ok(ArgumentType::Raw(_)) => {
+                self.0 = Err(AgentError::MessageError(
+                    "Cannot overwrite a Raw Argument with a non-raw argument.".to_owned(),
+                ))
+            }
+            _ => {}
+        }
+    }
+
     /// Set the argument as raw, replacing any value that was there before. If the
     /// current argument was an error, does nothing.
     pub fn set_raw_arg(&mut self, arg: Vec<u8>) {
@@ -255,6 +275,16 @@ impl<'agent, 'canister: 'agent, Interface> SyncCallBuilder<'agent, 'canister, In
         Argument: CandidType + Sync + Send,
     {
         self.arg.push_idl_arg(arg);
+        self
+    }
+
+    /// Add an argument to the candid argument list. This requires Candid arguments, if
+    /// there is a raw argument set (using [with_arg_raw]), this will fail.
+    pub fn with_value_arg(
+        mut self,
+        arg: IDLValue,
+    ) -> SyncCallBuilder<'agent, 'canister, Interface> {
+        self.arg.push_value_arg(arg);
         self
     }
 

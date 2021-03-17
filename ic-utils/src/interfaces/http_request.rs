@@ -1,7 +1,8 @@
 use crate::call::SyncCall;
 use crate::canister::CanisterBuilder;
 use crate::Canister;
-use candid::{CandidType, Deserialize, Nat};
+use candid::parser::value::IDLValue;
+use candid::{CandidType, Deserialize};
 use ic_agent::export::Principal;
 use ic_agent::Agent;
 use std::fmt::Debug;
@@ -9,7 +10,7 @@ use std::fmt::Debug;
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub struct HttpRequestCanister;
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Clone, Deserialize)]
 pub struct HeaderField(pub String, pub String);
 
 #[derive(CandidType, Deserialize)]
@@ -27,18 +28,14 @@ pub struct HttpResponse {
     pub headers: Vec<HeaderField>,
     #[serde(with = "serde_bytes")]
     pub body: Vec<u8>,
-}
-
-#[derive(CandidType)]
-pub struct HttpGetChunkRequest {
-    pub url: String,
-    pub content_encoding: String,
-    pub index: Nat,
+    pub next_token: Option<IDLValue>,
 }
 
 #[derive(CandidType, Deserialize)]
-pub struct HttpGetChunkResponse {
-    pub chunk: Vec<u8>,
+pub struct NextHttpResponse {
+    #[serde(with = "serde_bytes")]
+    pub body: Vec<u8>,
+    pub next_token: Option<IDLValue>,
 }
 
 impl HttpRequestCanister {
@@ -80,18 +77,27 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
             .build()
     }
 
-    pub fn http_get_chunk<'canister: 'agent, U: Into<String>, E: Into<String>, N: Into<Nat>>(
+    pub fn http_request_next<
+        'canister: 'agent,
+        M: Into<String>,
+        U: Into<String>,
+        B: AsRef<[u8]>,
+    >(
         &'canister self,
+        method: M,
         url: U,
-        content_encoding: E,
-        index: N,
-    ) -> impl 'agent + SyncCall<(HttpGetChunkResponse,)> {
-        self.query_("http_get_chunk")
-            .with_arg(HttpGetChunkRequest {
+        headers: Vec<HeaderField>,
+        body: B,
+        token: IDLValue,
+    ) -> impl 'agent + SyncCall<(NextHttpResponse,)> {
+        self.query_("http_request_next")
+            .with_arg(HttpRequest {
+                method: method.into(),
                 url: url.into(),
-                content_encoding: content_encoding.into(),
-                index: index.into(),
+                headers,
+                body: body.as_ref(),
             })
+            .with_value_arg(token)
             .build()
     }
 }
