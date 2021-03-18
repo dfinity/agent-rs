@@ -193,7 +193,7 @@ impl Argument {
         }
     }
 
-    /// Add an IDL Argument. If the current value of Argument is Raw, will set the
+    /// Add an IDLValue Argument. If the current value of Argument is Raw, will set the
     /// result to an error. If the current value is an error, will do nothing.
     pub fn push_value_arg(&mut self, arg: IDLValue) {
         match self.0 {
