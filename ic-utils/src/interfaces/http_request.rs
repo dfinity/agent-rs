@@ -77,9 +77,7 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
             .build()
     }
 
-    pub fn http_request_next<
-        'canister: 'agent,
-    >(
+    pub fn http_request_next<'canister: 'agent>(
         &'canister self,
         token: IDLValue,
     ) -> impl 'agent + SyncCall<(NextHttpResponse,)> {
