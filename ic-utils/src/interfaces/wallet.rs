@@ -176,6 +176,7 @@ pub struct CreateResult {
 
 #[derive(CandidType, Deserialize)]
 pub struct CallResult {
+    #[serde(with = "serde_bytes")]
     pub r#return: Vec<u8>,
 }
 
