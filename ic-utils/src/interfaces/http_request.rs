@@ -79,24 +79,11 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
 
     pub fn http_request_next<
         'canister: 'agent,
-        M: Into<String>,
-        U: Into<String>,
-        B: AsRef<[u8]>,
     >(
         &'canister self,
-        method: M,
-        url: U,
-        headers: Vec<HeaderField>,
-        body: B,
         token: IDLValue,
     ) -> impl 'agent + SyncCall<(NextHttpResponse,)> {
         self.query_("http_request_next")
-            .with_arg(HttpRequest {
-                method: method.into(),
-                url: url.into(),
-                headers,
-                body: body.as_ref(),
-            })
             .with_value_arg(token)
             .build()
     }
