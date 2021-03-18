@@ -280,6 +280,7 @@ impl<'agent, 'canister: 'agent, Interface> SyncCallBuilder<'agent, 'canister, In
 
     /// Add an argument to the candid argument list. This requires Candid arguments, if
     /// there is a raw argument set (using [with_arg_raw]), this will fail.
+    /// TODO: make this method unnecessary https://github.com/dfinity/agent-rs/issues/132
     pub fn with_value_arg(
         mut self,
         arg: IDLValue,
