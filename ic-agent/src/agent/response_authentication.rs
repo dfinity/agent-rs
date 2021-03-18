@@ -43,6 +43,25 @@ pub fn extract_der(buf: Vec<u8>) -> Result<Vec<u8>, AgentError> {
     Ok(key.to_vec())
 }
 
+pub(crate) fn lookup_canister_info(
+    certificate: Certificate,
+    canister_id: ic_types::Principal,
+    path: &str,
+) -> Result<Vec<u8>, AgentError> {
+    println!("lookup_canister_info {:?}", path);
+    let path_canister_module_hash = vec![
+        "canister".into(),
+        canister_id.into(),
+        path.into(),
+    ];
+    match certificate.tree.lookup_path(&path_canister_module_hash) {
+        LookupResult::Absent => Err(AgentError::LookupPathAbsent(path_canister_module_hash)),
+        LookupResult::Unknown => Err(AgentError::LookupPathAbsent(path_canister_module_hash)),
+        LookupResult::Found(blob) => Ok(blob.to_vec()),
+        LookupResult::Error => Err(AgentError::LookupPathError(path_canister_module_hash)),
+    }
+}
+
 pub(crate) fn lookup_request_status(
     certificate: Certificate,
     request_id: &RequestId,
