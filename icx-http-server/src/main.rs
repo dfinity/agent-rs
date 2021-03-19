@@ -139,11 +139,11 @@ async fn forward_request(
 
         tokio::spawn(async move {
             let canister = HttpRequestCanister::create(&agent, canister_id);
-            // We already call it once.
-            let mut count = 1;
+            // We have not yet called http_request_next.
+            let mut count = 0;
             loop {
                 count += 1;
-                if count >= MAX_HTTP_REQUEST_NEXT_CALL_COUNT {
+                if count > MAX_HTTP_REQUEST_NEXT_CALL_COUNT {
                     sender.abort();
                     break;
                 }
