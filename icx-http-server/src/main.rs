@@ -150,7 +150,7 @@ async fn forward_request(
 
                 match canister.http_request_next(token).call().await {
                     Ok((NextHttpResponse { body, next_token },)) => {
-                        if let Err(_) = sender.send_data(Bytes::from(body)).await {
+                        if sender.send_data(Bytes::from(body)).await.is_err() {
                             sender.abort();
                             break;
                         }
