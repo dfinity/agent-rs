@@ -1,11 +1,12 @@
 use clap::{crate_authors, crate_version, AppSettings, Clap};
+use hyper::body::Bytes;
 use hyper::http::uri::Parts;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{body, Body, Client, Request, Response, Server, StatusCode, Uri};
 use ic_agent::export::Principal;
 use ic_agent::Agent;
 use ic_utils::call::SyncCall;
-use ic_utils::interfaces::http_request::HeaderField;
+use ic_utils::interfaces::http_request::{HeaderField, NextHttpResponse};
 use ic_utils::interfaces::HttpRequestCanister;
 use std::convert::Infallible;
 use std::error::Error;
@@ -13,6 +14,9 @@ use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+
+// Limit the total number of calls to an HTTP Request loop to 1000 for now.
+static MAX_HTTP_REQUEST_NEXT_CALL_COUNT: i32 = 1000;
 
 #[derive(Clap)]
 #[clap(
@@ -116,19 +120,58 @@ async fn forward_request(
 
     let entire_body = body::to_bytes(request.into_body()).await?.to_vec();
 
-    HttpRequestCanister::create(agent.as_ref(), canister_id)
+    let canister = HttpRequestCanister::create(agent.as_ref(), canister_id.clone());
+    let (http_response,) = canister
         .http_request(method, uri.to_string(), headers, &entire_body)
         .call()
         .await
-        .map_err(Into::<Box<dyn Error>>::into)
-        .and_then(|(http_response,)| {
-            let mut builder =
-                Response::builder().status(StatusCode::from_u16(http_response.status_code)?);
-            for HeaderField(name, value) in http_response.headers {
-                builder = builder.header(&name, value);
+        .map_err(Into::<Box<dyn Error>>::into)?;
+
+    let mut builder = Response::builder().status(StatusCode::from_u16(http_response.status_code)?);
+    for HeaderField(name, value) in http_response.headers {
+        builder = builder.header(&name, value);
+    }
+
+    if let Some(mut token) = http_response.next_token {
+        let (mut sender, body) = body::Body::channel();
+        let agent = agent.as_ref().clone();
+        sender.send_data(Bytes::from(http_response.body)).await?;
+
+        tokio::spawn(async move {
+            let canister = HttpRequestCanister::create(&agent, canister_id);
+            // We have not yet called http_request_next.
+            let mut count = 0;
+            loop {
+                count += 1;
+                if count > MAX_HTTP_REQUEST_NEXT_CALL_COUNT {
+                    sender.abort();
+                    break;
+                }
+
+                match canister.http_request_next(token).call().await {
+                    Ok((NextHttpResponse { body, next_token },)) => {
+                        if sender.send_data(Bytes::from(body)).await.is_err() {
+                            sender.abort();
+                            break;
+                        }
+                        if let Some(next_token) = next_token {
+                            token = next_token;
+                        } else {
+                            break;
+                        }
+                    }
+                    Err(_) => {
+                        sender.abort();
+                        break;
+                    }
+                }
             }
-            Ok(builder.body(http_response.body.into())?)
-        })
+        });
+
+        Ok(builder.body(body)?)
+    } else {
+        Ok(builder.body(http_response.body.into())?)
+    }
 }
 
 fn is_hop_header(name: &str) -> bool {

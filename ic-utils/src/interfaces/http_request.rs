@@ -1,6 +1,7 @@
 use crate::call::SyncCall;
 use crate::canister::CanisterBuilder;
 use crate::Canister;
+use candid::parser::value::IDLValue;
 use candid::{CandidType, Deserialize};
 use ic_agent::export::Principal;
 use ic_agent::Agent;
@@ -9,7 +10,7 @@ use std::fmt::Debug;
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub struct HttpRequestCanister;
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Clone, Deserialize)]
 pub struct HeaderField(pub String, pub String);
 
 #[derive(CandidType, Deserialize)]
@@ -27,6 +28,14 @@ pub struct HttpResponse {
     pub headers: Vec<HeaderField>,
     #[serde(with = "serde_bytes")]
     pub body: Vec<u8>,
+    pub next_token: Option<IDLValue>,
+}
+
+#[derive(CandidType, Deserialize)]
+pub struct NextHttpResponse {
+    #[serde(with = "serde_bytes")]
+    pub body: Vec<u8>,
+    pub next_token: Option<IDLValue>,
 }
 
 impl HttpRequestCanister {
@@ -65,6 +74,15 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
                 headers,
                 body: body.as_ref(),
             })
+            .build()
+    }
+
+    pub fn http_request_next<'canister: 'agent>(
+        &'canister self,
+        token: IDLValue,
+    ) -> impl 'agent + SyncCall<(NextHttpResponse,)> {
+        self.query_("http_request_next")
+            .with_value_arg(token)
             .build()
     }
 }
