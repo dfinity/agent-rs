@@ -320,8 +320,6 @@ impl Agent {
     }
 
     async fn read_state_raw(&self, paths: Vec<Vec<Label>>) -> Result<Certificate, AgentError> {
-        println!("enter read_state_raw");
-        println!("{:?}", paths);
         let read_state_response: ReadStateResponse = self
             .read_endpoint(SyncContent::ReadStateRequest {
                 sender: self.identity.sender().map_err(AgentError::SigningError)?,
@@ -333,7 +331,6 @@ impl Agent {
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
         self.verify(&cert)?;
-        println!("exit read_state_raw");
         Ok(cert)
     }
 
@@ -378,15 +375,16 @@ impl Agent {
         canister_id: Principal,
         path: &str,
     ) -> Result<Vec<u8>, AgentError> {
-        println!("read_state_canister_info {:?}", path);
-        let paths: Vec<Vec<Label>> =
-            vec![vec!["canister".into(), canister_id.clone().into(), path.into()]];
+        let paths: Vec<Vec<Label>> = vec![vec![
+            "canister".into(),
+            canister_id.clone().into(),
+            path.into(),
+        ]];
 
         let cert = self.read_state_raw(paths).await?;
 
         lookup_canister_info(cert, canister_id, path)
     }
-
 
     pub async fn request_status_raw(
         &self,
