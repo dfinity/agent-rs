@@ -49,12 +49,7 @@ pub(crate) fn lookup_canister_info(
     path: &str,
 ) -> Result<Vec<u8>, AgentError> {
     let path_canister_module_hash = vec!["canister".into(), canister_id.into(), path.into()];
-    match certificate.tree.lookup_path(&path_canister_module_hash) {
-        LookupResult::Absent => Err(AgentError::LookupPathAbsent(path_canister_module_hash)),
-        LookupResult::Unknown => Err(AgentError::LookupPathUnknown(path_canister_module_hash)),
-        LookupResult::Found(blob) => Ok(blob.to_vec()),
-        LookupResult::Error => Err(AgentError::LookupPathError(path_canister_module_hash)),
-    }
+    lookup_value(&certificate, path_canister_module_hash).map(<[u8]>::to_vec)
 }
 
 pub(crate) fn lookup_request_status(
