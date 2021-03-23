@@ -30,7 +30,7 @@ use serde::Serialize;
 use status::Status;
 
 use crate::agent::response_authentication::{
-    extract_der, initialize_bls, lookup_request_status, lookup_value,
+    extract_der, initialize_bls, lookup_canister_info, lookup_request_status, lookup_value,
 };
 use crate::bls::bls12381::bls;
 use std::convert::TryFrom;
@@ -368,6 +368,22 @@ impl Agent {
                 lookup_value(&cert, public_key_path).map(|pk| pk.to_vec())
             }
         }
+    }
+
+    pub async fn read_state_canister_info(
+        &self,
+        canister_id: Principal,
+        path: &str,
+    ) -> Result<Vec<u8>, AgentError> {
+        let paths: Vec<Vec<Label>> = vec![vec![
+            "canister".into(),
+            canister_id.clone().into(),
+            path.into(),
+        ]];
+
+        let cert = self.read_state_raw(paths).await?;
+
+        lookup_canister_info(cert, canister_id, path)
     }
 
     pub async fn request_status_raw(
