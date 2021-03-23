@@ -48,8 +48,8 @@ pub(crate) fn lookup_canister_info(
     canister_id: ic_types::Principal,
     path: &str,
 ) -> Result<Vec<u8>, AgentError> {
-    let path_canister_module_hash = vec!["canister".into(), canister_id.into(), path.into()];
-    lookup_value(&certificate, path_canister_module_hash).map(<[u8]>::to_vec)
+    let path_canister = vec!["canister".into(), canister_id.into(), path.into()];
+    lookup_value(&certificate, path_canister).map(<[u8]>::to_vec)
 }
 
 pub(crate) fn lookup_request_status(
