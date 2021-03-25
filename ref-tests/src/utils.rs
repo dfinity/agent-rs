@@ -19,8 +19,7 @@ const HSM_PIN: &str = "HSM_PIN";
 
 pub fn create_waiter() -> Delay {
     Delay::builder()
-        .throttle(std::time::Duration::from_millis(5))
-        .timeout(std::time::Duration::from_secs(60 * 5))
+        .throttle(std::time::Duration::from_secs(5))
         .build()
 }
 
@@ -87,7 +86,7 @@ where
     R: Future<Output = Result<(), Box<dyn Error>>>,
     F: FnOnce(Agent) -> R,
 {
-    let mut runtime = tokio::runtime::Runtime::new().expect("Could not create tokio runtime.");
+    let runtime = tokio::runtime::Runtime::new().expect("Could not create tokio runtime.");
     runtime.block_on(async {
         let agent_identity = create_identity()
             .await

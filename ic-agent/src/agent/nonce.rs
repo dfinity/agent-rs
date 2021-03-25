@@ -1,16 +1,17 @@
 use rand::rngs::OsRng;
 use rand::Rng;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// A Factory for nonce blobs.
+#[derive(Clone)]
 pub struct NonceFactory {
-    inner: Mutex<Box<dyn Iterator<Item = Vec<u8>> + Send>>,
+    inner: Arc<Mutex<Box<dyn Iterator<Item = Vec<u8>> + Send>>>,
 }
 
 impl NonceFactory {
     pub fn from_iterator(iter: Box<dyn Iterator<Item = Vec<u8>> + Send>) -> Self {
         Self {
-            inner: Mutex::new(iter),
+            inner: Arc::new(Mutex::new(iter)),
         }
     }
 

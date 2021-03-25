@@ -2,8 +2,9 @@
 //!
 //! Contrary to ic-ref.rs, these tests are not meant to match any other tests. They're
 //! integration tests with a running IC-Ref.
+use ic_agent::agent::agent_error::HttpErrorPayload;
 use ic_agent::export::Principal;
-use ic_agent::{AgentError, HttpErrorPayload};
+use ic_agent::AgentError;
 use ic_utils::call::AsyncCall;
 use ic_utils::call::SyncCall;
 use ic_utils::interfaces::management_canister::InstallMode;
@@ -345,6 +346,7 @@ fn wallet_create_wallet() {
                 .call_and_wait(create_waiter())
                 .await?;
         let grandchild_create_res = grandchild_create_res?;
+
         let grandchild_wallet = Canister::builder()
             .with_agent(&agent)
             .with_canister_id(grandchild_create_res.canister_id.clone())
