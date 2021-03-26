@@ -123,37 +123,19 @@ pub struct HttpErrorPayload {
 
 impl HttpErrorPayload {
     fn fmt_human_readable(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        match self {
-            HttpErrorPayload {
-                status,
-                content_type,
-                content,
-            } if is_text(content_type) => {
-                f.write_fmt(format_args!(
-                    "Http Error: status {}, content type {:?}, content: {}",
-                    http::StatusCode::from_u16(*status)
-                        .map_or_else(|_| format!("{}", status), |code| format!("{}", code)),
-                    content_type.clone().unwrap_or_else(|| "".to_string()),
-                    String::from_utf8(content.to_vec()).unwrap_or_else(|from_utf8_err| format!(
-                        "(unable to decode content: {:#?})",
-                        from_utf8_err
-                    ))
-                ))?;
-            }
-            HttpErrorPayload {
-                status,
-                content_type,
-                content,
-            } => {
-                f.write_fmt(format_args!(
-                    r#"Http Error: status {}, content type {:?}, content: {:?}"#,
-                    http::StatusCode::from_u16(*status)
-                        .map_or_else(|_| format!("{}", status), |code| format!("{}", code)),
-                    content_type.clone().unwrap_or_else(|| "".to_string()),
-                    content
-                ))?;
-            }
-        }
+        // No matter content_type is TEXT or not,
+        // always try to parse it as a String.
+        // When fail, print the raw byte array
+        f.write_fmt(format_args!(
+            "Http Error: status {}, content type {:?}, content: {}",
+            http::StatusCode::from_u16(self.status)
+                .map_or_else(|_| format!("{}", self.status), |code| format!("{}", code)),
+            self.content_type.clone().unwrap_or_else(|| "".to_string()),
+            String::from_utf8(self.content.clone()).unwrap_or_else(|_| format!(
+                "(unable to decode content as UTF-8: {:?})",
+                self.content
+            ))
+        ))?;
         Ok(())
     }
 }
@@ -170,34 +152,36 @@ impl Display for HttpErrorPayload {
     }
 }
 
-fn is_text(content_type: &Option<String>) -> bool {
-    // Sometimes returned by the replica, or ic-ref, or ic-fe,
-    // depending on where in the stack the error happens:
-    //   text/plain
-    //   text/plain; charset=utf-8
-    //   text/html
-    matches!(
-        content_type.as_ref().and_then(|s|s.parse::<mime::Mime>().ok()),
-        Some(mt) if mt.type_() == mime::TEXT
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::HttpErrorPayload;
     use crate::AgentError;
 
     #[test]
-    fn http_payload_works_with_content_type_none() {
+    fn content_type_none_valid_utf8() {
         let payload = HttpErrorPayload {
             status: 420,
             content_type: None,
-            content: vec![1, 2, 3],
+            content: vec![104, 101, 108, 108, 111],
         };
 
         assert_eq!(
             format!("{}", AgentError::HttpError(payload)),
-            r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "", content: [1, 2, 3]"#,
+            r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "", content: hello"#,
+        );
+    }
+
+    #[test]
+    fn content_type_none_invalid_utf8() {
+        let payload = HttpErrorPayload {
+            status: 420,
+            content_type: None,
+            content: vec![195, 40],
+        };
+
+        assert_eq!(
+            format!("{}", AgentError::HttpError(payload)),
+            r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "", content: (unable to decode content as UTF-8: [195, 40])"#,
         );
     }
 
