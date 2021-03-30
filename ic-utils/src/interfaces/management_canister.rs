@@ -239,6 +239,7 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
                 compute_allocation,
                 memory_allocation,
             })
+            .with_effective_canister_id(self.canister_id)
             .build())
     }
 
@@ -287,6 +288,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             .with_arg(In {
                 canister_id: canister_id.clone(),
             })
+            .with_effective_canister_id(canister_id.to_owned())
             .build()
             .map(|result: (StatusCallResult,)| (result.0,))
     }
@@ -320,6 +322,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             .with_arg(Argument {
                 canister_id: canister_id.clone(),
             })
+            .with_effective_canister_id(canister_id.to_owned())
             .build()
     }
 
@@ -337,6 +340,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             .with_arg(Argument {
                 canister_id: canister_id.clone(),
             })
+            .with_effective_canister_id(canister_id.to_owned())
             .build()
     }
 
@@ -364,6 +368,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             .with_arg(Argument {
                 amount: amount.map(candid::Nat::from),
             })
+            .with_effective_canister_id(Principal::management_canister())
             .build()
             .map(|result: (Out,)| (result.0.canister_id,))
     }
@@ -388,6 +393,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
                 canister_id: canister_id.clone(),
                 amount,
             })
+            .with_effective_canister_id(canister_id.to_owned())
             .build()
     }
 
@@ -414,6 +420,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             .with_arg(Argument {
                 canister_id: canister_id.clone(),
             })
+            .with_effective_canister_id(canister_id.to_owned())
             .build()
     }
 
@@ -431,6 +438,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             .with_arg(Argument {
                 canister_id: canister_id.clone(),
             })
+            .with_effective_canister_id(canister_id.to_owned())
             .build()
     }
 
@@ -460,6 +468,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
                 canister_id: canister_id.clone(),
                 new_controller: new_controller.clone(),
             })
+            .with_effective_canister_id(canister_id.to_owned())
             .build()
     }
 }

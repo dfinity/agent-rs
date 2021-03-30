@@ -247,6 +247,7 @@ impl Default for Argument {
 pub struct SyncCallBuilder<'agent, 'canister: 'agent, T> {
     canister: &'canister Canister<'agent, T>,
     method_name: String,
+    effective_canister_id: Principal,
     arg: Argument,
 }
 
@@ -259,6 +260,7 @@ impl<'agent, 'canister: 'agent, T> SyncCallBuilder<'agent, 'canister, T> {
         Self {
             canister,
             method_name: method_name.into(),
+            effective_canister_id: canister.canister_id_().to_owned(),
             arg: Default::default(),
         }
     }
@@ -296,6 +298,14 @@ impl<'agent, 'canister: 'agent, Interface> SyncCallBuilder<'agent, 'canister, In
         self
     }
 
+    pub fn with_effective_canister_id(
+        mut self,
+        canister_id: Principal,
+    ) -> SyncCallBuilder<'agent, 'canister, Interface> {
+        self.effective_canister_id = canister_id;
+        self
+    }
+
     /// Builds an [SyncCaller] from this builder's state.
     pub fn build<Output>(self) -> SyncCaller<'canister, Output>
     where
@@ -304,6 +314,7 @@ impl<'agent, 'canister: 'agent, Interface> SyncCallBuilder<'agent, 'canister, In
         let c = self.canister;
         SyncCaller {
             agent: c.agent,
+            effective_canister_id: self.effective_canister_id,
             canister_id: c.canister_id.clone(),
             method_name: self.method_name.clone(),
             arg: self.arg.serialize(),
@@ -319,6 +330,7 @@ impl<'agent, 'canister: 'agent, Interface> SyncCallBuilder<'agent, 'canister, In
 pub struct AsyncCallBuilder<'agent, 'canister: 'agent, T> {
     canister: &'canister Canister<'agent, T>,
     method_name: String,
+    effective_canister_id: Principal,
     arg: Argument,
 }
 
@@ -331,6 +343,7 @@ impl<'agent, 'canister: 'agent, T> AsyncCallBuilder<'agent, 'canister, T> {
         Self {
             canister,
             method_name: method_name.to_string(),
+            effective_canister_id: canister.canister_id_().to_owned(),
             arg: Default::default(),
         }
     }
@@ -357,6 +370,14 @@ impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, I
         self
     }
 
+    pub fn with_effective_canister_id(
+        mut self,
+        canister_id: Principal,
+    ) -> AsyncCallBuilder<'agent, 'canister, Interface> {
+        self.effective_canister_id = canister_id;
+        self
+    }
+
     /// Builds an [AsyncCaller] from this builder's state.
     pub fn build<Output>(self) -> AsyncCaller<'canister, Output>
     where
@@ -365,6 +386,7 @@ impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, I
         let c = self.canister;
         AsyncCaller {
             agent: c.agent,
+            effective_canister_id: self.effective_canister_id,
             canister_id: c.canister_id.clone(),
             method_name: self.method_name.clone(),
             arg: self.arg.serialize(),

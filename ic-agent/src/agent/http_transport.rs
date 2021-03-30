@@ -4,6 +4,7 @@
 use crate::agent::agent_error::HttpErrorPayload;
 use crate::AgentError;
 use crate::RequestId;
+use ic_types::Principal;
 use reqwest::Method;
 use std::future::Future;
 use std::pin::Pin;
@@ -46,7 +47,7 @@ impl ReqwestHttpReplicaV1Transport {
 
         Ok(Self {
             url: reqwest::Url::parse(&url)
-                .and_then(|url| url.join("api/v1/"))
+                .and_then(|url| url.join("api/v2/"))
                 .map_err(|_| AgentError::InvalidReplicaUrl(url.clone()))?,
             client: reqwest::Client::builder()
                 .use_preconfigured_tls(tls_config)
@@ -170,6 +171,24 @@ impl ReqwestHttpReplicaV1Transport {
 }
 
 impl super::ReplicaV1Transport for ReqwestHttpReplicaV1Transport {
+    fn call<'a>(
+        &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
+        async fn run(
+            s: &ReqwestHttpReplicaV1Transport,
+            effective_canister_id: Principal,
+            envelope: Vec<u8>,
+        ) -> Result<(), AgentError> {
+            let endpoint = format!("canister/{}/call", effective_canister_id.to_text());
+            s.execute(Method::POST, &endpoint, Some(envelope)).await?;
+            Ok(())
+        }
+
+        Box::pin(run(self, effective_canister_id, envelope))
+    }
+
     fn read<'a>(
         &'a self,
         envelope: Vec<u8>,
@@ -182,6 +201,40 @@ impl super::ReplicaV1Transport for ReqwestHttpReplicaV1Transport {
         }
 
         Box::pin(run(self, envelope))
+    }
+
+    fn read_state<'a>(
+        &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        async fn run(
+            s: &ReqwestHttpReplicaV1Transport,
+            effective_canister_id: Principal,
+            envelope: Vec<u8>,
+        ) -> Result<Vec<u8>, AgentError> {
+            let endpoint = format!("canister/{}/read_state", effective_canister_id.to_text());
+            s.execute(Method::POST, &endpoint, Some(envelope)).await
+        }
+
+        Box::pin(run(self, effective_canister_id, envelope))
+    }
+
+    fn query<'a>(
+        &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        async fn run(
+            s: &ReqwestHttpReplicaV1Transport,
+            effective_canister_id: Principal,
+            envelope: Vec<u8>,
+        ) -> Result<Vec<u8>, AgentError> {
+            let endpoint = format!("canister/{}/query", effective_canister_id.to_text());
+            s.execute(Method::POST, &endpoint, Some(envelope)).await
+        }
+
+        Box::pin(run(self, effective_canister_id, envelope))
     }
 
     fn submit<'a>(

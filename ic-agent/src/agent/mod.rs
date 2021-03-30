@@ -19,7 +19,8 @@ pub use response::{Replied, RequestStatusResponse};
 mod agent_test;
 
 use crate::agent::replica_api::{
-    AsyncContent, Certificate, Delegation, Envelope, ReadStateResponse, SyncContent,
+    AsyncContent, CallRequestContent, Certificate, Delegation, Envelope, QueryContent,
+    ReadStateContent, ReadStateResponse, SyncContent,
 };
 use crate::export::Principal;
 use crate::hash_tree::Label;
@@ -52,12 +53,24 @@ const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 ///
 /// Any error returned by these methods will bubble up to the code that called the [Agent].
 pub trait ReplicaV1Transport {
+    fn call<'a>(
+        &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>>;
+
     /// Sends a synchronous request to a Replica. This call includes the body of the request message
     /// itself (envelope).
     ///
     /// This normally corresponds to the `/api/v1/read` endpoint.
     fn read<'a>(
         &'a self,
+        envelope: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
+
+    fn read_state<'a>(
+        &'a self,
+        effective_canister_id: Principal,
         envelope: Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
 
@@ -70,6 +83,12 @@ pub trait ReplicaV1Transport {
         envelope: Vec<u8>,
         request_id: RequestId,
     ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>>;
+
+    fn query<'a>(
+        &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
 
     /// Sends a status request to the Replica, returning whatever the replica returns.
     /// In the current spec v1, this is a CBOR encoded status message, but we are not
@@ -250,7 +269,14 @@ impl Agent {
         serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
     }
 
-    async fn submit_endpoint(&self, request: AsyncContent) -> Result<RequestId, AgentError> {
+    async fn query_endpoint<A>(
+        &self,
+        effective_canister_id: Principal,
+        request: QueryContent,
+    ) -> Result<A, AgentError>
+    where
+        A: serde::de::DeserializeOwned,
+    {
         let request_id = to_request_id(&request)?;
         let msg = self.construct_message(&request_id);
         let signature = self.identity.sign(&msg).map_err(AgentError::SigningError)?;
@@ -266,7 +292,66 @@ impl Agent {
         serializer.self_describe()?;
         envelope.serialize(&mut serializer)?;
 
-        self.transport.submit(serialized_bytes, request_id).await?;
+        let bytes = self
+            .transport
+            .query(effective_canister_id, serialized_bytes)
+            .await?;
+        serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
+    }
+
+    async fn read_state_endpoint<A>(
+        &self,
+        effective_canister_id: Principal,
+        request: ReadStateContent,
+    ) -> Result<A, AgentError>
+    where
+        A: serde::de::DeserializeOwned,
+    {
+        let request_id = to_request_id(&request)?;
+        let msg = self.construct_message(&request_id);
+        let signature = self.identity.sign(&msg).map_err(AgentError::SigningError)?;
+
+        let envelope = Envelope {
+            content: request,
+            sender_pubkey: signature.public_key,
+            sender_sig: signature.signature,
+        };
+
+        let mut serialized_bytes = Vec::new();
+        let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
+        serializer.self_describe()?;
+        envelope.serialize(&mut serializer)?;
+
+        let bytes = self
+            .transport
+            .read_state(effective_canister_id, serialized_bytes)
+            .await?;
+        serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
+    }
+
+    async fn call_endpoint(
+        &self,
+        effective_canister_id: Principal,
+        request: CallRequestContent,
+    ) -> Result<RequestId, AgentError> {
+        let request_id = to_request_id(&request)?;
+        let msg = self.construct_message(&request_id);
+        let signature = self.identity.sign(&msg).map_err(AgentError::SigningError)?;
+
+        let envelope = Envelope {
+            content: request,
+            sender_pubkey: signature.public_key,
+            sender_sig: signature.signature,
+        };
+
+        let mut serialized_bytes = Vec::new();
+        let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
+        serializer.self_describe()?;
+        envelope.serialize(&mut serializer)?;
+
+        self.transport
+            .call(effective_canister_id, serialized_bytes)
+            .await?;
         Ok(request_id)
     }
 
@@ -275,17 +360,21 @@ impl Agent {
     async fn query_raw(
         &self,
         canister_id: &Principal,
+        effective_canister_id: Principal,
         method_name: &str,
         arg: &[u8],
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<Vec<u8>, AgentError> {
-        self.read_endpoint::<replica_api::QueryResponse>(SyncContent::QueryRequest {
-            sender: self.identity.sender().map_err(AgentError::SigningError)?,
-            canister_id: canister_id.clone(),
-            method_name: method_name.to_string(),
-            arg: arg.to_vec(),
-            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
-        })
+        self.query_endpoint::<replica_api::QueryResponse>(
+            effective_canister_id,
+            QueryContent::QueryRequest {
+                sender: self.identity.sender().map_err(AgentError::SigningError)?,
+                canister_id: canister_id.clone(),
+                method_name: method_name.to_string(),
+                arg: arg.to_vec(),
+                ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
+            },
+        )
         .await
         .and_then(|response| match response {
             replica_api::QueryResponse::Replied { reply } => Ok(reply.arg),
@@ -304,28 +393,39 @@ impl Agent {
     async fn update_raw(
         &self,
         canister_id: &Principal,
+        effective_canister_id: Principal,
         method_name: &str,
         arg: &[u8],
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestId, AgentError> {
-        self.submit_endpoint(AsyncContent::CallRequest {
-            canister_id: canister_id.clone(),
-            method_name: method_name.into(),
-            arg: arg.to_vec(),
-            nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
-            sender: self.identity.sender().map_err(AgentError::SigningError)?,
-            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
-        })
+        self.call_endpoint(
+            effective_canister_id,
+            CallRequestContent::CallRequest {
+                canister_id: canister_id.clone(),
+                method_name: method_name.into(),
+                arg: arg.to_vec(),
+                nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
+                sender: self.identity.sender().map_err(AgentError::SigningError)?,
+                ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
+            },
+        )
         .await
     }
 
-    async fn read_state_raw(&self, paths: Vec<Vec<Label>>) -> Result<Certificate, AgentError> {
+    async fn read_state_raw(
+        &self,
+        paths: Vec<Vec<Label>>,
+        effective_canister_id: Principal,
+    ) -> Result<Certificate, AgentError> {
         let read_state_response: ReadStateResponse = self
-            .read_endpoint(SyncContent::ReadStateRequest {
-                sender: self.identity.sender().map_err(AgentError::SigningError)?,
-                paths,
-                ingress_expiry: self.get_expiry_date(),
-            })
+            .read_state_endpoint(
+                effective_canister_id,
+                ReadStateContent::ReadStateRequest {
+                    sender: self.identity.sender().map_err(AgentError::SigningError)?,
+                    paths,
+                    ingress_expiry: self.get_expiry_date(),
+                },
+            )
             .await?;
 
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
@@ -381,7 +481,7 @@ impl Agent {
             path.into(),
         ]];
 
-        let cert = self.read_state_raw(paths).await?;
+        let cert = self.read_state_raw(paths, canister_id.clone()).await?;
 
         lookup_canister_info(cert, canister_id, path)
     }
@@ -389,11 +489,12 @@ impl Agent {
     pub async fn request_status_raw(
         &self,
         request_id: &RequestId,
+        effective_canister_id: Principal,
     ) -> Result<RequestStatusResponse, AgentError> {
         let paths: Vec<Vec<Label>> =
             vec![vec!["request_status".into(), request_id.to_vec().into()]];
 
-        let cert = self.read_state_raw(paths).await?;
+        let cert = self.read_state_raw(paths, effective_canister_id).await?;
 
         lookup_request_status(cert, request_id)
     }
@@ -430,6 +531,7 @@ impl Agent {
 /// This makes it easier to do query calls without actually passing all arguments.
 pub struct QueryBuilder<'agent> {
     agent: &'agent Agent,
+    effective_canister_id: Principal,
     canister_id: Principal,
     method_name: String,
     arg: Vec<u8>,
@@ -440,11 +542,17 @@ impl<'agent> QueryBuilder<'agent> {
     pub fn new(agent: &'agent Agent, canister_id: Principal, method_name: String) -> Self {
         Self {
             agent,
+            effective_canister_id: canister_id.clone(),
             canister_id,
             method_name,
             arg: vec![],
             ingress_expiry_datetime: None,
         }
+    }
+
+    pub fn with_effective_canister_id(&mut self, canister_id: Principal) -> &mut Self {
+        self.effective_canister_id = canister_id;
+        self
     }
 
     pub fn with_arg<A: AsRef<[u8]>>(&mut self, arg: A) -> &mut Self {
@@ -486,6 +594,7 @@ impl<'agent> QueryBuilder<'agent> {
         self.agent
             .query_raw(
                 &self.canister_id,
+                self.effective_canister_id.clone(),
                 self.method_name.as_str(),
                 self.arg.as_slice(),
                 self.ingress_expiry_datetime,
@@ -500,6 +609,7 @@ impl<'agent> QueryBuilder<'agent> {
 /// if you want to wait or not.
 pub struct UpdateBuilder<'agent> {
     agent: &'agent Agent,
+    pub effective_canister_id: Principal,
     pub canister_id: Principal,
     pub method_name: String,
     pub arg: Vec<u8>,
@@ -510,11 +620,17 @@ impl<'agent> UpdateBuilder<'agent> {
     pub fn new(agent: &'agent Agent, canister_id: Principal, method_name: String) -> Self {
         Self {
             agent,
+            effective_canister_id: canister_id.clone(),
             canister_id,
             method_name,
             arg: vec![],
             ingress_expiry_datetime: None,
         }
+    }
+
+    pub fn with_effective_canister_id(&mut self, canister_id: Principal) -> &mut Self {
+        self.effective_canister_id = canister_id;
+        self
     }
 
     pub fn with_arg<A: AsRef<[u8]>>(&mut self, arg: A) -> &mut Self {
@@ -558,6 +674,7 @@ impl<'agent> UpdateBuilder<'agent> {
             .agent
             .update_raw(
                 &self.canister_id,
+                self.effective_canister_id.clone(),
                 self.method_name.as_str(),
                 self.arg.as_slice(),
                 self.ingress_expiry_datetime,
@@ -566,7 +683,11 @@ impl<'agent> UpdateBuilder<'agent> {
         waiter.start();
         let mut request_accepted = false;
         loop {
-            match self.agent.request_status_raw(&request_id).await? {
+            match self
+                .agent
+                .request_status_raw(&request_id, self.effective_canister_id.clone())
+                .await?
+            {
                 RequestStatusResponse::Replied {
                     reply: Replied::CallReplied(arg),
                 } => return Ok(arg),
@@ -612,6 +733,7 @@ impl<'agent> UpdateBuilder<'agent> {
         self.agent
             .update_raw(
                 &self.canister_id,
+                self.effective_canister_id.clone(),
                 self.method_name.as_str(),
                 self.arg.as_slice(),
                 self.ingress_expiry_datetime,
