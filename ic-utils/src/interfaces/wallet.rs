@@ -107,6 +107,7 @@ pub enum EventKind {
     CyclesSent {
         to: Principal,
         amount: u64,
+        refund: u64,
     },
     CyclesReceived {
         from: Principal,
@@ -163,11 +164,6 @@ pub struct AddressEntry {
 #[derive(CandidType, Deserialize)]
 pub struct BalanceResult {
     pub amount: u64,
-}
-
-#[derive(CandidType, Deserialize)]
-pub struct ReceiveResult {
-    pub accepted: u64,
 }
 
 #[derive(CandidType, Deserialize)]
@@ -287,12 +283,8 @@ impl<'agent> Canister<'agent, Wallet> {
     }
 
     /// Send cycles to another (hopefully Wallet) canister.
-    pub fn wallet_receive<'canister: 'agent>(
-        &'canister self,
-    ) -> impl 'agent + AsyncCall<(ReceiveResult,)> {
-        self.update_("wallet_receive")
-            .build()
-            .map(|result: (ReceiveResult,)| (result.0,))
+    pub fn wallet_receive<'canister: 'agent>(&'canister self) -> impl 'agent + AsyncCall<((),)> {
+        self.update_("wallet_receive").build()
     }
 
     pub fn wallet_create_canister<'canister: 'agent>(
