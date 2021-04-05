@@ -264,8 +264,8 @@ where
     where
         W: Waiter,
     {
-        let w = waiter.clone_box();
-        self.call_and_wait(garcon::Delay::from(w.clone())).await
+        self.call_and_wait(garcon::Delay::from(waiter.clone_box()))
+            .await
     }
 }
 
