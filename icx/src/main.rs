@@ -332,7 +332,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let result = builder
                         .with_arg(arg)
                         .call_and_wait(
-                            delay::Delay::builder()
+                            garcon::Delay::builder()
                                 .exponential_backoff(std::time::Duration::from_secs(1), 1.1)
                                 .side_effect(|| {
                                     eprint!(".");

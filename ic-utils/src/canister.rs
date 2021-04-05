@@ -384,7 +384,7 @@ mod tests {
     #[tokio::test]
     async fn simple() {
         use super::Canister;
-        use delay::Delay;
+        use garcon::Delay;
 
         let rng = ring::rand::SystemRandom::new();
         let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)

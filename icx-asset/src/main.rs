@@ -40,8 +40,8 @@ struct Opts {
 enum SubCommand {
     /// Uploads an asset to an asset canister.
     Upload(UploadOpts),
-    // /// List keys from the asset canister.
-    // Ls(CallOpts),
+    /// List keys from the asset canister.
+    List(),
 }
 
 #[derive(Clap)]
@@ -175,15 +175,30 @@ async fn upload(agent: Agent, opts: &Opts, o: &UploadOpts) -> Result {
         }
     }
 
-    let canister = ic_utils::Canister::builder()
-        .with_agent(&agent)
-        .with_canister_id(Principal::from_text(&opts.canister_id)?)
-        .build()?;
-
     eprintln!("{:#?}", key_map);
     do_upload(&canister, key_map.into_iter(), 1024 * 1024).await?;
 
     Ok(())
+}
+
+async fn list(canister: &Canister<'_>, opts: &Opts) -> Result {
+    #[derive(CandidType, Deserialize)]
+    struct Encoding {
+        content_encoding: String,
+        sha256: Option<Vec<u8>>,
+    }
+
+    #[derive(CandidType, Deserialize)]
+    struct ListEntry {
+        key: String,
+        content_type: String,
+        encondings: Vec<Encoding>,
+    }
+
+    #[derive(CandidType, Deserialize)]
+    struct EmptyRecord {}
+
+    let (entries, ): (Vec<ListEntry>,) = canister.update_("list").with_arg(EmptyRecord).build().call_and_wait()
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
@@ -197,9 +212,17 @@ async fn main() -> Result {
         // .with_boxed_identity((create_identity(opts.pem)))
         .build()?;
 
+    let canister = ic_utils::Canister::builder()
+        .with_agent(&agent)
+        .with_canister_id(Principal::from_text(&opts.canister_id)?)
+        .build()?;
+
     match &opts.subcommand {
         SubCommand::Upload(o) => {
             upload(agent, &opts, o).await?;
+        }
+        SubCommand::List() => {
+            list(&canister, &opts).await?;
         }
     }
 

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use candid::de::ArgumentDecoder;
 use candid::{decode_args, decode_one};
-use delay::Waiter;
+use garcon::Waiter;
 use ic_agent::agent::UpdateBuilder;
 use ic_agent::export::Principal;
 use ic_agent::{Agent, AgentError, RequestId};
@@ -224,7 +224,7 @@ where
     ///
     pub async fn call_and_wait<W>(self, waiter: W) -> Result<Out, AgentError>
     where
-        W: Waiter,
+        W: Waiter + Send,
     {
         self.build_call()?
             .call_and_wait(waiter)
@@ -264,7 +264,8 @@ where
     where
         W: Waiter,
     {
-        self.call_and_wait(waiter).await
+        let w = waiter.clone_box();
+        self.call_and_wait(garcon::Delay::from(w.clone())).await
     }
 }
 

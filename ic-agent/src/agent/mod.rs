@@ -25,7 +25,7 @@ use crate::export::Principal;
 use crate::hash_tree::Label;
 use crate::identity::Identity;
 use crate::{to_request_id, RequestId};
-use delay::Waiter;
+use garcon::Waiter;
 use serde::Serialize;
 use status::Status;
 
@@ -585,7 +585,8 @@ impl<'agent> UpdateBuilder<'agent> {
             };
 
             waiter
-                .wait()
+                .async_wait()
+                .await
                 .map_err(|_| AgentError::TimeoutWaitingForResponse())?;
         }
     }
