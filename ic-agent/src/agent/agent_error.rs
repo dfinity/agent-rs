@@ -100,6 +100,9 @@ pub enum AgentError {
     #[error("Failed to initialize the BLS library")]
     BlsInitializationFailure(),
 
+    #[error("The invocation to the wallet call forward method failed with the error: {0}")]
+    WalletCallFailed(String),
+
     #[error("Missing replica transport in the Agent Builder.")]
     MissingReplicaTransport(),
 
