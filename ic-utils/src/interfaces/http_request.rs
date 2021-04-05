@@ -23,12 +23,23 @@ pub struct HttpRequest<'body> {
 }
 
 #[derive(CandidType, Deserialize)]
+pub struct CallbackStrategy {
+    pub callback: IDLValue,
+    pub token: IDLValue,
+}
+
+#[derive(CandidType, Deserialize)]
+pub enum StreamingStrategy {
+    Callback(CallbackStrategy)
+}
+
+#[derive(CandidType, Deserialize)]
 pub struct HttpResponse {
     pub status_code: u16,
     pub headers: Vec<HeaderField>,
     #[serde(with = "serde_bytes")]
     pub body: Vec<u8>,
-    pub next_token: Option<IDLValue>,
+    pub streaming_strategy: Option<StreamingStrategy>,
 }
 
 #[derive(CandidType, Deserialize)]
