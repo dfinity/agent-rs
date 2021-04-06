@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 // Limit the total number of calls to an HTTP Request loop to 1000 for now.
-static MAX_HTTP_REQUEST_NEXT_CALL_COUNT: i32 = 1000;
+static MAX_HTTP_REQUEST_STREAM_CALLBACK_CALL_COUNT: i32 = 1000;
 
 #[derive(Clap)]
 #[clap(
@@ -147,11 +147,11 @@ async fn forward_request(
                         tokio::spawn(async move {
                             let canister =
                                 HttpRequestCanister::create(&agent, streaming_canister_id_id);
-                            // We have not yet called http_request_next.
+                            // We have not yet called http_request_stream_callback.
                             let mut count = 0;
                             loop {
                                 count += 1;
-                                if count > MAX_HTTP_REQUEST_NEXT_CALL_COUNT {
+                                if count > MAX_HTTP_REQUEST_STREAM_CALLBACK_CALL_COUNT {
                                     sender.abort();
                                     break;
                                 }
