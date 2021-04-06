@@ -6,7 +6,7 @@ use hyper::{body, Body, Client, Request, Response, Server, StatusCode, Uri};
 use ic_agent::export::Principal;
 use ic_agent::Agent;
 use ic_utils::call::SyncCall;
-use ic_utils::interfaces::http_request::{HeaderField, NextHttpResponse};
+use ic_utils::interfaces::http_request::{HeaderField, StreamingCallbackHttpResponse};
 use ic_utils::interfaces::HttpRequestCanister;
 use std::convert::Infallible;
 use std::error::Error;
@@ -14,6 +14,8 @@ use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use ic_utils::interfaces::http_request::StreamingStrategy::Callback;
+use candid::parser::value::IDLValue;
 
 // Limit the total number of calls to an HTTP Request loop to 1000 for now.
 static MAX_HTTP_REQUEST_NEXT_CALL_COUNT: i32 = 1000;
@@ -132,41 +134,60 @@ async fn forward_request(
         builder = builder.header(&name, value);
     }
 
-    if let Some(mut token) = http_response.next_token {
+    if let Some(streaming_strategy) = http_response.streaming_strategy {
         let (mut sender, body) = body::Body::channel();
         let agent = agent.as_ref().clone();
         sender.send_data(Bytes::from(http_response.body)).await?;
 
-        tokio::spawn(async move {
-            let canister = HttpRequestCanister::create(&agent, canister_id);
-            // We have not yet called http_request_next.
-            let mut count = 0;
-            loop {
-                count += 1;
-                if count > MAX_HTTP_REQUEST_NEXT_CALL_COUNT {
-                    sender.abort();
-                    break;
-                }
+        match streaming_strategy {
+            Callback(callback) => {
+                let mut callback_token = callback.token;
+                let callback = callback.callback;
+                match callback {
+                    IDLValue::Func(streaming_canister_id_id, method_name) => {
+                        let method_name = method_name;
+                        tokio::spawn(async move {
+                            let canister = HttpRequestCanister::create(&agent, streaming_canister_id_id);
+                            // We have not yet called http_request_next.
+                            let mut count = 0;
+                            loop {
+                                count += 1;
+                                if count > MAX_HTTP_REQUEST_NEXT_CALL_COUNT {
+                                    sender.abort();
+                                    break;
+                                }
 
-                match canister.http_request_next(token).call().await {
-                    Ok((NextHttpResponse { body, next_token },)) => {
-                        if sender.send_data(Bytes::from(body)).await.is_err() {
-                            sender.abort();
-                            break;
-                        }
-                        if let Some(next_token) = next_token {
-                            token = next_token;
-                        } else {
-                            break;
-                        }
+                                match canister.http_request_stream_callback(&method_name, callback_token).call().await {
+                                    Ok((StreamingCallbackHttpResponse { body, token },)) => {
+                                        if sender.send_data(Bytes::from(body)).await.is_err() {
+                                            sender.abort();
+                                            break;
+                                        }
+                                        if let Some(next_token) = token {
+                                            callback_token = next_token;
+                                        } else {
+                                            break;
+                                        }
+                                    }
+                                    Err(_) => {
+                                        sender.abort();
+                                        break;
+                                    }
+                                }
+                            }
+                        });
+
                     }
-                    Err(_) => {
-                        sender.abort();
-                        break;
+                    _ => {
+                        return Ok(Response::builder()
+                            .status(StatusCode::BAD_REQUEST)
+                            .body("Streaming callback must be a function.".into())
+                            .unwrap())
                     }
                 }
             }
-        });
+        }
+
 
         Ok(builder.body(body)?)
     } else {
