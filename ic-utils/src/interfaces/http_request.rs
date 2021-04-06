@@ -30,7 +30,7 @@ pub struct CallbackStrategy {
 
 #[derive(CandidType, Deserialize)]
 pub enum StreamingStrategy {
-    Callback(CallbackStrategy)
+    Callback(CallbackStrategy),
 }
 
 #[derive(CandidType, Deserialize)]
@@ -43,10 +43,10 @@ pub struct HttpResponse {
 }
 
 #[derive(CandidType, Deserialize)]
-pub struct NextHttpResponse {
+pub struct StreamingCallbackHttpResponse {
     #[serde(with = "serde_bytes")]
     pub body: Vec<u8>,
-    pub next_token: Option<IDLValue>,
+    pub token: Option<IDLValue>,
 }
 
 impl HttpRequestCanister {
@@ -88,12 +88,20 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
             .build()
     }
 
-    pub fn http_request_next<'canister: 'agent>(
+    // pub fn http_request_next<'canister: 'agent>(
+    //     &'canister self,
+    //     token: IDLValue,
+    // ) -> impl 'agent + SyncCall<(NextHttpResponse,)> {
+    //     self.query_("http_request_next")
+    //         .with_value_arg(token)
+    //         .build()
+    // }
+
+    pub fn http_request_stream_callback<'canister: 'agent, M: Into<String>>(
         &'canister self,
+        method: M,
         token: IDLValue,
-    ) -> impl 'agent + SyncCall<(NextHttpResponse,)> {
-        self.query_("http_request_next")
-            .with_value_arg(token)
-            .build()
+    ) -> impl 'agent + SyncCall<(StreamingCallbackHttpResponse,)> {
+        self.query_(&method.into()).with_value_arg(token).build()
     }
 }
