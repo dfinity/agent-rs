@@ -1,3 +1,4 @@
+use candid::parser::value::IDLValue;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use hyper::body::Bytes;
 use hyper::http::uri::Parts;
@@ -6,6 +7,7 @@ use hyper::{body, Body, Client, Request, Response, Server, StatusCode, Uri};
 use ic_agent::export::Principal;
 use ic_agent::Agent;
 use ic_utils::call::SyncCall;
+use ic_utils::interfaces::http_request::StreamingStrategy::Callback;
 use ic_utils::interfaces::http_request::{HeaderField, StreamingCallbackHttpResponse};
 use ic_utils::interfaces::HttpRequestCanister;
 use std::convert::Infallible;
@@ -14,8 +16,6 @@ use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use ic_utils::interfaces::http_request::StreamingStrategy::Callback;
-use candid::parser::value::IDLValue;
 
 // Limit the total number of calls to an HTTP Request loop to 1000 for now.
 static MAX_HTTP_REQUEST_NEXT_CALL_COUNT: i32 = 1000;
@@ -147,7 +147,8 @@ async fn forward_request(
                     IDLValue::Func(streaming_canister_id_id, method_name) => {
                         let method_name = method_name;
                         tokio::spawn(async move {
-                            let canister = HttpRequestCanister::create(&agent, streaming_canister_id_id);
+                            let canister =
+                                HttpRequestCanister::create(&agent, streaming_canister_id_id);
                             // We have not yet called http_request_next.
                             let mut count = 0;
                             loop {
@@ -157,7 +158,11 @@ async fn forward_request(
                                     break;
                                 }
 
-                                match canister.http_request_stream_callback(&method_name, callback_token).call().await {
+                                match canister
+                                    .http_request_stream_callback(&method_name, callback_token)
+                                    .call()
+                                    .await
+                                {
                                     Ok((StreamingCallbackHttpResponse { body, token },)) => {
                                         if sender.send_data(Bytes::from(body)).await.is_err() {
                                             sender.abort();
@@ -176,7 +181,6 @@ async fn forward_request(
                                 }
                             }
                         });
-
                     }
                     _ => {
                         return Ok(Response::builder()
@@ -187,7 +191,6 @@ async fn forward_request(
                 }
             }
         }
-
 
         Ok(builder.body(body)?)
     } else {
