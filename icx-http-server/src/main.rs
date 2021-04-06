@@ -145,7 +145,6 @@ async fn forward_request(
                 let callback = callback.callback;
                 match callback {
                     IDLValue::Func(streaming_canister_id_id, method_name) => {
-                        let method_name = method_name;
                         tokio::spawn(async move {
                             let canister =
                                 HttpRequestCanister::create(&agent, streaming_canister_id_id);
