@@ -122,8 +122,7 @@ async fn forward_request(
 
     let entire_body = body::to_bytes(request.into_body()).await?.to_vec();
 
-    let canister = HttpRequestCanister::create(agent.as_ref(), canister_id.clone());
-    let (http_response,) = canister
+    let (http_response,) = HttpRequestCanister::create(agent.as_ref(), canister_id.clone())
         .http_request(method, uri.to_string(), headers, &entire_body)
         .call()
         .await
