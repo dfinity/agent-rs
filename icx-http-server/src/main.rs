@@ -141,10 +141,9 @@ async fn forward_request(
 
         match streaming_strategy {
             Callback(callback) => {
-                let mut callback_token = callback.token;
-                let callback = callback.callback;
-                match callback {
+                match callback.callback {
                     IDLValue::Func(streaming_canister_id_id, method_name) => {
+                        let mut callback_token = callback.token;
                         tokio::spawn(async move {
                             let canister =
                                 HttpRequestCanister::create(&agent, streaming_canister_id_id);
