@@ -184,7 +184,7 @@ async fn forward_request(
                     }
                     _ => {
                         return Ok(Response::builder()
-                            .status(StatusCode::BAD_REQUEST)
+                            .status(StatusCode::INTERNAL_SERVER_ERROR)
                             .body("Streaming callback must be a function.".into())
                             .unwrap())
                     }
