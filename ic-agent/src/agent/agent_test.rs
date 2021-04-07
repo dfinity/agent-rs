@@ -25,7 +25,13 @@ fn query() -> Result<(), AgentError> {
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
         agent
-            .query_raw(&Principal::management_canister(), Principal::management_canister(), "main", &[], None)
+            .query_raw(
+                &Principal::management_canister(),
+                Principal::management_canister(),
+                "main",
+                &[],
+                None,
+            )
             .await
     });
 
@@ -38,13 +44,21 @@ fn query() -> Result<(), AgentError> {
 
 #[test]
 fn query_error() -> Result<(), AgentError> {
-    let query_mock = mock("POST", "/api/v2/canister/aaaaa-aa/query").with_status(500).create();
+    let query_mock = mock("POST", "/api/v2/canister/aaaaa-aa/query")
+        .with_status(500)
+        .create();
     let agent = Agent::builder().with_url(&mockito::server_url()).build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
 
     let result = runtime.block_on(async {
         agent
-            .query_raw(&Principal::management_canister(), Principal::management_canister(), "greet", &[], None)
+            .query_raw(
+                &Principal::management_canister(),
+                Principal::management_canister(),
+                "greet",
+                &[],
+                None,
+            )
             .await
     });
 
@@ -73,7 +87,13 @@ fn query_rejected() -> Result<(), AgentError> {
 
     let result = runtime.block_on(async {
         agent
-            .query_raw(&Principal::management_canister(), Principal::management_canister(), "greet", &[], None)
+            .query_raw(
+                &Principal::management_canister(),
+                Principal::management_canister(),
+                "greet",
+                &[],
+                None,
+            )
             .await
     });
 
@@ -95,7 +115,9 @@ fn query_rejected() -> Result<(), AgentError> {
 
 #[test]
 fn call_error() -> Result<(), AgentError> {
-    let call_mock = mock("POST", "/api/v2/canister/aaaaa-aa/call").with_status(500).create();
+    let call_mock = mock("POST", "/api/v2/canister/aaaaa-aa/call")
+        .with_status(500)
+        .create();
 
     let agent = Agent::builder().with_url(&mockito::server_url()).build()?;
 

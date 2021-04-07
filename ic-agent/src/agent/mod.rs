@@ -19,8 +19,8 @@ pub use response::{Replied, RequestStatusResponse};
 mod agent_test;
 
 use crate::agent::replica_api::{
-    CallRequestContent, Certificate, Delegation, Envelope, QueryContent,
-    ReadStateContent, ReadStateResponse,
+    CallRequestContent, Certificate, Delegation, Envelope, QueryContent, ReadStateContent,
+    ReadStateResponse,
 };
 use crate::export::Principal;
 use crate::hash_tree::Label;

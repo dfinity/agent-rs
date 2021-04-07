@@ -247,8 +247,16 @@ impl agent::ReplicaV2Transport for SerializingTransport {
         effective_canister_id: Principal,
         envelope: Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(_: &SerializingTransport, effective_canister_id: Principal, envelope: Vec<u8>) -> Result<Vec<u8>, AgentError> {
-            print!("query\n{}\n\n{}", effective_canister_id.to_text(), hex::encode(envelope));
+        async fn run(
+            _: &SerializingTransport,
+            effective_canister_id: Principal,
+            envelope: Vec<u8>,
+        ) -> Result<Vec<u8>, AgentError> {
+            print!(
+                "query\n{}\n\n{}",
+                effective_canister_id.to_text(),
+                hex::encode(envelope)
+            );
             Err(AgentError::TransportError(SerializeError::Success.into()))
         }
 
@@ -260,8 +268,16 @@ impl agent::ReplicaV2Transport for SerializingTransport {
         effective_canister_id: Principal,
         envelope: Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(_: &SerializingTransport, effective_canister_id: Principal, envelope: Vec<u8>) -> Result<Vec<u8>, AgentError> {
-            print!("read_state\n{}\n\n{}", effective_canister_id.to_text(), hex::encode(envelope));
+        async fn run(
+            _: &SerializingTransport,
+            effective_canister_id: Principal,
+            envelope: Vec<u8>,
+        ) -> Result<Vec<u8>, AgentError> {
+            print!(
+                "read_state\n{}\n\n{}",
+                effective_canister_id.to_text(),
+                hex::encode(envelope)
+            );
             Err(AgentError::TransportError(SerializeError::Success.into()))
         }
 
@@ -439,6 +455,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 //     eprint!("Request ID: ");
                 //     println!("0x{}", hex::encode(request_id.as_slice()));
                 // }
+                "call" | "read_state" | "query" => (),
                 other => {
                     eprintln!(
                         r#"Error: Invalid STDIN format. Unexpected line: "{}""#,
