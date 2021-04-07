@@ -38,11 +38,13 @@ fn spec_compliance_claimed() {
 
 mod management_canister {
     use ic_agent::AgentError;
+    use ic_agent::export::Principal;
     use ic_utils::call::AsyncCall;
     use ic_utils::interfaces::management_canister::{CanisterStatus, InstallMode};
-    use ic_utils::interfaces::ManagementCanister;
+    use ic_utils::interfaces::{ManagementCanister, Wallet};
+    use ic_utils::{Argument, Canister};
     use openssl::sha::Sha256;
-    use ref_tests::{create_agent, create_basic_identity, create_waiter, with_agent};
+    use ref_tests::{create_agent, create_basic_identity, create_waiter, with_agent, with_wallet_canister};
 
     mod create_canister {
         use super::{create_waiter, with_agent};
@@ -59,7 +61,7 @@ mod management_canister {
                 let ic00 = ManagementCanister::create(&agent);
 
                 let _ = ic00
-                    .create_canister()
+                    .provisional_create_canister_with_cycles(None)
                     .call_and_wait(create_waiter())
                     .await?;
 
@@ -98,7 +100,7 @@ mod management_canister {
             let ic00 = ManagementCanister::create(&agent);
 
             let (canister_id,) = ic00
-                .create_canister()
+                .provisional_create_canister_with_cycles(None)
                 .call_and_wait(create_waiter())
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
@@ -177,7 +179,7 @@ mod management_canister {
 
             // Reinstall on empty should succeed.
             let (canister_id_2,) = ic00
-                .create_canister()
+                .provisional_create_canister_with_cycles(None)
                 .call_and_wait(create_waiter())
                 .await?;
 
@@ -189,7 +191,7 @@ mod management_canister {
 
             // Create an empty canister
             let (canister_id_3,) = other_ic00
-                .create_canister()
+                .provisional_create_canister_with_cycles(None)
                 .call_and_wait(create_waiter())
                 .await?;
 
@@ -229,7 +231,7 @@ mod management_canister {
         with_agent(|agent| async move {
             let ic00 = ManagementCanister::create(&agent);
             let (canister_id,) = ic00
-                .create_canister()
+                .provisional_create_canister_with_cycles(None)
                 .call_and_wait(create_waiter())
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
@@ -400,7 +402,7 @@ mod management_canister {
         with_agent(|agent| async move {
             let ic00 = ManagementCanister::create(&agent);
             let (canister_id,) = ic00
-                .create_canister()
+                .provisional_create_canister_with_cycles(None)
                 .call_and_wait(create_waiter())
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
@@ -511,11 +513,24 @@ mod management_canister {
     #[ignore]
     #[test]
     fn randomness() {
-        with_agent(|agent| async move {
-            let ic00 = ManagementCanister::create(&agent);
-            let (rand_1,) = ic00.raw_rand().call_and_wait(create_waiter()).await?;
-            let (rand_2,) = ic00.raw_rand().call_and_wait(create_waiter()).await?;
-            let (rand_3,) = ic00.raw_rand().call_and_wait(create_waiter()).await?;
+        with_wallet_canister(None, |agent, wallet_id| async move {
+            let wallet = Wallet::create(&agent, wallet_id);
+            let ic00 = Canister::builder()
+                .with_agent(&agent)
+                .with_canister_id(Principal::management_canister())
+                .build()?;
+            let (rand_1,): (Vec<u8>,) = wallet
+                .call(&ic00, "raw_rand", Argument::default(), 0)
+                .call_and_wait(create_waiter())
+                .await?;
+            let (rand_2,): (Vec<u8>,) = wallet
+                .call(&ic00, "raw_rand", Argument::default(), 0)
+                .call_and_wait(create_waiter())
+                .await?;
+            let (rand_3,): (Vec<u8>,) = wallet
+                .call(&ic00, "raw_rand", Argument::default(), 0)
+                .call_and_wait(create_waiter())
+                .await?;
 
             assert_eq!(rand_1.len(), 32);
             assert_eq!(rand_2.len(), 32);
@@ -535,7 +550,7 @@ mod simple_calls {
     use ic_agent::AgentError;
     use ref_tests::{create_waiter, with_universal_canister};
 
-    #[ignore]
+    // #[ignore]
     #[test]
     fn call() {
         with_universal_canister(|agent, canister_id| async move {
@@ -618,7 +633,7 @@ mod extras {
         with_agent(|agent| async move {
             let ic00 = ManagementCanister::create(&agent);
             let (canister_id,) = ic00
-                .create_canister()
+                .provisional_create_canister_with_cycles(None)
                 .call_and_wait(create_waiter())
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
@@ -648,7 +663,7 @@ mod extras {
         with_agent(|agent| async move {
             let ic00 = ManagementCanister::create(&agent);
             let (canister_id,) = ic00
-                .create_canister()
+                .provisional_create_canister_with_cycles(None)
                 .call_and_wait(create_waiter())
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
