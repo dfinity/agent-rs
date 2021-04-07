@@ -19,8 +19,8 @@ pub use response::{Replied, RequestStatusResponse};
 mod agent_test;
 
 use crate::agent::replica_api::{
-    AsyncContent, CallRequestContent, Certificate, Delegation, Envelope, QueryContent,
-    ReadStateContent, ReadStateResponse, SyncContent,
+    CallRequestContent, Certificate, Delegation, Envelope, QueryContent,
+    ReadStateContent, ReadStateResponse,
 };
 use crate::export::Principal;
 use crate::hash_tree::Label;
@@ -52,37 +52,18 @@ const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 /// feature flag `reqwest`. This might be deprecated in the future.
 ///
 /// Any error returned by these methods will bubble up to the code that called the [Agent].
-pub trait ReplicaV1Transport {
+pub trait ReplicaV2Transport {
     fn call<'a>(
         &'a self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>>;
 
-    /// Sends a synchronous request to a Replica. This call includes the body of the request message
-    /// itself (envelope).
-    ///
-    /// This normally corresponds to the `/api/v1/read` endpoint.
-    fn read<'a>(
-        &'a self,
-        envelope: Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
-
     fn read_state<'a>(
         &'a self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
-
-    /// Sends an asynchronous request to a Replica. The Request ID is non-mutable and
-    /// depends on the content of the envelope.
-    ///
-    /// This normally corresponds to the `/api/v1/read` endpoint.
-    fn submit<'a>(
-        &'a self,
-        envelope: Vec<u8>,
-        request_id: RequestId,
-    ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>>;
 
     fn query<'a>(
         &'a self,
@@ -165,7 +146,7 @@ pub struct Agent {
     identity: Arc<dyn Identity + Send + Sync>,
     ingress_expiry_duration: Duration,
     root_key: Arc<RwLock<Option<Vec<u8>>>>,
-    transport: Arc<dyn ReplicaV1Transport + Send + Sync>,
+    transport: Arc<dyn ReplicaV2Transport + Send + Sync>,
 }
 
 impl Agent {
@@ -193,7 +174,7 @@ impl Agent {
     }
 
     /// Set the transport of the [`Agent`].
-    pub fn set_transport<F: 'static + ReplicaV1Transport + Send + Sync>(&mut self, transport: F) {
+    pub fn set_transport<F: 'static + ReplicaV2Transport + Send + Sync>(&mut self, transport: F) {
         self.transport = Arc::new(transport);
     }
 
@@ -244,29 +225,6 @@ impl Agent {
         buf.extend_from_slice(IC_REQUEST_DOMAIN_SEPARATOR);
         buf.extend_from_slice(request_id.as_slice());
         buf
-    }
-
-    async fn read_endpoint<A>(&self, request: SyncContent) -> Result<A, AgentError>
-    where
-        A: serde::de::DeserializeOwned,
-    {
-        let request_id = to_request_id(&request)?;
-        let msg = self.construct_message(&request_id);
-        let signature = self.identity.sign(&msg).map_err(AgentError::SigningError)?;
-
-        let envelope = Envelope {
-            content: request,
-            sender_pubkey: signature.public_key,
-            sender_sig: signature.signature,
-        };
-
-        let mut serialized_bytes = Vec::new();
-        let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
-        serializer.self_describe()?;
-        envelope.serialize(&mut serializer)?;
-
-        let bytes = self.transport.read(serialized_bytes).await?;
-        serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
     }
 
     async fn query_endpoint<A>(

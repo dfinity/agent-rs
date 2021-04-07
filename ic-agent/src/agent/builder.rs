@@ -1,4 +1,4 @@
-use crate::agent::{AgentConfig, ReplicaV1Transport};
+use crate::agent::{AgentConfig, ReplicaV2Transport};
 use crate::{Agent, AgentError, Identity, NonceFactory};
 use std::sync::Arc;
 
@@ -24,13 +24,13 @@ impl AgentBuilder {
     #[cfg(feature = "reqwest")]
     #[deprecated(since = "0.3.0", note = "Prefer using with_transport().")]
     pub fn with_url<S: Into<String>>(self, url: S) -> Self {
-        use crate::agent::http_transport::ReqwestHttpReplicaV1Transport;
+        use crate::agent::http_transport::ReqwestHttpReplicaV2Transport;
 
-        self.with_transport(ReqwestHttpReplicaV1Transport::create(url).unwrap())
+        self.with_transport(ReqwestHttpReplicaV2Transport::create(url).unwrap())
     }
 
     /// Set a Replica transport to talk to serve as the replica interface.
-    pub fn with_transport<F: 'static + ReplicaV1Transport + Send + Sync>(
+    pub fn with_transport<F: 'static + ReplicaV2Transport + Send + Sync>(
         self,
         transport: F,
     ) -> Self {

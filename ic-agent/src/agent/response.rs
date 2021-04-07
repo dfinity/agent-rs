@@ -1,4 +1,4 @@
-/// The response of /api/v1/read with "request_status" request type.
+/// The response of /api/v2/canister/<effective_canister_id>/read_state with "request_status" request type.
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum RequestStatusResponse {
     Unknown,

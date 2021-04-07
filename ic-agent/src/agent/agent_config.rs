@@ -1,4 +1,4 @@
-use crate::agent::{NonceFactory, ReplicaV1Transport};
+use crate::agent::{NonceFactory, ReplicaV2Transport};
 use crate::identity::anonymous::AnonymousIdentity;
 use crate::identity::Identity;
 use std::sync::Arc;
@@ -8,7 +8,7 @@ pub struct AgentConfig {
     pub nonce_factory: NonceFactory,
     pub identity: Arc<dyn Identity + Send + Sync>,
     pub ingress_expiry_duration: Option<std::time::Duration>,
-    pub transport: Option<Arc<dyn ReplicaV1Transport + Send + Sync>>,
+    pub transport: Option<Arc<dyn ReplicaV2Transport + Send + Sync>>,
 }
 
 impl Default for AgentConfig {

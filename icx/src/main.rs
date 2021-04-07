@@ -3,11 +3,11 @@ use candid::types::{Function, Type};
 use candid::{check_prog, IDLArgs, IDLProg, TypeEnv};
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use ic_agent::agent::agent_error::HttpErrorPayload;
-use ic_agent::agent::http_transport::ReqwestHttpReplicaV1Transport;
-use ic_agent::agent::ReplicaV1Transport;
+use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
+// use ic_agent::agent::ReplicaV2Transport;
 use ic_agent::export::Principal;
 use ic_agent::identity::BasicIdentity;
-use ic_agent::{agent, Agent, AgentError, Identity, RequestId};
+use ic_agent::{agent, Agent, AgentError, Identity};
 use ring::signature::Ed25519KeyPair;
 use std::collections::VecDeque;
 use std::convert::TryFrom;
@@ -15,7 +15,7 @@ use std::future::Future;
 use std::io::BufRead;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::str::FromStr;
+// use std::str::FromStr;
 use thiserror::Error;
 
 #[derive(Clap)]
@@ -241,38 +241,52 @@ enum SerializeError {
 
 struct SerializingTransport;
 
-impl agent::ReplicaV1Transport for SerializingTransport {
-    fn read<'a>(
+impl agent::ReplicaV2Transport for SerializingTransport {
+    fn query<'a>(
         &'a self,
+        effective_canister_id: Principal,
         envelope: Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(_: &SerializingTransport, envelope: Vec<u8>) -> Result<Vec<u8>, AgentError> {
-            print!("read\n\n{}", hex::encode(envelope));
+        async fn run(_: &SerializingTransport, effective_canister_id: Principal, envelope: Vec<u8>) -> Result<Vec<u8>, AgentError> {
+            print!("query\n{}\n\n{}", effective_canister_id.to_text(), hex::encode(envelope));
             Err(AgentError::TransportError(SerializeError::Success.into()))
         }
 
-        Box::pin(run(self, envelope))
+        Box::pin(run(self, effective_canister_id, envelope))
     }
 
-    fn submit<'a>(
+    fn read_state<'a>(
         &'a self,
+        effective_canister_id: Principal,
         envelope: Vec<u8>,
-        request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        async fn run(_: &SerializingTransport, effective_canister_id: Principal, envelope: Vec<u8>) -> Result<Vec<u8>, AgentError> {
+            print!("read_state\n{}\n\n{}", effective_canister_id.to_text(), hex::encode(envelope));
+            Err(AgentError::TransportError(SerializeError::Success.into()))
+        }
+
+        Box::pin(run(self, effective_canister_id, envelope))
+    }
+
+    fn call<'a>(
+        &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
         async fn run(
             _: &SerializingTransport,
+            effective_canister_id: Principal,
             envelope: Vec<u8>,
-            request_id: RequestId,
         ) -> Result<(), AgentError> {
             print!(
-                "submit\n{}\n\n{}",
-                hex::encode(request_id.as_slice()),
+                "call\n{}\n\n{}",
+                effective_canister_id.to_text(),
                 hex::encode(envelope)
             );
             Err(AgentError::MessageError(String::new()))
         }
 
-        Box::pin(run(self, envelope, request_id))
+        Box::pin(run(self, effective_canister_id, envelope))
     }
 
     fn status<'a>(
@@ -300,7 +314,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             serialize: true, ..
         }) => Agent::builder().with_transport(SerializingTransport),
         _ => Agent::builder().with_transport(
-            agent::http_transport::ReqwestHttpReplicaV1Transport::create(opts.replica.clone())?,
+            agent::http_transport::ReqwestHttpReplicaV2Transport::create(opts.replica.clone())?,
         ),
     }
     .with_boxed_identity(Box::new(create_identity(opts.pem)))
@@ -405,26 +419,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 line = input.pop_front().unwrap();
             }
 
-            let transport = ReqwestHttpReplicaV1Transport::create(opts.replica)?;
+            let _transport = ReqwestHttpReplicaV2Transport::create(opts.replica)?;
             match line.as_str() {
-                "read" => {
-                    input.pop_front().unwrap(); // empty line.
-                    line = input.pop_front().unwrap(); // envelope
-                    let envelope = hex::decode(line)?;
-                    let result = transport.read(envelope).await?;
-                    eprint!("Result: ");
-                    println!("{}", hex::encode(result));
-                }
-                "submit" => {
-                    line = input.pop_front().unwrap(); // request id.
-                    let request_id = RequestId::from_str(&line)?;
-                    input.pop_front().unwrap(); // empty line.
-                    line = input.pop_front().unwrap(); // envelope
-                    let envelope = hex::decode(line)?;
-                    transport.submit(envelope, request_id).await?;
-                    eprint!("Request ID: ");
-                    println!("0x{}", hex::encode(request_id.as_slice()));
-                }
+                // "read" => {
+                //     input.pop_front().unwrap(); // empty line.
+                //     line = input.pop_front().unwrap(); // envelope
+                //     let envelope = hex::decode(line)?;
+                //     let result = transport.read(envelope).await?;
+                //     eprint!("Result: ");
+                //     println!("{}", hex::encode(result));
+                // }
+                // "submit" => {
+                //     line = input.pop_front().unwrap(); // request id.
+                //     let request_id = RequestId::from_str(&line)?;
+                //     input.pop_front().unwrap(); // empty line.
+                //     line = input.pop_front().unwrap(); // envelope
+                //     let envelope = hex::decode(line)?;
+                //     transport.submit(envelope, request_id).await?;
+                //     eprint!("Request ID: ");
+                //     println!("0x{}", hex::encode(request_id.as_slice()));
+                // }
                 other => {
                     eprintln!(
                         r#"Error: Invalid STDIN format. Unexpected line: "{}""#,

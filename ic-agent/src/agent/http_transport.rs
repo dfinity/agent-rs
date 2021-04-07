@@ -1,9 +1,8 @@
-//! A [ReplicaV1Transport] that connects using a reqwest client.
+//! A [ReplicaV2Transport] that connects using a reqwest client.
 #![cfg(feature = "reqwest")]
 
 use crate::agent::agent_error::HttpErrorPayload;
 use crate::AgentError;
-use crate::RequestId;
 use ic_types::Principal;
 use reqwest::Method;
 use std::future::Future;
@@ -25,14 +24,14 @@ pub trait PasswordManager {
     fn required(&self, url: &str) -> Result<(String, String), String>;
 }
 
-/// A [ReplicaV1Transport] using Reqwest to make HTTP calls to the internet computer.
-pub struct ReqwestHttpReplicaV1Transport {
+/// A [ReplicaV2Transport] using Reqwest to make HTTP calls to the internet computer.
+pub struct ReqwestHttpReplicaV2Transport {
     url: reqwest::Url,
     client: reqwest::Client,
     password_manager: Option<Box<dyn PasswordManager + Send + Sync>>,
 }
 
-impl ReqwestHttpReplicaV1Transport {
+impl ReqwestHttpReplicaV2Transport {
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
         let mut tls_config = rustls::ClientConfig::new();
 
@@ -170,14 +169,14 @@ impl ReqwestHttpReplicaV1Transport {
     }
 }
 
-impl super::ReplicaV1Transport for ReqwestHttpReplicaV1Transport {
+impl super::ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
     fn call<'a>(
         &'a self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
         async fn run(
-            s: &ReqwestHttpReplicaV1Transport,
+            s: &ReqwestHttpReplicaV2Transport,
             effective_canister_id: Principal,
             envelope: Vec<u8>,
         ) -> Result<(), AgentError> {
@@ -189,27 +188,13 @@ impl super::ReplicaV1Transport for ReqwestHttpReplicaV1Transport {
         Box::pin(run(self, effective_canister_id, envelope))
     }
 
-    fn read<'a>(
-        &'a self,
-        envelope: Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(
-            s: &ReqwestHttpReplicaV1Transport,
-            envelope: Vec<u8>,
-        ) -> Result<Vec<u8>, AgentError> {
-            s.execute(Method::POST, "read", Some(envelope)).await
-        }
-
-        Box::pin(run(self, envelope))
-    }
-
     fn read_state<'a>(
         &'a self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
         async fn run(
-            s: &ReqwestHttpReplicaV1Transport,
+            s: &ReqwestHttpReplicaV2Transport,
             effective_canister_id: Principal,
             envelope: Vec<u8>,
         ) -> Result<Vec<u8>, AgentError> {
@@ -226,7 +211,7 @@ impl super::ReplicaV1Transport for ReqwestHttpReplicaV1Transport {
         envelope: Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
         async fn run(
-            s: &ReqwestHttpReplicaV1Transport,
+            s: &ReqwestHttpReplicaV2Transport,
             effective_canister_id: Principal,
             envelope: Vec<u8>,
         ) -> Result<Vec<u8>, AgentError> {
@@ -237,25 +222,10 @@ impl super::ReplicaV1Transport for ReqwestHttpReplicaV1Transport {
         Box::pin(run(self, effective_canister_id, envelope))
     }
 
-    fn submit<'a>(
-        &'a self,
-        envelope: Vec<u8>,
-        _request_id: RequestId,
-    ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
-        async fn run(
-            s: &ReqwestHttpReplicaV1Transport,
-            envelope: Vec<u8>,
-        ) -> Result<(), AgentError> {
-            s.execute(Method::POST, "submit", Some(envelope)).await?;
-            Ok(())
-        }
-        Box::pin(run(self, envelope))
-    }
-
     fn status<'a>(
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(s: &ReqwestHttpReplicaV1Transport) -> Result<Vec<u8>, AgentError> {
+        async fn run(s: &ReqwestHttpReplicaV2Transport) -> Result<Vec<u8>, AgentError> {
             s.execute(Method::GET, "status", None).await
         }
 
