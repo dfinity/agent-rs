@@ -249,14 +249,10 @@ impl agent::ReplicaV2Transport for SerializingTransport {
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
         async fn run(
             _: &SerializingTransport,
-            effective_canister_id: Principal,
+            _effective_canister_id: Principal,
             envelope: Vec<u8>,
         ) -> Result<Vec<u8>, AgentError> {
-            print!(
-                "query\n{}\n\n{}",
-                effective_canister_id.to_text(),
-                hex::encode(envelope)
-            );
+            print!("query\n{}", hex::encode(envelope));
             Err(AgentError::TransportError(SerializeError::Success.into()))
         }
 
@@ -270,14 +266,10 @@ impl agent::ReplicaV2Transport for SerializingTransport {
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
         async fn run(
             _: &SerializingTransport,
-            effective_canister_id: Principal,
+            _effective_canister_id: Principal,
             envelope: Vec<u8>,
         ) -> Result<Vec<u8>, AgentError> {
-            print!(
-                "read_state\n{}\n\n{}",
-                effective_canister_id.to_text(),
-                hex::encode(envelope)
-            );
+            print!("read_state\n{}", hex::encode(envelope));
             Err(AgentError::TransportError(SerializeError::Success.into()))
         }
 
@@ -299,7 +291,6 @@ impl agent::ReplicaV2Transport for SerializingTransport {
             print!(
                 "call\n{}\n\n{}",
                 hex::encode(request_id.as_slice()),
-                // effective_canister_id.to_text(),
                 hex::encode(envelope)
             );
             Err(AgentError::MessageError(String::new()))

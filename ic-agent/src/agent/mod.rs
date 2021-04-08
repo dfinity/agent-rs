@@ -87,8 +87,13 @@ pub trait ReplicaV2Transport {
 /// # // in the ic-ref workflow.
 /// use ic_agent::Agent;
 /// use ic_types::Principal;
-/// use candid::{Encode, Decode, CandidType};
+/// use candid::{Encode, Decode, CandidType, Nat};
 /// use serde::Deserialize;
+///
+/// #[derive(CandidType)]
+/// struct Argument {
+///   amount: Option<Nat>,
+/// }
 ///
 /// #[derive(CandidType, Deserialize)]
 /// struct CreateCanisterResult {
@@ -123,8 +128,8 @@ pub trait ReplicaV2Transport {
 ///
 ///   // Create a call to the management canister to create a new canister ID,
 ///   // and wait for a result.
-///   let response = agent.update(&management_canister_id, "create_canister")
-///     .with_arg(&Encode!()?)  // Empty Candid.
+///   let response = agent.update(&management_canister_id, "provisional_create_canister_with_cycles")
+///     .with_arg(&Encode!(&Argument { amount: None})?)
 ///     .call_and_wait(waiter)
 ///     .await?;
 ///

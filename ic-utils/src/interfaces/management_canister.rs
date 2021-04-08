@@ -6,8 +6,10 @@ use candid::{CandidType, Deserialize};
 use delay::Waiter;
 use ic_agent::export::Principal;
 use ic_agent::{Agent, AgentError, RequestId};
+use std::convert::AsRef;
 use std::fmt::Debug;
 use std::str::FromStr;
+use strum_macros::AsRefStr;
 
 pub mod attributes;
 pub use attributes::ComputeAllocation;
@@ -17,6 +19,22 @@ use std::convert::TryInto;
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub struct ManagementCanister;
+
+#[derive(AsRefStr, Debug)]
+#[strum(serialize_all = "snake_case")]
+pub enum ManagementCanisterMethods {
+    CreateCanister,
+    InstallCode,
+    SetController,
+    StartCanister,
+    StopCanister,
+    CanisterStatus,
+    DeleteCanister,
+    DepositCycles,
+    RawRand,
+    ProvisionalCreateCanisterWithCycles,
+    ProvisionalTopUpCanister,
+}
 
 impl ManagementCanister {
     /// Create an instance of a [Canister] implementing the ManagementCanister interface
@@ -230,7 +248,7 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
 
         Ok(self
             .canister
-            .update_("install_code")
+            .update_(ManagementCanisterMethods::InstallCode.as_ref())
             .with_arg(CanisterInstall {
                 mode: self.mode.unwrap_or(InstallMode::Install),
                 canister_id: self.canister_id.clone(),
@@ -284,7 +302,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             canister_id: Principal,
         }
 
-        self.update_("canister_status")
+        self.update_(ManagementCanisterMethods::CanisterStatus.as_ref())
             .with_arg(In {
                 canister_id: canister_id.clone(),
             })
@@ -302,7 +320,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             canister_id: Principal,
         }
 
-        self.update_("create_canister")
+        self.update_(ManagementCanisterMethods::CreateCanister.as_ref())
             .build()
             .map(|result: (Out,)| (result.0.canister_id,))
     }
@@ -318,7 +336,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             canister_id: Principal,
         }
 
-        self.update_("deposit_cycles")
+        self.update_(ManagementCanisterMethods::DepositCycles.as_ref())
             .with_arg(Argument {
                 canister_id: canister_id.clone(),
             })
@@ -336,7 +354,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             canister_id: Principal,
         }
 
-        self.update_("delete_canister")
+        self.update_(ManagementCanisterMethods::DeleteCanister.as_ref())
             .with_arg(Argument {
                 canister_id: canister_id.clone(),
             })
@@ -364,7 +382,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             canister_id: Principal,
         }
 
-        self.update_("provisional_create_canister_with_cycles")
+        self.update_(ManagementCanisterMethods::ProvisionalCreateCanisterWithCycles.as_ref())
             .with_arg(Argument {
                 amount: amount.map(candid::Nat::from),
             })
@@ -388,7 +406,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             amount: u64,
         }
 
-        self.update_("provisional_top_up_canister")
+        self.update_(ManagementCanisterMethods::ProvisionalTopUpCanister.as_ref())
             .with_arg(Argument {
                 canister_id: canister_id.clone(),
                 amount,
@@ -401,7 +419,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
     /// The return value is unknown to any part of the IC at time of the submission of this call.
     /// A new return value is generated for each call to this method.
     pub fn raw_rand<'canister: 'agent>(&'canister self) -> impl 'agent + AsyncCall<(Vec<u8>,)> {
-        self.update_("raw_rand")
+        self.update_(ManagementCanisterMethods::RawRand.as_ref())
             .build()
             .map(|result: (Vec<u8>,)| (result.0,))
     }
@@ -416,7 +434,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             canister_id: Principal,
         }
 
-        self.update_("start_canister")
+        self.update_(ManagementCanisterMethods::StartCanister.as_ref())
             .with_arg(Argument {
                 canister_id: canister_id.clone(),
             })
@@ -434,7 +452,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             canister_id: Principal,
         }
 
-        self.update_("stop_canister")
+        self.update_(ManagementCanisterMethods::StopCanister.as_ref())
             .with_arg(Argument {
                 canister_id: canister_id.clone(),
             })
@@ -463,7 +481,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             new_controller: Principal,
         }
 
-        self.update_("set_controller")
+        self.update_(ManagementCanisterMethods::SetController.as_ref())
             .with_arg(Argument {
                 canister_id: canister_id.clone(),
                 new_controller: new_controller.clone(),
