@@ -87,6 +87,18 @@ pub enum InstallMode {
     Upgrade,
 }
 
+#[derive(candid::CandidType, Deserialize)]
+pub struct CanisterInstall {
+    pub mode: InstallMode,
+    pub canister_id: Principal,
+    #[serde(with = "serde_bytes")]
+    pub wasm_module: Vec<u8>,
+    #[serde(with = "serde_bytes")]
+    pub arg: Vec<u8>,
+    pub compute_allocation: Option<candid::Nat>,
+    pub memory_allocation: Option<candid::Nat>,
+}
+
 impl FromStr for InstallMode {
     type Err = String;
 
@@ -205,18 +217,6 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
     /// Create an [AsyncCall] implementation that, when called, will install the
     /// canister.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
-        #[derive(candid::CandidType, Deserialize)]
-        struct CanisterInstall {
-            mode: InstallMode,
-            canister_id: Principal,
-            #[serde(with = "serde_bytes")]
-            wasm_module: Vec<u8>,
-            #[serde(with = "serde_bytes")]
-            arg: Vec<u8>,
-            compute_allocation: Option<candid::Nat>,
-            memory_allocation: Option<candid::Nat>,
-        }
-
         let compute_allocation = match self.compute_allocation {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
             Some(Ok(x)) => Some(candid::Nat::from(u8::from(x))),
