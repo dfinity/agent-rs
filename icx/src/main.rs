@@ -7,7 +7,7 @@ use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
 // use ic_agent::agent::ReplicaV2Transport;
 use ic_agent::export::Principal;
 use ic_agent::identity::BasicIdentity;
-use ic_agent::{agent, Agent, AgentError, Identity};
+use ic_agent::{agent, Agent, AgentError, Identity, RequestId};
 use ring::signature::Ed25519KeyPair;
 use std::collections::VecDeque;
 use std::convert::TryFrom;
@@ -288,21 +288,24 @@ impl agent::ReplicaV2Transport for SerializingTransport {
         &'a self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
+        request_id: RequestId,
     ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
         async fn run(
             _: &SerializingTransport,
-            effective_canister_id: Principal,
+            _effective_canister_id: Principal,
             envelope: Vec<u8>,
+            request_id: RequestId,
         ) -> Result<(), AgentError> {
             print!(
                 "call\n{}\n\n{}",
-                effective_canister_id.to_text(),
+                hex::encode(request_id.as_slice()),
+                // effective_canister_id.to_text(),
                 hex::encode(envelope)
             );
             Err(AgentError::MessageError(String::new()))
         }
 
-        Box::pin(run(self, effective_canister_id, envelope))
+        Box::pin(run(self, effective_canister_id, envelope, request_id))
     }
 
     fn status<'a>(

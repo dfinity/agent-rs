@@ -3,6 +3,7 @@
 
 use crate::agent::agent_error::HttpErrorPayload;
 use crate::AgentError;
+use crate::RequestId;
 use ic_types::Principal;
 use reqwest::Method;
 use std::future::Future;
@@ -174,6 +175,7 @@ impl super::ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
         &'a self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
+        _request_id: RequestId,
     ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
         async fn run(
             s: &ReqwestHttpReplicaV2Transport,

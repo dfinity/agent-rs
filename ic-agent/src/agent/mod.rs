@@ -57,6 +57,7 @@ pub trait ReplicaV2Transport {
         &'a self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
+        request_id: RequestId,
     ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>>;
 
     fn read_state<'a>(
@@ -308,7 +309,7 @@ impl Agent {
         envelope.serialize(&mut serializer)?;
 
         self.transport
-            .call(effective_canister_id, serialized_bytes)
+            .call(effective_canister_id, serialized_bytes, request_id)
             .await?;
         Ok(request_id)
     }
