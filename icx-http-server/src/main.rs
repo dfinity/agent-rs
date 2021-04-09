@@ -32,7 +32,8 @@ struct Opts {
     #[clap(long, default_value = "127.0.0.1:3000")]
     address: SocketAddr,
 
-    /// Some input. Because this isn't an Option<T> it's required to be used
+    /// A replica to use as backend. Locally, this should be a local instance or the
+    /// boundary node. Multiple replicas can be passed and they'll be used round-robin.
     #[clap(long, default_value = "http://localhost:8000/")]
     replica: Vec<String>,
 
