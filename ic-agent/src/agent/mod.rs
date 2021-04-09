@@ -53,6 +53,10 @@ const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 ///
 /// Any error returned by these methods will bubble up to the code that called the [Agent].
 pub trait ReplicaV2Transport {
+    /// Sends an asynchronous request to a Replica. The Request ID is non-mutable and
+    /// depends on the content of the envelope.
+    ///
+    /// This normally corresponds to the `/api/v2/canister/<effective_canister_id>/call` endpoint.
     fn call<'a>(
         &'a self,
         effective_canister_id: Principal,
@@ -60,12 +64,20 @@ pub trait ReplicaV2Transport {
         request_id: RequestId,
     ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>>;
 
+    /// Sends a synchronous request to a Replica. This call includes the body of the request message
+    /// itself (envelope).
+    ///
+    /// This normally corresponds to the `/api/v2/canister/<effective_canister_id>/read_state` endpoint.
     fn read_state<'a>(
         &'a self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
 
+    /// Sends a synchronous request to a Replica. This call includes the body of the request message
+    /// itself (envelope).
+    ///
+    /// This normally corresponds to the `/api/v2/canister/<effective_canister_id>/query` endpoint.
     fn query<'a>(
         &'a self,
         effective_canister_id: Principal,
@@ -73,7 +85,7 @@ pub trait ReplicaV2Transport {
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
 
     /// Sends a status request to the Replica, returning whatever the replica returns.
-    /// In the current spec v1, this is a CBOR encoded status message, but we are not
+    /// In the current spec v2, this is a CBOR encoded status message, but we are not
     /// making this API attach semantics to the response.
     fn status<'a>(
         &'a self,
@@ -129,7 +141,7 @@ pub trait ReplicaV2Transport {
 ///   // Create a call to the management canister to create a new canister ID,
 ///   // and wait for a result.
 ///   let response = agent.update(&management_canister_id, "provisional_create_canister_with_cycles")
-///     .with_arg(&Encode!(&Argument { amount: None})?)
+///     .with_arg(&Encode!(&Argument { amount: None })?)
 ///     .call_and_wait(waiter)
 ///     .await?;
 ///

@@ -233,13 +233,13 @@ pub fn get_effective_canister_id(
             )
         })?;
         match method_name {
-            MgmtMethod::CreateCanister
-            | MgmtMethod::RawRand => {
-                Err(format!("{} can only be called via an inter-canister call. Try calling this without `--no-wallet`.",
-                    method_name.as_ref()))
-            },
+            MgmtMethod::CreateCanister | MgmtMethod::RawRand => Err(format!(
+                "{} can only be called via an inter-canister call.",
+                method_name.as_ref()
+            )),
             MgmtMethod::InstallCode => {
-                let install_args = candid::Decode!(arg_value, CanisterInstall).map_err(|err| format!("Candid decode err: {}", err))?;
+                let install_args = candid::Decode!(arg_value, CanisterInstall)
+                    .map_err(|err| format!("Candid decode err: {}", err))?;
                 Ok(install_args.canister_id)
             }
             MgmtMethod::SetController => {
@@ -248,7 +248,8 @@ pub fn get_effective_canister_id(
                     canister_id: Principal,
                     new_controller: Principal,
                 }
-                let in_args = candid::Decode!(arg_value, In).map_err(|err| format!("Candid decode err: {}", err))?;
+                let in_args = candid::Decode!(arg_value, In)
+                    .map_err(|err| format!("Candid decode err: {}", err))?;
                 Ok(in_args.canister_id)
             }
             MgmtMethod::StartCanister
@@ -261,7 +262,8 @@ pub fn get_effective_canister_id(
                 struct In {
                     canister_id: Principal,
                 }
-                let in_args = candid::Decode!(arg_value, In).map_err(|err| format!("Candid decode err: {}", err))?;
+                let in_args = candid::Decode!(arg_value, In)
+                    .map_err(|err| format!("Candid decode err: {}", err))?;
                 Ok(in_args.canister_id)
             }
             MgmtMethod::ProvisionalCreateCanisterWithCycles => Ok(Principal::management_canister()),
