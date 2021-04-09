@@ -307,7 +307,7 @@ impl agent::ReplicaV2Transport for SerializingTransport {
             envelope: Vec<u8>,
         ) -> Result<Vec<u8>, AgentError> {
             print!(
-                "query\n{}\n\n{}",
+                "query\n\n{}\n\n{}",
                 hex::encode(envelope),
                 hex::encode(effective_canister_id)
             );
@@ -328,7 +328,7 @@ impl agent::ReplicaV2Transport for SerializingTransport {
             envelope: Vec<u8>,
         ) -> Result<Vec<u8>, AgentError> {
             print!(
-                "read_state\n{}\n\n{}",
+                "read_state\n\n{}\n\n{}",
                 hex::encode(envelope),
                 hex::encode(effective_canister_id)
             );
