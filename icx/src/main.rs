@@ -1,6 +1,7 @@
 use candid::parser::value::IDLValue;
 use candid::types::{Function, Type};
 use candid::{check_prog, IDLArgs, IDLProg, TypeEnv};
+use candid::{CandidType, Decode, Deserialize};
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use ic_agent::agent::agent_error::HttpErrorPayload;
 use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
@@ -8,6 +9,7 @@ use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
 use ic_agent::export::Principal;
 use ic_agent::identity::BasicIdentity;
 use ic_agent::{agent, Agent, AgentError, Identity, RequestId};
+use ic_utils::interfaces::management_canister::{CanisterInstall, MgmtMethod};
 use ring::signature::Ed25519KeyPair;
 use std::collections::VecDeque;
 use std::convert::TryFrom;
@@ -15,7 +17,7 @@ use std::future::Future;
 use std::io::BufRead;
 use std::path::PathBuf;
 use std::pin::Pin;
-// use std::str::FromStr;
+use std::str::FromStr;
 use thiserror::Error;
 
 #[derive(Clap)]
@@ -217,6 +219,58 @@ fn print_idl_blob(
     Ok(())
 }
 
+pub fn get_effective_canister_id(
+    is_management_canister: bool,
+    method_name: &str,
+    arg_value: &[u8],
+    canister_id: Principal,
+) -> Result<Principal, String> {
+    if is_management_canister {
+        let method_name = MgmtMethod::from_str(method_name).map_err(|_| {
+            format!(
+                "Attempted to call an unsupported management canister method: {}",
+                method_name
+            )
+        })?;
+        match method_name {
+            MgmtMethod::CreateCanister
+            | MgmtMethod::RawRand => {
+                Err(format!("{} can only be called via an inter-canister call. Try calling this without `--no-wallet`.",
+                    method_name.as_ref()))
+            },
+            MgmtMethod::InstallCode => {
+                let install_args = candid::Decode!(arg_value, CanisterInstall).map_err(|err| format!("Candid decode err: {}", err))?;
+                Ok(install_args.canister_id)
+            }
+            MgmtMethod::SetController => {
+                #[derive(CandidType, Deserialize)]
+                struct In {
+                    canister_id: Principal,
+                    new_controller: Principal,
+                }
+                let in_args = candid::Decode!(arg_value, In).map_err(|err| format!("Candid decode err: {}", err))?;
+                Ok(in_args.canister_id)
+            }
+            MgmtMethod::StartCanister
+            | MgmtMethod::StopCanister
+            | MgmtMethod::CanisterStatus
+            | MgmtMethod::DeleteCanister
+            | MgmtMethod::DepositCycles
+            | MgmtMethod::ProvisionalTopUpCanister => {
+                #[derive(CandidType, Deserialize)]
+                struct In {
+                    canister_id: Principal,
+                }
+                let in_args = candid::Decode!(arg_value, In).map_err(|err| format!("Candid decode err: {}", err))?;
+                Ok(in_args.canister_id)
+            }
+            MgmtMethod::ProvisionalCreateCanisterWithCycles => Ok(Principal::management_canister()),
+        }
+    } else {
+        Ok(canister_id)
+    }
+}
+
 fn create_identity(maybe_pem: Option<PathBuf>) -> impl Identity {
     if let Some(pem_path) = maybe_pem {
         BasicIdentity::from_pem_file(pem_path).expect("Could not read the key pair.")
@@ -341,6 +395,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 maybe_candid_path.and_then(|path| get_candid_type(&path, &t.method_name));
 
             let arg = blob_from_arguments(t.arg_value.as_deref(), &t.arg, &method_type)?;
+            let is_management_canister = t.canister_id == Principal::management_canister();
+            let effective_canister_id = get_effective_canister_id(
+                is_management_canister,
+                &t.method_name,
+                &arg,
+                t.canister_id.clone(),
+            )?;
+
             let result = match &opts.subcommand {
                 SubCommand::Update(_) => {
                     // We need to fetch the root key for updates.
@@ -355,6 +417,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     eprint!(".");
                     let result = builder
                         .with_arg(arg)
+                        .with_effective_canister_id(effective_canister_id)
                         .call_and_wait(
                             delay::Delay::builder()
                                 .exponential_backoff(std::time::Duration::from_secs(1), 1.1)
@@ -375,7 +438,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         builder.expire_after(d);
                     }
 
-                    builder.with_arg(&arg).call().await
+                    builder
+                        .with_arg(&arg)
+                        .with_effective_canister_id(effective_canister_id)
+                        .call()
+                        .await
                 }
                 _ => unreachable!(),
             };
