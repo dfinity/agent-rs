@@ -48,23 +48,20 @@ fn resolve_canister_id_from_hostname(hostname: &str) -> Option<Principal> {
 
     // Check if it's localhost or ic0.
     match url.host()?.split('.').collect::<Vec<&str>>().as_slice() {
-        [.., maybe_canister_id, "localhost"] | [.., maybe_canister_id, "ic0", "app"] => {
-            if let Ok(canister_id) = Principal::from_text(maybe_canister_id) {
-                return Some(canister_id);
-            }
-        }
-        _ => {}
-    };
-
-    None
+        [.., maybe_canister_id, "localhost"] => Principal::from_text(maybe_canister_id).ok(),
+        [maybe_canister_id, ..] => Principal::from_text(maybe_canister_id).ok(),
+        _ => None,
+    }
 }
 
-fn resolve_canister_id_from_query(url: &hyper::Uri) -> Option<Principal> {
+fn resolve_canister_id_from_uri(url: &hyper::Uri) -> Option<Principal> {
     let (_, canister_id) = url::form_urlencoded::parse(url.query()?.as_bytes())
         .find(|(name, _)| name == "canisterId")?;
     Principal::from_text(canister_id.as_ref()).ok()
 }
 
+/// Try to resolve a canister ID from an HTTP Request. If it cannot be resolved,
+/// [None] will be returned.
 fn resolve_canister_id(request: &Request<Body>) -> Option<Principal> {
     // Look for subdomains if there's a host header.
     if let Some(host_header) = request.headers().get("Host") {
@@ -76,7 +73,7 @@ fn resolve_canister_id(request: &Request<Body>) -> Option<Principal> {
     }
 
     // Look into the URI.
-    if let Some(canister_id) = resolve_canister_id_from_query(request.uri()) {
+    if let Some(canister_id) = resolve_canister_id_from_uri(request.uri()) {
         return Some(canister_id);
     }
 
@@ -84,7 +81,7 @@ fn resolve_canister_id(request: &Request<Body>) -> Option<Principal> {
     if let Some(referer_header) = request.headers().get("referer") {
         if let Ok(referer) = referer_header.to_str() {
             if let Ok(referer_uri) = hyper::Uri::from_str(referer) {
-                if let Some(canister_id) = resolve_canister_id_from_query(&referer_uri) {
+                if let Some(canister_id) = resolve_canister_id_from_uri(&referer_uri) {
                     return Some(canister_id);
                 }
             }
