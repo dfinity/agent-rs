@@ -5,7 +5,7 @@ use candid::{CandidType, Decode, Deserialize};
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use ic_agent::agent::agent_error::HttpErrorPayload;
 use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
-// use ic_agent::agent::ReplicaV2Transport;
+use ic_agent::agent::ReplicaV2Transport;
 use ic_agent::export::Principal;
 use ic_agent::identity::BasicIdentity;
 use ic_agent::{agent, Agent, AgentError, Identity, RequestId};
@@ -303,10 +303,14 @@ impl agent::ReplicaV2Transport for SerializingTransport {
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
         async fn run(
             _: &SerializingTransport,
-            _effective_canister_id: Principal,
+            effective_canister_id: Principal,
             envelope: Vec<u8>,
         ) -> Result<Vec<u8>, AgentError> {
-            print!("query\n{}", hex::encode(envelope));
+            print!(
+                "query\n{}\n\n{}",
+                hex::encode(envelope),
+                hex::encode(effective_canister_id)
+            );
             Err(AgentError::TransportError(SerializeError::Success.into()))
         }
 
@@ -320,10 +324,14 @@ impl agent::ReplicaV2Transport for SerializingTransport {
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
         async fn run(
             _: &SerializingTransport,
-            _effective_canister_id: Principal,
+            effective_canister_id: Principal,
             envelope: Vec<u8>,
         ) -> Result<Vec<u8>, AgentError> {
-            print!("read_state\n{}", hex::encode(envelope));
+            print!(
+                "read_state\n{}\n\n{}",
+                hex::encode(envelope),
+                hex::encode(effective_canister_id)
+            );
             Err(AgentError::TransportError(SerializeError::Success.into()))
         }
 
@@ -338,14 +346,15 @@ impl agent::ReplicaV2Transport for SerializingTransport {
     ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
         async fn run(
             _: &SerializingTransport,
-            _effective_canister_id: Principal,
+            effective_canister_id: Principal,
             envelope: Vec<u8>,
             request_id: RequestId,
         ) -> Result<(), AgentError> {
             print!(
-                "call\n{}\n\n{}",
+                "call\n{}\n\n{}\n\n{}",
                 hex::encode(request_id.as_slice()),
-                hex::encode(envelope)
+                hex::encode(envelope),
+                hex::encode(effective_canister_id)
             );
             Err(AgentError::MessageError(String::new()))
         }
@@ -496,27 +505,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 line = input.pop_front().unwrap();
             }
 
-            let _transport = ReqwestHttpReplicaV2Transport::create(opts.replica)?;
+            let transport = ReqwestHttpReplicaV2Transport::create(opts.replica)?;
             match line.as_str() {
-                // "read" => {
-                //     input.pop_front().unwrap(); // empty line.
-                //     line = input.pop_front().unwrap(); // envelope
-                //     let envelope = hex::decode(line)?;
-                //     let result = transport.read(envelope).await?;
-                //     eprint!("Result: ");
-                //     println!("{}", hex::encode(result));
-                // }
-                // "submit" => {
-                //     line = input.pop_front().unwrap(); // request id.
-                //     let request_id = RequestId::from_str(&line)?;
-                //     input.pop_front().unwrap(); // empty line.
-                //     line = input.pop_front().unwrap(); // envelope
-                //     let envelope = hex::decode(line)?;
-                //     transport.submit(envelope, request_id).await?;
-                //     eprint!("Request ID: ");
-                //     println!("0x{}", hex::encode(request_id.as_slice()));
-                // }
-                "call" | "read_state" | "query" => (),
+                "call" => {
+                    line = input.pop_front().unwrap(); // request id.
+                    let request_id = RequestId::from_str(&line)?;
+                    input.pop_front().unwrap(); // empty line.
+                    line = input.pop_front().unwrap(); // envelope
+                    let envelope = hex::decode(line)?;
+                    input.pop_front().unwrap(); // empty line.
+                    line = input.pop_front().unwrap(); // effective_canister_id
+                    let effective_canister_id = Principal::try_from(hex::decode(line)?)?;
+                    transport
+                        .call(effective_canister_id, envelope, request_id)
+                        .await?;
+                    eprint!("Request ID: ");
+                    println!("0x{}", hex::encode(request_id.as_slice()));
+                }
+                "read_state" => {
+                    input.pop_front().unwrap(); // empty line.
+                    line = input.pop_front().unwrap(); // envelope
+                    let envelope = hex::decode(line)?;
+                    input.pop_front().unwrap(); // empty line.
+                    line = input.pop_front().unwrap(); // effective_canister_id
+                    let effective_canister_id = Principal::try_from(hex::decode(line)?)?;
+                    let result = transport
+                        .read_state(effective_canister_id, envelope)
+                        .await?;
+                    eprint!("Result: ");
+                    println!("{}", hex::encode(result));
+                }
+                "query" => {
+                    input.pop_front().unwrap(); // empty line.
+                    line = input.pop_front().unwrap(); // envelope
+                    let envelope = hex::decode(line)?;
+                    input.pop_front().unwrap(); // empty line.
+                    line = input.pop_front().unwrap(); // effective_canister_id
+                    let effective_canister_id = Principal::try_from(hex::decode(line)?)?;
+                    let result = transport.query(effective_canister_id, envelope).await?;
+                    eprint!("Result: ");
+                    println!("{}", hex::encode(result));
+                }
                 other => {
                     eprintln!(
                         r#"Error: Invalid STDIN format. Unexpected line: "{}""#,
