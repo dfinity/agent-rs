@@ -22,6 +22,8 @@ ic-agent = { path = "../ic-agent", version = "0.2" }
 ic-types = { path = "../ic-types", version = "0.1.2" }
 serde = "1.0.115"
 serde_bytes = "0.11"
+strum = "0.20"
+strum_macros = "0.20"
 thiserror = "1.0.20"
 
 [dev-dependencies]

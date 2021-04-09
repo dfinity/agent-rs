@@ -31,6 +31,51 @@ pub enum AsyncContent {
     },
 }
 
+// A request as submitted to /api/v2/.../call
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(tag = "request_type")]
+pub enum CallRequestContent {
+    #[serde(rename = "call")]
+    CallRequest {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(with = "serde_bytes")]
+        nonce: Option<Vec<u8>>,
+        ingress_expiry: u64,
+        sender: Principal,
+        canister_id: Principal,
+        method_name: String,
+        #[serde(with = "serde_bytes")]
+        arg: Vec<u8>,
+    },
+}
+
+// A request as submitted to /api/v2/.../read_state
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(tag = "request_type")]
+pub enum ReadStateContent {
+    #[serde(rename = "read_state")]
+    ReadStateRequest {
+        ingress_expiry: u64,
+        sender: Principal,
+        paths: Vec<Vec<Label>>,
+    },
+}
+
+// A request as submitted to /api/v2/.../query
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(tag = "request_type")]
+pub enum QueryContent {
+    #[serde(rename = "query")]
+    QueryRequest {
+        ingress_expiry: u64,
+        sender: Principal,
+        canister_id: Principal,
+        method_name: String,
+        #[serde(with = "serde_bytes")]
+        arg: Vec<u8>,
+    },
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "request_type")]
 pub enum SyncContent {

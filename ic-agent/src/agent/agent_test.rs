@@ -15,7 +15,7 @@ fn query() -> Result<(), AgentError> {
         reply: CallReply { arg: blob.clone() },
     };
 
-    let read_mock = mock("POST", "/api/v1/read")
+    let query_mock = mock("POST", "/api/v2/canister/aaaaa-aa/query")
         .with_status(200)
         .with_header("content-type", "application/cbor")
         .with_body(serde_cbor::to_vec(&response)?)
@@ -25,11 +25,17 @@ fn query() -> Result<(), AgentError> {
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
         agent
-            .query_raw(&Principal::management_canister(), "main", &[], None)
+            .query_raw(
+                &Principal::management_canister(),
+                Principal::management_canister(),
+                "main",
+                &[],
+                None,
+            )
             .await
     });
 
-    read_mock.assert();
+    query_mock.assert();
 
     assert_eq!(result?, blob);
 
@@ -38,17 +44,25 @@ fn query() -> Result<(), AgentError> {
 
 #[test]
 fn query_error() -> Result<(), AgentError> {
-    let read_mock = mock("POST", "/api/v1/read").with_status(500).create();
+    let query_mock = mock("POST", "/api/v2/canister/aaaaa-aa/query")
+        .with_status(500)
+        .create();
     let agent = Agent::builder().with_url(&mockito::server_url()).build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
 
     let result = runtime.block_on(async {
         agent
-            .query_raw(&Principal::management_canister(), "greet", &[], None)
+            .query_raw(
+                &Principal::management_canister(),
+                Principal::management_canister(),
+                "greet",
+                &[],
+                None,
+            )
             .await
     });
 
-    read_mock.assert();
+    query_mock.assert();
 
     assert!(result.is_err());
 
@@ -62,7 +76,7 @@ fn query_rejected() -> Result<(), AgentError> {
         reject_message: "Rejected Message".to_string(),
     };
 
-    let read_mock = mock("POST", "/api/v1/read")
+    let query_mock = mock("POST", "/api/v2/canister/aaaaa-aa/query")
         .with_status(200)
         .with_header("content-type", "application/cbor")
         .with_body(serde_cbor::to_vec(&response)?)
@@ -73,11 +87,17 @@ fn query_rejected() -> Result<(), AgentError> {
 
     let result = runtime.block_on(async {
         agent
-            .query_raw(&Principal::management_canister(), "greet", &[], None)
+            .query_raw(
+                &Principal::management_canister(),
+                Principal::management_canister(),
+                "greet",
+                &[],
+                None,
+            )
             .await
     });
 
-    read_mock.assert();
+    query_mock.assert();
 
     match result {
         Err(AgentError::ReplicaError {
@@ -95,7 +115,9 @@ fn query_rejected() -> Result<(), AgentError> {
 
 #[test]
 fn call_error() -> Result<(), AgentError> {
-    let submit_mock = mock("POST", "/api/v1/submit").with_status(500).create();
+    let call_mock = mock("POST", "/api/v2/canister/aaaaa-aa/call")
+        .with_status(500)
+        .create();
 
     let agent = Agent::builder().with_url(&mockito::server_url()).build()?;
 
@@ -108,7 +130,7 @@ fn call_error() -> Result<(), AgentError> {
             .await
     });
 
-    submit_mock.assert();
+    call_mock.assert();
 
     assert!(result.is_err());
 
@@ -124,7 +146,7 @@ fn status() -> Result<(), AgentError> {
         serde_cbor::Value::Text(ic_api_version.clone()),
     );
     let response = serde_cbor::Value::Map(map);
-    let read_mock = mock("GET", "/api/v1/status")
+    let read_mock = mock("GET", "/api/v2/status")
         .with_status(200)
         .with_body(serde_cbor::to_vec(&response)?)
         .create();
@@ -147,7 +169,7 @@ fn status_okay() -> Result<(), AgentError> {
         serde_cbor::Value::Text("1.2.3".to_owned()),
     );
     let response = serde_cbor::Value::Map(map);
-    let read_mock = mock("GET", "/api/v1/status")
+    let read_mock = mock("GET", "/api/v2/status")
         .with_status(200)
         .with_body(serde_cbor::to_vec(&response)?)
         .create();
@@ -171,7 +193,7 @@ fn status_okay() -> Result<(), AgentError> {
 fn status_error() -> Result<(), AgentError> {
     // This mock is never asserted as we don't know (nor do we need to know) how many times
     // it is called.
-    let _read_mock = mock("GET", "/api/v1/status").with_status(500).create();
+    let _read_mock = mock("GET", "/api/v2/status").with_status(500).create();
 
     let agent = Agent::builder().with_url(mockito::server_url()).build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");

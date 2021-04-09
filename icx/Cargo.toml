@@ -14,6 +14,7 @@ hex = "0.4.2"
 humantime = "2.0.1"
 ic-agent = { path = "../ic-agent" }
 ic-types = { path = "../ic-types" }
+ic-utils = { path = "../ic-utils" }
 pem = "0.8.1"
 ring = "0.16.11"
 serde = "1.0.115"

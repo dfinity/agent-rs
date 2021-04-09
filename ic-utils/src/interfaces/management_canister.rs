@@ -6,8 +6,10 @@ use candid::{CandidType, Deserialize};
 use delay::Waiter;
 use ic_agent::export::Principal;
 use ic_agent::{Agent, AgentError, RequestId};
+use std::convert::AsRef;
 use std::fmt::Debug;
 use std::str::FromStr;
+use strum_macros::{AsRefStr, EnumString};
 
 pub mod attributes;
 pub use attributes::ComputeAllocation;
@@ -17,6 +19,22 @@ use std::convert::TryInto;
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub struct ManagementCanister;
+
+#[derive(AsRefStr, Debug, EnumString)]
+#[strum(serialize_all = "snake_case")]
+pub enum MgmtMethod {
+    CreateCanister,
+    InstallCode,
+    SetController,
+    StartCanister,
+    StopCanister,
+    CanisterStatus,
+    DeleteCanister,
+    DepositCycles,
+    RawRand,
+    ProvisionalCreateCanisterWithCycles,
+    ProvisionalTopUpCanister,
+}
 
 impl ManagementCanister {
     /// Create an instance of a [Canister] implementing the ManagementCanister interface
@@ -85,6 +103,18 @@ pub enum InstallMode {
     Reinstall,
     #[serde(rename = "upgrade")]
     Upgrade,
+}
+
+#[derive(candid::CandidType, Deserialize)]
+pub struct CanisterInstall {
+    pub mode: InstallMode,
+    pub canister_id: Principal,
+    #[serde(with = "serde_bytes")]
+    pub wasm_module: Vec<u8>,
+    #[serde(with = "serde_bytes")]
+    pub arg: Vec<u8>,
+    pub compute_allocation: Option<candid::Nat>,
+    pub memory_allocation: Option<candid::Nat>,
 }
 
 impl FromStr for InstallMode {
@@ -205,18 +235,6 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
     /// Create an [AsyncCall] implementation that, when called, will install the
     /// canister.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
-        #[derive(candid::CandidType, Deserialize)]
-        struct CanisterInstall {
-            mode: InstallMode,
-            canister_id: Principal,
-            #[serde(with = "serde_bytes")]
-            wasm_module: Vec<u8>,
-            #[serde(with = "serde_bytes")]
-            arg: Vec<u8>,
-            compute_allocation: Option<candid::Nat>,
-            memory_allocation: Option<candid::Nat>,
-        }
-
         let compute_allocation = match self.compute_allocation {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
             Some(Ok(x)) => Some(candid::Nat::from(u8::from(x))),
@@ -230,7 +248,7 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
 
         Ok(self
             .canister
-            .update_("install_code")
+            .update_(MgmtMethod::InstallCode.as_ref())
             .with_arg(CanisterInstall {
                 mode: self.mode.unwrap_or(InstallMode::Install),
                 canister_id: self.canister_id.clone(),
@@ -239,6 +257,7 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
                 compute_allocation,
                 memory_allocation,
             })
+            .with_effective_canister_id(self.canister_id)
             .build())
     }
 
@@ -283,10 +302,11 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             canister_id: Principal,
         }
 
-        self.update_("canister_status")
+        self.update_(MgmtMethod::CanisterStatus.as_ref())
             .with_arg(In {
                 canister_id: canister_id.clone(),
             })
+            .with_effective_canister_id(canister_id.to_owned())
             .build()
             .map(|result: (StatusCallResult,)| (result.0,))
     }
@@ -300,7 +320,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             canister_id: Principal,
         }
 
-        self.update_("create_canister")
+        self.update_(MgmtMethod::CreateCanister.as_ref())
             .build()
             .map(|result: (Out,)| (result.0.canister_id,))
     }
@@ -316,10 +336,11 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             canister_id: Principal,
         }
 
-        self.update_("deposit_cycles")
+        self.update_(MgmtMethod::DepositCycles.as_ref())
             .with_arg(Argument {
                 canister_id: canister_id.clone(),
             })
+            .with_effective_canister_id(canister_id.to_owned())
             .build()
     }
 
@@ -333,10 +354,11 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             canister_id: Principal,
         }
 
-        self.update_("delete_canister")
+        self.update_(MgmtMethod::DeleteCanister.as_ref())
             .with_arg(Argument {
                 canister_id: canister_id.clone(),
             })
+            .with_effective_canister_id(canister_id.to_owned())
             .build()
     }
 
@@ -360,10 +382,11 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             canister_id: Principal,
         }
 
-        self.update_("provisional_create_canister_with_cycles")
+        self.update_(MgmtMethod::ProvisionalCreateCanisterWithCycles.as_ref())
             .with_arg(Argument {
                 amount: amount.map(candid::Nat::from),
             })
+            .with_effective_canister_id(Principal::management_canister())
             .build()
             .map(|result: (Out,)| (result.0.canister_id,))
     }
@@ -383,11 +406,12 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             amount: u64,
         }
 
-        self.update_("provisional_top_up_canister")
+        self.update_(MgmtMethod::ProvisionalTopUpCanister.as_ref())
             .with_arg(Argument {
                 canister_id: canister_id.clone(),
                 amount,
             })
+            .with_effective_canister_id(canister_id.to_owned())
             .build()
     }
 
@@ -395,7 +419,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
     /// The return value is unknown to any part of the IC at time of the submission of this call.
     /// A new return value is generated for each call to this method.
     pub fn raw_rand<'canister: 'agent>(&'canister self) -> impl 'agent + AsyncCall<(Vec<u8>,)> {
-        self.update_("raw_rand")
+        self.update_(MgmtMethod::RawRand.as_ref())
             .build()
             .map(|result: (Vec<u8>,)| (result.0,))
     }
@@ -410,10 +434,11 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             canister_id: Principal,
         }
 
-        self.update_("start_canister")
+        self.update_(MgmtMethod::StartCanister.as_ref())
             .with_arg(Argument {
                 canister_id: canister_id.clone(),
             })
+            .with_effective_canister_id(canister_id.to_owned())
             .build()
     }
 
@@ -427,10 +452,11 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             canister_id: Principal,
         }
 
-        self.update_("stop_canister")
+        self.update_(MgmtMethod::StopCanister.as_ref())
             .with_arg(Argument {
                 canister_id: canister_id.clone(),
             })
+            .with_effective_canister_id(canister_id.to_owned())
             .build()
     }
 
@@ -455,11 +481,12 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             new_controller: Principal,
         }
 
-        self.update_("set_controller")
+        self.update_(MgmtMethod::SetController.as_ref())
             .with_arg(Argument {
                 canister_id: canister_id.clone(),
                 new_controller: new_controller.clone(),
             })
+            .with_effective_canister_id(canister_id.to_owned())
             .build()
     }
 }
