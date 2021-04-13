@@ -8,6 +8,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use walkdir::WalkDir;
+use std::sync::Arc;
 
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -91,6 +92,59 @@ where
     }
 }
 
+struct Content {
+    reader: Arc<dyn Read>,
+    encodings: Vec<ContentEncoding<Arc<dyn Read>>>
+}
+
+impl Content {
+    pub fn from_path<P: Into<&Path>>(path: P) -> Self {
+        let reader = Arc::new(std::fs::File::open(path.into()));
+
+    }
+}
+
+enum ContentEncoding<T: Read> {
+    Identity,
+    Gzip,
+}
+
+impl ContentEncoding {
+    pub fn from_path<P: Into<&Path>>(path: P) -> Vec<Self> {
+
+    }
+}
+
+impl Read for ContentEncoding {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+
+    }
+}
+
+struct Asset {
+    name: String,
+    file: std::fs::File,
+    encodings: Vec<ContentEncoding>,
+}
+
+impl Asset {
+    pub fn new<N: Into<String>, P: Into<PathBuf>>(name: N, path: P) -> Result<Self> {
+        Ok(Self {
+            name: name.into(),
+            file: std::fs::File::open(path.into())?,
+            encodings: ContentEncoding::from_path(path),
+        })
+    }
+
+
+}
+
+impl Read for Asset {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.file.read(buf)
+    }
+}
+
 #[derive(CandidType, Deserialize)]
 struct CreateChunkArg<'a> {
     pub batch_id: &'a candid::Nat,
@@ -115,6 +169,10 @@ async fn do_upload(
     // First, split the files into chunks.
     let files = files
         .filter_map(|(name, path)| Some((name, std::fs::File::open(path).ok()?)))
+        .flat_map(|(name, file)| {
+            // Return an iterator over encodings of this file.
+            (name, file)
+        })
         .flat_map(|(name, file)| {
             let chunks = ChunkIterator {
                 source: file,
