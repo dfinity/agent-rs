@@ -50,7 +50,8 @@ pub(crate) fn setup_logging(opts: &Opts) -> Logger {
     let mode = match opts.logmode.as_str() {
         "tee" => LoggingMode::Tee(logfile),
         "file" => LoggingMode::File(logfile),
-        _ => LoggingMode::Stderr,
+        "stderr" => LoggingMode::Stderr,
+        _ => unreachable!("unhandled logmode"),
     };
 
     let log_level = match verbose_level {
