@@ -34,7 +34,7 @@ fn create_drain(mode: LoggingMode) -> Logger {
             .fuse(),
             slog::o!(),
         ),
-        _ => {
+        LoggingMode::Stderr => {
             let decorator = slog_term::PlainDecorator::new(std::io::stderr());
             let drain = slog_term::CompactFormat::new(decorator).build().fuse();
             Logger::root(slog_async::Async::new(drain).build().fuse(), slog::o!())
