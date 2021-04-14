@@ -5,7 +5,7 @@ members = [
     "ic-types/",
     "ic-utils/",
     "icx/",
-    "icx-http-server/",
+    "icx-proxy/",
     "ref-tests/",
 ]
 

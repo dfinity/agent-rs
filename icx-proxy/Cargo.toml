@@ -1,5 +1,5 @@
 [package]
-name = "icx-http-server"
+name = "icx-proxy"
 version = "0.1.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
