@@ -265,7 +265,7 @@ async fn forward_request(
             slog::trace!(logger, ">> {}: {}", name, value);
         }
 
-        let body = body.unwrap_or(b"... streaming ...".to_vec());
+        let body = body.unwrap_or_else(|| b"... streaming ...".to_vec());
 
         slog::trace!(logger, ">>");
         slog::trace!(

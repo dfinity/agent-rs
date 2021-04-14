@@ -45,7 +45,7 @@ fn create_drain(mode: LoggingMode) -> Logger {
 pub(crate) fn setup_logging(opts: &Opts) -> Logger {
     // Create a logger with our argument matches.
     let verbose_level = opts.verbose as i64 - opts.quiet as i64;
-    let logfile = opts.logfile.clone().unwrap_or("log.txt".into());
+    let logfile = opts.logfile.clone().unwrap_or_else(|| "log.txt".into());
 
     let mode = match opts.logmode.as_str() {
         "tee" => LoggingMode::Tee(logfile),
