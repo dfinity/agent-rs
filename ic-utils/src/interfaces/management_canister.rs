@@ -61,7 +61,7 @@ impl ManagementCanister {
 /// The complete canister status information of a canister. This includes
 /// the CanisterStatus, a hash of the module installed on the canister (None if nothing installed),
 /// the contoller of the canister, the canisters memory size, and its balance in cycles.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, CandidType)]
 pub struct StatusCallResult {
     pub status: CanisterStatus,
     pub module_hash: Option<Vec<u8>>,
@@ -78,7 +78,7 @@ impl std::fmt::Display for StatusCallResult {
 
 /// The status of a Canister, whether it's running, in the process of stopping, or
 /// stopped.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, CandidType)]
 #[serde(rename_all = "snake_case")]
 pub enum CanisterStatus {
     Running,
@@ -105,7 +105,7 @@ pub enum InstallMode {
     Upgrade,
 }
 
-#[derive(candid::CandidType, Deserialize)]
+#[derive(CandidType, Deserialize)]
 pub struct CanisterInstall {
     pub mode: InstallMode,
     pub canister_id: Principal,
@@ -315,7 +315,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
     pub fn create_canister<'canister: 'agent>(
         &'canister self,
     ) -> impl 'agent + AsyncCall<(Principal,)> {
-        #[derive(Deserialize)]
+        #[derive(Deserialize, CandidType)]
         struct Out {
             canister_id: Principal,
         }
@@ -377,7 +377,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
             amount: Option<candid::Nat>,
         }
 
-        #[derive(Deserialize)]
+        #[derive(Deserialize, CandidType)]
         struct Out {
             canister_id: Principal,
         }

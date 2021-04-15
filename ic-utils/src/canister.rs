@@ -1,7 +1,7 @@
 use crate::call::{AsyncCaller, SyncCaller};
-use candid::de::ArgumentDecoder;
 use candid::parser::value::IDLValue;
 use candid::ser::IDLBuilder;
+use candid::utils::ArgumentDecoder;
 use candid::CandidType;
 use ic_agent::{Agent, AgentError};
 use ic_types::{Principal, PrincipalError};
