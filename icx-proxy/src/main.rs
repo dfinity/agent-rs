@@ -4,21 +4,29 @@ use hyper::body::Bytes;
 use hyper::http::uri::Parts;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{body, Body, Client, Request, Response, Server, StatusCode, Uri};
+use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
 use ic_agent::export::Principal;
 use ic_agent::Agent;
 use ic_utils::call::SyncCall;
 use ic_utils::interfaces::http_request::StreamingStrategy::Callback;
 use ic_utils::interfaces::http_request::{HeaderField, StreamingCallbackHttpResponse};
 use ic_utils::interfaces::HttpRequestCanister;
+use slog::Drain;
 use std::convert::Infallible;
 use std::error::Error;
 use std::net::{IpAddr, SocketAddr};
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+mod logging;
+
 // Limit the total number of calls to an HTTP Request loop to 1000 for now.
 static MAX_HTTP_REQUEST_STREAM_CALLBACK_CALL_COUNT: i32 = 1000;
+
+// The maximum length of a body we should log as tracing.
+static MAX_LOG_BODY_SIZE: usize = 100;
 
 #[derive(Clap)]
 #[clap(
@@ -27,7 +35,27 @@ static MAX_HTTP_REQUEST_STREAM_CALLBACK_CALL_COUNT: i32 = 1000;
     global_setting = AppSettings::GlobalVersion,
     global_setting = AppSettings::ColoredHelp
 )]
-struct Opts {
+pub(crate) struct Opts {
+    /// Verbose level. By default, INFO will be used. Add a single `-v` to upgrade to
+    /// DEBUG, and another `-v` to upgrade to TRACE.
+    #[clap(long, short('v'), parse(from_occurrences))]
+    verbose: u64,
+
+    /// Quiet level. The opposite of verbose. A single `-q` will drop the logging to
+    /// WARN only, then another one to ERR, and finally another one for FATAL. Another
+    /// `-q` will silence ALL logs.
+    #[clap(long, short('q'), parse(from_occurrences))]
+    quiet: u64,
+
+    /// Mode to use the logging. "stderr" will output logs in STDERR, "file" will output
+    /// logs in a file, and "tee" will do both.
+    #[clap(long("log"), default_value("stderr"), possible_values(&["stderr", "tee", "file"]))]
+    logmode: String,
+
+    /// File to output the log to, when using logmode=tee or logmode=file.
+    #[clap(long)]
+    logfile: Option<PathBuf>,
+
     /// The address to bind to.
     #[clap(long, default_value = "127.0.0.1:3000")]
     address: SocketAddr,
@@ -94,6 +122,7 @@ fn resolve_canister_id(request: &Request<Body>) -> Option<Principal> {
 async fn forward_request(
     request: Request<Body>,
     agent: Arc<Agent>,
+    logger: slog::Logger,
 ) -> Result<Response<Body>, Box<dyn Error>> {
     let canister_id = match resolve_canister_id(&request) {
         None => {
@@ -104,6 +133,14 @@ async fn forward_request(
         }
         Some(x) => x,
     };
+
+    slog::trace!(
+        logger,
+        "<< {} {} {:?}",
+        request.method(),
+        request.uri(),
+        &request.version()
+    );
 
     let method = request.method().to_string();
     let uri = request.uri().clone();
@@ -116,9 +153,27 @@ async fn forward_request(
                 value.to_str().ok()?.to_string(),
             ))
         })
+        .inspect(|HeaderField(name, value)| {
+            slog::trace!(logger, "<< {}: {}", name, value);
+        })
         .collect();
 
     let entire_body = body::to_bytes(request.into_body()).await?.to_vec();
+
+    slog::trace!(logger, "<<");
+    if logger.is_trace_enabled() {
+        let body = String::from_utf8_lossy(&entire_body);
+        slog::trace!(
+            logger,
+            "<< {}{}",
+            &body[0..usize::min(body.len(), MAX_LOG_BODY_SIZE)],
+            if body.len() > MAX_LOG_BODY_SIZE {
+                format!("... {} bytes total", body.len())
+            } else {
+                String::new()
+            }
+        );
+    }
 
     let (http_response,) = HttpRequestCanister::create(agent.as_ref(), canister_id.clone())
         .http_request(method, uri.to_string(), headers, &entire_body)
@@ -131,7 +186,13 @@ async fn forward_request(
         builder = builder.header(&name, value);
     }
 
-    if let Some(streaming_strategy) = http_response.streaming_strategy {
+    let body = if logger.is_trace_enabled() {
+        Some(http_response.body.clone())
+    } else {
+        None
+    };
+    let is_streaming = http_response.streaming_strategy.is_some();
+    let response = if let Some(streaming_strategy) = http_response.streaming_strategy {
         let (mut sender, body) = body::Body::channel();
         let agent = agent.as_ref().clone();
         sender.send_data(Bytes::from(http_response.body)).await?;
@@ -187,10 +248,49 @@ async fn forward_request(
             }
         }
 
-        Ok(builder.body(body)?)
+        builder.body(body)?
     } else {
-        Ok(builder.body(http_response.body.into())?)
+        builder.body(http_response.body.into())?
+    };
+
+    if logger.is_trace_enabled() {
+        slog::trace!(
+            logger,
+            ">> {:?} {} {}",
+            &response.version(),
+            response.status().as_u16(),
+            response.status().to_string()
+        );
+
+        for (name, value) in response.headers() {
+            let value = String::from_utf8_lossy(value.as_bytes());
+            slog::trace!(logger, ">> {}: {}", name, value);
+        }
+
+        let body = body.unwrap_or_else(|| b"... streaming ...".to_vec());
+
+        slog::trace!(logger, ">>");
+        slog::trace!(
+            logger,
+            ">> {}{}",
+            match std::str::from_utf8(&body) {
+                Ok(s) => format!(
+                    r#""{}""#,
+                    s[..usize::min(MAX_LOG_BODY_SIZE, s.len())].escape_default()
+                ),
+                Err(_) => hex::encode(&body[..usize::min(MAX_LOG_BODY_SIZE, body.len())]),
+            },
+            if is_streaming {
+                "... streaming".to_string()
+            } else if body.len() > MAX_LOG_BODY_SIZE {
+                format!("... {} bytes total", body.len())
+            } else {
+                String::new()
+            }
+        );
     }
+
+    Ok(response)
 }
 
 fn is_hop_header(name: &str) -> bool {
@@ -268,34 +368,46 @@ async fn handle_request(
     ip_addr: IpAddr,
     request: Request<Body>,
     replica_url: String,
+    logger: slog::Logger,
     debug: bool,
 ) -> Result<Response<Body>, Infallible> {
     match if request.uri().path().starts_with("/api/") {
+        slog::debug!(
+            logger,
+            "URI Request to path '{}' being forwarded to Replica",
+            &request.uri().path()
+        );
         forward_api(&ip_addr, request, &replica_url).await
     } else {
         let agent = Arc::new(
             ic_agent::Agent::builder()
-                .with_url(replica_url)
+                .with_transport(ReqwestHttpReplicaV2Transport::create(replica_url).unwrap())
                 .build()
                 .expect("Could not create agent..."),
         );
 
-        forward_request(request, agent).await
+        forward_request(request, agent, logger.clone()).await
     } {
-        Err(err) => Ok(Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(if debug {
-                format!("Internal Error: {:?}", err).into()
-            } else {
-                "Internal Server Error".into()
-            })
-            .unwrap()),
+        Err(err) => {
+            slog::warn!(logger, "Internal Error during request:\n{:#?}", err);
+
+            Ok(Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(if debug {
+                    format!("Internal Error: {:?}", err).into()
+                } else {
+                    "Internal Server Error".into()
+                })
+                .unwrap())
+        }
         Ok(x) => Ok::<_, Infallible>(x),
     }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let opts: Opts = Opts::parse();
+
+    let logger = logging::setup_logging(&opts);
 
     // Prepare a list of agents for each backend replicas.
     let replicas = Mutex::new(opts.replica.clone());
@@ -306,6 +418,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let service = make_service_fn(|socket: &hyper::server::conn::AddrStream| {
         let ip_addr = socket.remote_addr();
         let ip_addr = ip_addr.ip();
+        let logger = logger.clone();
 
         // Select an agent.
         let replica_url_array = replicas.lock().unwrap();
@@ -314,17 +427,26 @@ fn main() -> Result<(), Box<dyn Error>> {
             .get(count % replica_url_array.len())
             .unwrap_or_else(|| unreachable!());
         let replica_url = replica_url.clone();
+        slog::debug!(logger, "Replica URL: {}", replica_url);
 
         async move {
             Ok::<_, Infallible>(service_fn(move |req| {
-                handle_request(ip_addr, req, replica_url.clone(), debug)
+                let logger = logger.clone();
+                handle_request(ip_addr, req, replica_url.clone(), logger, debug)
             }))
         }
     });
 
-    eprintln!("Starting server. Listening on http://{}/", opts.address);
+    slog::info!(
+        logger,
+        "Starting server. Listening on http://{}/",
+        opts.address
+    );
 
-    let runtime = tokio::runtime::Runtime::new()?;
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(10)
+        .enable_all()
+        .build()?;
     runtime.block_on(async {
         let server = Server::bind(&opts.address).serve(service);
         server.await?;
