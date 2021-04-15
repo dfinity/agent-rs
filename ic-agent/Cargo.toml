@@ -1,6 +1,6 @@
 [package]
 name = "ic-agent"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
 description = "Agent library to communicate with the Internet Computer, following the Public Specification."
@@ -53,5 +53,4 @@ tokio = { version = "1.2.0", features = ["full"] }
 
 [features]
 default = ["pem", "reqwest"]
-
-ic_ref_tests = ['default'] # Used to separate integration tests for ic-ref which need a server running.
+ic_ref_tests = ["default"] # Used to separate integration tests for ic-ref which need a server running.
