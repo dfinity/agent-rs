@@ -12,9 +12,9 @@ clap = "3.0.0-beta.1"
 delay = "0.3.1"
 hex = "0.4.2"
 humantime = "2.0.1"
-ic-agent = { path = "../ic-agent" }
-ic-types = { path = "../ic-types" }
-ic-utils = { path = "../ic-utils" }
+ic-agent = { path = "../ic-agent", version = "0.2" }
+ic-types = { path = "../ic-types", version = "0.1.2" }
+ic-utils = { path = "../ic-utils", version = "0.2" }
 pem = "0.8.1"
 ring = "0.16.11"
 serde = "1.0.115"
