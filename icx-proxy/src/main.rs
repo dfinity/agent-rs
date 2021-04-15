@@ -25,6 +25,9 @@ mod logging;
 // Limit the total number of calls to an HTTP Request loop to 1000 for now.
 static MAX_HTTP_REQUEST_STREAM_CALLBACK_CALL_COUNT: i32 = 1000;
 
+// The maximum length of a body we should log as tracing.
+static MAX_LOG_BODY_SIZE: usize = 100;
+
 #[derive(Clap)]
 #[clap(
     version = crate_version!(),
@@ -163,8 +166,8 @@ async fn forward_request(
         slog::trace!(
             logger,
             "<< {}{}",
-            &body[0..usize::min(body.len(), 100)],
-            if body.len() > 100 {
+            &body[0..usize::min(body.len(), MAX_LOG_BODY_SIZE)],
+            if body.len() > MAX_LOG_BODY_SIZE {
                 format!("... {} bytes total", body.len())
             } else {
                 String::new()
@@ -183,7 +186,13 @@ async fn forward_request(
         builder = builder.header(&name, value);
     }
 
-    let (body, response) = if let Some(streaming_strategy) = http_response.streaming_strategy {
+    let body = if logger.is_trace_enabled() {
+        Some(http_response.body.clone())
+    } else {
+        None
+    };
+    let is_streaming = http_response.streaming_strategy.is_some();
+    let response = if let Some(streaming_strategy) = http_response.streaming_strategy {
         let (mut sender, body) = body::Body::channel();
         let agent = agent.as_ref().clone();
         sender.send_data(Bytes::from(http_response.body)).await?;
@@ -239,16 +248,9 @@ async fn forward_request(
             }
         }
 
-        (None, builder.body(body)?)
+        builder.body(body)?
     } else {
-        (
-            if logger.is_trace_enabled() {
-                Some(http_response.body.clone())
-            } else {
-                None
-            },
-            builder.body(http_response.body.into())?,
-        )
+        builder.body(http_response.body.into())?
     };
 
     if logger.is_trace_enabled() {
@@ -272,10 +274,15 @@ async fn forward_request(
             logger,
             ">> {}{}",
             match std::str::from_utf8(&body) {
-                Ok(s) => format!(r#""{}""#, s[..usize::min(100, s.len())].escape_default()),
-                Err(_) => hex::encode(&body[..usize::min(100, body.len())]),
+                Ok(s) => format!(
+                    r#""{}""#,
+                    s[..usize::min(MAX_LOG_BODY_SIZE, s.len())].escape_default()
+                ),
+                Err(_) => hex::encode(&body[..usize::min(MAX_LOG_BODY_SIZE, body.len())]),
             },
-            if body.len() > 500 {
+            if is_streaming {
+                "... streaming".to_string()
+            } else if body.len() > MAX_LOG_BODY_SIZE {
                 format!("... {} bytes total", body.len())
             } else {
                 String::new()
