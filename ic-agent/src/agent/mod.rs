@@ -661,7 +661,7 @@ impl<'agent> UpdateBuilder<'agent> {
 
     /// Make an update call. This will call request_status on the RequestId in a loop and return
     /// the response as a byte vector.
-    pub async fn call_and_wait<W: Waiter>(&self, mut waiter: W) -> Result<Vec<u8>, AgentError> {
+    pub async fn call_and_wait<W: Waiter>(&self, waiter: W) -> Result<Vec<u8>, AgentError> {
         let request_id = self
             .agent
             .update_raw(
@@ -672,6 +672,16 @@ impl<'agent> UpdateBuilder<'agent> {
                 self.ingress_expiry_datetime,
             )
             .await?;
+        self.wait(request_id, waiter).await
+    }
+
+    // Call request_status on the RequestId in a loop and return
+    // the response as a byte vector.
+    pub async fn wait<W: Waiter>(
+        &self,
+        request_id: RequestId,
+        mut waiter: W,
+    ) -> Result<Vec<u8>, AgentError> {
         waiter.start();
         let mut request_accepted = false;
         loop {
