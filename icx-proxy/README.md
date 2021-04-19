@@ -1,14 +1,15 @@
-# `icx-http-server`
-A command line tool to use the `ic-agent` crate directly. It allows simple communication with
-the Internet Computer.
+# `icx-proxy`
+A command line tool to serve as a gateway for a Internet Computer replica.
 
-## Installing `icx`
-To install `icx` you will have to build it locally, using `cargo`. Make a clone of this repository,
-then in it simply run `cargo build`:
+## Installing `icx-proxy`
+One can install `icx-proxy` by running cargo;
 
-```sh
-git clone https://github.com/dfinity/agent-rust.git
-cd agent-rust
-cargo build
+```bash
+cargo install icx-proxy
 ```
 
+## Usage
+Once installed, using `icx-proxy --help` will show the usage message and all the flags.
+
+## Ecosystem
+This is similar in principle to `dfx bootstrap`, but is simpler and more configurable. This also can replace a Replica when using the `--network` flag in `dfx`.

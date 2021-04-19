@@ -8,9 +8,9 @@ use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
 use ic_agent::export::Principal;
 use ic_agent::Agent;
 use ic_utils::call::SyncCall;
-use ic_utils::interfaces::http_request::StreamingStrategy::Callback;
-use ic_utils::interfaces::http_request::{HeaderField, StreamingCallbackHttpResponse};
-use ic_utils::interfaces::HttpRequestCanister;
+use ic_utils::interfaces::http_request::{
+    HeaderField, HttpRequestCanister, StreamingCallbackHttpResponse, StreamingStrategy,
+};
 use slog::Drain;
 use std::convert::Infallible;
 use std::error::Error;
@@ -198,7 +198,7 @@ async fn forward_request(
         sender.send_data(Bytes::from(http_response.body)).await?;
 
         match streaming_strategy {
-            Callback(callback) => {
+            StreamingStrategy::Callback(callback) => {
                 match callback.callback {
                     IDLValue::Func(streaming_canister_id_id, method_name) => {
                         let mut callback_token = callback.token;
