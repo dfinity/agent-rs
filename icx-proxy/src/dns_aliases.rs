@@ -27,7 +27,7 @@ pub struct DnsAliases {
 
 impl DnsAliases {
     pub(crate) fn new(arg: &Vec<String>) -> Result<DnsAliases, Box<dyn Error>> {
-        let v: Result<Vec<DnsAlias>, Box<dyn Error>> = arg
+        let dns_aliases = arg
             .iter()
             .map(|alias| {
                 let (domain_name, principal) = parse_dns_alias(&alias)?;
@@ -38,8 +38,7 @@ impl DnsAliases {
                     principal,
                 })
             })
-            .collect();
-        let dns_aliases = v?;
+            .collect::<Result<Vec<DnsAlias>, Box<dyn Error>>>()?;
         Ok(DnsAliases { dns_aliases })
     }
 
@@ -52,37 +51,6 @@ impl DnsAliases {
             })
             .map(|dns_alias| dns_alias.principal.clone())
     }
-}
-
-fn _map_dns_aliases1(arg: Vec<String>) -> Result<HashMap<String, Principal>, Box<dyn Error>> {
-    let v: Result<Vec<(String, Principal)>, Box<dyn Error>> =
-        arg.iter().map(|alias| parse_dns_alias(alias)).collect();
-    let v = v?;
-
-    let hm: HashMap<String, Principal> = v
-        .iter()
-        .map(|(dns, principal)| ((dns.to_owned().to_string(), principal.to_owned())))
-        .collect();
-    Ok(hm)
-}
-fn _map_dns_aliases2(arg: Vec<String>) -> Result<HashMap<String, Principal>, Box<dyn Error>> {
-    let v = arg
-        .iter()
-        .map(|alias| parse_dns_alias(alias))
-        .collect::<Result<Vec<(String, Principal)>, Box<dyn Error>>>()?;
-
-    Ok(v.iter()
-        .map(|(domain, principal)| ((domain.to_owned().to_string(), principal.to_owned())))
-        .collect())
-}
-
-fn _map_dns_aliases3(arg: &Vec<String>) -> Result<HashMap<String, Principal>, Box<dyn Error>> {
-    let mut hm = HashMap::new();
-    for alias in arg {
-        let (domain_name, principal) = parse_dns_alias(&alias)?;
-        hm.insert(domain_name.to_string(), principal);
-    }
-    Ok(hm)
 }
 
 fn parse_dns_alias(alias: &str) -> Result<(String, Principal), Box<dyn Error>> {
