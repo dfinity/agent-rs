@@ -1,6 +1,5 @@
 use ic_types::Principal;
 
-use std::collections::HashMap;
 use std::error::Error;
 use std::ops::Deref;
 use thiserror::Error;
@@ -26,7 +25,7 @@ pub struct DnsAliases {
 }
 
 impl DnsAliases {
-    pub(crate) fn new(arg: &Vec<String>) -> Result<DnsAliases, Box<dyn Error>> {
+    pub(crate) fn new(arg: &[String]) -> Result<DnsAliases, Box<dyn Error>> {
         let dns_aliases = arg
             .iter()
             .map(|alias| {
