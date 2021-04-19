@@ -385,7 +385,7 @@ async fn handle_request(
     ip_addr: IpAddr,
     request: Request<Body>,
     replica_url: String,
-    dns_aliases: DnsAliases,
+    dns_aliases: Arc<DnsAliases>,
     logger: slog::Logger,
     debug: bool,
 ) -> Result<Response<Body>, Infallible> {
@@ -404,7 +404,7 @@ async fn handle_request(
                 .expect("Could not create agent..."),
         );
 
-        forward_request(request, agent, &dns_aliases, logger.clone()).await
+        forward_request(request, agent, dns_aliases.as_ref(), logger.clone()).await
     } {
         Err(err) => {
             slog::warn!(logger, "Internal Error during request:\n{:#?}", err);
@@ -430,7 +430,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Prepare a list of agents for each backend replicas.
     let replicas = Mutex::new(opts.replica.clone());
 
-    let dns_aliases = DnsAliases::new(&opts.dns_alias)?;
+    let dns_aliases = Arc::new(DnsAliases::new(&opts.dns_alias)?);
 
     let counter = AtomicUsize::new(0);
     let debug = opts.debug;
