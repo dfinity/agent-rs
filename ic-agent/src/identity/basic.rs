@@ -4,7 +4,7 @@ use crate::{Identity, Signature};
 #[cfg(feature = "pem")]
 use crate::identity::error::PemError;
 
-use num_bigint::BigUint;
+use simple_asn1::BigUint;
 use ring::signature::{Ed25519KeyPair, KeyPair};
 use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, Sequence};
 use simple_asn1::{oid, to_der, OID};
