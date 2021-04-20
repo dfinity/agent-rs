@@ -64,6 +64,8 @@ impl Identity for BasicIdentity {
 fn der_encode_public_key(public_key: Vec<u8>) -> Vec<u8> {
     // see Section 4 "SubjectPublicKeyInfo" in https://tools.ietf.org/html/rfc8410
 
+    // failing lint (1.47.0, ubuntu-latest):
+    //   expected struct `simple_asn1::BigUint`, found struct `num_bigint::BigUint`
     let id_ed25519 = oid!(1, 3, 101, 112);
     let algorithm = Sequence(0, vec![ObjectIdentifier(0, id_ed25519)]);
     let subject_public_key = BitString(0, public_key.len() * 8, public_key);
