@@ -11,9 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-      with:
-        - ref: 'ed5c28f57090831706a16b64e85ff135be926a92'
+    - uses: actions/checkout@v1
 
     - uses: actions/cache@v2
       with:
