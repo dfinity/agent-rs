@@ -13,7 +13,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
       with:
-        - ref: 'ed5c28f57090831706a16b64e85ff135be926a92'
+        - ref: $GITHUB_SHA
 
     - uses: actions/cache@v2
       with:
