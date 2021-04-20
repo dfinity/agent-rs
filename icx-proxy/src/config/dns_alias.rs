@@ -23,7 +23,7 @@ impl DnsAlias {
         let (domain_name, principal) = split_dns_alias(dns_alias)?;
         let dns_suffix: Vec<String> = domain_name
             .split('.')
-            .map(|s| String::from(s).to_ascii_lowercase())
+            .map(|s| s.to_ascii_lowercase())
             .collect();
         Ok(DnsAlias {
             domain_name,
