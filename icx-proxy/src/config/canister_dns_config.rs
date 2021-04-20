@@ -14,7 +14,7 @@ impl CanisterDnsConfig {
         let dns_aliases = dns_aliases
             .iter()
             .map(|alias| DnsAlias::new(alias))
-            .collect::<Result<Vec<DnsAlias>, anyhow::Error>>()?;
+            .collect::<anyhow::Result<Vec<DnsAlias>>>()?;
         Ok(CanisterDnsConfig { dns_aliases })
     }
 
