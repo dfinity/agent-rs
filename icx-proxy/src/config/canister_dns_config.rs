@@ -1,6 +1,7 @@
 use crate::config::dns_alias::DnsAlias;
 use ic_types::Principal;
 
+/// Configuration for determination of Domain Name to Principal
 #[derive(Clone, Debug)]
 pub struct CanisterDnsConfig {
     dns_aliases: Vec<DnsAlias>,

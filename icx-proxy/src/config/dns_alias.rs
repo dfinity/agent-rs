@@ -4,6 +4,8 @@ use anyhow::anyhow;
 
 const FORMAT_HELP: &str = "Format is dns.alias:principal-id";
 
+/// A mapping from a domain name to a Principal.  The domain name must
+/// match the last portion, as split by '.', of the host specified in the request.
 #[derive(Clone, Debug)]
 pub struct DnsAlias {
     domain_name: String,
