@@ -12,8 +12,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-      with:
-        - ref: $GITHUB_SHA
 
     - uses: actions/cache@v2
       with:
