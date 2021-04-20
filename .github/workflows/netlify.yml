@@ -23,6 +23,7 @@ jobs:
 
     - name: Install Rust
       run: |
+        echo "github SHA is $GITHUB_SHA"
         rustup update ${{ matrix.rust }} --no-self-update
         rustup default ${{ matrix.rust }}
     - name: Build Docs
