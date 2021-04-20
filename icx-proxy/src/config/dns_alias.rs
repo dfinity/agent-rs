@@ -7,7 +7,11 @@ const FORMAT_HELP: &str = "Format is dns.alias:principal-id";
 #[derive(Clone, Debug)]
 pub struct DnsAlias {
     domain_name: String,
+
+    /// The hostname parts that must match the right-hand side of the domain name.  Lower case.
     pub dns_suffix: Vec<String>,
+
+    /// The principal associated with the domain name.
     pub principal: Principal,
 }
 
