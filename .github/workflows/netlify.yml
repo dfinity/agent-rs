@@ -1,9 +1,6 @@
 name: Publish Cargo docs
 
 on:
-  push:
-    branches:
-      - next
   pull_request_target:
 
 jobs:
