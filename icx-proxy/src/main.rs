@@ -1,3 +1,4 @@
+use crate::config::canister_dns_config::CanisterDnsConfig;
 use candid::parser::value::IDLValue;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use hyper::body::Bytes;
@@ -19,7 +20,6 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use crate::config::canister_dns_config::CanisterDnsConfig;
 
 mod config;
 mod logging;
@@ -106,11 +106,15 @@ fn resolve_canister_id_from_uri(url: &hyper::Uri) -> Option<Principal> {
 
 /// Try to resolve a canister ID from an HTTP Request. If it cannot be resolved,
 /// [None] will be returned.
-fn resolve_canister_id(request: &Request<Body>, canister_dns_config: &CanisterDnsConfig) -> Option<Principal> {
+fn resolve_canister_id(
+    request: &Request<Body>,
+    canister_dns_config: &CanisterDnsConfig,
+) -> Option<Principal> {
     // Look for subdomains if there's a host header.
     if let Some(host_header) = request.headers().get("Host") {
         if let Ok(host) = host_header.to_str() {
-            if let Some(canister_id) = resolve_canister_id_from_hostname(host, canister_dns_config) {
+            if let Some(canister_id) = resolve_canister_id_from_hostname(host, canister_dns_config)
+            {
                 return Some(canister_id);
             }
         }

@@ -1,8 +1,6 @@
 use crate::config::dns_alias::DnsAlias;
 use ic_types::Principal;
 
-use anyhow::anyhow;
-
 #[derive(Clone, Debug)]
 pub struct CanisterDnsConfig {
     dns_aliases: Vec<DnsAlias>,
@@ -14,9 +12,7 @@ impl CanisterDnsConfig {
     pub fn new(dns_aliases: &[String]) -> anyhow::Result<CanisterDnsConfig> {
         let dns_aliases = dns_aliases
             .iter()
-            .map(|alias| {
-                DnsAlias::new(alias)
-            })
+            .map(|alias| DnsAlias::new(alias))
             .collect::<Result<Vec<DnsAlias>, anyhow::Error>>()?;
         Ok(CanisterDnsConfig { dns_aliases })
     }
@@ -30,35 +26,15 @@ impl CanisterDnsConfig {
             host_parts.iter().map(|s| s.to_ascii_lowercase()).collect();
         self.dns_aliases
             .iter()
-            .find(|dns_alias| {
-                // if dns_alias.dns_suffix.len() > host_parts.len() {
-                //     false
-                // } else {
-                //     let mut dns_alias_rev_iter = dns_alias.dns_suffix.iter().rev();
-                //     host_parts_lowercase.iter().rev().find(|host_part| match (host_part, dns_alias_rev_iter.next()) {
-                //         (&host_part, Some(dns_part)) => {
-                //             host_part != dns_part
-                //         },
-                //         _ => {
-                //             println!("oh no");
-                //             unreachable!()
-                //         },
-                //     }).is_some()
-                // }
-                // todo: replace with loop
-                // let suffix: Vec<&str> = dns_alias.dns_suffix.iter().map(Deref::deref).collect();
-                // host_parts.ends_with(suffix.as_slice())
-                host_parts_lowercase.ends_with(&dns_alias.dns_suffix)
-            })
+            .find(|dns_alias| host_parts_lowercase.ends_with(&dns_alias.dns_suffix))
             .map(|dns_alias| dns_alias.principal.clone())
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use ic_types::Principal;
     use crate::config::canister_dns_config::CanisterDnsConfig;
+    use ic_types::Principal;
 
     #[test]
     fn parse_error_no_colon() {

@@ -6,7 +6,7 @@ const FORMAT_HELP: &str = "Format is dns.alias:principal-id";
 
 #[derive(Clone, Debug)]
 pub struct DnsAlias {
-    pub domain_name: String,
+    domain_name: String,
     pub dns_suffix: Vec<String>,
     pub principal: Principal,
 }
@@ -19,7 +19,11 @@ impl DnsAlias {
             .split('.')
             .map(|s| String::from(s).to_ascii_lowercase())
             .collect();
-        Ok(DnsAlias { domain_name, dns_suffix, principal })
+        Ok(DnsAlias {
+            domain_name,
+            dns_suffix,
+            principal,
+        })
     }
 }
 
