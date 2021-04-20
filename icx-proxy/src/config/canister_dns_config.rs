@@ -17,12 +17,12 @@ impl CanisterDnsConfig {
         Ok(CanisterDnsConfig { dns_aliases })
     }
 
-    /// Find the first DNS alias that exactly matches the end of the given host name,
-    /// and return the associated Principal.
+    /// Return the Principal of the canister that matches the host name.
+    ///
     /// host_parts is expected to be split by '.',
     /// but may contain upper- or lower-case characters.
     pub fn resolve_canister_id_from_host_parts(&self, host_parts: &[&str]) -> Option<Principal> {
-        let host_parts_lowercase: Vec<_> =
+        let host_parts_lowercase: Vec<String> =
             host_parts.iter().map(|s| s.to_ascii_lowercase()).collect();
         self.dns_aliases
             .iter()
@@ -35,35 +35,6 @@ impl CanisterDnsConfig {
 mod tests {
     use crate::config::canister_dns_config::CanisterDnsConfig;
     use ic_types::Principal;
-
-    #[test]
-    fn parse_error_no_colon() {
-        let e = parse_dns_aliases(vec!["happy.little.domain.name!r7inp-6aaaa-aaaaa-aaabq-cai"])
-            .expect_err("expected failure due to missing colon");
-        assert_eq!(
-            e.to_string(),
-            r#"Unrecognized DNS alias "happy.little.domain.name!r7inp-6aaaa-aaaaa-aaabq-cai".  Format is dns.alias:principal-id"#
-        )
-    }
-
-    #[test]
-    fn parse_error_nothing_after_colon() {
-        let e = parse_dns_aliases(vec!["happy.little.domain.name:"])
-            .expect_err("expected failure due to nothing after colon");
-        assert_eq!(
-            e.to_string(),
-            r#"No canister ID specifed in DNS alias "happy.little.domain.name:".  Format is dns.alias:principal-id"#
-        )
-    }
-    #[test]
-    fn parse_error_nothing_before_colon() {
-        let e = parse_dns_aliases(vec![":r7inp-6aaaa-aaaaa-aaabq-cai"])
-            .expect_err("expected failure due to nothing after colon");
-        assert_eq!(
-            e.to_string(),
-            r#"No domain specifed in DNS alias ":r7inp-6aaaa-aaaaa-aaabq-cai".  Format is dns.alias:principal-id"#
-        )
-    }
 
     #[test]
     fn matches_whole_hostname() {
@@ -109,6 +80,54 @@ mod tests {
         assert_eq!(
             dns_aliases.resolve_canister_id_from_host_parts(&["hAPpy", "littLE", "doMAin", "NAme"]),
             Some(Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap())
+        )
+    }
+
+    #[test]
+    fn chooses_among_many() {
+        let dns_aliases = parse_dns_aliases(vec![
+            "happy.little.domain.name:r7inp-6aaaa-aaaaa-aaabq-cai",
+            "ecstatic.domain.name:rrkah-fqaaa-aaaaa-aaaaq-cai",
+        ])
+        .unwrap();
+
+        assert_eq!(
+            dns_aliases.resolve_canister_id_from_host_parts(&["happy", "little", "domain", "name"]),
+            Some(Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap())
+        );
+
+        assert_eq!(
+            dns_aliases.resolve_canister_id_from_host_parts(&["ecstatic", "domain", "name"]),
+            Some(Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap())
+        );
+
+        assert_eq!(
+            dns_aliases
+                .resolve_canister_id_from_host_parts(&["super", "ecstatic", "domain", "name"]),
+            Some(Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap())
+        )
+    }
+
+    #[test]
+    fn chooses_first_match() {
+        let dns_aliases = parse_dns_aliases(vec![
+            "specific.of.many:r7inp-6aaaa-aaaaa-aaabq-cai",
+            "of.many:rrkah-fqaaa-aaaaa-aaaaq-cai",
+        ])
+        .unwrap();
+
+        assert_eq!(
+            dns_aliases.resolve_canister_id_from_host_parts(&["specific", "of", "many"]),
+            Some(Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap())
+        );
+        assert_eq!(
+            dns_aliases.resolve_canister_id_from_host_parts(&["more", "specific", "of", "many"]),
+            Some(Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap())
+        );
+
+        assert_eq!(
+            dns_aliases.resolve_canister_id_from_host_parts(&["another", "of", "many"]),
+            Some(Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap())
         )
     }
 

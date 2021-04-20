@@ -14,7 +14,7 @@ pub struct DnsAlias {
 impl DnsAlias {
     /// Create a DnsAlias from an entry of the form dns.alias:canister-id
     pub fn new(dns_alias: &str) -> anyhow::Result<DnsAlias> {
-        let (domain_name, principal) = parse_dns_alias(dns_alias)?;
+        let (domain_name, principal) = split_dns_alias(dns_alias)?;
         let dns_suffix: Vec<String> = domain_name
             .split('.')
             .map(|s| String::from(s).to_ascii_lowercase())
@@ -27,7 +27,7 @@ impl DnsAlias {
     }
 }
 
-fn parse_dns_alias(alias: &str) -> Result<(String, Principal), anyhow::Error> {
+fn split_dns_alias(alias: &str) -> Result<(String, Principal), anyhow::Error> {
     match alias.find(':') {
         Some(0) => Err(anyhow!(
             r#"No domain specifed in DNS alias "{}".  {}"#,
@@ -50,5 +50,44 @@ fn parse_dns_alias(alias: &str) -> Result<(String, Principal), anyhow::Error> {
             alias.to_string(),
             FORMAT_HELP,
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::config::dns_alias::DnsAlias;
+
+    #[test]
+    fn parse_error_no_colon() {
+        let e = parse_dns_alias("happy.little.domain.name!r7inp-6aaaa-aaaaa-aaabq-cai")
+            .expect_err("expected failure due to missing colon");
+        assert_eq!(
+            e.to_string(),
+            r#"Unrecognized DNS alias "happy.little.domain.name!r7inp-6aaaa-aaaaa-aaabq-cai".  Format is dns.alias:principal-id"#
+        )
+    }
+
+    #[test]
+    fn parse_error_nothing_after_colon() {
+        let e = parse_dns_alias("happy.little.domain.name:")
+            .expect_err("expected failure due to nothing after colon");
+        assert_eq!(
+            e.to_string(),
+            r#"No canister ID specifed in DNS alias "happy.little.domain.name:".  Format is dns.alias:principal-id"#
+        )
+    }
+
+    #[test]
+    fn parse_error_nothing_before_colon() {
+        let e = parse_dns_alias(":r7inp-6aaaa-aaaaa-aaabq-cai")
+            .expect_err("expected failure due to nothing after colon");
+        assert_eq!(
+            e.to_string(),
+            r#"No domain specifed in DNS alias ":r7inp-6aaaa-aaaaa-aaabq-cai".  Format is dns.alias:principal-id"#
+        )
+    }
+
+    fn parse_dns_alias(alias: &str) -> anyhow::Result<DnsAlias> {
+        DnsAlias::new(alias)
     }
 }
