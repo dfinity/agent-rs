@@ -1,7 +1,6 @@
 use ic_agent::{Identity, Signature};
 use ic_types::Principal;
 
-use num_bigint::BigUint;
 use openssl::sha::Sha256;
 use pkcs11::types::{
     CKA_CLASS, CKA_EC_PARAMS, CKA_EC_POINT, CKA_ID, CKA_KEY_TYPE, CKF_LOGIN_REQUIRED,
@@ -11,7 +10,7 @@ use pkcs11::types::{
 };
 use pkcs11::Ctx;
 use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, OctetString, Sequence};
-use simple_asn1::{from_der, oid, to_der, ASN1DecodeErr, ASN1EncodeErr, OID};
+use simple_asn1::{from_der, oid, to_der, ASN1DecodeErr, ASN1EncodeErr, BigUint, OID};
 use std::path::Path;
 use std::ptr;
 use thiserror::Error;
