@@ -20,14 +20,19 @@ impl CanisterDnsConfig {
 
     /// Return the Principal of the canister that matches the host name.
     ///
-    /// host_parts is expected to be split by '.',
+    /// split_hostname is expected to be the hostname split by '.',
     /// but may contain upper- or lower-case characters.
-    pub fn resolve_canister_id_from_host_parts(&self, host_parts: &[&str]) -> Option<Principal> {
-        let host_parts_lowercase: Vec<String> =
-            host_parts.iter().map(|s| s.to_ascii_lowercase()).collect();
+    pub fn resolve_canister_id_from_split_hostname(
+        &self,
+        split_hostname: &[&str],
+    ) -> Option<Principal> {
+        let split_hostname_lowercase: Vec<String> = split_hostname
+            .iter()
+            .map(|s| s.to_ascii_lowercase())
+            .collect();
         self.dns_aliases
             .iter()
-            .find(|dns_alias| host_parts_lowercase.ends_with(&dns_alias.dns_suffix))
+            .find(|dns_alias| split_hostname_lowercase.ends_with(&dns_alias.dns_suffix))
             .map(|dns_alias| dns_alias.principal.clone())
     }
 }
@@ -44,7 +49,8 @@ mod tests {
                 .unwrap();
 
         assert_eq!(
-            dns_aliases.resolve_canister_id_from_host_parts(&["happy", "little", "domain", "name"]),
+            dns_aliases
+                .resolve_canister_id_from_split_hostname(&["happy", "little", "domain", "name"]),
             Some(Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap())
         )
     }
@@ -55,7 +61,8 @@ mod tests {
             parse_dns_aliases(vec!["little.domain.name:r7inp-6aaaa-aaaaa-aaabq-cai"]).unwrap();
 
         assert_eq!(
-            dns_aliases.resolve_canister_id_from_host_parts(&["happy", "little", "domain", "name"]),
+            dns_aliases
+                .resolve_canister_id_from_split_hostname(&["happy", "little", "domain", "name"]),
             Some(Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap())
         )
     }
@@ -68,7 +75,8 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            dns_aliases.resolve_canister_id_from_host_parts(&["happy", "little", "domain", "name"]),
+            dns_aliases
+                .resolve_canister_id_from_split_hostname(&["happy", "little", "domain", "name"]),
             None
         )
     }
@@ -79,7 +87,8 @@ mod tests {
             parse_dns_aliases(vec!["lItTlE.doMain.nAMe:r7inp-6aaaa-aaaaa-aaabq-cai"]).unwrap();
 
         assert_eq!(
-            dns_aliases.resolve_canister_id_from_host_parts(&["hAPpy", "littLE", "doMAin", "NAme"]),
+            dns_aliases
+                .resolve_canister_id_from_split_hostname(&["hAPpy", "littLE", "doMAin", "NAme"]),
             Some(Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap())
         )
     }
@@ -93,18 +102,19 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            dns_aliases.resolve_canister_id_from_host_parts(&["happy", "little", "domain", "name"]),
+            dns_aliases
+                .resolve_canister_id_from_split_hostname(&["happy", "little", "domain", "name"]),
             Some(Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap())
         );
 
         assert_eq!(
-            dns_aliases.resolve_canister_id_from_host_parts(&["ecstatic", "domain", "name"]),
+            dns_aliases.resolve_canister_id_from_split_hostname(&["ecstatic", "domain", "name"]),
             Some(Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap())
         );
 
         assert_eq!(
             dns_aliases
-                .resolve_canister_id_from_host_parts(&["super", "ecstatic", "domain", "name"]),
+                .resolve_canister_id_from_split_hostname(&["super", "ecstatic", "domain", "name"]),
             Some(Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap())
         )
     }
@@ -118,16 +128,17 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            dns_aliases.resolve_canister_id_from_host_parts(&["specific", "of", "many"]),
+            dns_aliases.resolve_canister_id_from_split_hostname(&["specific", "of", "many"]),
             Some(Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap())
         );
         assert_eq!(
-            dns_aliases.resolve_canister_id_from_host_parts(&["more", "specific", "of", "many"]),
+            dns_aliases
+                .resolve_canister_id_from_split_hostname(&["more", "specific", "of", "many"]),
             Some(Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap())
         );
 
         assert_eq!(
-            dns_aliases.resolve_canister_id_from_host_parts(&["another", "of", "many"]),
+            dns_aliases.resolve_canister_id_from_split_hostname(&["another", "of", "many"]),
             Some(Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap())
         )
     }

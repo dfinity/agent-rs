@@ -84,14 +84,16 @@ fn resolve_canister_id_from_hostname(
 ) -> Option<Principal> {
     let url = Uri::from_str(hostname).ok()?;
 
-    let host_parts = url.host()?.split('.').collect::<Vec<&str>>();
-    let host_parts = host_parts.as_slice();
+    let split_hostname = url.host()?.split('.').collect::<Vec<&str>>();
+    let split_hostname = split_hostname.as_slice();
 
-    if let Some(principal) = canister_dns_config.resolve_canister_id_from_host_parts(host_parts) {
+    if let Some(principal) =
+        canister_dns_config.resolve_canister_id_from_split_hostname(split_hostname)
+    {
         return Some(principal);
     }
     // Check if it's localhost or ic0.
-    match host_parts {
+    match split_hostname {
         [.., maybe_canister_id, "localhost"] => Principal::from_text(maybe_canister_id).ok(),
         [maybe_canister_id, ..] => Principal::from_text(maybe_canister_id).ok(),
         _ => None,
