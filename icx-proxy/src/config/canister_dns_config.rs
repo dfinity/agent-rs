@@ -1,40 +1,24 @@
+use crate::config::dns_alias::DnsAlias;
 use ic_types::Principal;
 
 use anyhow::anyhow;
 
-const FORMAT_HELP: &str = "Format is dns.alias:principal-id";
-
 #[derive(Clone, Debug)]
-struct DnsAlias {
-    domain_name: String,
-    dns_suffix: Vec<String>,
-    principal: Principal,
-}
-
-#[derive(Clone, Debug)]
-pub struct DnsAliases {
+pub struct CanisterDnsConfig {
     dns_aliases: Vec<DnsAlias>,
 }
 
-impl DnsAliases {
-    /// Parse 0 or more DNS aliases in the form of dns.alias:canister-id
-    pub fn new(arg: &[String]) -> Result<DnsAliases, anyhow::Error> {
-        let dns_aliases = arg
+impl CanisterDnsConfig {
+    /// Create a CanisterDnsConfig instance from command-line configuration.
+    /// dns_aliases: 0 or more entries of the form of dns.alias:canister-id
+    pub fn new(dns_aliases: &[String]) -> anyhow::Result<CanisterDnsConfig> {
+        let dns_aliases = dns_aliases
             .iter()
             .map(|alias| {
-                let (domain_name, principal) = parse_dns_alias(&alias)?;
-                let dns_suffix: Vec<String> = domain_name
-                    .split('.')
-                    .map(|s| String::from(s).to_ascii_lowercase())
-                    .collect();
-                Ok(DnsAlias {
-                    domain_name,
-                    dns_suffix,
-                    principal,
-                })
+                DnsAlias::new(alias)
             })
             .collect::<Result<Vec<DnsAlias>, anyhow::Error>>()?;
-        Ok(DnsAliases { dns_aliases })
+        Ok(CanisterDnsConfig { dns_aliases })
     }
 
     /// Find the first DNS alias that exactly matches the end of the given host name,
@@ -70,36 +54,11 @@ impl DnsAliases {
     }
 }
 
-fn parse_dns_alias(alias: &str) -> Result<(String, Principal), anyhow::Error> {
-    match alias.find(':') {
-        Some(0) => Err(anyhow!(
-            r#"No domain specifed in DNS alias "{}".  {}"#,
-            alias.to_string(),
-            FORMAT_HELP
-        )),
-        Some(index) if index == alias.len() - 1 => Err(anyhow!(
-            r#"No canister ID specifed in DNS alias "{}".  {}"#,
-            alias.to_string(),
-            FORMAT_HELP
-        )),
-        Some(index) => {
-            let (domain_name, principal) = alias.split_at(index);
-            let principal = &principal[1..];
-            let principal = Principal::from_text(principal)?;
-            Ok((domain_name.to_string(), principal))
-        }
-        None => Err(anyhow!(
-            r#"Unrecognized DNS alias "{}".  {}"#,
-            alias.to_string(),
-            FORMAT_HELP,
-        )),
-    }
-}
 
 #[cfg(test)]
 mod tests {
-    use crate::dns_aliases::DnsAliases;
     use ic_types::Principal;
+    use crate::config::canister_dns_config::CanisterDnsConfig;
 
     #[test]
     fn parse_error_no_colon() {
@@ -177,8 +136,8 @@ mod tests {
         )
     }
 
-    fn parse_dns_aliases(aliases: Vec<&str>) -> anyhow::Result<DnsAliases> {
+    fn parse_dns_aliases(aliases: Vec<&str>) -> anyhow::Result<CanisterDnsConfig> {
         let v = aliases.iter().map(|&s| String::from(s)).collect::<Vec<_>>();
-        DnsAliases::new(&v)
+        CanisterDnsConfig::new(&v)
     }
 }
