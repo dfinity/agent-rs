@@ -6,7 +6,7 @@ use crate::identity::error::PemError;
 
 use ring::signature::{Ed25519KeyPair, KeyPair};
 use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, Sequence};
-use simple_asn1::{to_der, OID};
+use simple_asn1::{oid, to_der, BigUint, OID};
 
 /// A Basic Identity which sign using an ED25519 key pair.
 pub struct BasicIdentity {
@@ -63,15 +63,7 @@ impl Identity for BasicIdentity {
 fn der_encode_public_key(public_key: Vec<u8>) -> Vec<u8> {
     // see Section 4 "SubjectPublicKeyInfo" in https://tools.ietf.org/html/rfc8410
 
-    // Until pkcs11 is updated to a more recent num-bigint.  This would be nicer:
-    // let id_ed25519 = oid!(1, 3, 101, 112);
-    let mut res = Vec::new();
-    res.push(simple_asn1::BigUint::from(1 as u64));
-    res.push(simple_asn1::BigUint::from(3 as u64));
-    res.push(simple_asn1::BigUint::from(101 as u64));
-    res.push(simple_asn1::BigUint::from(112 as u64));
-    let id_ed25519 = OID::new(res);
-
+    let id_ed25519 = oid!(1, 3, 101, 112);
     let algorithm = Sequence(0, vec![ObjectIdentifier(0, id_ed25519)]);
     let subject_public_key = BitString(0, public_key.len() * 8, public_key);
     let subject_public_key_info = Sequence(0, vec![algorithm, subject_public_key]);
