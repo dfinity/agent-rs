@@ -190,8 +190,8 @@ mod tests {
         // Similar to searches_longest_to_shortest, but make sure we
         // don't happen to get there by sorting alphabetically
         let dns_aliases = parse_dns_aliases(vec![
-            "a.x.c:r7inp-6aaaa-aaaaa-aaabq-cai",
             "x.c:rrkah-fqaaa-aaaaa-aaaaq-cai",
+            "a.x.c:r7inp-6aaaa-aaaaa-aaabq-cai",
         ])
         .unwrap();
 
@@ -210,8 +210,8 @@ mod tests {
         // Similar to searches_longest_to_shortest, but make sure we
         // don't happen to get there by sorting alphabetically/reversed
         let dns_aliases = parse_dns_aliases(vec![
-            "x.a.c:r7inp-6aaaa-aaaaa-aaabq-cai",
             "a.c:rrkah-fqaaa-aaaaa-aaaaq-cai",
+            "x.a.c:r7inp-6aaaa-aaaaa-aaabq-cai",
         ])
         .unwrap();
 
