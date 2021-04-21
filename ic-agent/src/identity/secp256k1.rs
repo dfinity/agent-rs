@@ -4,7 +4,6 @@ use crate::{Identity, Signature};
 #[cfg(feature = "pem")]
 use crate::identity::error::PemError;
 
-use num_bigint::BigUint;
 use openssl::bn::BigNumContext;
 use openssl::ec::{EcKey, PointConversionForm};
 use openssl::ecdsa::EcdsaSig;
@@ -13,7 +12,7 @@ use openssl::pkey::{Private, Public};
 use openssl::sha::sha256;
 use simple_asn1::ASN1Block;
 use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, Sequence};
-use simple_asn1::{oid, to_der, OID};
+use simple_asn1::{oid, to_der, BigUint, OID};
 
 #[derive(Clone, Debug)]
 pub struct Secp256k1Identity {

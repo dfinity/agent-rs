@@ -120,7 +120,7 @@ pub async fn create_universal_canister(agent: &Agent) -> Result<Principal, Box<d
     let ic00 = ManagementCanister::create(&agent);
 
     let (canister_id,) = ic00
-        .create_canister()
+        .provisional_create_canister_with_cycles(None)
         .call_and_wait(create_waiter())
         .await?;
 

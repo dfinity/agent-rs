@@ -10,7 +10,7 @@ edition = "2018"
 candid = "0.6.19"
 clap = "3.0.0-beta.2"
 delay = "0.3.1"
-ic-agent = { path = "../ic-agent", version = "0.2" }
+ic-agent = { path = "../ic-agent", version = "0.3" }
 ic-types = { path = "../ic-types", version = "0.1" }
 ic-utils = { path = "../ic-utils", version = "0.2" }
 pem = "0.8.1"

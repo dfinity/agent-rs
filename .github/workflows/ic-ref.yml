@@ -19,7 +19,7 @@ jobs:
         include:
           - build: linux-stable
             ghc: '8.8.4'
-            spec: '0.15.0'
+            spec: '0.16.0'
             os: ubuntu-latest
             rust: 1.47.0
 
@@ -40,7 +40,7 @@ jobs:
           # Personal Read-only Access Token created by hans.larsen@dfinity.org
           token: ${{ secrets.IC_REF_TOKEN }}
           path: wallet-rs
-          ref: 9810ca0ebd3ab342e80b964c8782c7dbd97ec6d8
+          ref: f41159994be17c2832a3f4b55b6aa38bef506156
 
       - name: Cache ~/.cabal/store
         uses: actions/cache@v2

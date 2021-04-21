@@ -6,7 +6,7 @@ members = [
     "ic-utils/",
     "icx/",
     "icx-asset/",
-    "icx-http-server/",
+    "icx-proxy/",
     "ref-tests/",
 ]
 

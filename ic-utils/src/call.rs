@@ -152,6 +152,7 @@ where
     Out: for<'de> ArgumentDecoder<'de> + Send,
 {
     pub(crate) agent: &'agent Agent,
+    pub(crate) effective_canister_id: Principal,
     pub(crate) canister_id: Principal,
     pub(crate) method_name: String,
     pub(crate) arg: Result<Vec<u8>, AgentError>,
@@ -168,6 +169,7 @@ where
         let mut builder = self.agent.query(&self.canister_id, &self.method_name);
         self.expiry.apply_to_query(&mut builder);
         builder.with_arg(&self.arg?);
+        builder.with_effective_canister_id(self.effective_canister_id);
         builder.call().await
     }
 }
@@ -196,6 +198,7 @@ where
     Out: for<'de> ArgumentDecoder<'de> + Send,
 {
     pub(crate) agent: &'agent Agent,
+    pub(crate) effective_canister_id: Principal,
     pub(crate) canister_id: Principal,
     pub(crate) method_name: String,
     pub(crate) arg: Result<Vec<u8>, AgentError>,
@@ -213,6 +216,7 @@ where
         let mut builder = self.agent.update(&self.canister_id, &self.method_name);
         self.expiry.apply_to_update(&mut builder);
         builder.with_arg(&self.arg?);
+        builder.with_effective_canister_id(self.effective_canister_id);
         Ok(builder)
     }
 

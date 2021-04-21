@@ -1,13 +1,15 @@
 use candid::parser::value::IDLValue;
 use candid::types::{Function, Type};
 use candid::{check_prog, IDLArgs, IDLProg, TypeEnv};
+use candid::{CandidType, Decode, Deserialize};
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use ic_agent::agent::agent_error::HttpErrorPayload;
-use ic_agent::agent::http_transport::ReqwestHttpReplicaV1Transport;
-use ic_agent::agent::ReplicaV1Transport;
+use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
+use ic_agent::agent::ReplicaV2Transport;
 use ic_agent::export::Principal;
 use ic_agent::identity::BasicIdentity;
 use ic_agent::{agent, Agent, AgentError, Identity, RequestId};
+use ic_utils::interfaces::management_canister::{CanisterInstall, MgmtMethod};
 use ring::signature::Ed25519KeyPair;
 use std::collections::VecDeque;
 use std::convert::TryFrom;
@@ -217,6 +219,60 @@ fn print_idl_blob(
     Ok(())
 }
 
+pub fn get_effective_canister_id(
+    is_management_canister: bool,
+    method_name: &str,
+    arg_value: &[u8],
+    canister_id: Principal,
+) -> Result<Principal, String> {
+    if is_management_canister {
+        let method_name = MgmtMethod::from_str(method_name).map_err(|_| {
+            format!(
+                "Attempted to call an unsupported management canister method: {}",
+                method_name
+            )
+        })?;
+        match method_name {
+            MgmtMethod::CreateCanister | MgmtMethod::RawRand => Err(format!(
+                "{} can only be called via an inter-canister call.",
+                method_name.as_ref()
+            )),
+            MgmtMethod::InstallCode => {
+                let install_args = candid::Decode!(arg_value, CanisterInstall)
+                    .map_err(|err| format!("Candid decode err: {}", err))?;
+                Ok(install_args.canister_id)
+            }
+            MgmtMethod::SetController => {
+                #[derive(CandidType, Deserialize)]
+                struct In {
+                    canister_id: Principal,
+                    new_controller: Principal,
+                }
+                let in_args = candid::Decode!(arg_value, In)
+                    .map_err(|err| format!("Candid decode err: {}", err))?;
+                Ok(in_args.canister_id)
+            }
+            MgmtMethod::StartCanister
+            | MgmtMethod::StopCanister
+            | MgmtMethod::CanisterStatus
+            | MgmtMethod::DeleteCanister
+            | MgmtMethod::DepositCycles
+            | MgmtMethod::ProvisionalTopUpCanister => {
+                #[derive(CandidType, Deserialize)]
+                struct In {
+                    canister_id: Principal,
+                }
+                let in_args = candid::Decode!(arg_value, In)
+                    .map_err(|err| format!("Candid decode err: {}", err))?;
+                Ok(in_args.canister_id)
+            }
+            MgmtMethod::ProvisionalCreateCanisterWithCycles => Ok(Principal::management_canister()),
+        }
+    } else {
+        Ok(canister_id)
+    }
+}
+
 fn create_identity(maybe_pem: Option<PathBuf>) -> impl Identity {
     if let Some(pem_path) = maybe_pem {
         BasicIdentity::from_pem_file(pem_path).expect("Could not read the key pair.")
@@ -241,38 +297,71 @@ enum SerializeError {
 
 struct SerializingTransport;
 
-impl agent::ReplicaV1Transport for SerializingTransport {
-    fn read<'a>(
+impl agent::ReplicaV2Transport for SerializingTransport {
+    fn query<'a>(
         &'a self,
+        effective_canister_id: Principal,
         envelope: Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(_: &SerializingTransport, envelope: Vec<u8>) -> Result<Vec<u8>, AgentError> {
-            print!("read\n\n{}", hex::encode(envelope));
+        async fn run(
+            _: &SerializingTransport,
+            effective_canister_id: Principal,
+            envelope: Vec<u8>,
+        ) -> Result<Vec<u8>, AgentError> {
+            print!(
+                "query\n\n{}\n\n{}",
+                hex::encode(envelope),
+                hex::encode(effective_canister_id)
+            );
             Err(AgentError::TransportError(SerializeError::Success.into()))
         }
 
-        Box::pin(run(self, envelope))
+        Box::pin(run(self, effective_canister_id, envelope))
     }
 
-    fn submit<'a>(
+    fn read_state<'a>(
         &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        async fn run(
+            _: &SerializingTransport,
+            effective_canister_id: Principal,
+            envelope: Vec<u8>,
+        ) -> Result<Vec<u8>, AgentError> {
+            print!(
+                "read_state\n\n{}\n\n{}",
+                hex::encode(envelope),
+                hex::encode(effective_canister_id)
+            );
+            Err(AgentError::TransportError(SerializeError::Success.into()))
+        }
+
+        Box::pin(run(self, effective_canister_id, envelope))
+    }
+
+    fn call<'a>(
+        &'a self,
+        effective_canister_id: Principal,
         envelope: Vec<u8>,
         request_id: RequestId,
     ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
         async fn run(
             _: &SerializingTransport,
+            effective_canister_id: Principal,
             envelope: Vec<u8>,
             request_id: RequestId,
         ) -> Result<(), AgentError> {
             print!(
-                "submit\n{}\n\n{}",
+                "call\n{}\n\n{}\n\n{}",
                 hex::encode(request_id.as_slice()),
-                hex::encode(envelope)
+                hex::encode(envelope),
+                hex::encode(effective_canister_id)
             );
             Err(AgentError::MessageError(String::new()))
         }
 
-        Box::pin(run(self, envelope, request_id))
+        Box::pin(run(self, effective_canister_id, envelope, request_id))
     }
 
     fn status<'a>(
@@ -300,7 +389,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             serialize: true, ..
         }) => Agent::builder().with_transport(SerializingTransport),
         _ => Agent::builder().with_transport(
-            agent::http_transport::ReqwestHttpReplicaV1Transport::create(opts.replica.clone())?,
+            agent::http_transport::ReqwestHttpReplicaV2Transport::create(opts.replica.clone())?,
         ),
     }
     .with_boxed_identity(Box::new(create_identity(opts.pem)))
@@ -317,6 +406,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 maybe_candid_path.and_then(|path| get_candid_type(&path, &t.method_name));
 
             let arg = blob_from_arguments(t.arg_value.as_deref(), &t.arg, &method_type)?;
+            let is_management_canister = t.canister_id == Principal::management_canister();
+            let effective_canister_id = get_effective_canister_id(
+                is_management_canister,
+                &t.method_name,
+                &arg,
+                t.canister_id.clone(),
+            )?;
+
             let result = match &opts.subcommand {
                 SubCommand::Update(_) => {
                     // We need to fetch the root key for updates.
@@ -331,6 +428,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     eprint!(".");
                     let result = builder
                         .with_arg(arg)
+                        .with_effective_canister_id(effective_canister_id)
                         .call_and_wait(
                             garcon::Delay::builder()
                                 .exponential_backoff(std::time::Duration::from_secs(1), 1.1)
@@ -351,7 +449,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         builder.expire_after(d);
                     }
 
-                    builder.with_arg(&arg).call().await
+                    builder
+                        .with_arg(&arg)
+                        .with_effective_canister_id(effective_canister_id)
+                        .call()
+                        .await
                 }
                 _ => unreachable!(),
             };
@@ -405,25 +507,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 line = input.pop_front().unwrap();
             }
 
-            let transport = ReqwestHttpReplicaV1Transport::create(opts.replica)?;
+            let transport = ReqwestHttpReplicaV2Transport::create(opts.replica)?;
             match line.as_str() {
-                "read" => {
-                    input.pop_front().unwrap(); // empty line.
-                    line = input.pop_front().unwrap(); // envelope
-                    let envelope = hex::decode(line)?;
-                    let result = transport.read(envelope).await?;
-                    eprint!("Result: ");
-                    println!("{}", hex::encode(result));
-                }
-                "submit" => {
+                "call" => {
                     line = input.pop_front().unwrap(); // request id.
                     let request_id = RequestId::from_str(&line)?;
                     input.pop_front().unwrap(); // empty line.
                     line = input.pop_front().unwrap(); // envelope
                     let envelope = hex::decode(line)?;
-                    transport.submit(envelope, request_id).await?;
+                    input.pop_front().unwrap(); // empty line.
+                    line = input.pop_front().unwrap(); // effective_canister_id
+                    let effective_canister_id = Principal::try_from(hex::decode(line)?)?;
+                    transport
+                        .call(effective_canister_id, envelope, request_id)
+                        .await?;
                     eprint!("Request ID: ");
                     println!("0x{}", hex::encode(request_id.as_slice()));
+                }
+                "read_state" => {
+                    input.pop_front().unwrap(); // empty line.
+                    line = input.pop_front().unwrap(); // envelope
+                    let envelope = hex::decode(line)?;
+                    input.pop_front().unwrap(); // empty line.
+                    line = input.pop_front().unwrap(); // effective_canister_id
+                    let effective_canister_id = Principal::try_from(hex::decode(line)?)?;
+                    let result = transport
+                        .read_state(effective_canister_id, envelope)
+                        .await?;
+                    eprint!("Result: ");
+                    println!("{}", hex::encode(result));
+                }
+                "query" => {
+                    input.pop_front().unwrap(); // empty line.
+                    line = input.pop_front().unwrap(); // envelope
+                    let envelope = hex::decode(line)?;
+                    input.pop_front().unwrap(); // empty line.
+                    line = input.pop_front().unwrap(); // effective_canister_id
+                    let effective_canister_id = Principal::try_from(hex::decode(line)?)?;
+                    let result = transport.query(effective_canister_id, envelope).await?;
+                    eprint!("Result: ");
+                    println!("{}", hex::encode(result));
                 }
                 other => {
                     eprintln!(
