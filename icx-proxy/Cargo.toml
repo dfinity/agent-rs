@@ -17,6 +17,7 @@ name = "icx-proxy"
 path = "src/main.rs"
 
 [dependencies]
+anyhow = "1.0.34"
 candid = "0.6.15"
 clap = "3.0.0-beta.2"
 delay = "0.3.1"
