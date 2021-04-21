@@ -160,6 +160,28 @@ mod tests {
             dns_aliases.resolve_canister_id_from_split_hostname(&["a", "b", "c"]),
             Some(Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap())
         );
+        assert_eq!(
+            dns_aliases.resolve_canister_id_from_split_hostname(&["d", "b", "c"]),
+            Some(Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap())
+        );
+    }
+
+    #[test]
+    fn searches_longest_to_shortest_passed_in_order() {
+        let dns_aliases = parse_dns_aliases(vec![
+            "a.b.c:r7inp-6aaaa-aaaaa-aaabq-cai",
+            "b.c:rrkah-fqaaa-aaaaa-aaaaq-cai",
+        ])
+            .unwrap();
+
+        assert_eq!(
+            dns_aliases.resolve_canister_id_from_split_hostname(&["a", "b", "c"]),
+            Some(Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap())
+        );
+        assert_eq!(
+            dns_aliases.resolve_canister_id_from_split_hostname(&["d", "b", "c"]),
+            Some(Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap())
+        );
     }
 
     fn parse_dns_aliases(aliases: Vec<&str>) -> anyhow::Result<CanisterDnsConfig> {
