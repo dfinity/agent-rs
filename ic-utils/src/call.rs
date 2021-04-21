@@ -92,7 +92,7 @@ where
     ///     .with_interface(interfaces::ManagementCanister)
     ///     .build()?;
     ///
-    ///   let waiter = delay::Delay::builder()
+    ///   let waiter = garcon::Delay::builder()
     ///     .throttle(std::time::Duration::from_millis(500))
     ///     .timeout(std::time::Duration::from_secs(60 * 5))
     ///     .build();
