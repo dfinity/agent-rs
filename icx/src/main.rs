@@ -430,7 +430,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .with_arg(arg)
                         .with_effective_canister_id(effective_canister_id)
                         .call_and_wait(
-                            delay::Delay::builder()
+                            garcon::Delay::builder()
                                 .exponential_backoff(std::time::Duration::from_secs(1), 1.1)
                                 .side_effect(|| {
                                     eprint!(".");
