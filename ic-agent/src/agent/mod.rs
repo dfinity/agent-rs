@@ -26,7 +26,7 @@ use crate::export::Principal;
 use crate::hash_tree::Label;
 use crate::identity::Identity;
 use crate::{to_request_id, RequestId};
-use delay::Waiter;
+use garcon::Waiter;
 use serde::Serialize;
 use status::Status;
 
@@ -133,7 +133,7 @@ pub trait ReplicaV2Transport {
 ///   agent.fetch_root_key().await?;
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 ///
-///   let waiter = delay::Delay::builder()
+///   let waiter = garcon::Delay::builder()
 ///     .throttle(std::time::Duration::from_millis(500))
 ///     .timeout(std::time::Duration::from_secs(60 * 5))
 ///     .build();
@@ -698,7 +698,8 @@ impl<'agent> UpdateBuilder<'agent> {
             };
 
             waiter
-                .wait()
+                .async_wait()
+                .await
                 .map_err(|_| AgentError::TimeoutWaitingForResponse())?;
         }
     }

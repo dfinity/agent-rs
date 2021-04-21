@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 candid = "0.6.17"
-delay = "0.3.1"
+garcon = { version = "0.2.2", features = [ "async" ] }
 ic-agent = { path = "../ic-agent" }
 ic-identity-hsm = { path = "../ic-identity-hsm" }
 ic-utils = { path = "../ic-utils", features = ["raw"] }
