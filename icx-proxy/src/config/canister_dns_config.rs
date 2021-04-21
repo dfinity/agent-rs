@@ -12,12 +12,11 @@ impl CanisterDnsConfig {
     /// Create a CanisterDnsConfig instance from command-line configuration.
     /// dns_aliases: 0 or more entries of the form of dns.alias:canister-id
     pub fn new(dns_aliases: &[String]) -> anyhow::Result<CanisterDnsConfig> {
-        let mut dns_aliases: Vec<String> = dns_aliases.iter().map(String::clone).collect();
-        dns_aliases.sort_by_key(|s| Reverse(s.len()));
-        let dns_aliases = dns_aliases
+        let mut dns_aliases = dns_aliases
             .iter()
             .map(|alias| DnsAlias::new(&alias))
             .collect::<anyhow::Result<Vec<DnsAlias>>>()?;
+        dns_aliases.sort_by_key(|x| Reverse(x.dns_suffix.len()));
         Ok(CanisterDnsConfig { dns_aliases })
     }
 
