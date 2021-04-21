@@ -11,15 +11,10 @@ impl CanisterDnsConfig {
     /// Create a CanisterDnsConfig instance from command-line configuration.
     /// dns_aliases: 0 or more entries of the form of dns.alias:canister-id
     pub fn new(dns_aliases: &[String]) -> anyhow::Result<CanisterDnsConfig> {
-        let mut dns_aliases: Vec<String> = dns_aliases.iter()
-             .map(String::clone)
-             .collect();
-        dns_aliases.sort_by(|a, b| b.len().cmp(&a.len()));
         let dns_aliases = dns_aliases
             .iter()
-            .map(|alias| DnsAlias::new(&alias))
+            .map(|alias| DnsAlias::new(alias))
             .collect::<anyhow::Result<Vec<DnsAlias>>>()?;
-
         Ok(CanisterDnsConfig { dns_aliases })
     }
 
@@ -146,20 +141,6 @@ mod tests {
             dns_aliases.resolve_canister_id_from_split_hostname(&["another", "of", "many"]),
             Some(Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap())
         )
-    }
-
-    #[test]
-    fn searches_longest_to_shortest() {
-        let dns_aliases = parse_dns_aliases(vec![
-            "b.c:rrkah-fqaaa-aaaaa-aaaaq-cai",
-            "a.b.c:r7inp-6aaaa-aaaaa-aaabq-cai",
-        ])
-            .unwrap();
-
-        assert_eq!(
-            dns_aliases.resolve_canister_id_from_split_hostname(&["a", "b", "c"]),
-            Some(Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap())
-        );
     }
 
     fn parse_dns_aliases(aliases: Vec<&str>) -> anyhow::Result<CanisterDnsConfig> {
