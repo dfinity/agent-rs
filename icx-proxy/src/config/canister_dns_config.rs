@@ -18,7 +18,6 @@ impl CanisterDnsConfig {
             .iter()
             .map(|alias| DnsAlias::new(&alias))
             .collect::<anyhow::Result<Vec<DnsAlias>>>()?;
-
         Ok(CanisterDnsConfig { dns_aliases })
     }
 
@@ -190,7 +189,7 @@ mod tests {
     #[test]
     fn searches_longest_to_shortest_not_alpha() {
         // Similar to searches_longest_to_shortest, but make sure we
-        // are sorting by length, not alphabetically
+        // don't happen to get there by sorting alphabetically
         let dns_aliases = parse_dns_aliases(vec![
             "a.x.c:r7inp-6aaaa-aaaaa-aaabq-cai",
             "x.c:rrkah-fqaaa-aaaaa-aaaaq-cai",
@@ -210,7 +209,7 @@ mod tests {
     #[test]
     fn searches_longest_to_shortest_not_alpha_reversed() {
         // Similar to searches_longest_to_shortest, but make sure we
-        // are sorting by length, not alphabetically
+        // don't happen to get there by sorting alphabetically/reversed
         let dns_aliases = parse_dns_aliases(vec![
             "x.a.c:r7inp-6aaaa-aaaaa-aaabq-cai",
             "a.c:rrkah-fqaaa-aaaaa-aaaaq-cai",
