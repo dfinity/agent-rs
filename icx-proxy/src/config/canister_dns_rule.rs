@@ -23,7 +23,7 @@ pub struct CanisterDnsRule {
 }
 
 impl CanisterDnsRule {
-    /// Create a DnsAlias from an entry of the form dns.alias:canister-id
+    /// Create a rule for a domain name alias with form dns.alias:canister-id
     pub fn new_alias(dns_alias: &str) -> anyhow::Result<CanisterDnsRule> {
         let (domain_name, principal) = split_dns_alias(dns_alias)?;
         let dns_suffix: Vec<String> = domain_name
