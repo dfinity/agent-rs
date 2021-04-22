@@ -9,8 +9,8 @@ enum PrincipalDeterminationStrategy {
     // A domain name which matches the suffix is an alias for this specific Principal.
     Alias(Principal),
 
-    // If the subdomain immediately to the left of the suffix is a valid principal,
-    // return it
+    // The subdomain to the immediate left of the suffix is the Principal,
+    // if it parses as a valid Principal.
     PrecedingDomainName,
 }
 
@@ -49,17 +49,16 @@ impl DnsCanisterRule {
         }
     }
 
-    /// Check to see if this alias applies to the hostname, and if so, return
-    /// the associated principal.
+    /// Return the associated principal if this rule applies to the domain name.
     pub fn lookup(&self, split_hostname_lowercase: &[String]) -> Option<Principal> {
         if split_hostname_lowercase.ends_with(&self.dns_suffix) {
             match &self.strategy {
                 PrincipalDeterminationStrategy::Alias(principal) => Some(principal.clone()),
                 PrincipalDeterminationStrategy::PrecedingDomainName => {
                     if split_hostname_lowercase.len() > self.dns_suffix.len() {
-                        let next = &split_hostname_lowercase
+                        let subdomain = &split_hostname_lowercase
                             [split_hostname_lowercase.len() - self.dns_suffix.len() - 1];
-                        Principal::from_text(next).ok()
+                        Principal::from_text(subdomain).ok()
                     } else {
                         None
                     }

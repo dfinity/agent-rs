@@ -16,10 +16,10 @@ impl DnsCanisterConfig {
         dns_aliases: &[String],
         dns_suffixes: &[String],
     ) -> anyhow::Result<DnsCanisterConfig> {
-        let mut rules: Vec<DnsCanisterRule> = dns_suffixes
-            .iter()
-            .map(|suffix| DnsCanisterRule::new_suffix(suffix))
-            .collect();
+        let mut rules = vec![];
+        for suffix in dns_suffixes {
+            rules.push(DnsCanisterRule::new_suffix(suffix));
+        }
         for alias in dns_aliases {
             rules.push(DnsCanisterRule::new_alias(alias)?);
         }
@@ -405,16 +405,13 @@ mod tests {
     }
 
     fn parse_dns_aliases(aliases: Vec<&str>) -> anyhow::Result<DnsCanisterConfig> {
-        let v = aliases.iter().map(|&s| String::from(s)).collect::<Vec<_>>();
-        DnsCanisterConfig::new(&v, &[])
+        let aliases: Vec<String> = aliases.iter().map(|&s| String::from(s)).collect();
+        DnsCanisterConfig::new(&aliases, &[])
     }
 
     fn parse_config(aliases: Vec<&str>, suffixes: Vec<&str>) -> anyhow::Result<DnsCanisterConfig> {
-        let dns_aliases = aliases.iter().map(|&s| String::from(s)).collect::<Vec<_>>();
-        let dns_suffixes = suffixes
-            .iter()
-            .map(|&s| String::from(s))
-            .collect::<Vec<_>>();
-        DnsCanisterConfig::new(&dns_aliases, &dns_suffixes)
+        let aliases: Vec<String> = aliases.iter().map(|&s| String::from(s)).collect();
+        let suffixes: Vec<String> = suffixes.iter().map(|&s| String::from(s)).collect();
+        DnsCanisterConfig::new(&aliases, &suffixes)
     }
 }
