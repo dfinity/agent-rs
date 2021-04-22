@@ -1,2 +1,2 @@
-pub mod canister_dns_config;
-mod dns_alias;
+pub mod dns_canister_config;
+mod dns_canister_rule;

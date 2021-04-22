@@ -1,4 +1,4 @@
-use crate::config::canister_dns_config::CanisterDnsConfig;
+use crate::config::dns_canister_config::DnsCanisterConfig;
 use candid::parser::value::IDLValue;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use hyper::body::Bytes;
@@ -80,7 +80,7 @@ pub(crate) struct Opts {
 
 fn resolve_canister_id_from_hostname(
     hostname: &str,
-    canister_dns_config: &CanisterDnsConfig,
+    dns_canister_config: &DnsCanisterConfig,
 ) -> Option<Principal> {
     let url = Uri::from_str(hostname).ok()?;
 
@@ -88,7 +88,7 @@ fn resolve_canister_id_from_hostname(
     let split_hostname = split_hostname.as_slice();
 
     if let Some(principal) =
-        canister_dns_config.resolve_canister_id_from_split_hostname(split_hostname)
+        dns_canister_config.resolve_canister_id_from_split_hostname(split_hostname)
     {
         return Some(principal);
     }
@@ -110,12 +110,12 @@ fn resolve_canister_id_from_uri(url: &hyper::Uri) -> Option<Principal> {
 /// [None] will be returned.
 fn resolve_canister_id(
     request: &Request<Body>,
-    canister_dns_config: &CanisterDnsConfig,
+    dns_canister_config: &DnsCanisterConfig,
 ) -> Option<Principal> {
     // Look for subdomains if there's a host header.
     if let Some(host_header) = request.headers().get("Host") {
         if let Ok(host) = host_header.to_str() {
-            if let Some(canister_id) = resolve_canister_id_from_hostname(host, canister_dns_config)
+            if let Some(canister_id) = resolve_canister_id_from_hostname(host, dns_canister_config)
             {
                 return Some(canister_id);
             }
@@ -144,10 +144,10 @@ fn resolve_canister_id(
 async fn forward_request(
     request: Request<Body>,
     agent: Arc<Agent>,
-    canister_dns_config: &CanisterDnsConfig,
+    dns_canister_config: &DnsCanisterConfig,
     logger: slog::Logger,
 ) -> Result<Response<Body>, Box<dyn Error>> {
-    let canister_id = match resolve_canister_id(&request, canister_dns_config) {
+    let canister_id = match resolve_canister_id(&request, dns_canister_config) {
         None => {
             return Ok(Response::builder()
                 .status(StatusCode::BAD_REQUEST)
@@ -391,7 +391,7 @@ async fn handle_request(
     ip_addr: IpAddr,
     request: Request<Body>,
     replica_url: String,
-    canister_dns_config: Arc<CanisterDnsConfig>,
+    dns_canister_config: Arc<DnsCanisterConfig>,
     logger: slog::Logger,
     debug: bool,
 ) -> Result<Response<Body>, Infallible> {
@@ -410,7 +410,7 @@ async fn handle_request(
                 .expect("Could not create agent..."),
         );
 
-        forward_request(request, agent, canister_dns_config.as_ref(), logger.clone()).await
+        forward_request(request, agent, dns_canister_config.as_ref(), logger.clone()).await
     } {
         Err(err) => {
             slog::warn!(logger, "Internal Error during request:\n{:#?}", err);
@@ -436,7 +436,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Prepare a list of agents for each backend replicas.
     let replicas = Mutex::new(opts.replica.clone());
 
-    let canister_dns_config = Arc::new(CanisterDnsConfig::new(&opts.dns_alias)?);
+    let dns_canister_config = Arc::new(DnsCanisterConfig::new(&opts.dns_alias)?);
 
     let counter = AtomicUsize::new(0);
     let debug = opts.debug;
@@ -444,7 +444,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let service = make_service_fn(|socket: &hyper::server::conn::AddrStream| {
         let ip_addr = socket.remote_addr();
         let ip_addr = ip_addr.ip();
-        let canister_dns_config = canister_dns_config.clone();
+        let dns_canister_config = dns_canister_config.clone();
         let logger = logger.clone();
 
         // Select an agent.
@@ -459,12 +459,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         async move {
             Ok::<_, Infallible>(service_fn(move |req| {
                 let logger = logger.clone();
-                let canister_dns_config = canister_dns_config.clone();
+                let dns_canister_config = dns_canister_config.clone();
                 handle_request(
                     ip_addr,
                     req,
                     replica_url.clone(),
-                    canister_dns_config,
+                    dns_canister_config,
                     logger,
                     debug,
                 )
