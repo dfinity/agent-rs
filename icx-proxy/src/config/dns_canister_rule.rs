@@ -13,7 +13,7 @@ enum PrincipalDeterminationStrategy {
 /// A mapping from a domain name to a Principal.  The domain name must
 /// match the last portion, as split by '.', of the host specified in the request.
 #[derive(Clone, Debug)]
-pub struct CanisterDnsRule {
+pub struct DnsCanisterRule {
     domain_name: String,
 
     /// The hostname parts that must match the right-hand side of the domain name.  Lower case.
@@ -22,15 +22,15 @@ pub struct CanisterDnsRule {
     strategy: PrincipalDeterminationStrategy,
 }
 
-impl CanisterDnsRule {
+impl DnsCanisterRule {
     /// Create a rule for a domain name alias with form dns.alias:canister-id
-    pub fn new_alias(dns_alias: &str) -> anyhow::Result<CanisterDnsRule> {
+    pub fn new_alias(dns_alias: &str) -> anyhow::Result<DnsCanisterRule> {
         let (domain_name, principal) = split_dns_alias(dns_alias)?;
         let dns_suffix: Vec<String> = domain_name
             .split('.')
             .map(|s| s.to_ascii_lowercase())
             .collect();
-        Ok(CanisterDnsRule {
+        Ok(DnsCanisterRule {
             domain_name,
             dns_suffix,
             strategy: PrincipalDeterminationStrategy::Alias(principal),
@@ -77,7 +77,7 @@ fn split_dns_alias(alias: &str) -> Result<(String, Principal), anyhow::Error> {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::canister_dns_rule::CanisterDnsRule;
+    use crate::config::dns_canister_rule::DnsCanisterRule;
 
     #[test]
     fn parse_error_no_colon() {
@@ -109,7 +109,7 @@ mod tests {
         )
     }
 
-    fn parse_dns_alias(alias: &str) -> anyhow::Result<CanisterDnsRule> {
-        CanisterDnsRule::new_alias(alias)
+    fn parse_dns_alias(alias: &str) -> anyhow::Result<DnsCanisterRule> {
+        DnsCanisterRule::new_alias(alias)
     }
 }

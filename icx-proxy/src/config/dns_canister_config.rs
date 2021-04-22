@@ -1,23 +1,23 @@
-use crate::config::canister_dns_rule::CanisterDnsRule;
+use crate::config::dns_canister_rule::DnsCanisterRule;
 use ic_types::Principal;
 use std::cmp::Reverse;
 
 /// Configuration for determination of Domain Name to Principal
 #[derive(Clone, Debug)]
-pub struct CanisterDnsConfig {
-    rules: Vec<CanisterDnsRule>,
+pub struct DnsCanisterConfig {
+    rules: Vec<DnsCanisterRule>,
 }
 
-impl CanisterDnsConfig {
-    /// Create a CanisterDnsConfig instance from command-line configuration.
+impl DnsCanisterConfig {
+    /// Create a DnsCanisterConfig instance from command-line configuration.
     /// dns_aliases: 0 or more entries of the form of dns.alias:canister-id
-    pub fn new(dns_aliases: &[String]) -> anyhow::Result<CanisterDnsConfig> {
+    pub fn new(dns_aliases: &[String]) -> anyhow::Result<DnsCanisterConfig> {
         let mut rules = dns_aliases
             .iter()
-            .map(|alias| CanisterDnsRule::new_alias(&alias))
-            .collect::<anyhow::Result<Vec<CanisterDnsRule>>>()?;
+            .map(|alias| DnsCanisterRule::new_alias(&alias))
+            .collect::<anyhow::Result<Vec<DnsCanisterRule>>>()?;
         rules.sort_by_key(|x| Reverse(x.dns_suffix.len()));
-        Ok(CanisterDnsConfig { rules })
+        Ok(DnsCanisterConfig { rules })
     }
 
     /// Return the Principal of the canister that matches the host name.
@@ -40,7 +40,7 @@ impl CanisterDnsConfig {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::canister_dns_config::CanisterDnsConfig;
+    use crate::config::dns_canister_config::DnsCanisterConfig;
     use ic_types::Principal;
 
     #[test]
@@ -224,8 +224,8 @@ mod tests {
         );
     }
 
-    fn parse_dns_aliases(aliases: Vec<&str>) -> anyhow::Result<CanisterDnsConfig> {
+    fn parse_dns_aliases(aliases: Vec<&str>) -> anyhow::Result<DnsCanisterConfig> {
         let v = aliases.iter().map(|&s| String::from(s)).collect::<Vec<_>>();
-        CanisterDnsConfig::new(&v)
+        DnsCanisterConfig::new(&v)
     }
 }
