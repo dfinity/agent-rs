@@ -406,7 +406,7 @@ mod tests {
     #[tokio::test]
     async fn simple() {
         use super::Canister;
-        use garcon::Delay;
+        use delay::Delay;
 
         let rng = ring::rand::SystemRandom::new();
         let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
