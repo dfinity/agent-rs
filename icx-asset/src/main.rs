@@ -1,14 +1,21 @@
+use candid::CandidType;
+use chrono::SecondsFormat;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use ic_agent::identity::AnonymousIdentity;
 use ic_agent::{agent, Agent, Identity};
 use ic_types::Principal;
+use ic_utils::call::SyncCall;
 use ic_utils::Canister;
+use num_traits::ToPrimitive;
+use serde::Deserialize;
 use std::collections::HashMap;
+use std::error::Error;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use walkdir::WalkDir;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
+use walkdir::WalkDir;
 
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -29,10 +36,6 @@ struct Opts {
     #[clap(long)]
     pem: Option<PathBuf>,
 
-    /// The asset canister ID to manage.
-    #[clap()]
-    canister_id: String,
-
     #[clap(subcommand)]
     subcommand: SubCommand,
 }
@@ -42,14 +45,26 @@ enum SubCommand {
     /// Uploads an asset to an asset canister.
     Upload(UploadOpts),
     /// List keys from the asset canister.
-    List(),
+    #[clap(name = "ls")]
+    List(ListOpts),
 }
 
 #[derive(Clap)]
 struct UploadOpts {
+    /// The asset canister ID to manage.
+    #[clap()]
+    canister_id: String,
+
     /// Files or folders to send.
     #[clap()]
     files: Vec<String>,
+}
+
+#[derive(Clap)]
+struct ListOpts {
+    /// The canister ID.
+    #[clap()]
+    canister_id: String,
 }
 
 fn create_identity(maybe_pem: Option<PathBuf>) -> Box<dyn Identity> {
@@ -94,37 +109,47 @@ where
 
 struct Content {
     reader: Arc<dyn Read>,
-    encodings: Vec<ContentEncoding<Arc<dyn Read>>>
+    encodings: Vec<ContentEncoding>,
 }
 
 impl Content {
-    pub fn from_path<P: Into<&Path>>(path: P) -> Self {
-        let reader = Arc::new(std::fs::File::open(path.into()));
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let reader = Arc::new(std::fs::File::open(path)?);
 
+        Ok(Self {
+            reader,
+            encodings: vec![ContentEncoding::Identity],
+        })
     }
 }
 
-enum ContentEncoding<T: Read> {
+enum ContentEncoding {
     Identity,
     Gzip,
 }
 
 impl ContentEncoding {
-    pub fn from_path<P: Into<&Path>>(path: P) -> Vec<Self> {
+    pub fn read<R: Read>(&self, mut reader: R) -> Result<Vec<u8>> {
+        match self {
+            ContentEncoding::Identity => {
+                let mut vec = Vec::new();
+                reader.read_to_end(&mut vec)?;
+                Ok(vec)
+            }
+            ContentEncoding::Gzip => {
+                let mut encoder = libflate::gzip::Encoder::new(Vec::new())?;
+                std::io::copy(&mut reader, &mut encoder)?;
 
-    }
-}
-
-impl Read for ContentEncoding {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-
+                Ok(encoder.finish().into_result()?)
+            }
+        }
     }
 }
 
 struct Asset {
     name: String,
     file: std::fs::File,
-    encodings: Vec<ContentEncoding>,
+    // content: Vec<ContentEncoding>,
 }
 
 impl Asset {
@@ -132,11 +157,9 @@ impl Asset {
         Ok(Self {
             name: name.into(),
             file: std::fs::File::open(path.into())?,
-            encodings: ContentEncoding::from_path(path),
+            // content: Content::from_path(path),
         })
     }
-
-
 }
 
 impl Read for Asset {
@@ -146,8 +169,8 @@ impl Read for Asset {
 }
 
 #[derive(CandidType, Deserialize)]
-struct CreateChunkArg<'a> {
-    pub batch_id: &'a candid::Nat,
+struct CreateChunkArg {
+    pub batch_id: candid::Nat,
     #[serde(with = "serde_bytes")]
     pub content: Vec<u8>,
 }
@@ -169,10 +192,10 @@ async fn do_upload(
     // First, split the files into chunks.
     let files = files
         .filter_map(|(name, path)| Some((name, std::fs::File::open(path).ok()?)))
-        .flat_map(|(name, file)| {
-            // Return an iterator over encodings of this file.
-            (name, file)
-        })
+        // .flat_map(|(name, file)| {
+        //     // Return an iterator over encodings of this file.
+        //     (name, file)
+        // })
         .flat_map(|(name, file)| {
             let chunks = ChunkIterator {
                 source: file,
@@ -191,18 +214,21 @@ async fn do_upload(
         canister
             .update_("create_chunk")
             .with_arg(CreateChunkArg {
-                batch_id: &batch_id,
+                batch_id: batch_id.clone(),
                 content: chunk.0,
             })
             .build()
-            .call_and_wait()
+            .call_and_wait(garcon::Delay::exponential_backoff(
+                Duration::from_secs(1),
+                1.2,
+            ))
             .await?;
     }
 
     Ok(result)
 }
 
-async fn upload(agent: Agent, opts: &Opts, o: &UploadOpts) -> Result {
+async fn upload(canister: &Canister<'_>, _opts: &Opts, o: &UploadOpts) -> Result {
     let mut key_map: HashMap<String, PathBuf> = HashMap::new();
 
     for arg in &o.files {
@@ -234,29 +260,63 @@ async fn upload(agent: Agent, opts: &Opts, o: &UploadOpts) -> Result {
     }
 
     eprintln!("{:#?}", key_map);
-    do_upload(&canister, key_map.into_iter(), 1024 * 1024).await?;
+    do_upload(
+        canister,
+        candid::Nat::from(0),
+        key_map.into_iter(),
+        1024 * 1024,
+    )
+    .await?;
 
     Ok(())
 }
 
-async fn list(canister: &Canister<'_>, opts: &Opts) -> Result {
+async fn list(canister: &Canister<'_>, _opts: &Opts, _o: &ListOpts) -> Result {
     #[derive(CandidType, Deserialize)]
     struct Encoding {
+        modified: candid::Int,
         content_encoding: String,
         sha256: Option<Vec<u8>>,
+        length: candid::Nat,
     }
 
     #[derive(CandidType, Deserialize)]
     struct ListEntry {
         key: String,
         content_type: String,
-        encondings: Vec<Encoding>,
+        encodings: Vec<Encoding>,
     }
 
     #[derive(CandidType, Deserialize)]
     struct EmptyRecord {}
 
-    let (entries, ): (Vec<ListEntry>,) = canister.update_("list").with_arg(EmptyRecord).build().call_and_wait()
+    let (entries,): (Vec<ListEntry>,) = canister
+        .query_("list")
+        .with_arg(EmptyRecord {})
+        .build()
+        .call()
+        .await?;
+
+    use chrono::offset::Local;
+    use chrono::DateTime;
+
+    for entry in entries {
+        for encoding in entry.encodings {
+            let modified = encoding.modified;
+            let modified = SystemTime::UNIX_EPOCH
+                + std::time::Duration::from_nanos(modified.0.to_u64().unwrap());
+
+            eprintln!(
+                "{:>20} {:>15} {:50} ({}, {})",
+                DateTime::<Local>::from(modified).format("%F %X"),
+                encoding.length.0.to_string(),
+                entry.key,
+                entry.content_type,
+                encoding.content_encoding
+            );
+        }
+    }
+    Ok(())
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
@@ -265,22 +325,29 @@ async fn main() -> Result {
 
     let agent = Agent::builder()
         .with_transport(
-            agent::http_transport::ReqwestHttpReplicaV1Transport::create(opts.replica.clone())?,
+            agent::http_transport::ReqwestHttpReplicaV2Transport::create(opts.replica.clone())?,
         )
         // .with_boxed_identity((create_identity(opts.pem)))
         .build()?;
 
-    let canister = ic_utils::Canister::builder()
-        .with_agent(&agent)
-        .with_canister_id(Principal::from_text(&opts.canister_id)?)
-        .build()?;
+    agent.fetch_root_key().await?;
 
     match &opts.subcommand {
         SubCommand::Upload(o) => {
-            upload(agent, &opts, o).await?;
+            let canister = ic_utils::Canister::builder()
+                .with_agent(&agent)
+                .with_canister_id(Principal::from_text(&o.canister_id)?)
+                .build()?;
+
+            upload(&canister, &opts, o).await?;
         }
-        SubCommand::List() => {
-            list(&canister, &opts).await?;
+        SubCommand::List(o) => {
+            let canister = ic_utils::Canister::builder()
+                .with_agent(&agent)
+                .with_canister_id(Principal::from_text(&o.canister_id)?)
+                .build()?;
+
+            list(&canister, &opts, o).await?;
         }
     }
 
