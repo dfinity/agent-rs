@@ -243,16 +243,6 @@ pub fn get_effective_canister_id(
                     .map_err(|err| format!("Candid decode err: {}", err))?;
                 Ok(install_args.canister_id)
             }
-            // MgmtMethod::SetController => {
-            //     #[derive(CandidType, Deserialize)]
-            //     struct In {
-            //         canister_id: Principal,
-            //         new_controller: Principal,
-            //     }
-            //     let in_args = candid::Decode!(arg_value, In)
-            //         .map_err(|err| format!("Candid decode err: {}", err))?;
-            //     Ok(in_args.canister_id)
-            // }
             MgmtMethod::StartCanister
             | MgmtMethod::StopCanister
             | MgmtMethod::CanisterStatus
