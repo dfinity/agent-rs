@@ -76,6 +76,11 @@ pub(crate) struct Opts {
     /// Format: domain.name:canister-id
     #[clap(long)]
     dns_alias: Vec<String>,
+
+    /// A list of domain name suffixes.  If found, the next (to the left) subdomain
+    /// is used as the Principal, if it parses as a Principal.
+    #[clap(long, default_value = "localhost")]
+    dns_suffix: Vec<String>,
 }
 
 fn resolve_canister_id_from_hostname(
@@ -436,7 +441,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Prepare a list of agents for each backend replicas.
     let replicas = Mutex::new(opts.replica.clone());
 
-    let dns_canister_config = Arc::new(DnsCanisterConfig::new(&opts.dns_alias)?);
+    let dns_canister_config = Arc::new(DnsCanisterConfig::new(&opts.dns_alias, &opts.dns_suffix)?);
 
     let counter = AtomicUsize::new(0);
     let debug = opts.debug;
