@@ -1,5 +1,4 @@
 use candid::CandidType;
-use chrono::SecondsFormat;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use ic_agent::identity::AnonymousIdentity;
 use ic_agent::{agent, Agent, Identity};
@@ -9,7 +8,6 @@ use ic_utils::Canister;
 use num_traits::ToPrimitive;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::error::Error;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
