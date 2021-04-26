@@ -1,3 +1,4 @@
+use crate::config::dns_canister_config::DnsCanisterConfig;
 use candid::parser::value::IDLValue;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use hyper::body::Bytes;
@@ -20,6 +21,7 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+mod config;
 mod logging;
 
 // Limit the total number of calls to an HTTP Request loop to 1000 for now.
@@ -69,13 +71,29 @@ pub(crate) struct Opts {
     /// should show full stack and error details).
     #[clap(long)]
     debug: bool,
+
+    /// A map of domain names to canister IDs.
+    /// Format: domain.name:canister-id
+    #[clap(long)]
+    dns_alias: Vec<String>,
 }
 
-fn resolve_canister_id_from_hostname(hostname: &str) -> Option<Principal> {
+fn resolve_canister_id_from_hostname(
+    hostname: &str,
+    dns_canister_config: &DnsCanisterConfig,
+) -> Option<Principal> {
     let url = Uri::from_str(hostname).ok()?;
 
+    let split_hostname = url.host()?.split('.').collect::<Vec<&str>>();
+    let split_hostname = split_hostname.as_slice();
+
+    if let Some(principal) =
+        dns_canister_config.resolve_canister_id_from_split_hostname(split_hostname)
+    {
+        return Some(principal);
+    }
     // Check if it's localhost or ic0.
-    match url.host()?.split('.').collect::<Vec<&str>>().as_slice() {
+    match split_hostname {
         [.., maybe_canister_id, "localhost"] => Principal::from_text(maybe_canister_id).ok(),
         [maybe_canister_id, ..] => Principal::from_text(maybe_canister_id).ok(),
         _ => None,
@@ -90,11 +108,15 @@ fn resolve_canister_id_from_uri(url: &hyper::Uri) -> Option<Principal> {
 
 /// Try to resolve a canister ID from an HTTP Request. If it cannot be resolved,
 /// [None] will be returned.
-fn resolve_canister_id(request: &Request<Body>) -> Option<Principal> {
+fn resolve_canister_id(
+    request: &Request<Body>,
+    dns_canister_config: &DnsCanisterConfig,
+) -> Option<Principal> {
     // Look for subdomains if there's a host header.
     if let Some(host_header) = request.headers().get("Host") {
         if let Ok(host) = host_header.to_str() {
-            if let Some(canister_id) = resolve_canister_id_from_hostname(host) {
+            if let Some(canister_id) = resolve_canister_id_from_hostname(host, dns_canister_config)
+            {
                 return Some(canister_id);
             }
         }
@@ -122,9 +144,10 @@ fn resolve_canister_id(request: &Request<Body>) -> Option<Principal> {
 async fn forward_request(
     request: Request<Body>,
     agent: Arc<Agent>,
+    dns_canister_config: &DnsCanisterConfig,
     logger: slog::Logger,
 ) -> Result<Response<Body>, Box<dyn Error>> {
-    let canister_id = match resolve_canister_id(&request) {
+    let canister_id = match resolve_canister_id(&request, dns_canister_config) {
         None => {
             return Ok(Response::builder()
                 .status(StatusCode::BAD_REQUEST)
@@ -368,6 +391,7 @@ async fn handle_request(
     ip_addr: IpAddr,
     request: Request<Body>,
     replica_url: String,
+    dns_canister_config: Arc<DnsCanisterConfig>,
     logger: slog::Logger,
     debug: bool,
 ) -> Result<Response<Body>, Infallible> {
@@ -386,7 +410,7 @@ async fn handle_request(
                 .expect("Could not create agent..."),
         );
 
-        forward_request(request, agent, logger.clone()).await
+        forward_request(request, agent, dns_canister_config.as_ref(), logger.clone()).await
     } {
         Err(err) => {
             slog::warn!(logger, "Internal Error during request:\n{:#?}", err);
@@ -412,12 +436,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Prepare a list of agents for each backend replicas.
     let replicas = Mutex::new(opts.replica.clone());
 
+    let dns_canister_config = Arc::new(DnsCanisterConfig::new(&opts.dns_alias)?);
+
     let counter = AtomicUsize::new(0);
     let debug = opts.debug;
 
     let service = make_service_fn(|socket: &hyper::server::conn::AddrStream| {
         let ip_addr = socket.remote_addr();
         let ip_addr = ip_addr.ip();
+        let dns_canister_config = dns_canister_config.clone();
         let logger = logger.clone();
 
         // Select an agent.
@@ -432,7 +459,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         async move {
             Ok::<_, Infallible>(service_fn(move |req| {
                 let logger = logger.clone();
-                handle_request(ip_addr, req, replica_url.clone(), logger, debug)
+                let dns_canister_config = dns_canister_config.clone();
+                handle_request(
+                    ip_addr,
+                    req,
+                    replica_url.clone(),
+                    dns_canister_config,
+                    logger,
+                    debug,
+                )
             }))
         }
     });
