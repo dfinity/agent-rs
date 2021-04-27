@@ -3,7 +3,7 @@ use crate::canister::Argument;
 use crate::interfaces::management_canister::MgmtMethod;
 use crate::Canister;
 use async_trait::async_trait;
-use candid::{CandidType, Deserialize, Encode};
+use candid::{CandidType, Deserialize};
 use delay::Waiter;
 use ic_agent::export::Principal;
 use ic_agent::{AgentError, RequestId};
@@ -191,13 +191,12 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
             canister_id: Principal,
         }
 
-        let (method, arg) = if self.is_provisional_create {
+        let async_builder = if self.is_provisional_create {
             #[derive(CandidType)]
             struct In {
                 amount: Option<candid::Nat>,
                 settings: CanisterSettings,
             }
-            let mut arg = Argument::default();
             let in_arg = In {
                 amount: self.amount.map(candid::Nat::from),
                 settings: CanisterSettings {
@@ -207,31 +206,21 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
                     freezing_threshold,
                 },
             };
-            arg.set_raw_arg(
-                Encode!(&in_arg).map_err(|err| AgentError::CandidError(Box::new(err)))?,
-            );
-            (
-                MgmtMethod::ProvisionalCreateCanisterWithCycles.as_ref(),
-                arg.serialize()?,
-            )
+            self.canister
+                .update_(MgmtMethod::ProvisionalCreateCanisterWithCycles.as_ref())
+                .with_arg(in_arg)
         } else {
-            let mut arg = Argument::default();
-            arg.set_raw_arg(
-                Encode!(&CanisterSettings {
+            self.canister
+                .update_(MgmtMethod::CreateCanister.as_ref())
+                .with_arg(CanisterSettings {
                     controller,
                     compute_allocation,
                     memory_allocation,
-                    freezing_threshold
+                    freezing_threshold,
                 })
-                .map_err(|err| AgentError::CandidError(Box::new(err)))?,
-            );
-            (MgmtMethod::CreateCanister.as_ref(), arg.serialize()?)
         };
 
-        Ok(self
-            .canister
-            .update_(method)
-            .with_arg(arg)
+        Ok(async_builder
             .build()
             .map(|result: (Out,)| (result.0.canister_id,)))
     }
@@ -355,13 +344,14 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
     pub fn build(self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
         Ok(self
             .canister
-            .update_("install_code")
+            .update_(MgmtMethod::InstallCode.as_ref())
             .with_arg(CanisterInstall {
                 mode: self.mode.unwrap_or(InstallMode::Install),
                 canister_id: self.canister_id.clone(),
                 wasm_module: self.wasm.to_owned(),
                 arg: self.arg.serialize()?,
             })
+            .with_effective_canister_id(self.canister_id)
             .build())
     }
 
@@ -549,7 +539,7 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
 
         Ok(self
             .canister
-            .update_(MgmtMethod::UpdateCanisterSettings.as_ref())
+            .update_(MgmtMethod::UpdateSettings.as_ref())
             .with_arg(In {
                 canister_id: self.canister_id.clone(),
                 settings: CanisterSettings {
@@ -559,6 +549,7 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
                     freezing_threshold,
                 },
             })
+            .with_effective_canister_id(self.canister_id)
             .build())
     }
 

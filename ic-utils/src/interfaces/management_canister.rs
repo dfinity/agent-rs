@@ -29,7 +29,7 @@ pub enum MgmtMethod {
     ProvisionalCreateCanisterWithCycles,
     ProvisionalTopUpCanister,
     UninstallCode,
-    UpdateCanisterSettings,
+    UpdateSettings,
 }
 
 impl ManagementCanister {
@@ -263,7 +263,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
     }
 
     /// Update one or more of a canisters settings (i.e its controller, compute allocation, or memory allocation.)
-    pub fn update_canister_settings<'canister: 'agent>(
+    pub fn update_settings<'canister: 'agent>(
         &'canister self,
         canister_id: &Principal,
     ) -> UpdateCanisterBuilder<'agent, 'canister, ManagementCanister> {
