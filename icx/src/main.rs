@@ -259,7 +259,7 @@ pub fn get_effective_canister_id(
                 Ok(in_args.canister_id)
             }
             MgmtMethod::ProvisionalCreateCanisterWithCycles => Ok(Principal::management_canister()),
-            MgmtMethod::UpdateCanisterSettings => {
+            MgmtMethod::UpdateSettings => {
                 #[derive(CandidType, Deserialize)]
                 struct In {
                     canister_id: Principal,
