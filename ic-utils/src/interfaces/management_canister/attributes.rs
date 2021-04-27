@@ -138,8 +138,6 @@ fn can_convert_compute_allocation() {
     let _ca_i16: ComputeAllocation = 1i16.try_into().unwrap();
     let _ca_i32: ComputeAllocation = 1i32.try_into().unwrap();
     let _ca_i64: ComputeAllocation = 1i64.try_into().unwrap();
-    let _ca_u128: ComputeAllocation = 1i128.try_into().unwrap();
-    let _ca_i128: ComputeAllocation = 1u128.try_into().unwrap();
 
     let ca = ComputeAllocation(100);
     let _ca_ca: ComputeAllocation = ComputeAllocation::try_from(ca).unwrap();
@@ -178,6 +176,8 @@ fn can_convert_freezing_threshold() {
     let _ft_i16: FreezingThreshold = 1i16.try_into().unwrap();
     let _ft_i32: FreezingThreshold = 1i32.try_into().unwrap();
     let _ft_i64: FreezingThreshold = 1i64.try_into().unwrap();
+    let _ft_u128: FreezingThreshold = 1i128.try_into().unwrap();
+    let _ft_i128: FreezingThreshold = 1u128.try_into().unwrap();
 
     let ft = FreezingThreshold(100);
     let _ft_ft: FreezingThreshold = FreezingThreshold::try_from(ft).unwrap();
