@@ -4,7 +4,7 @@ use crate::interfaces::management_canister::MgmtMethod;
 use crate::Canister;
 use async_trait::async_trait;
 use candid::{CandidType, Deserialize, Encode};
-use garcon::Waiter;
+use delay::Waiter;
 use ic_agent::export::Principal;
 use ic_agent::{AgentError, RequestId};
 use std::str::FromStr;
