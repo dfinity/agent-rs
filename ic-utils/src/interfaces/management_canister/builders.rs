@@ -10,6 +10,7 @@ use ic_agent::{AgentError, RequestId};
 use std::str::FromStr;
 
 pub use super::attributes::ComputeAllocation;
+pub use super::attributes::FreezingThreshold;
 pub use super::attributes::MemoryAllocation;
 use std::convert::From;
 use std::convert::TryInto;
@@ -19,6 +20,7 @@ pub struct CanisterSettings {
     pub controller: Option<Principal>,
     pub compute_allocation: Option<candid::Nat>,
     pub memory_allocation: Option<candid::Nat>,
+    pub freezing_threshold: Option<candid::Nat>,
 }
 
 pub struct CreateCanisterBuilder<'agent, 'canister: 'agent, T> {
@@ -26,6 +28,7 @@ pub struct CreateCanisterBuilder<'agent, 'canister: 'agent, T> {
     controller: Option<Result<Principal, AgentError>>,
     compute_allocation: Option<Result<ComputeAllocation, AgentError>>,
     memory_allocation: Option<Result<MemoryAllocation, AgentError>>,
+    freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
     is_provisional_create: bool,
     amount: Option<u64>,
 }
@@ -38,6 +41,7 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
             controller: None,
             compute_allocation: None,
             memory_allocation: None,
+            freezing_threshold: None,
             is_provisional_create: false,
             amount: None,
         }
@@ -133,6 +137,31 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
         self.with_optional_memory_allocation(Some(memory_allocation))
     }
 
+    /// Pass in a freezing threshold optional value for the canister. If this is [None],
+    /// it will revert the freezing threshold to default.
+    pub fn with_optional_freezing_threshold<E, C>(self, freezing_threshold: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<FreezingThreshold, Error = E>,
+    {
+        Self {
+            freezing_threshold: freezing_threshold.map(|ma| {
+                ma.try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+            }),
+            ..self
+        }
+    }
+
+    /// Pass in a freezing threshold value for the canister.
+    pub fn with_freezing_threshold<C, E>(self, freezing_threshold: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<FreezingThreshold, Error = E>,
+    {
+        self.with_optional_freezing_threshold(Some(freezing_threshold))
+    }
+
     /// Create an [AsyncCall] implementation that, when called, will create a
     /// canister.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<(Principal,)>, AgentError> {
@@ -147,6 +176,11 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
             None => None,
         };
         let memory_allocation = match self.memory_allocation {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Ok(x)) => Some(candid::Nat::from(u64::from(x))),
+            None => None,
+        };
+        let freezing_threshold = match self.freezing_threshold {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
             Some(Ok(x)) => Some(candid::Nat::from(u64::from(x))),
             None => None,
@@ -170,6 +204,7 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
                     controller,
                     compute_allocation,
                     memory_allocation,
+                    freezing_threshold,
                 },
             };
             arg.set_raw_arg(
@@ -186,6 +221,7 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
                     controller,
                     compute_allocation,
                     memory_allocation,
+                    freezing_threshold
                 })
                 .map_err(|err| AgentError::CandidError(Box::new(err)))?,
             );
@@ -365,6 +401,7 @@ pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent, T> {
     controller: Option<Result<Principal, AgentError>>,
     compute_allocation: Option<Result<ComputeAllocation, AgentError>>,
     memory_allocation: Option<Result<MemoryAllocation, AgentError>>,
+    freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
 }
 
 impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
@@ -376,6 +413,7 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
             controller: None,
             compute_allocation: None,
             memory_allocation: None,
+            freezing_threshold: None,
         }
     }
 
@@ -454,6 +492,31 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
         self.with_optional_memory_allocation(Some(memory_allocation))
     }
 
+    /// Pass in a freezing threshold optional value for the canister. If this is [None],
+    /// it will revert the freezing threshold to default.
+    pub fn with_optional_freezing_threshold<E, C>(self, freezing_threshold: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<FreezingThreshold, Error = E>,
+    {
+        Self {
+            freezing_threshold: freezing_threshold.map(|ma| {
+                ma.try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+            }),
+            ..self
+        }
+    }
+
+    /// Pass in a freezing threshold value for the canister.
+    pub fn with_freezing_threshold<C, E>(self, freezing_threshold: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<FreezingThreshold, Error = E>,
+    {
+        self.with_optional_freezing_threshold(Some(freezing_threshold))
+    }
+
     /// Create an [AsyncCall] implementation that, when called, will update a
     /// canisters settings.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
@@ -478,6 +541,11 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
             Some(Ok(x)) => Some(candid::Nat::from(u64::from(x))),
             None => None,
         };
+        let freezing_threshold = match self.freezing_threshold {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Ok(x)) => Some(candid::Nat::from(u64::from(x))),
+            None => None,
+        };
 
         Ok(self
             .canister
@@ -488,6 +556,7 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
                     controller,
                     compute_allocation,
                     memory_allocation,
+                    freezing_threshold,
                 },
             })
             .build())

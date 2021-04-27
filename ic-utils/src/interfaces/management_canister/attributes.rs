@@ -80,6 +80,48 @@ try_from_memory_alloc_decl!(i16);
 try_from_memory_alloc_decl!(i32);
 try_from_memory_alloc_decl!(i64);
 
+#[derive(Error, Debug)]
+pub enum FreezingThresholdError {
+    #[error("Freezing threshold must be between 0 and 2^64-1, inclusively. Got {0}.")]
+    InvalidFreezingThreshold(u64),
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct FreezingThreshold(u64);
+
+impl std::convert::From<FreezingThreshold> for u64 {
+    fn from(freezing_threshold: FreezingThreshold) -> Self {
+        freezing_threshold.0
+    }
+}
+
+macro_rules! try_from_freezing_threshold_decl {
+    ( $t: ty ) => {
+        impl std::convert::TryFrom<$t> for FreezingThreshold {
+            type Error = FreezingThresholdError;
+
+            fn try_from(value: $t) -> Result<Self, Self::Error> {
+                if (value as i64) < 0 || (value as i64) > (2_i64.pow(64) - 1i64) {
+                    Err(FreezingThresholdError::InvalidFreezingThreshold(
+                        value as u64,
+                    ))
+                } else {
+                    Ok(Self(value as u64))
+                }
+            }
+        }
+    };
+}
+
+try_from_freezing_threshold_decl!(u8);
+try_from_freezing_threshold_decl!(u16);
+try_from_freezing_threshold_decl!(u32);
+try_from_freezing_threshold_decl!(u64);
+try_from_freezing_threshold_decl!(i8);
+try_from_freezing_threshold_decl!(i16);
+try_from_freezing_threshold_decl!(i32);
+try_from_freezing_threshold_decl!(i64);
+
 #[test]
 #[allow(clippy::useless_conversion)]
 fn can_convert_compute_allocation() {
@@ -116,4 +158,23 @@ fn can_convert_memory_allocation() {
 
     let ma = MemoryAllocation(100);
     let _ma_ma: MemoryAllocation = MemoryAllocation::try_from(ma).unwrap();
+}
+
+#[test]
+#[allow(clippy::useless_conversion)]
+fn can_convert_freezing_threshold() {
+    use std::convert::{TryFrom, TryInto};
+
+    // This is more of a compiler test than an actual test.
+    let _ft_u8: FreezingThreshold = 1u8.try_into().unwrap();
+    let _ft_u16: FreezingThreshold = 1u16.try_into().unwrap();
+    let _ft_u32: FreezingThreshold = 1u32.try_into().unwrap();
+    let _ft_u64: FreezingThreshold = 1u64.try_into().unwrap();
+    let _ft_i8: FreezingThreshold = 1i8.try_into().unwrap();
+    let _ft_i16: FreezingThreshold = 1i16.try_into().unwrap();
+    let _ft_i32: FreezingThreshold = 1i32.try_into().unwrap();
+    let _ft_i64: FreezingThreshold = 1i64.try_into().unwrap();
+
+    let ft = FreezingThreshold(100);
+    let _ft_ft: FreezingThreshold = FreezingThreshold::try_from(ft).unwrap();
 }

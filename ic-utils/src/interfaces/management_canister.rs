@@ -71,6 +71,7 @@ pub struct DefiniteCanisterSettings {
     pub controller: Principal,
     pub compute_allocation: candid::Nat,
     pub memory_allocation: candid::Nat,
+    pub freezing_threshold: candid::Nat,
 }
 
 impl std::fmt::Display for StatusCallResult {
