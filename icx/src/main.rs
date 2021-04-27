@@ -248,6 +248,7 @@ pub fn get_effective_canister_id(
             | MgmtMethod::CanisterStatus
             | MgmtMethod::DeleteCanister
             | MgmtMethod::DepositCycles
+            | MgmtMethod::UninstallCode
             | MgmtMethod::ProvisionalTopUpCanister => {
                 #[derive(CandidType, Deserialize)]
                 struct In {

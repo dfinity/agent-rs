@@ -28,6 +28,7 @@ pub enum MgmtMethod {
     RawRand,
     ProvisionalCreateCanisterWithCycles,
     ProvisionalTopUpCanister,
+    UninstallCode,
     UpdateCanisterSettings,
 }
 
@@ -220,6 +221,30 @@ impl<'agent> Canister<'agent, ManagementCanister> {
         }
 
         self.update_(MgmtMethod::StopCanister.as_ref())
+            .with_arg(Argument {
+                canister_id: canister_id.clone(),
+            })
+            .with_effective_canister_id(canister_id.to_owned())
+            .build()
+    }
+
+    /// This method removes a canister’s code and state, making the canister empty again.
+    /// Only the controller of the canister can uninstall code.
+    /// Uninstalling a canister’s code will reject all calls that the canister has not yet responded to,
+    /// and drop the canister’s code and state.
+    /// Outstanding responses to the canister will not be processed, even if they arrive after code has been installed again.
+    /// The canister is now empty. In particular, any incoming or queued calls will be rejected.
+    //// A canister after uninstalling retains its cycles balance, controller, status, and allocations.
+    pub fn uninstall_code<'canister: 'agent>(
+        &'canister self,
+        canister_id: &Principal,
+    ) -> impl 'agent + AsyncCall<()> {
+        #[derive(CandidType)]
+        struct Argument {
+            canister_id: Principal,
+        }
+
+        self.update_(MgmtMethod::UninstallCode.as_ref())
             .with_arg(Argument {
                 canister_id: canister_id.clone(),
             })
