@@ -101,7 +101,7 @@ macro_rules! try_from_freezing_threshold_decl {
             type Error = FreezingThresholdError;
 
             fn try_from(value: $t) -> Result<Self, Self::Error> {
-                if (value as i64) < 0 || (value as i64) > (2_i64.pow(64) - 1i64) {
+                if (value as i128) < 0 || (value as i128) > (2_i128.pow(64) - 1i128) {
                     Err(FreezingThresholdError::InvalidFreezingThreshold(
                         value as u64,
                     ))
@@ -121,6 +121,8 @@ try_from_freezing_threshold_decl!(i8);
 try_from_freezing_threshold_decl!(i16);
 try_from_freezing_threshold_decl!(i32);
 try_from_freezing_threshold_decl!(i64);
+try_from_freezing_threshold_decl!(i128);
+try_from_freezing_threshold_decl!(u128);
 
 #[test]
 #[allow(clippy::useless_conversion)]
@@ -136,6 +138,8 @@ fn can_convert_compute_allocation() {
     let _ca_i16: ComputeAllocation = 1i16.try_into().unwrap();
     let _ca_i32: ComputeAllocation = 1i32.try_into().unwrap();
     let _ca_i64: ComputeAllocation = 1i64.try_into().unwrap();
+    let _ca_u128: ComputeAllocation = 1i128.try_into().unwrap();
+    let _ca_i128: ComputeAllocation = 1u128.try_into().unwrap();
 
     let ca = ComputeAllocation(100);
     let _ca_ca: ComputeAllocation = ComputeAllocation::try_from(ca).unwrap();

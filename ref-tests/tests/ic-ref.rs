@@ -648,9 +648,46 @@ mod simple_calls {
 }
 
 mod extras {
+    use ic_utils::call::AsyncCall;
     use ic_utils::interfaces::management_canister::builders::ComputeAllocation;
     use ic_utils::interfaces::ManagementCanister;
     use ref_tests::{create_waiter, with_agent};
+
+    #[ignore]
+    #[test]
+    fn valid_allocations() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(Some(20_000_000_000_000_u64))
+                .with_compute_allocation(1_u64)
+                .with_memory_allocation(1024 * 1024_u64)
+                .with_freezing_threshold(1_000_000_u64)
+                .call_and_wait(create_waiter())
+                .await?;
+
+            let result = ic00
+                .canister_status(&canister_id)
+                .call_and_wait(create_waiter())
+                .await?;
+            assert_eq!(
+                result.0.settings.compute_allocation,
+                candid::Nat::from(1_u64)
+            );
+            assert_eq!(
+                result.0.settings.memory_allocation,
+                candid::Nat::from(1024 * 1024_u64)
+            );
+            assert_eq!(
+                result.0.settings.freezing_threshold,
+                candid::Nat::from(1_000_000_u64)
+            );
+
+            Ok(())
+        })
+    }
 
     #[ignore]
     #[test]
@@ -692,6 +729,24 @@ mod extras {
                 .with_compute_allocation(ca)
                 .call_and_wait(create_waiter())
                 .await?;
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn freezing_threshold() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            assert!(ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_freezing_threshold(2u128.pow(70))
+                .call_and_wait(create_waiter())
+                .await
+                .is_err());
 
             Ok(())
         })

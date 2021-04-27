@@ -11,8 +11,7 @@ use ic_utils::Canister;
 use ref_tests::universal_canister::payload;
 use ref_tests::{
     create_agent, create_basic_identity, create_universal_canister, create_waiter,
-    create_wallet_canister, with_universal_canister,
-    with_wallet_canister,
+    create_wallet_canister, with_universal_canister, with_wallet_canister,
 };
 
 #[ignore]
