@@ -1,5 +1,9 @@
 use crate::call::{AsyncCall, AsyncCaller, SyncCall};
 use crate::canister::{Argument, CanisterBuilder};
+use crate::interfaces::management_canister::attributes::{
+    ComputeAllocation, FreezingThreshold, MemoryAllocation,
+};
+use crate::interfaces::management_canister::builders::CanisterSettings;
 use crate::Canister;
 use async_trait::async_trait;
 use candid::de::ArgumentDecoder;
@@ -291,15 +295,25 @@ impl<'agent> Canister<'agent, Wallet> {
         &'canister self,
         cycles: u64,
         controller: Option<Principal>,
+        compute_allocation: Option<ComputeAllocation>,
+        memory_allocation: Option<MemoryAllocation>,
+        freezing_threshold: Option<FreezingThreshold>,
     ) -> impl 'agent + AsyncCall<(Result<CreateResult, String>,)> {
         #[derive(CandidType)]
         struct In {
             cycles: u64,
-            controller: Option<Principal>,
+            settings: CanisterSettings,
         }
 
+        let settings = CanisterSettings {
+            controller,
+            compute_allocation: compute_allocation.map(u8::from).map(candid::Nat::from),
+            memory_allocation: memory_allocation.map(u64::from).map(candid::Nat::from),
+            freezing_threshold: freezing_threshold.map(u64::from).map(candid::Nat::from),
+        };
+
         self.update_("wallet_create_canister")
-            .with_arg(In { cycles, controller })
+            .with_arg(In { cycles, settings })
             .build()
             .map(|result: (Result<CreateResult, String>,)| (result.0,))
     }
@@ -309,15 +323,25 @@ impl<'agent> Canister<'agent, Wallet> {
         &'canister self,
         cycles: u64,
         controller: Option<Principal>,
+        compute_allocation: Option<ComputeAllocation>,
+        memory_allocation: Option<MemoryAllocation>,
+        freezing_threshold: Option<FreezingThreshold>,
     ) -> impl 'agent + AsyncCall<(Result<CreateResult, String>,)> {
         #[derive(CandidType)]
         struct In {
             cycles: u64,
-            controller: Option<Principal>,
+            settings: CanisterSettings,
         }
 
+        let settings = CanisterSettings {
+            controller,
+            compute_allocation: compute_allocation.map(u8::from).map(candid::Nat::from),
+            memory_allocation: memory_allocation.map(u64::from).map(candid::Nat::from),
+            freezing_threshold: freezing_threshold.map(u64::from).map(candid::Nat::from),
+        };
+
         self.update_("wallet_create_wallet")
-            .with_arg(In { cycles, controller })
+            .with_arg(In { cycles, settings })
             .build()
             .map(|result: (Result<CreateResult, String>,)| (result.0,))
     }

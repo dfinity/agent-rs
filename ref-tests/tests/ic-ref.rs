@@ -40,8 +40,9 @@ mod management_canister {
     use ic_agent::export::Principal;
     use ic_agent::AgentError;
     use ic_utils::call::AsyncCall;
-    use ic_utils::interfaces::management_canister::builders::InstallMode;
-    use ic_utils::interfaces::management_canister::CanisterStatus;
+    use ic_utils::interfaces::management_canister::builders::{CanisterSettings, InstallMode};
+    use ic_utils::interfaces::management_canister::{CanisterStatus, StatusCallResult};
+    use ic_utils::interfaces::wallet::CreateResult;
     use ic_utils::interfaces::{ManagementCanister, Wallet};
     use ic_utils::{Argument, Canister};
     use openssl::sha::Sha256;
@@ -472,37 +473,54 @@ mod management_canister {
     #[ignore]
     #[test]
     fn provisional_create_canister_with_cycles() {
-        with_wallet_canister(None, |agent, _wallet_id| async move {
+        with_wallet_canister(None, |agent, wallet_id| async move {
             let max_canister_balance: u64 = 1152921504606846976;
 
-            // TODO: enable this test back after updating the wallet to 0.17.0
-
             // empty cycle balance on create
-            // let wallet = Wallet::create(&agent, wallet_id);
-            // let ic00 = Canister::builder()
-            //     .with_agent(&agent)
-            //     .with_canister_id(Principal::management_canister())
-            //     .build()?;
-            // let (create_result,): (CreateResult,) = wallet
-            //     .call(&ic00, "create_canister", Argument::default(), 0)
-            //     .call_and_wait(create_waiter())
-            //     .await?;
-            // let canister_id = create_result.canister_id;
+            let wallet = Wallet::create(&agent, wallet_id);
+            let ic00 = Canister::builder()
+                .with_agent(&agent)
+                .with_canister_id(Principal::management_canister())
+                .build()?;
 
-            // #[derive(candid::CandidType)]
-            // struct In {
-            //     canister_id: Principal,
-            // }
-            // let status_args = In { canister_id };
-            // let mut args = Argument::default();
-            // args.push_idl_arg(status_args);
+            #[derive(candid::CandidType)]
+            struct InCreate {
+                cycles: u64,
+                settings: CanisterSettings,
+            }
+            let create_args = InCreate {
+                cycles: 0_u64,
+                settings: CanisterSettings {
+                    controller: None,
+                    compute_allocation: None,
+                    memory_allocation: None,
+                    freezing_threshold: None,
+                },
+            };
 
-            // let (result,): (StatusCallResult,) = wallet
-            //     .call(&ic00, "canister_status", args, 0)
-            //     .call_and_wait(create_waiter())
-            //     .await?;
+            let mut args = Argument::default();
+            args.push_idl_arg(create_args);
 
-            // assert_eq!(result.cycles, 0_u64);
+            let (create_result,): (CreateResult,) = wallet
+                .call(&ic00, "create_canister", args, 0)
+                .call_and_wait(create_waiter())
+                .await?;
+            let canister_id = create_result.canister_id;
+
+            #[derive(candid::CandidType)]
+            struct In {
+                canister_id: Principal,
+            }
+            let status_args = In { canister_id };
+            let mut args = Argument::default();
+            args.push_idl_arg(status_args);
+
+            let (result,): (StatusCallResult,) = wallet
+                .call(&ic00, "canister_status", args, 0)
+                .call_and_wait(create_waiter())
+                .await?;
+
+            assert_eq!(result.cycles, 0_u64);
 
             let ic00 = ManagementCanister::create(&agent);
             // cycle balance is max_canister_balance when creating with

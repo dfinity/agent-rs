@@ -3,15 +3,18 @@
 //! Contrary to ic-ref.rs, these tests are not meant to match any other tests. They're
 //! integration tests with a running IC-Ref.
 use ic_agent::agent::agent_error::HttpErrorPayload;
+use ic_agent::export::Principal;
 use ic_agent::AgentError;
 use ic_utils::call::AsyncCall;
 use ic_utils::call::SyncCall;
+use ic_utils::interfaces::management_canister::builders::{CanisterSettings, InstallMode};
 use ic_utils::interfaces::Wallet;
-use ic_utils::Canister;
+use ic_utils::{Argument, Canister};
 use ref_tests::universal_canister::payload;
 use ref_tests::{
     create_agent, create_basic_identity, create_universal_canister, create_waiter,
-    create_wallet_canister, with_universal_canister, with_wallet_canister,
+    create_wallet_canister, get_wallet_wasm_from_env, with_universal_canister,
+    with_wallet_canister,
 };
 
 #[ignore]
@@ -136,250 +139,235 @@ fn wallet_canister_forward() {
     });
 }
 
-// #[ignore]
-// #[test]
-// fn wallet_canister_create_and_install() {
-//     with_wallet_canister(None, |agent, wallet_id| async move {
-//         let wallet = Wallet::create(&agent, wallet_id);
+#[ignore]
+#[test]
+fn wallet_canister_create_and_install() {
+    with_wallet_canister(None, |agent, wallet_id| async move {
+        let wallet = Wallet::create(&agent, wallet_id);
 
-//         let (create_result,) = wallet
-//             .wallet_create_canister(1_000_000, None)
-//             .call_and_wait(create_waiter())
-//             .await?;
+        let (create_result,) = wallet
+            .wallet_create_canister(1_000_000, None, None, None, None)
+            .call_and_wait(create_waiter())
+            .await?;
 
-//         let create_result = create_result?;
+        let create_result = create_result?;
 
-//         let ic00 = Canister::builder()
-//             .with_agent(&agent)
-//             .with_canister_id(Principal::management_canister())
-//             .build()?;
+        let ic00 = Canister::builder()
+            .with_agent(&agent)
+            .with_canister_id(Principal::management_canister())
+            .build()?;
 
-//         #[derive(candid::CandidType)]
-//         struct CanisterInstall {
-//             mode: InstallMode,
-//             canister_id: Principal,
-//             wasm_module: Vec<u8>,
-//             arg: Vec<u8>,
-//             compute_allocation: Option<candid::Nat>,
-//             memory_allocation: Option<candid::Nat>,
-//         }
+        #[derive(candid::CandidType)]
+        struct CanisterInstall {
+            mode: InstallMode,
+            canister_id: Principal,
+            wasm_module: Vec<u8>,
+            arg: Vec<u8>,
+        }
 
-//         let install_config = CanisterInstall {
-//             mode: InstallMode::Install,
-//             canister_id: create_result.canister_id,
-//             wasm_module: b"\0asm\x01\0\0\0".to_vec(),
-//             arg: Argument::default().serialize()?,
-//             compute_allocation: None,
-//             memory_allocation: None,
-//         };
+        let install_config = CanisterInstall {
+            mode: InstallMode::Install,
+            canister_id: create_result.canister_id,
+            wasm_module: b"\0asm\x01\0\0\0".to_vec(),
+            arg: Argument::default().serialize()?,
+        };
 
-//         let mut args = Argument::default();
-//         args.push_idl_arg(install_config);
+        let mut args = Argument::default();
+        args.push_idl_arg(install_config);
 
-//         wallet
-//             .call(&ic00, "install_code", args, 0)
-//             .call_and_wait(create_waiter())
-//             .await?;
+        wallet
+            .call(&ic00, "install_code", args, 0)
+            .call_and_wait(create_waiter())
+            .await?;
 
-//         Ok(())
-//     });
-// }
+        Ok(())
+    });
+}
 
-// #[ignore]
-// #[test]
-// fn wallet_create_and_set_controller() {
-//     with_wallet_canister(None, |agent, wallet_id| async move {
-//         eprintln!("Parent wallet canister id: {:?}", wallet_id.to_text());
-//         let wallet = Wallet::create(&agent, wallet_id);
-//         // get the wallet wasm from the environment
-//         let wallet_wasm = get_wallet_wasm_from_env();
-//         // store the wasm into the wallet
-//         wallet
-//             .wallet_store_wallet_wasm(wallet_wasm)
-//             .call_and_wait(create_waiter())
-//             .await?;
+#[ignore]
+#[test]
+fn wallet_create_and_set_controller() {
+    with_wallet_canister(None, |agent, wallet_id| async move {
+        eprintln!("Parent wallet canister id: {:?}", wallet_id.to_text());
+        let wallet = Wallet::create(&agent, wallet_id);
+        // get the wallet wasm from the environment
+        let wallet_wasm = get_wallet_wasm_from_env();
+        // store the wasm into the wallet
+        wallet
+            .wallet_store_wallet_wasm(wallet_wasm)
+            .call_and_wait(create_waiter())
+            .await?;
 
-//         // controller
-//         let other_agent_identity = create_basic_identity().await?;
-//         let other_agent_principal = other_agent_identity.sender()?;
-//         let other_agent = create_agent(other_agent_identity).await?;
-//         other_agent.fetch_root_key().await?;
+        // controller
+        let other_agent_identity = create_basic_identity().await?;
+        let other_agent_principal = other_agent_identity.sender()?;
+        let other_agent = create_agent(other_agent_identity).await?;
+        other_agent.fetch_root_key().await?;
 
-//         eprintln!("Agent id: {:?}", other_agent_principal.clone().to_text());
+        eprintln!("Agent id: {:?}", other_agent_principal.clone().to_text());
 
-//         let (create_result,) = wallet
-//             .wallet_create_wallet(1_000_000_000_000_u64, Some(other_agent_principal.clone()))
-//             .call_and_wait(create_waiter())
-//             .await?;
+        let (create_result,) = wallet
+            .wallet_create_wallet(
+                1_000_000_000_000_u64,
+                Some(other_agent_principal.clone()),
+                None,
+                None,
+                None,
+            )
+            .call_and_wait(create_waiter())
+            .await?;
 
-//         let create_result = create_result?;
+        let create_result = create_result?;
 
-//         eprintln!(
-//             "Child wallet canister id: {:?}",
-//             create_result.canister_id.clone().to_text()
-//         );
+        eprintln!(
+            "Child wallet canister id: {:?}",
+            create_result.canister_id.clone().to_text()
+        );
 
-//         let child_wallet = Canister::builder()
-//             .with_agent(&other_agent)
-//             .with_canister_id(create_result.canister_id)
-//             .with_interface(Wallet)
-//             .build()?;
+        let child_wallet = Canister::builder()
+            .with_agent(&other_agent)
+            .with_canister_id(create_result.canister_id)
+            .with_interface(Wallet)
+            .build()?;
 
-//         let (controller_list,) = child_wallet.get_controllers().call().await?;
-//         assert!(controller_list.len() == 1);
-//         assert_eq!(controller_list[0], other_agent_principal);
+        let (controller_list,) = child_wallet.get_controllers().call().await?;
+        assert!(controller_list.len() == 1);
+        assert_eq!(controller_list[0], other_agent_principal);
 
-//         let (address_entries,): (Vec<ic_utils::interfaces::wallet::AddressEntry>,) =
-//             child_wallet.list_addresses().call().await?;
-//         for address in address_entries.iter() {
-//             eprintln!("id {:?} is a {:?}", address.id.to_text(), address.role);
-//         }
+        let (address_entries,): (Vec<ic_utils::interfaces::wallet::AddressEntry>,) =
+            child_wallet.list_addresses().call().await?;
+        for address in address_entries.iter() {
+            eprintln!("id {:?} is a {:?}", address.id.to_text(), address.role);
+        }
 
-//         Ok(())
-//     });
-// }
+        Ok(())
+    });
+}
 
-// #[ignore]
-// #[test]
-// fn wallet_create_wallet() {
-//     with_wallet_canister(None, |agent, wallet_id| async move {
-//         eprintln!("Parent wallet canister id: {:?}", wallet_id.to_text());
-//         let wallet = Wallet::create(&agent, wallet_id);
-//         let (wallet_initial_balance,) = wallet.wallet_balance().call().await?;
+#[ignore]
+#[test]
+fn wallet_create_wallet() {
+    with_wallet_canister(None, |agent, wallet_id| async move {
+        eprintln!("Parent wallet canister id: {:?}", wallet_id.to_text());
+        let wallet = Wallet::create(&agent, wallet_id);
+        let (wallet_initial_balance,) = wallet.wallet_balance().call().await?;
 
-//         // get the wallet wasm from the environment
-//         let wallet_wasm = get_wallet_wasm_from_env();
+        // get the wallet wasm from the environment
+        let wallet_wasm = get_wallet_wasm_from_env();
 
-//         // store the wasm into the wallet
-//         wallet
-//             .wallet_store_wallet_wasm(wallet_wasm)
-//             .call_and_wait(create_waiter())
-//             .await?;
+        // store the wasm into the wallet
+        wallet
+            .wallet_store_wallet_wasm(wallet_wasm)
+            .call_and_wait(create_waiter())
+            .await?;
 
-//         // create a child wallet
-//         let (child_create_res,) = wallet
-//             .wallet_create_wallet(1_000_000_000_000_u64, None)
-//             .call_and_wait(create_waiter())
-//             .await?;
+        // create a child wallet
+        let (child_create_res,) = wallet
+            .wallet_create_wallet(1_000_000_000_000_u64, None, None, None, None)
+            .call_and_wait(create_waiter())
+            .await?;
 
-//         let child_create_res = child_create_res?;
+        let child_create_res = child_create_res?;
 
-//         eprintln!(
-//             "Created child wallet one.\nChild wallet one canister id: {:?}",
-//             child_create_res.canister_id.to_text()
-//         );
+        eprintln!(
+            "Created child wallet one.\nChild wallet one canister id: {:?}",
+            child_create_res.canister_id.to_text()
+        );
 
-//         // verify the child wallet by checking its balance
-//         let child_wallet = Canister::builder()
-//             .with_agent(&agent)
-//             .with_canister_id(child_create_res.canister_id)
-//             .build()?;
+        // verify the child wallet by checking its balance
+        let child_wallet = Canister::builder()
+            .with_agent(&agent)
+            .with_canister_id(child_create_res.canister_id)
+            .build()?;
 
-//         let (child_wallet_balance,): (ic_utils::interfaces::wallet::BalanceResult,) = wallet
-//             .call(&child_wallet, "wallet_balance", Argument::default(), 0)
-//             .call_and_wait(create_waiter())
-//             .await?;
+        let (child_wallet_balance,): (ic_utils::interfaces::wallet::BalanceResult,) = wallet
+            .call(&child_wallet, "wallet_balance", Argument::default(), 0)
+            .call_and_wait(create_waiter())
+            .await?;
 
-//         eprintln!(
-//             "Child wallet one cycle balance: {}",
-//             child_wallet_balance.amount
-//         );
+        eprintln!(
+            "Child wallet one cycle balance: {}",
+            child_wallet_balance.amount
+        );
 
-//         //
-//         // create a second child wallet
-//         //
-//         let (child_two_create_res,) = wallet
-//             .wallet_create_wallet(2_100_000_000_000_u64, None)
-//             .call_and_wait(create_waiter())
-//             .await?;
+        //
+        // create a second child wallet
+        //
+        let (child_two_create_res,) = wallet
+            .wallet_create_wallet(2_100_000_000_000_u64, None, None, None, None)
+            .call_and_wait(create_waiter())
+            .await?;
 
-//         let child_two_create_res = child_two_create_res?;
+        let child_two_create_res = child_two_create_res?;
 
-//         let child_wallet_two = Canister::builder()
-//             .with_agent(&agent)
-//             .with_canister_id(child_two_create_res.canister_id.clone())
-//             .build()?;
+        let child_wallet_two = Canister::builder()
+            .with_agent(&agent)
+            .with_canister_id(child_two_create_res.canister_id.clone())
+            .build()?;
 
-//         eprintln!(
-//             "Created child wallet two.\nChild wallet two canister id: {:?}",
-//             child_two_create_res.canister_id.clone().to_text()
-//         );
-//         let (child_wallet_two_balance,): (ic_utils::interfaces::wallet::BalanceResult,) = wallet
-//             .call(&child_wallet_two, "wallet_balance", Argument::default(), 0)
-//             .call_and_wait(create_waiter())
-//             .await?;
-//         eprintln!(
-//             "Child wallet two cycle balance: {}",
-//             child_wallet_two_balance.amount
-//         );
+        eprintln!(
+            "Created child wallet two.\nChild wallet two canister id: {:?}",
+            child_two_create_res.canister_id.clone().to_text()
+        );
+        let (child_wallet_two_balance,): (ic_utils::interfaces::wallet::BalanceResult,) = wallet
+            .call(&child_wallet_two, "wallet_balance", Argument::default(), 0)
+            .call_and_wait(create_waiter())
+            .await?;
+        eprintln!(
+            "Child wallet two cycle balance: {}",
+            child_wallet_two_balance.amount
+        );
 
-//         //
-//         // Get wallet intermediate balance
-//         //
-//         let (wallet_intermediate_balance,) = wallet.wallet_balance().call().await?;
-//         eprintln!(
-//             "Parent wallet initial balance: {}\n      intermediate balance:  {}",
-//             wallet_initial_balance.amount, wallet_intermediate_balance.amount
-//         );
+        //
+        // Get wallet intermediate balance
+        //
+        let (wallet_intermediate_balance,) = wallet.wallet_balance().call().await?;
+        eprintln!(
+            "Parent wallet initial balance: {}\n      intermediate balance:  {}",
+            wallet_initial_balance.amount, wallet_intermediate_balance.amount
+        );
 
-//         //
-//         // Create a grandchild wallet from second child wallet
-//         //
-//         #[derive(candid::CandidType)]
-//         struct In {
-//             cycles: u64,
-//             controller: Option<Principal>,
-//         }
-//         let create_args = In {
-//             cycles: 1_000_000_000_000_u64,
-//             controller: None,
-//         };
-//         let mut args = Argument::default();
-//         args.push_idl_arg(create_args);
+        //
+        // Create a grandchild wallet from second child wallet
+        //
+        #[derive(candid::CandidType)]
+        struct In {
+            cycles: u64,
+            settings: CanisterSettings,
+        }
+        let create_args = In {
+            cycles: 1_000_000_000_000_u64,
+            settings: CanisterSettings {
+                controller: None,
+                compute_allocation: None,
+                memory_allocation: None,
+                freezing_threshold: None,
+            },
+        };
+        let mut args = Argument::default();
+        args.push_idl_arg(create_args);
 
-//         let (grandchild_create_res,): (Result<ic_utils::interfaces::wallet::CreateResult, String>,) =
-//             wallet
-//                 .call(&child_wallet_two, "wallet_create_wallet", args, 0)
-//                 .call_and_wait(create_waiter())
-//                 .await?;
-//         let grandchild_create_res = grandchild_create_res?;
+        let (grandchild_create_res,): (Result<ic_utils::interfaces::wallet::CreateResult, String>,) =
+            wallet
+                .call(&child_wallet_two, "wallet_create_wallet", args, 0)
+                .call_and_wait(create_waiter())
+                .await?;
+        let grandchild_create_res = grandchild_create_res?;
 
-//         let grandchild_wallet = Canister::builder()
-//             .with_agent(&agent)
-//             .with_canister_id(grandchild_create_res.canister_id.clone())
-//             .build()?;
-//         eprintln!(
-//             "Created grandchild wallet from child wallet two.\nGrandchild wallet canister id: {:?}",
-//             grandchild_create_res.canister_id.to_text()
-//         );
+        eprintln!(
+            "Created grandchild wallet from child wallet two.\nGrandchild wallet canister id: {:?}",
+            grandchild_create_res.canister_id.to_text()
+        );
 
-//         //
-//         // validate grandchild controller
-//         //
-//         let (grandchild_address_entries,): (Vec<ic_utils::interfaces::wallet::AddressEntry>,) =
-//             wallet
-//                 .call(&grandchild_wallet, "list_addresses", Argument::default(), 0)
-//                 .call_and_wait(create_waiter())
-//                 .await?;
-//         assert_eq!(
-//             child_two_create_res.canister_id.clone().to_text(),
-//             grandchild_address_entries[0].id.to_text()
-//         );
-//         eprintln!(
-//             "Grandchild wallet controller: {:?} with role: {:?}",
-//             grandchild_address_entries[0].id.to_text(),
-//             grandchild_address_entries[0].role,
-//         );
+        let (wallet_final_balance,) = wallet.wallet_balance().call().await?;
+        eprintln!(
+            "Parent wallet initial balance: {}\n      final balance:  {}",
+            wallet_initial_balance.amount, wallet_final_balance.amount
+        );
 
-//         let (wallet_final_balance,) = wallet.wallet_balance().call().await?;
-//         eprintln!(
-//             "Parent wallet initial balance: {}\n      final balance:  {}",
-//             wallet_initial_balance.amount, wallet_final_balance.amount
-//         );
-
-//         Ok(())
-//     });
-// }
+        Ok(())
+    });
+}
 
 #[ignore]
 #[test]
