@@ -3,8 +3,7 @@ use ic_agent::export::Principal;
 use ic_agent::identity::BasicIdentity;
 use ic_agent::{Agent, Identity};
 use ic_identity_hsm::HardwareIdentity;
-use ic_utils::call::AsyncCall;
-use ic_utils::interfaces::management_canister::MemoryAllocation;
+use ic_utils::interfaces::management_canister::builders::MemoryAllocation;
 use ic_utils::interfaces::ManagementCanister;
 use ring::signature::Ed25519KeyPair;
 use std::convert::TryFrom;
@@ -120,7 +119,8 @@ pub async fn create_universal_canister(agent: &Agent) -> Result<Principal, Box<d
     let ic00 = ManagementCanister::create(&agent);
 
     let (canister_id,) = ic00
-        .provisional_create_canister_with_cycles(None)
+        .create_canister()
+        .as_provisional_create_with_amount(None)
         .call_and_wait(create_waiter())
         .await?;
 
@@ -154,16 +154,17 @@ pub async fn create_wallet_canister(
     let ic00 = ManagementCanister::create(&agent);
 
     let (canister_id,) = ic00
-        .provisional_create_canister_with_cycles(cycles)
+        .create_canister()
+        .as_provisional_create_with_amount(cycles)
+        .with_memory_allocation(
+            MemoryAllocation::try_from(8000000000_u64)
+                .expect("Memory allocation must be between 0 and 2^48 (i.e 256TB), inclusively."),
+        )
         .call_and_wait(create_waiter())
         .await?;
 
     ic00.install_code(&canister_id, &canister_wasm)
         .with_raw_arg(vec![])
-        .with_memory_allocation(
-            MemoryAllocation::try_from(8000000000_u64)
-                .expect("Memory allocation must be between 0 and 2^48 (i.e 256TB), inclusively."),
-        )
         .call_and_wait(create_waiter())
         .await?;
 
