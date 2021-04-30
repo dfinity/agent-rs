@@ -25,7 +25,7 @@ leb128 = "0.2.4"
 mime = "0.3.16"
 openssl = "0.10.32"
 rand = "0.7.2"
-rustls = "0.19.0"
+rustls = "0.18.1"
 ring = { version = "0.16.11", features = ["std"] }
 serde = { version = "1.0.101", features = ["derive"] }
 serde_bytes = "0.11.2"
@@ -36,7 +36,7 @@ url = "2.1.0"
 webpki-roots = "0.20.0"
 
 [dependencies.reqwest]
-version = "0.11"
+version = "0.10.10"
 features = [ "blocking", "json", "rustls-tls" ]
 optional = true
 
@@ -48,7 +48,7 @@ optional = true
 candid = "0.6.17"
 mockito = "0.27.0"
 proptest = "0.9.5"
-tokio = { version = "1.2.0", features = ["full"] }
+tokio = { version = "0.2.25", features = ["full"] }
 
 [features]
 default = ["pem", "reqwest"]
