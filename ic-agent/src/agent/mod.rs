@@ -198,13 +198,14 @@ impl Agent {
         self.transport = Arc::new(transport);
     }
 
-    /// Fetch the root key of the replica using its status end point, and update the agent's
-    /// root key. This only uses the agent's specific upstream replica, and does not ensure
-    /// the root key validity. In order to prevent any MITM attack, developers should try
-    /// to contact multiple replicas.
+    /// By default, the agent is configured to talk to the main Internet Computer, and verifies
+    /// responses using a hard-coded public key.
     ///
-    /// The root key is necessary for validating state and certificates sent by the replica.
-    /// By default, it is set to [None] and validating methods will return an error.
+    /// This function will instruct the agent to ask the endpoint for its public key, and use
+    /// that instead. This is required when talking to a local test instance, for example.
+    ///
+    /// *Only use this when you are  _not_ talking to the main Internet Computer, otherwise
+    /// you are prone to man-in-the-middle attacks! Do not call this function by default.*
     pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
         let status = self.status().await?;
         let root_key = status
