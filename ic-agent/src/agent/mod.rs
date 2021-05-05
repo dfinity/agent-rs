@@ -43,6 +43,8 @@ use std::time::Duration;
 const IC_REQUEST_DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 
+const IC_ROOT_KEY: &[u8; 133] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00\x81\x4c\x0e\x6e\xc7\x1f\xab\x58\x3b\x08\xbd\x81\x37\x3c\x25\x5c\x3c\x37\x1b\x2e\x84\x86\x3c\x98\xa4\xf1\xe0\x8b\x74\x23\x5d\x14\xfb\x5d\x9c\x0c\xd5\x46\xd9\x68\x5f\x91\x3a\x0c\x0b\x2c\xc5\x34\x15\x83\xbf\x4b\x43\x92\xe4\x67\xdb\x96\xd6\x5b\x9b\xb4\xcb\x71\x71\x12\xf8\x47\x2e\x0d\x5a\x4d\x14\x50\x5f\xfd\x74\x84\xb0\x12\x91\x09\x1c\x5f\x87\xb9\x88\x83\x46\x3f\x98\x09\x1a\x0b\xaa\xae";
+
 /// A facade that connects to a Replica and does requests. These requests can be of any type
 /// (does not have to be HTTP). This trait is to inverse the control from the Agent over its
 /// connection code, and to resolve any direct dependencies to tokio or HTTP code from this
@@ -184,7 +186,7 @@ impl Agent {
             ingress_expiry_duration: config
                 .ingress_expiry_duration
                 .unwrap_or_else(|| Duration::from_secs(300)),
-            root_key: Arc::new(RwLock::new(None)),
+            root_key: Arc::new(RwLock::new(Some(IC_ROOT_KEY.to_vec()))),
             transport: config
                 .transport
                 .ok_or_else(AgentError::MissingReplicaTransport)?,
@@ -196,13 +198,14 @@ impl Agent {
         self.transport = Arc::new(transport);
     }
 
-    /// Fetch the root key of the replica using its status end point, and update the agent's
-    /// root key. This only uses the agent's specific upstream replica, and does not ensure
-    /// the root key validity. In order to prevent any MITM attack, developers should try
-    /// to contact multiple replicas.
+    /// By default, the agent is configured to talk to the main Internet Computer, and verifies
+    /// responses using a hard-coded public key.
     ///
-    /// The root key is necessary for validating state and certificates sent by the replica.
-    /// By default, it is set to [None] and validating methods will return an error.
+    /// This function will instruct the agent to ask the endpoint for its public key, and use
+    /// that instead. This is required when talking to a local test instance, for example.
+    ///
+    /// *Only use this when you are  _not_ talking to the main Internet Computer, otherwise
+    /// you are prone to man-in-the-middle attacks! Do not call this function by default.*
     pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
         let status = self.status().await?;
         let root_key = status

@@ -21,6 +21,10 @@ To get help, simply use `icx --help`.
 To read a PEM file, you can pass it with the `--pem` argument. The PEM file must be a valid
 key that can be used for the Internet Computer signing and validation.
 
+### Root Key
+For non-IC networks, pass --fetch-root-key to fetch the root key.  When this argument is not present,
+icx uses the hardcoded public key.
+
 ### Examples
 To call the management canister's `create_canister` function, you can use the following:
 
