@@ -81,6 +81,10 @@ pub(crate) struct Opts {
     /// is used as the Principal, if it parses as a Principal.
     #[clap(long, default_value = "localhost")]
     dns_suffix: Vec<String>,
+
+    /// If true, check the URI and the referer when determining canister id.
+    #[clap(long)]
+    check_uri_and_referer_for_canister_id: bool,
 }
 
 fn resolve_canister_id_from_hostname(
@@ -116,6 +120,7 @@ fn resolve_canister_id_from_uri(url: &hyper::Uri) -> Option<Principal> {
 fn resolve_canister_id(
     request: &Request<Body>,
     dns_canister_config: &DnsCanisterConfig,
+    check_uri_and_referer: bool,
 ) -> Option<Principal> {
     // Look for subdomains if there's a host header.
     if let Some(host_header) = request.headers().get("Host") {
@@ -127,17 +132,19 @@ fn resolve_canister_id(
         }
     }
 
-    // Look into the URI.
-    if let Some(canister_id) = resolve_canister_id_from_uri(request.uri()) {
-        return Some(canister_id);
-    }
+    if check_uri_and_referer {
+        // Look into the URI.
+        if let Some(canister_id) = resolve_canister_id_from_uri(request.uri()) {
+            return Some(canister_id);
+        }
 
-    // Look into the request by header.
-    if let Some(referer_header) = request.headers().get("referer") {
-        if let Ok(referer) = referer_header.to_str() {
-            if let Ok(referer_uri) = hyper::Uri::from_str(referer) {
-                if let Some(canister_id) = resolve_canister_id_from_uri(&referer_uri) {
-                    return Some(canister_id);
+        // Look into the request by header.
+        if let Some(referer_header) = request.headers().get("referer") {
+            if let Ok(referer) = referer_header.to_str() {
+                if let Ok(referer_uri) = hyper::Uri::from_str(referer) {
+                    if let Some(canister_id) = resolve_canister_id_from_uri(&referer_uri) {
+                        return Some(canister_id);
+                    }
                 }
             }
         }
@@ -150,9 +157,10 @@ async fn forward_request(
     request: Request<Body>,
     agent: Arc<Agent>,
     dns_canister_config: &DnsCanisterConfig,
+    check_uri_and_referer_for_canister_id: bool,
     logger: slog::Logger,
 ) -> Result<Response<Body>, Box<dyn Error>> {
-    let canister_id = match resolve_canister_id(&request, dns_canister_config) {
+    let canister_id = match resolve_canister_id(&request, dns_canister_config, check_uri_and_referer_for_canister_id) {
         None => {
             return Ok(Response::builder()
                 .status(StatusCode::BAD_REQUEST)
@@ -397,6 +405,7 @@ async fn handle_request(
     request: Request<Body>,
     replica_url: String,
     dns_canister_config: Arc<DnsCanisterConfig>,
+    check_uri_and_referer_for_canister_id: bool,
     logger: slog::Logger,
     debug: bool,
 ) -> Result<Response<Body>, Infallible> {
@@ -415,7 +424,7 @@ async fn handle_request(
                 .expect("Could not create agent..."),
         );
 
-        forward_request(request, agent, dns_canister_config.as_ref(), logger.clone()).await
+        forward_request(request, agent, dns_canister_config.as_ref(), check_uri_and_referer_for_canister_id, logger.clone()).await
     } {
         Err(err) => {
             slog::warn!(logger, "Internal Error during request:\n{:#?}", err);
@@ -445,6 +454,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let counter = AtomicUsize::new(0);
     let debug = opts.debug;
+    let check_uri_and_referer_for_canister_id = opts.check_uri_and_referer_for_canister_id;
 
     let service = make_service_fn(|socket: &hyper::server::conn::AddrStream| {
         let ip_addr = socket.remote_addr();
@@ -470,6 +480,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     req,
                     replica_url.clone(),
                     dns_canister_config,
+                    check_uri_and_referer_for_canister_id,
                     logger,
                     debug,
                 )
