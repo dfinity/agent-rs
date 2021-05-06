@@ -160,7 +160,11 @@ async fn forward_request(
     check_uri_and_referer_for_canister_id: bool,
     logger: slog::Logger,
 ) -> Result<Response<Body>, Box<dyn Error>> {
-    let canister_id = match resolve_canister_id(&request, dns_canister_config, check_uri_and_referer_for_canister_id) {
+    let canister_id = match resolve_canister_id(
+        &request,
+        dns_canister_config,
+        check_uri_and_referer_for_canister_id,
+    ) {
         None => {
             return Ok(Response::builder()
                 .status(StatusCode::BAD_REQUEST)
@@ -424,7 +428,14 @@ async fn handle_request(
                 .expect("Could not create agent..."),
         );
 
-        forward_request(request, agent, dns_canister_config.as_ref(), check_uri_and_referer_for_canister_id, logger.clone()).await
+        forward_request(
+            request,
+            agent,
+            dns_canister_config.as_ref(),
+            check_uri_and_referer_for_canister_id,
+            logger.clone(),
+        )
+        .await
     } {
         Err(err) => {
             slog::warn!(logger, "Internal Error during request:\n{:#?}", err);
