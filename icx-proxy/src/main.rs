@@ -82,9 +82,9 @@ pub(crate) struct Opts {
     #[clap(long, default_value = "localhost")]
     dns_suffix: Vec<String>,
 
-    /// If true, check the URI and the referer when determining canister id.
+    /// For local development, check the URI and the referer when determining canister id.
     #[clap(long)]
-    check_uri_and_referer_for_canister_id: bool,
+    local: bool,
 }
 
 fn resolve_canister_id_from_hostname(
@@ -465,7 +465,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let counter = AtomicUsize::new(0);
     let debug = opts.debug;
-    let check_uri_and_referer_for_canister_id = opts.check_uri_and_referer_for_canister_id;
+    let check_uri_and_referer_for_canister_id = opts.local;
 
     let service = make_service_fn(|socket: &hyper::server::conn::AddrStream| {
         let ip_addr = socket.remote_addr();
