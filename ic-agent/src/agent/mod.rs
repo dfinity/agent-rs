@@ -662,16 +662,7 @@ impl<'agent> UpdateBuilder<'agent> {
     /// Make an update call. This will call request_status on the RequestId in a loop and return
     /// the response as a byte vector.
     pub async fn call_and_wait<W: Waiter>(&self, waiter: W) -> Result<Vec<u8>, AgentError> {
-        let request_id = self
-            .agent
-            .update_raw(
-                &self.canister_id,
-                self.effective_canister_id.clone(),
-                self.method_name.as_str(),
-                self.arg.as_slice(),
-                self.ingress_expiry_datetime,
-            )
-            .await?;
+        let request_id = self.call().await?;
         self.wait(request_id, waiter).await
     }
 
