@@ -132,6 +132,11 @@ pub trait ReplicaV2Transport {
 ///     .with_url(URL)
 ///     .with_identity(create_identity())
 ///     .build()?;
+///
+///   // Only do the following call when not contacting the IC main net (e.g. a local emulator).
+///   // This is important as the main net public key is static and a rogue network could return
+///   // a different key.
+///   // If you know the root key ahead of time, you can use `agent.set_root_key(root_key)?;`.
 ///   agent.fetch_root_key().await?;
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 ///
@@ -212,6 +217,14 @@ impl Agent {
             .root_key
             .clone()
             .ok_or(AgentError::NoRootKeyInStatus(status))?;
+        self.set_root_key(root_key)
+    }
+
+    /// By default, the agent is configured to talk to the main Internet Computer, and verifies
+    /// responses using a hard-coded public key.
+    ///
+    /// Using this function you can set the root key to a known one if you know if beforehand.
+    pub fn set_root_key(&self, root_key: Vec<u8>) -> Result<(), AgentError> {
         if let Ok(mut write_guard) = self.root_key.write() {
             *write_guard = Some(root_key);
         }
