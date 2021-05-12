@@ -230,6 +230,7 @@ async fn forward_request(
                 match callback.callback {
                     IDLValue::Func(streaming_canister_id_id, method_name) => {
                         let mut callback_token = callback.token;
+                        let logger = logger.clone();
                         tokio::spawn(async move {
                             let canister =
                                 HttpRequestCanister::create(&agent, streaming_canister_id_id);
@@ -258,7 +259,12 @@ async fn forward_request(
                                             break;
                                         }
                                     }
-                                    Err(_) => {
+                                    Err(e) => {
+                                        slog::debug!(
+                                            logger,
+                                            "Error happened during streaming: {}",
+                                            e
+                                        );
                                         sender.abort();
                                         break;
                                     }
