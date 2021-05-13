@@ -33,6 +33,10 @@ struct Opts {
     #[clap(default_value = "http://localhost:8000/")]
     replica: String,
 
+    /// Set for non-IC networks: fetch the root key.  If not passed, use real hardcoded key.
+    #[clap(long)]
+    fetch_root_key: bool,
+
     /// An optional PEM file to read the identity from. If none is passed,
     /// a random identity will be created.
     #[clap(long)]
@@ -419,7 +423,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let result = match &opts.subcommand {
                 SubCommand::Update(_) => {
                     // We need to fetch the root key for updates.
-                    agent.fetch_root_key().await?;
+                    if opts.fetch_root_key {
+                        agent.fetch_root_key().await?;
+                    }
 
                     let mut builder = agent.update(&t.canister_id, &t.method_name);
 
