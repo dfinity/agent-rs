@@ -2,6 +2,7 @@
 members = [
     "ic-agent/",
     "ic-identity-hsm/",
+    "ic-types/",
     "ic-utils/",
     "icx/",
     "icx-proxy/",
