@@ -17,7 +17,7 @@ name = "icx"
 path = "src/main.rs"
 
 [dependencies]
-candid = "0.6.17"
+candid = "0.6.21"
 clap = "3.0.0-beta.1"
 delay = "0.3.1"
 hex = "0.4.2"
