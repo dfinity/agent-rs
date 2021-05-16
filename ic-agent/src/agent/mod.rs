@@ -666,8 +666,7 @@ impl<'agent> UpdateBuilder<'agent> {
         self.wait(request_id, waiter).await
     }
 
-    // Call request_status on the RequestId in a loop and return
-    // the response as a byte vector.
+    // Call request_status on the RequestId in a loop and return the response as a byte vector.
     pub async fn wait<W: Waiter>(
         &self,
         request_id: RequestId,
