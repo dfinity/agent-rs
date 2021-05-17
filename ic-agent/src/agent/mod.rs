@@ -446,7 +446,7 @@ impl Agent {
                 reject_message,
             }),
             RequestStatusResponse::Done => Err(AgentError::RequestStatusDoneNoReply(String::from(
-                request_id.clone(),
+                *request_id,
             ))),
         }
     }
