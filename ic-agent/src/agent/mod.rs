@@ -38,8 +38,8 @@ use std::convert::TryFrom;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
 use std::task::{Context, Poll};
+use std::time::Duration;
 
 const IC_REQUEST_DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
@@ -107,7 +107,6 @@ pub enum PollResult {
     /// The request completed and returned some data.
     Completed(Vec<u8>),
 }
-
 
 /// A low level Agent to make calls to a Replica endpoint.
 ///
@@ -442,17 +441,13 @@ impl Agent {
             RequestStatusResponse::Rejected {
                 reject_code,
                 reject_message,
-            } => {
-                Err(AgentError::ReplicaError {
-                    reject_code,
-                    reject_message,
-                })
-            }
-            RequestStatusResponse::Done => {
-                Err(AgentError::RequestStatusDoneNoReply(String::from(
-                    request_id.clone(),
-                )))
-            }
+            } => Err(AgentError::ReplicaError {
+                reject_code,
+                reject_message,
+            }),
+            RequestStatusResponse::Done => Err(AgentError::RequestStatusDoneNoReply(String::from(
+                request_id.clone(),
+            ))),
         }
     }
 
@@ -466,10 +461,7 @@ impl Agent {
         waiter.start();
         let mut request_accepted = false;
         loop {
-            match self
-                .poll(&request_id, effective_canister_id)
-                .await?
-            {
+            match self.poll(&request_id, effective_canister_id).await? {
                 PollResult::Submitted => {}
                 PollResult::Accepted => {
                     if !request_accepted {
@@ -485,7 +477,7 @@ impl Agent {
                             .map_err(|_| AgentError::WaiterRestartError())?;
                         request_accepted = true;
                     }
-                },
+                }
                 PollResult::Completed(result) => return Ok(result),
             };
 
@@ -702,16 +694,19 @@ impl UpdateCall<'_> {
         self,
         waiter: W,
     ) -> Pin<Box<dyn core::future::Future<Output = Result<Vec<u8>, AgentError>> + Send + 'out>>
-        where
-            Self: 'out,
-            W: Waiter + 'out,
+    where
+        Self: 'out,
+        W: Waiter + 'out,
     {
         async fn run<W>(_self: UpdateCall<'_>, waiter: W) -> Result<Vec<u8>, AgentError>
-            where
-                W: Waiter,
+        where
+            W: Waiter,
         {
             let request_id = _self.request_id.await?;
-            _self.agent.wait(request_id, &_self.effective_canister_id, waiter).await
+            _self
+                .agent
+                .wait(request_id, &_self.effective_canister_id, waiter)
+                .await
         }
         Box::pin(run(self, waiter))
     }
@@ -789,14 +784,13 @@ impl<'agent> UpdateBuilder<'agent> {
     /// Make an update call. This will return a RequestId.
     /// The RequestId should then be used for request_status (most likely in a loop).
     pub fn call(&self) -> UpdateCall {
-        let request_id_future = self.agent
-            .update_raw(
-                &self.canister_id,
-                self.effective_canister_id.clone(),
-                self.method_name.as_str(),
-                self.arg.as_slice(),
-                self.ingress_expiry_datetime,
-            );
+        let request_id_future = self.agent.update_raw(
+            &self.canister_id,
+            self.effective_canister_id.clone(),
+            self.method_name.as_str(),
+            self.arg.as_slice(),
+            self.ingress_expiry_datetime,
+        );
         UpdateCall {
             agent: &self.agent,
             request_id: Box::pin(request_id_future),
@@ -804,4 +798,3 @@ impl<'agent> UpdateBuilder<'agent> {
         }
     }
 }
-
