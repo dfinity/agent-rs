@@ -69,7 +69,7 @@
 //!   agent.fetch_root_key().await?;
 //!   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 //!
-//!   let waiter = delay::Delay::builder()
+//!   let waiter = garcon::Delay::builder()
 //!     .throttle(std::time::Duration::from_millis(500))
 //!     .timeout(std::time::Duration::from_secs(60 * 5))
 //!     .build();
