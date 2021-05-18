@@ -7,7 +7,7 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::{body, Body, Client, Request, Response, Server, StatusCode, Uri};
 use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
 use ic_agent::export::Principal;
-use ic_agent::Agent;
+use ic_agent::{Agent, AgentError};
 use ic_utils::call::SyncCall;
 use ic_utils::interfaces::http_request::{
     HeaderField, HttpRequestCanister, StreamingCallbackHttpResponse, StreamingStrategy,
@@ -203,11 +203,27 @@ async fn forward_request(
         );
     }
 
-    let (http_response,) = HttpRequestCanister::create(agent.as_ref(), canister_id.clone())
+    let canister = HttpRequestCanister::create(agent.as_ref(), canister_id.clone());
+    let result = canister
         .http_request(method, uri.to_string(), headers, &entire_body)
         .call()
-        .await
-        .map_err(Into::<Box<dyn Error>>::into)?;
+        .await;
+
+    // If the result is a Replica error, returns the 500 code and message. There is no information
+    // leak here because a user could use `dfx` to get the same reply.
+    let (http_response,) = match result {
+        Ok(response) => response,
+        Err(AgentError::ReplicaError {
+            reject_code,
+            reject_message,
+        }) => {
+            return Ok(Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(format!(r#"Replica Error ({}): "{}""#, reject_code, reject_message).into())
+                .unwrap());
+        }
+        Err(e) => return Err(e.into()),
+    };
 
     let mut builder = Response::builder().status(StatusCode::from_u16(http_response.status_code)?);
     for HeaderField(name, value) in http_response.headers {
