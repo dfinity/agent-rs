@@ -246,12 +246,16 @@ impl Agent {
     fn get_expiry_date(&self) -> u64 {
         // TODO(hansl): evaluate if we need this on the agent side (my hunch is we don't).
         let permitted_drift = Duration::from_secs(60);
-        (self.ingress_expiry_duration
-            + std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("Time wrapped around.")
-            - permitted_drift)
-            .as_nanos() as u64
+        (self
+            .ingress_expiry_duration
+            .as_nanos()
+            .saturating_add(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("Time wrapped around.")
+                    .as_nanos(),
+            )
+            .saturating_sub(permitted_drift.as_nanos())) as u64
     }
 
     fn construct_message(&self, request_id: &RequestId) -> Vec<u8> {
@@ -572,11 +576,14 @@ impl<'agent> QueryBuilder<'agent> {
         let permitted_drift = Duration::from_secs(60);
         self.ingress_expiry_datetime = Some(
             (duration
-                + std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("Time wrapped around")
-                - permitted_drift)
-                .as_nanos() as u64,
+                .as_nanos()
+                .saturating_add(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .expect("Time wrapped around")
+                        .as_nanos(),
+                )
+                .saturating_sub(permitted_drift.as_nanos())) as u64,
         );
         self
     }
@@ -650,11 +657,14 @@ impl<'agent> UpdateBuilder<'agent> {
         let permitted_drift = Duration::from_secs(60);
         self.ingress_expiry_datetime = Some(
             (duration
-                + std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("Time wrapped around")
-                - permitted_drift)
-                .as_nanos() as u64,
+                .as_nanos()
+                .saturating_add(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .expect("Time wrapped around")
+                        .as_nanos(),
+                )
+                .saturating_sub(permitted_drift.as_nanos())) as u64,
         );
         self
     }
