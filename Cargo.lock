@@ -365,12 +365,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
-name = "delay"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8546bb2c80129c9c85cd2b44e160b917f34a8b7ce9f3af675502cf9960e33d62"
-
-[[package]]
 name = "derivative"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -599,6 +593,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "garcon"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e83fb8961dcd3c26123863998521ae4d07e5e5aa8fb50b503380448f2e0ea069"
+dependencies = [
+ "futures-util",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -780,14 +783,14 @@ dependencies = [
 
 [[package]]
 name = "ic-agent"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-trait",
  "base32",
  "base64 0.12.3",
  "byteorder",
  "candid",
- "delay",
+ "garcon",
  "hex",
  "http",
  "ic-types",
@@ -844,7 +847,7 @@ version = "0.3.0"
 dependencies = [
  "async-trait",
  "candid",
- "delay",
+ "garcon",
  "ic-agent",
  "ic-types",
  "ring",
@@ -862,7 +865,7 @@ version = "0.2.0"
 dependencies = [
  "candid",
  "clap",
- "delay",
+ "garcon",
  "hex",
  "humantime",
  "ic-agent",
@@ -878,12 +881,12 @@ dependencies = [
 
 [[package]]
 name = "icx-proxy"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "candid",
  "clap",
- "delay",
+ "garcon",
  "hex",
  "hyper",
  "hyper-tls",
@@ -1792,7 +1795,7 @@ name = "ref-tests"
 version = "0.0.0"
 dependencies = [
  "candid",
- "delay",
+ "garcon",
  "ic-agent",
  "ic-identity-hsm",
  "ic-utils",

@@ -1,4 +1,4 @@
-use delay::Delay;
+use garcon::Delay;
 use ic_agent::export::Principal;
 use ic_agent::identity::BasicIdentity;
 use ic_agent::{Agent, Identity};

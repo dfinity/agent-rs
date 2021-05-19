@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use candid::de::ArgumentDecoder;
 use candid::{decode_args, decode_one};
-use delay::Waiter;
+use garcon::Waiter;
 use ic_agent::agent::UpdateBuilder;
 use ic_agent::export::Principal;
 use ic_agent::{Agent, AgentError, RequestId};
@@ -92,7 +92,7 @@ where
     ///     .with_interface(interfaces::ManagementCanister)
     ///     .build()?;
     ///
-    ///   let waiter = delay::Delay::builder()
+    ///   let waiter = garcon::Delay::builder()
     ///     .throttle(std::time::Duration::from_millis(500))
     ///     .timeout(std::time::Duration::from_secs(60 * 5))
     ///     .build();
