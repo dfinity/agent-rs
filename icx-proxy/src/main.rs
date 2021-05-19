@@ -67,6 +67,10 @@ pub(crate) struct Opts {
     #[clap(long, default_value = "http://localhost:8000/")]
     replica: Vec<String>,
 
+    /// An address to forward any requests from /_/
+    #[clap(long)]
+    proxy: Option<String>,
+
     /// Whether or not this is run in a debug context (e.g. errors returned in responses
     /// should show full stack and error details).
     #[clap(long)]
@@ -418,17 +422,26 @@ async fn handle_request(
     ip_addr: IpAddr,
     request: Request<Body>,
     replica_url: String,
+    proxy_url: Option<String>,
     dns_canister_config: Arc<DnsCanisterConfig>,
     logger: slog::Logger,
     debug: bool,
 ) -> Result<Response<Body>, Infallible> {
-    match if request.uri().path().starts_with("/api/") {
+    let request_uri_path = request.uri().path();
+    match if request_uri_path.starts_with("/api/") {
         slog::debug!(
             logger,
             "URI Request to path '{}' being forwarded to Replica",
             &request.uri().path()
         );
         forward_api(&ip_addr, request, &replica_url).await
+    } else if proxy_url.is_some() && request_uri_path.starts_with("/_/") {
+        slog::debug!(
+            logger,
+            "URI Request to path '{}' being forwarded to proxy",
+            &request.uri().path(),
+        );
+        forward_api(&ip_addr, request, &proxy_url.unwrap()).await
     } else {
         let agent = Arc::new(
             ic_agent::Agent::builder()
@@ -467,6 +480,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let counter = AtomicUsize::new(0);
     let debug = opts.debug;
+    let proxy_url = opts.proxy.clone();
 
     let service = make_service_fn(|socket: &hyper::server::conn::AddrStream| {
         let ip_addr = socket.remote_addr();
@@ -483,6 +497,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         let replica_url = replica_url.clone();
         slog::debug!(logger, "Replica URL: {}", replica_url);
 
+        let proxy_url = proxy_url.clone();
+
         async move {
             Ok::<_, Infallible>(service_fn(move |req| {
                 let logger = logger.clone();
@@ -491,6 +507,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     ip_addr,
                     req,
                     replica_url.clone(),
+                    proxy_url.clone(),
                     dns_canister_config,
                     logger,
                     debug,
