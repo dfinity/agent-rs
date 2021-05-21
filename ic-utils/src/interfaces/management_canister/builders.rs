@@ -31,6 +31,7 @@ pub struct CreateCanisterBuilder<'agent, 'canister: 'agent, T> {
     freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
     is_provisional_create: bool,
     amount: Option<u64>,
+    effective_cid: Option<Principal>,
 }
 
 impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
@@ -44,6 +45,7 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
             freezing_threshold: None,
             is_provisional_create: false,
             amount: None,
+            effective_cid: None,
         }
     }
 
@@ -58,6 +60,13 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
         Self {
             is_provisional_create: true,
             amount,
+            ..self
+        }
+    }
+
+    pub fn with_effective_canister_id(self, effective_cid: Principal) -> Self {
+        Self {
+            effective_cid: Some(effective_cid),
             ..self
         }
     }
@@ -218,6 +227,10 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
                     memory_allocation,
                     freezing_threshold,
                 })
+        };
+
+        let async_builder = if self.effective_cid.is_some() {
+            async_builder.with_effective_canister_id(self.effective_cid.unwrap())
         };
 
         Ok(async_builder
