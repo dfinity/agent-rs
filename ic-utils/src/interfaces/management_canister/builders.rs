@@ -230,7 +230,9 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
         };
 
         let async_builder = if self.effective_cid.is_some() {
-            async_builder.with_effective_canister_id(self.effective_cid)
+            async_builder.with_effective_canister_id(self.effective_cid.unwrap())
+        } else {
+            async_builder
         };
 
         Ok(async_builder
