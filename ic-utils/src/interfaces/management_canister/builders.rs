@@ -64,9 +64,9 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
         }
     }
 
-    pub fn with_effective_canister_id(self, effective_cid: Principal) -> Self {
+    pub fn with_optional_effective_canister_id(self, effective_cid: Option<Principal>) -> Self {
         Self {
-            effective_cid: Some(effective_cid),
+            effective_cid,
             ..self
         }
     }
@@ -230,7 +230,7 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
         };
 
         let async_builder = if self.effective_cid.is_some() {
-            async_builder.with_effective_canister_id(self.effective_cid.unwrap())
+            async_builder.with_effective_canister_id(self.effective_cid)
         };
 
         Ok(async_builder
