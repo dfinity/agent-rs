@@ -4,7 +4,7 @@ pub mod agent_error;
 pub(crate) mod builder;
 pub mod http_transport;
 pub(crate) mod nonce;
-pub(crate) mod replica_api;
+pub mod replica_api;
 pub(crate) mod response;
 mod response_authentication;
 
@@ -14,6 +14,7 @@ pub use agent_error::AgentError;
 pub use builder::AgentBuilder;
 pub use nonce::NonceFactory;
 pub use response::{Replied, RequestStatusResponse};
+pub use response_authentication::lookup_request_status;
 
 #[cfg(test)]
 mod agent_test;
@@ -31,7 +32,7 @@ use serde::Serialize;
 use status::Status;
 
 use crate::agent::response_authentication::{
-    extract_der, initialize_bls, lookup_canister_info, lookup_request_status, lookup_value,
+    extract_der, initialize_bls, lookup_canister_info, lookup_value,
 };
 use crate::bls::bls12381::bls;
 use std::convert::TryFrom;
