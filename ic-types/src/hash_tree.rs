@@ -1,22 +1,14 @@
 //! Types used to manage the Hash Tree. This type is currently private and should be improved
 //! and reviewed before being moved to ic-types (where it should ultimately live).
 //!
-//! TODO: clean this file and move it to ic-types. When this is done, consider generalizing
-//!       the Sha256Digest and use the same type in RequestId (they're interchangeable).
-//!
 //! cf https://docs.dfinity.systems/public/v/0.13.1/#_encoding_of_certificates
 
-// @todo Remove this by publishing hash_tree module in ic_types.
-#![allow(dead_code)]
-
+use crate::Sha256Digest;
 use hex::FromHexError;
-use openssl::sha::Sha256;
 use serde::{Deserialize, Serialize, Serializer};
+use sha2::Digest;
 use std::borrow::Cow;
 use std::convert::TryFrom;
-
-/// Type alias for a sha256 result (ie. a u256).
-pub type Sha256Digest = [u8; 32];
 
 #[derive(Clone, Hash, Ord, PartialOrd, Eq, PartialEq, Deserialize)]
 #[serde(from = "&serde_bytes::Bytes")]
@@ -296,7 +288,7 @@ impl std::fmt::Debug for HashTreeNode<'_> {
 impl<'a> HashTreeNode<'a> {
     /// Update a hasher with the domain separator (byte(|s|) . s).
     #[inline]
-    fn domain_sep(&self, hasher: &mut Sha256) {
+    fn domain_sep(&self, hasher: &mut sha2::Sha256) {
         let domain_sep = match self {
             HashTreeNode::Empty() => "ic-hashtree-empty",
             HashTreeNode::Fork(_) => "ic-hashtree-fork",
@@ -311,7 +303,7 @@ impl<'a> HashTreeNode<'a> {
     /// Calculate the digest of this node only.
     #[inline]
     pub fn digest(&self) -> Sha256Digest {
-        let mut hasher = Sha256::new();
+        let mut hasher = sha2::Sha256::new();
         self.domain_sep(&mut hasher);
 
         match self {
@@ -332,7 +324,7 @@ impl<'a> HashTreeNode<'a> {
             }
         }
 
-        hasher.finish()
+        hasher.finalize().into()
     }
 
     /// Lookup a single label, returning a reference to the labeled [HashTreeNode] node if found.
