@@ -101,7 +101,7 @@ pub(crate) fn lookup_reject_code(
         request_id.to_vec().into(),
         "reject_code".into(),
     ];
-    let code = lookup_value(&certificate, path)?;
+    let code = lookup_value(certificate, path)?;
     let mut readable = &code[..];
     Ok(leb128::read::unsigned(&mut readable)?)
 }
@@ -133,10 +133,10 @@ pub(crate) fn lookup_reply(
     Ok(RequestStatusResponse::Replied { reply })
 }
 
-pub(crate) fn lookup_value(
-    certificate: &Certificate,
+pub(crate) fn lookup_value<'a>(
+    certificate: &'a Certificate<'a>,
     path: Vec<Label>,
-) -> Result<&[u8], AgentError> {
+) -> Result<&'a [u8], AgentError> {
     match certificate.tree.lookup_path(&path) {
         LookupResult::Absent => Err(AgentError::LookupPathAbsent(path)),
         LookupResult::Unknown => Err(AgentError::LookupPathUnknown(path)),

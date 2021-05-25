@@ -26,7 +26,7 @@ use crate::export::Principal;
 use crate::hash_tree::Label;
 use crate::identity::Identity;
 use crate::{to_request_id, RequestId};
-use delay::Waiter;
+use garcon::Waiter;
 use serde::Serialize;
 use status::Status;
 
@@ -154,7 +154,7 @@ pub enum PollResult {
 ///   agent.fetch_root_key().await?;
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 ///
-///   let waiter = delay::Delay::builder()
+///   let waiter = garcon::Delay::builder()
 ///     .throttle(std::time::Duration::from_millis(500))
 ///     .timeout(std::time::Duration::from_secs(60 * 5))
 ///     .build();
@@ -260,12 +260,16 @@ impl Agent {
     fn get_expiry_date(&self) -> u64 {
         // TODO(hansl): evaluate if we need this on the agent side (my hunch is we don't).
         let permitted_drift = Duration::from_secs(60);
-        (self.ingress_expiry_duration
-            + std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("Time wrapped around.")
-            - permitted_drift)
-            .as_nanos() as u64
+        (self
+            .ingress_expiry_duration
+            .as_nanos()
+            .saturating_add(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("Time wrapped around.")
+                    .as_nanos(),
+            )
+            .saturating_sub(permitted_drift.as_nanos())) as u64
     }
 
     fn construct_message(&self, request_id: &RequestId) -> Vec<u8> {
@@ -491,7 +495,7 @@ impl Agent {
         &self,
         paths: Vec<Vec<Label>>,
         effective_canister_id: Principal,
-    ) -> Result<Certificate, AgentError> {
+    ) -> Result<Certificate<'_>, AgentError> {
         let read_state_response: ReadStateResponse = self
             .read_state_endpoint(
                 effective_canister_id,
@@ -655,11 +659,14 @@ impl<'agent> QueryBuilder<'agent> {
         let permitted_drift = Duration::from_secs(60);
         self.ingress_expiry_datetime = Some(
             (duration
-                + std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("Time wrapped around")
-                - permitted_drift)
-                .as_nanos() as u64,
+                .as_nanos()
+                .saturating_add(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .expect("Time wrapped around")
+                        .as_nanos(),
+                )
+                .saturating_sub(permitted_drift.as_nanos())) as u64,
         );
         self
     }
@@ -766,11 +773,14 @@ impl<'agent> UpdateBuilder<'agent> {
         let permitted_drift = Duration::from_secs(60);
         self.ingress_expiry_datetime = Some(
             (duration
-                + std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("Time wrapped around")
-                - permitted_drift)
-                .as_nanos() as u64,
+                .as_nanos()
+                .saturating_add(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .expect("Time wrapped around")
+                        .as_nanos(),
+                )
+                .saturating_sub(permitted_drift.as_nanos())) as u64,
         );
         self
     }
