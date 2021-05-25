@@ -412,7 +412,7 @@ impl Agent {
         &self,
         paths: Vec<Vec<Label>>,
         effective_canister_id: Principal,
-    ) -> Result<Certificate, AgentError> {
+    ) -> Result<Certificate<'_>, AgentError> {
         let read_state_response: ReadStateResponse = self
             .read_state_endpoint(
                 effective_canister_id,

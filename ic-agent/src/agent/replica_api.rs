@@ -104,8 +104,8 @@ pub struct ReadStateResponse {
 
 /// A `Certificate` as defined in https://docs.dfinity.systems/public/#_certificate
 #[derive(Deserialize)]
-pub(crate) struct Certificate {
-    pub tree: HashTree,
+pub(crate) struct Certificate<'a> {
+    pub tree: HashTree<'a>,
 
     #[serde(with = "serde_bytes")]
     pub signature: Vec<u8>,

@@ -1,25 +1,8 @@
 #![cfg(test)]
+use crate::hash_tree::{empty, fork, label, leaf, pruned, pruned_from_hex};
 use crate::hash_tree::{HashTree, HashTreeNode, Label, LookupResult, Sha256Digest};
 
-fn fork(left: HashTreeNode, right: HashTreeNode) -> HashTreeNode {
-    HashTreeNode::Fork(Box::new((left, right)))
-}
-fn label(label: &str, node: HashTreeNode) -> HashTreeNode {
-    HashTreeNode::Labeled(label.into(), Box::new(node))
-}
-fn pruned(hash: &str) -> HashTreeNode {
-    let digest: Sha256Digest =
-        std::convert::TryFrom::try_from(hex::decode(hash.as_bytes()).unwrap().as_ref()).unwrap();
-    HashTreeNode::Pruned(digest)
-}
-fn leaf(value: &[u8]) -> HashTreeNode {
-    HashTreeNode::Leaf(value.to_vec())
-}
-fn empty() -> HashTreeNode {
-    HashTreeNode::Empty()
-}
-
-fn lookup_path<P: AsRef<[&'static str]>>(tree: &HashTree, path: P) -> LookupResult {
+fn lookup_path<'a, P: AsRef<[&'static str]>>(tree: &'a HashTree<'a>, path: P) -> LookupResult<'a> {
     let path: Vec<Label> = path.as_ref().iter().map(|l| l.into()).collect();
 
     tree.lookup_path(path)
@@ -27,15 +10,13 @@ fn lookup_path<P: AsRef<[&'static str]>>(tree: &HashTree, path: P) -> LookupResu
 
 #[test]
 fn works_with_simple_tree() {
-    let tree = HashTree {
-        root: fork(
-            label("label 1", empty()),
-            fork(
-                pruned("0101010101010101010101010101010101010101010101010101010101010101"),
-                leaf(&[1, 2, 3, 4, 5, 6]),
-            ),
+    let tree = fork(
+        label("label 1", empty()),
+        fork(
+            pruned(*b"\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01"),
+            leaf(&[1u8, 2, 3, 4, 5, 6]),
         ),
-    };
+    );
 
     assert_eq!(
         hex::encode(tree.digest().to_vec()),
@@ -46,21 +27,19 @@ fn works_with_simple_tree() {
 #[test]
 fn spec_example() {
     // This is the example straight from the spec.
-    let tree = HashTree {
-        root: fork(
-            fork(
-                label(
-                    "a",
-                    fork(
-                        fork(label("x", leaf(b"hello")), empty()),
-                        label("y", leaf(b"world")),
-                    ),
+    let tree = fork(
+        fork(
+            label(
+                "a",
+                fork(
+                    fork(label("x", leaf(b"hello")), empty()),
+                    label("y", leaf(b"world")),
                 ),
-                label("b", leaf(b"good")),
             ),
-            fork(label("c", empty()), label("d", leaf(b"morning"))),
+            label("b", leaf(b"good")),
         ),
-    };
+        fork(label("c", empty()), label("d", leaf(b"morning"))),
+    );
 
     // Check CBOR serialization.
     assert_eq!(
@@ -77,27 +56,30 @@ fn spec_example() {
 #[test]
 fn spec_example_pruned() {
     // This is the example straight from the spec.
-    let tree = HashTree {
-        root: fork(
-            fork(
-                label(
-                    "a",
-                    fork(
-                        pruned("1b4feff9bef8131788b0c9dc6dbad6e81e524249c879e9f10f71ce3749f5a638"),
-                        label("y", leaf(b"world")),
-                    ),
-                ),
-                label(
-                    "b",
-                    pruned("7b32ac0c6ba8ce35ac82c255fc7906f7fc130dab2a090f80fe12f9c2cae83ba6"),
+    let tree = fork(
+        fork(
+            label(
+                "a",
+                fork(
+                    pruned_from_hex(
+                        "1b4feff9bef8131788b0c9dc6dbad6e81e524249c879e9f10f71ce3749f5a638",
+                    )
+                    .unwrap(),
+                    label("y", leaf(b"world")),
                 ),
             ),
-            fork(
-                pruned("ec8324b8a1f1ac16bd2e806edba78006479c9877fed4eb464a25485465af601d"),
-                label("d", leaf(b"morning")),
+            label(
+                "b",
+                pruned_from_hex("7b32ac0c6ba8ce35ac82c255fc7906f7fc130dab2a090f80fe12f9c2cae83ba6")
+                    .unwrap(),
             ),
         ),
-    };
+        fork(
+            pruned_from_hex("ec8324b8a1f1ac16bd2e806edba78006479c9877fed4eb464a25485465af601d")
+                .unwrap(),
+            label("d", leaf(b"morning")),
+        ),
+    );
 
     assert_eq!(
         hex::encode(tree.digest().to_vec()),
@@ -115,34 +97,20 @@ fn spec_example_pruned() {
     assert_eq!(lookup_path(&tree, ["bb"]), LookupResult::Unknown);
     assert_eq!(lookup_path(&tree, ["d"]), LookupResult::Found(b"morning"));
     assert_eq!(lookup_path(&tree, ["e"]), LookupResult::Absent);
-
-    // lookup_path(["a", "a"], pruned_tree) = Unknown
-    // lookup_path(["a", "y"], pruned_tree) = Found "world"
-    // lookup_path(["aa"],     pruned_tree) = Absent
-    // lookup_path(["ax"],     pruned_tree) = Absent
-    // lookup_path(["b"],      pruned_tree) = Unknown
-    // lookup_path(["bb"],     pruned_tree) = Unknown
-    // lookup_path(["d"],      pruned_tree) = Found "morning"
-    // lookup_path(["e"],      pruned_tree) = Absent
 }
 
 #[test]
 fn can_lookup_paths() {
-    let tree = HashTree {
-        root: HashTreeNode::Fork(Box::new((
-            HashTreeNode::Labeled("label 1".into(), Box::new(HashTreeNode::Empty())),
-            HashTreeNode::Fork(Box::new((
-                HashTreeNode::Pruned([1; 32]),
-                HashTreeNode::Fork(Box::new((
-                    HashTreeNode::Labeled(
-                        "label 2".into(),
-                        Box::new(HashTreeNode::Leaf(vec![1, 2, 3, 4, 5, 6])),
-                    ),
-                    HashTreeNode::Labeled("label 3".into(), Box::new(HashTreeNode::Empty())),
-                ))),
-            ))),
-        ))),
-    };
+    let tree = fork(
+        label("label 1", empty()),
+        fork(
+            pruned([1; 32]),
+            fork(
+                label("label 2", leaf(vec![1, 2, 3, 4, 5, 6])),
+                label("label 3", empty()),
+            ),
+        ),
+    );
 
     assert_eq!(
         tree.lookup_path(["label 2".into()]),
