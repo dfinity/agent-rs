@@ -120,4 +120,4 @@ pub use agent::{agent_error, agent_error::AgentError, nonce::NonceFactory, Agent
 pub use identity::{Identity, Signature};
 pub use request_id::{to_request_id, RequestId, RequestIdError};
 
-pub(crate) mod hash_tree;
+pub(crate) use ic_types::hash_tree;
