@@ -238,12 +238,7 @@ impl TryFrom<Vec<u8>> for Principal {
     type Error = PrincipalError;
 
     fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
-        match bytes.as_slice() {
-            [] => Ok(Principal::management_canister()),
-            [4] => Ok(Principal::anonymous()),
-            [.., 4] => Err(PrincipalError::BufferTooLong()),
-            bytes @ [..] => Ok(Principal(PrincipalInner::from(bytes))),
-        }
+        Self::try_from(bytes.as_slice())
     }
 }
 
@@ -260,7 +255,12 @@ impl TryFrom<&[u8]> for Principal {
     type Error = PrincipalError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        Self::try_from(bytes.to_vec())
+        match bytes {
+            [] => Ok(Principal::management_canister()),
+            [4] => Ok(Principal::anonymous()),
+            [.., 4] => Err(PrincipalError::BufferTooLong()),
+            bytes @ [..] => Ok(Principal(PrincipalInner::from(bytes))),
+        }
     }
 }
 
