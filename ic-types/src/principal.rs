@@ -1,4 +1,4 @@
-use sha2::{Digest, Sha224};
+use sha2::{digest::generic_array::typenum::Unsigned, Digest, Sha224};
 use std::cmp::min;
 use std::convert::TryFrom;
 use std::fmt::Write;
@@ -118,18 +118,35 @@ pub struct Principal(PrincipalInner);
 
 impl Principal {
     pub fn management_canister() -> Self {
-        Self(PrincipalInner::management_canister())
+        Self(PrincipalInner {
+            len: 0,
+            bytes: [0; PrincipalInner::MAX_LENGTH_IN_BYTES],
+        })
     }
 
     /// Right now we are enforcing a Twisted Edwards Curve 25519 point
     /// as the public key.
     pub fn self_authenticating<P: AsRef<[u8]>>(public_key: P) -> Self {
-        Self(PrincipalInner::self_authenticating(public_key.as_ref()))
+        let public_key = public_key.as_ref();
+        let mut bytes = [0u8; PrincipalInner::MAX_LENGTH_IN_BYTES];
+        let hash = Sha224::digest(public_key);
+        let len = hash.len();
+        bytes[..len].copy_from_slice(&hash);
+        // Now add a suffix denoting the identifier as representing a
+        // self-authenticating principal.
+        bytes[len] = PrincipalClass::SelfAuthenticating as u8;
+
+        Self(PrincipalInner{
+            len: (len + 1) as u8,
+            bytes,
+        })
     }
 
     /// An anonymous Principal.
     pub fn anonymous() -> Self {
-        Self(PrincipalInner::anonymous())
+        let mut bytes = [0u8; PrincipalInner::MAX_LENGTH_IN_BYTES];
+        bytes[0] = PrincipalClass::Anonymous as u8;
+        Self(PrincipalInner{ len: 1, bytes })
     }
 
     /// Parse the text format for canister IDs (e.g., `jkies-sibbb-ap6`).
@@ -222,8 +239,8 @@ impl TryFrom<Vec<u8>> for Principal {
 
     fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
         match bytes.as_slice() {
-            [] => Ok(Principal(PrincipalInner::management_canister())),
-            [4] => Ok(Principal(PrincipalInner::anonymous())),
+            [] => Ok(Principal::management_canister()),
+            [4] => Ok(Principal::anonymous()),
             [.., 4] => Err(PrincipalError::BufferTooLong()),
             bytes @ [..] => Ok(Principal(PrincipalInner::from(bytes))),
         }
@@ -336,43 +353,13 @@ struct PrincipalInner {
 }
 
 impl PrincipalInner {
-    const MAX_LENGTH_IN_BYTES: usize = 29;
+    const HASH_LEN_IN_BYTES: usize = <<Sha224 as Digest>::OutputSize as Unsigned>::USIZE; // 28
+    const MAX_LENGTH_IN_BYTES: usize = Self::HASH_LEN_IN_BYTES + 1; // 29
     const CRC_LENGTH_IN_BYTES: usize = 4;
 
     #[inline]
     pub fn as_slice(&self) -> &[u8] {
         &self.bytes[..self.len as usize]
-    }
-
-    #[inline]
-    pub fn management_canister() -> Self {
-        Self {
-            len: 0,
-            bytes: [0; Self::MAX_LENGTH_IN_BYTES],
-        }
-    }
-
-    #[inline]
-    pub fn anonymous() -> Self {
-        let mut bytes = [0u8; Self::MAX_LENGTH_IN_BYTES];
-        bytes[0] = PrincipalClass::Anonymous as u8;
-        Self { len: 1, bytes }
-    }
-
-    #[inline]
-    pub fn self_authenticating(public_key: &[u8]) -> Self {
-        let mut bytes = [0u8; PrincipalInner::MAX_LENGTH_IN_BYTES];
-        let hash = Sha224::digest(public_key);
-        let len = hash.len();
-        bytes[..len].copy_from_slice(&hash);
-        // Now add a suffix denoting the identifier as representing a
-        // self-authenticating principal.
-        bytes[len] = PrincipalClass::SelfAuthenticating as u8;
-
-        Self {
-            len: (len + 1) as u8,
-            bytes,
-        }
     }
 }
 
