@@ -5,14 +5,13 @@
 
 use crate::Sha256Digest;
 use hex::FromHexError;
-use serde::{Deserialize, Serialize, Serializer};
 use sha2::Digest;
 use std::borrow::Cow;
-use std::convert::TryFrom;
 
-#[derive(Clone, Hash, Ord, PartialOrd, Eq, PartialEq, Deserialize)]
-#[serde(from = "&serde_bytes::Bytes")]
-#[serde(into = "serde_bytes::ByteBuf")]
+#[derive(Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(from = "&serde_bytes::Bytes"))]
+#[cfg_attr(feature = "serde", serde(into = "&serde_bytes::ByteBuf"))]
 pub struct Label(Vec<u8>);
 
 impl Label {
@@ -22,6 +21,7 @@ impl Label {
     }
 }
 
+#[cfg(feature = "serde")]
 impl Into<serde_bytes::ByteBuf> for Label {
     fn into(self) -> serde_bytes::ByteBuf {
         serde_bytes::ByteBuf::from(self.as_bytes().to_vec())
@@ -65,7 +65,8 @@ impl std::fmt::Debug for Label {
     }
 }
 
-impl Serialize for Label {
+#[cfg(feature = "serde")]
+impl serde::Serialize for Label {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         if serializer.is_human_readable() {
             format!("{:?}", self).serialize(serializer)
@@ -128,15 +129,20 @@ impl<'a> Into<HashTreeNode<'a>> for HashTree<'a> {
     }
 }
 
-impl Serialize for HashTree<'_> {
-    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
+#[cfg(feature = "serde")]
+impl serde::Serialize for HashTree<'_> {
+    fn serialize<S>(
+        &self,
+        serializer: S,
+    ) -> Result<<S as serde::Serializer>::Ok, <S as serde::Serializer>::Error>
     where
-        S: Serializer,
+        S: serde::Serializer,
     {
         self.root.serialize(serializer)
     }
 }
 
+#[cfg(feature = "serde")]
 impl<'de> serde::Deserialize<'de> for HashTree<'_> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -405,12 +411,16 @@ impl<'a> HashTreeNode<'a> {
     }
 }
 
+#[cfg(feature = "serde")]
 impl serde::Serialize for HashTreeNode<'_> {
     // Serialize a `MixedHashTree` per the CDDL of the public spec.
     // See https://docs.dfinity.systems/public/certificates.cddl
-    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
+    fn serialize<S>(
+        &self,
+        serializer: S,
+    ) -> Result<<S as serde::Serializer>::Ok, <S as serde::Serializer>::Error>
     where
-        S: Serializer,
+        S: serde::Serializer,
     {
         use serde::ser::SerializeSeq;
         use serde_bytes::Bytes;
@@ -451,6 +461,7 @@ impl serde::Serialize for HashTreeNode<'_> {
     }
 }
 
+#[cfg(feature = "serde")]
 impl<'de, 'tree: 'de> serde::Deserialize<'de> for HashTreeNode<'tree> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -534,8 +545,8 @@ impl<'de, 'tree: 'de> serde::Deserialize<'de> for HashTreeNode<'tree> {
                             return Err(de::Error::invalid_length(3, &self));
                         }
 
-                        let digest =
-                            Sha256Digest::try_from(digest_bytes.as_ref()).map_err(|_| {
+                        let digest = std::convert::TryFrom::try_from(digest_bytes.as_ref())
+                            .map_err(|_| {
                                 de::Error::invalid_length(
                                     digest_bytes.len(),
                                     &"Expected digest blob",

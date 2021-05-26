@@ -1,6 +1,7 @@
 #![cfg(test)]
-use crate::hash_tree::{empty, fork, label, leaf, pruned, pruned_from_hex};
-use crate::hash_tree::{HashTree, HashTreeNode, Label, LookupResult, Sha256Digest};
+use crate::hash_tree::{
+    empty, fork, label, leaf, pruned, pruned_from_hex, HashTree, Label, LookupResult,
+};
 
 fn lookup_path<'a, P: AsRef<[&'static str]>>(tree: &'a HashTree<'a>, path: P) -> LookupResult<'a> {
     let path: Vec<Label> = path.as_ref().iter().map(|l| l.into()).collect();
@@ -42,6 +43,7 @@ fn spec_example() {
     );
 
     // Check CBOR serialization.
+    #[cfg(feature = "serde")]
     assert_eq!(
         hex::encode(serde_cbor::to_vec(&tree).unwrap()),
         "8301830183024161830183018302417882034568656c6c6f810083024179820345776f726c6483024162820344676f6f648301830241638100830241648203476d6f726e696e67"
