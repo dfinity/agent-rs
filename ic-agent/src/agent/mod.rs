@@ -486,7 +486,8 @@ impl Agent {
             };
 
             waiter
-                .wait()
+                .async_wait()
+                .await
                 .map_err(|_| AgentError::TimeoutWaitingForResponse())?;
         }
     }
