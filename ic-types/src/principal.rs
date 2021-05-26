@@ -1,5 +1,7 @@
 use sha2::{Digest, Sha224};
+use std::cmp::min;
 use std::convert::TryFrom;
+use std::fmt::Write;
 use thiserror::Error;
 
 /// An error happened while encoding, decoding or serializing a principal.
@@ -21,17 +23,27 @@ pub enum PrincipalError {
     ExternalError(String),
 }
 
-const ID_ANONYMOUS_BYTES: &[u8] = &[PrincipalClass::Anonymous as u8];
-
 /// A class of principal. Because this should not be exposed it
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
-pub(crate) enum PrincipalClass {
-    Unassigned = 0,
+enum PrincipalClass {
     OpaqueId = 1,
     SelfAuthenticating = 2,
     DerivedId = 3,
     Anonymous = 4,
+    Unassigned,
+}
+
+impl Into<u8> for PrincipalClass {
+    fn into(self) -> u8 {
+        match self {
+            PrincipalClass::Unassigned => 0,
+            PrincipalClass::OpaqueId => 1,
+            PrincipalClass::SelfAuthenticating => 2,
+            PrincipalClass::DerivedId => 3,
+            PrincipalClass::Anonymous => 4,
+        }
+    }
 }
 
 impl TryFrom<u8> for PrincipalClass {
@@ -104,52 +116,20 @@ impl TryFrom<u8> for PrincipalClass {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Principal(PrincipalInner);
 
-/// Inner structure of a Principal. This is not meant to be public as the different classes
-/// of principals are not public.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum PrincipalInner {
-    /// An empty principal that marks the system canister.
-    ManagementCanister,
-
-    /// A Principal created by the system (the Internet Computer). This can only be created by
-    /// using [`try_from`].
-    OpaqueId(Vec<u8>),
-
-    /// Defined as H(public_key) || 0x02.
-    SelfAuthenticating(Vec<u8>),
-
-    /// A Principal derived by another.
-    /// Defined as H(|registering_principal| || registering_principal || derivation_nonce) || 0x03
-    DerivedId(Vec<u8>),
-
-    /// The anonymous Principal.
-    Anonymous,
-
-    /// An unknown principal class was found. This is unspecified from the spec, but we can use it.
-    Unassigned(Vec<u8>),
-}
-
 impl Principal {
     pub fn management_canister() -> Self {
-        Self(PrincipalInner::ManagementCanister)
+        Self(PrincipalInner::management_canister())
     }
 
     /// Right now we are enforcing a Twisted Edwards Curve 25519 point
     /// as the public key.
     pub fn self_authenticating<P: AsRef<[u8]>>(public_key: P) -> Self {
-        let mut bytes: Vec<u8> = Vec::with_capacity(Sha224::output_size() + 1);
-        let hash = Sha224::digest(public_key.as_ref());
-        bytes.extend(&hash);
-
-        // Now add a suffix denoting the identifier as representing a
-        // self-authenticating principal.
-        bytes.push(PrincipalClass::SelfAuthenticating as u8);
-        Self(PrincipalInner::SelfAuthenticating(bytes))
+        Self(PrincipalInner::self_authenticating(public_key.as_ref()))
     }
 
     /// An anonymous Principal.
     pub fn anonymous() -> Self {
-        Self(PrincipalInner::Anonymous)
+        Self(PrincipalInner::anonymous())
     }
 
     /// Parse the text format for canister IDs (e.g., `jkies-sibbb-ap6`).
@@ -164,10 +144,10 @@ impl Principal {
         s.retain(|c| c != '-');
         match base32::decode(base32::Alphabet::RFC4648 { padding: false }, &s) {
             Some(mut bytes) => {
-                if bytes.len() < 4 {
+                if bytes.len() < PrincipalInner::CRC_LENGTH_IN_BYTES {
                     return Err(PrincipalError::TextTooSmall());
                 }
-                let result = Self::try_from(bytes.split_off(4))?;
+                let result = Self::try_from(bytes.split_off(PrincipalInner::CRC_LENGTH_IN_BYTES))?;
                 let expected = format!("{}", result);
 
                 if text.as_ref() != expected {
@@ -210,11 +190,11 @@ impl std::fmt::Display for Principal {
         s.make_ascii_lowercase();
 
         // write out string with dashes
+        let mut s = s.as_str();
         while s.len() > 5 {
-            // to bad split_off does not work the other way
-            let rest = s.split_off(5);
-            f.write_fmt(format_args!("{}-", s))?;
-            s = rest;
+            f.write_str(&s[..5])?;
+            f.write_char('-')?;
+            s = &s[5..];
         }
         f.write_str(&s)
     }
@@ -241,24 +221,11 @@ impl TryFrom<Vec<u8>> for Principal {
     type Error = PrincipalError;
 
     fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
-        if let Some(last_byte) = bytes.last() {
-            match PrincipalClass::try_from(*last_byte)? {
-                PrincipalClass::OpaqueId => Ok(Principal(PrincipalInner::OpaqueId(bytes))),
-                PrincipalClass::SelfAuthenticating => {
-                    Ok(Principal(PrincipalInner::SelfAuthenticating(bytes)))
-                }
-                PrincipalClass::DerivedId => Ok(Principal(PrincipalInner::DerivedId(bytes))),
-                PrincipalClass::Anonymous => {
-                    if bytes.len() == 1 {
-                        Ok(Principal(PrincipalInner::Anonymous))
-                    } else {
-                        Err(PrincipalError::BufferTooLong())
-                    }
-                }
-                PrincipalClass::Unassigned => Ok(Principal(PrincipalInner::Unassigned(bytes))),
-            }
-        } else {
-            Ok(Principal(PrincipalInner::ManagementCanister))
+        match bytes.as_slice() {
+            [] => Ok(Principal(PrincipalInner::management_canister())),
+            [4] => Ok(Principal(PrincipalInner::anonymous())),
+            [.., 4] => Err(PrincipalError::BufferTooLong()),
+            bytes @ [..] => Ok(Principal(PrincipalInner::from(bytes))),
         }
     }
 }
@@ -283,19 +250,6 @@ impl TryFrom<&[u8]> for Principal {
 impl AsRef<[u8]> for Principal {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
-    }
-}
-
-impl AsRef<[u8]> for PrincipalInner {
-    fn as_ref(&self) -> &[u8] {
-        match self {
-            PrincipalInner::Unassigned(v) => v,
-            PrincipalInner::ManagementCanister => &[],
-            PrincipalInner::OpaqueId(v) => v,
-            PrincipalInner::SelfAuthenticating(v) => v,
-            PrincipalInner::DerivedId(v) => v,
-            PrincipalInner::Anonymous => ID_ANONYMOUS_BYTES,
-        }
     }
 }
 
@@ -365,6 +319,78 @@ impl<'de> serde::Deserialize<'de> for Principal {
     }
 }
 
+/// Inner structure of a Principal. This is not meant to be public as the different classes
+/// of principals are not public.
+///
+/// This is a length (1 byte) and 29 bytes. The length can be 0, but won't ever be longer
+/// than 29. The current interface spec says that principals cannot be longer than 29 bytes.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(packed)]
+struct PrincipalInner {
+    /// Length.
+    len: u8,
+
+    /// The content buffer. When returning slices this should always be sized according to
+    /// `len`.
+    bytes: [u8; Self::MAX_LENGTH_IN_BYTES],
+}
+
+impl PrincipalInner {
+    const MAX_LENGTH_IN_BYTES: usize = 29;
+    const CRC_LENGTH_IN_BYTES: usize = 4;
+
+    #[inline]
+    pub fn as_slice(&self) -> &[u8] {
+        &self.bytes[..self.len as usize]
+    }
+
+    #[inline]
+    pub fn management_canister() -> Self {
+        Self {
+            len: 0,
+            bytes: [0; Self::MAX_LENGTH_IN_BYTES],
+        }
+    }
+
+    #[inline]
+    pub fn anonymous() -> Self {
+        let mut bytes = [0u8; Self::MAX_LENGTH_IN_BYTES];
+        bytes[0] = PrincipalClass::Anonymous as u8;
+        Self { len: 1, bytes }
+    }
+
+    #[inline]
+    pub fn self_authenticating(public_key: &[u8]) -> Self {
+        let mut bytes = [0u8; PrincipalInner::MAX_LENGTH_IN_BYTES];
+        let hash = Sha224::digest(public_key);
+        let len = hash.len();
+        bytes[..len].copy_from_slice(&hash);
+        // Now add a suffix denoting the identifier as representing a
+        // self-authenticating principal.
+        bytes[len] = PrincipalClass::SelfAuthenticating as u8;
+
+        Self {
+            len: (len + 1) as u8,
+            bytes,
+        }
+    }
+}
+
+impl AsRef<[u8]> for PrincipalInner {
+    fn as_ref(&self) -> &[u8] {
+        self.as_slice()
+    }
+}
+
+impl From<&[u8]> for PrincipalInner {
+    fn from(slice: &[u8]) -> Self {
+        let len = min(slice.len(), Self::MAX_LENGTH_IN_BYTES) as u8;
+        let mut bytes = [0u8; Self::MAX_LENGTH_IN_BYTES];
+        bytes[..len as usize].copy_from_slice(slice);
+        Self { len, bytes }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -394,7 +420,7 @@ mod tests {
     fn parse_management_canister_ok() {
         assert_eq!(
             Principal::from_str("aaaaa-aa").unwrap(),
-            Principal(PrincipalInner::ManagementCanister)
+            Principal::management_canister(),
         );
     }
 
