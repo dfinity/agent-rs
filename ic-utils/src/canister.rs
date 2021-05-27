@@ -4,7 +4,7 @@ use candid::parser::value::IDLValue;
 use candid::ser::IDLBuilder;
 use candid::CandidType;
 use ic_agent::{Agent, AgentError};
-use ic_types::{Principal, PrincipalError};
+use ic_types::Principal;
 use std::convert::TryInto;
 use thiserror::Error;
 
@@ -12,7 +12,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum CanisterBuilderError {
     #[error("Getting the Canister ID returned an error: {0}")]
-    PrincipalError(#[from] PrincipalError),
+    PrincipalError(#[from] Box<dyn std::error::Error>),
 
     #[error("Must specify an Agent")]
     MustSpecifyAnAgent(),
@@ -24,7 +24,7 @@ pub enum CanisterBuilderError {
 /// A canister builder, which can be used to create a canister abstraction.
 pub struct CanisterBuilder<'agent, T = ()> {
     agent: Option<&'agent Agent>,
-    canister_id: Option<Result<Principal, PrincipalError>>,
+    canister_id: Option<Result<Principal, CanisterBuilderError>>,
     interface: T,
 }
 
@@ -32,14 +32,14 @@ impl<'agent, T> CanisterBuilder<'agent, T> {
     /// Attach a canister ID to this canister.
     pub fn with_canister_id<E, P>(self, canister_id: P) -> Self
     where
-        E: std::error::Error,
+        E: 'static + std::error::Error,
         P: TryInto<Principal, Error = E>,
     {
         Self {
             canister_id: Some(
                 canister_id
                     .try_into()
-                    .map_err(|e| PrincipalError::ExternalError(format!("{}", e))),
+                    .map_err(|e| CanisterBuilderError::PrincipalError(Box::new(e))),
             ),
             ..self
         }
