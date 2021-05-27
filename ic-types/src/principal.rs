@@ -167,7 +167,31 @@ impl Principal {
         ]))
     }
 
-    /// Attempt to decode a slice into a Principal. `panic`s if the bytes can't be interpreted.
+    /// Attempt to decode a slice into a Principal.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the bytes can't be interpreted.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ic_types::Principal;
+    /// const FOO: Principal = Principal::from_slice(&[0; 29]);    // normal length
+    /// const MGMT: Principal = Principal::from_slice(&[]);        // management
+    /// const OPQ: Principal = Principal::from_slice(&[4,3,2,1]);  // opaque id
+    /// ```
+    ///
+    /// ```compile_fail
+    /// # use ic_types::Principal;
+    /// const BAR: Principal = Principal::from_slice(&[0; 32]); // Fails, too long
+    /// ```
+    ///
+    /// ```compile_fail
+    /// # use ic_types::Principal;
+    /// // Fails, ends in 0x04 (anonymous), but has a prefix
+    /// const BAZ: Principal = Principal::from_slice(&[1,2,3,4]);
+    /// ```
     pub const fn from_slice(bytes: &[u8]) -> Self {
         if let Ok(v) = Self::try_from_slice(bytes) {
             v
@@ -374,15 +398,6 @@ impl<'de> serde::Deserialize<'de> for Principal {
     }
 }
 
-#[doc(hidden)]
-pub struct PrincipalInnerTester;
-
-impl PrincipalInnerTester {
-    pub const fn test_from_slice(slice: &[u8]) {
-        PrincipalInner::from_slice(slice);
-    }
-}
-
 mod inner {
     use sha2::{digest::generic_array::typenum::Unsigned, Digest, Sha224};
 
@@ -414,18 +429,6 @@ mod inner {
         }
 
         /// Panics if the length is over `HASH_LEN_IN_BYTES`
-        ///
-        /// ```compile_fail
-        /// use ic_types::principal::PrincipalInnerTester;
-        /// const FOO: () = PrincipalInnerTester::test_from_slice(&[0; 32]);
-        /// ```
-        ///
-        /// ```
-        /// use ic_types::principal::PrincipalInnerTester;
-        /// const FOO: () = PrincipalInnerTester::test_from_slice(&[0; 29]);
-        /// const BAR: () = PrincipalInnerTester::test_from_slice(&[0; 0]);
-        /// const BAZ: () = PrincipalInnerTester::test_from_slice(&[0; 4]);
-        /// ```
         pub const fn from_slice(slice: &[u8]) -> Self {
             if let Some(v) = Self::try_from_slice(slice) {
                 v
@@ -494,6 +497,19 @@ use inner::PrincipalInner;
 mod tests {
     use super::*;
     use std::str::FromStr;
+
+    #[test]
+    #[should_panic]
+    fn inner_fails() {
+        let _ = inner::PrincipalInner::from_slice(&[0; 32]);
+    }
+
+    #[test]
+    fn inner() {
+        let _ = inner::PrincipalInner::from_slice(&[0; 29]);
+        let _ = inner::PrincipalInner::from_slice(&[0; 0]);
+        let _ = inner::PrincipalInner::from_slice(&[0; 4]);
+    }
 
     #[cfg(feature = "serde")]
     #[test]
