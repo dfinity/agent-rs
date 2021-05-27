@@ -834,7 +834,9 @@ version = "0.1.2"
 dependencies = [
  "base32",
  "crc32fast",
+ "hex",
  "serde",
+ "serde_bytes",
  "serde_cbor",
  "serde_json",
  "sha2",

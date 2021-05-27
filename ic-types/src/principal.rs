@@ -1,6 +1,23 @@
 use sha2::{Digest, Sha224};
 use std::convert::TryFrom;
+use std::fmt::Write;
 use thiserror::Error;
+
+// TODO: remove (blocked by rust-lang/rust#85194)
+const ASSERT: [(); 1] = [()];
+macro_rules! const_panic {
+    ($($arg:tt)*) => {
+        #[allow(unconditional_panic)]
+        let _ = $crate::principal::ASSERT[1];
+    };
+}
+
+/// An error happened while decoding bytes to make a principal.
+#[derive(Error, Clone, Debug, Eq, PartialEq)]
+pub enum PrincipalBufferError {
+    #[error("Buffer is too long.")]
+    BufferTooLong(),
+}
 
 /// An error happened while encoding, decoding or serializing a principal.
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
@@ -21,17 +38,35 @@ pub enum PrincipalError {
     ExternalError(String),
 }
 
-const ID_ANONYMOUS_BYTES: &[u8] = &[PrincipalClass::Anonymous as u8];
+impl From<PrincipalBufferError> for PrincipalError {
+    fn from(v: PrincipalBufferError) -> Self {
+        match v {
+            PrincipalBufferError::BufferTooLong() => Self::BufferTooLong(),
+        }
+    }
+}
 
 /// A class of principal. Because this should not be exposed it
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
-pub(crate) enum PrincipalClass {
-    Unassigned = 0,
+enum PrincipalClass {
     OpaqueId = 1,
     SelfAuthenticating = 2,
     DerivedId = 3,
     Anonymous = 4,
+    Unassigned,
+}
+
+impl Into<u8> for PrincipalClass {
+    fn into(self) -> u8 {
+        match self {
+            PrincipalClass::Unassigned => 0,
+            PrincipalClass::OpaqueId => 1,
+            PrincipalClass::SelfAuthenticating => 2,
+            PrincipalClass::DerivedId => 3,
+            PrincipalClass::Anonymous => 4,
+        }
+    }
 }
 
 impl TryFrom<u8> for PrincipalClass {
@@ -89,7 +124,7 @@ impl TryFrom<u8> for PrincipalClass {
 /// let id = Principal::from_str("2chl6-4hpzw-vqaaa-aaaaa-c").unwrap();
 ///
 /// // JSON is human readable, so this will serialize to a textual
-/// // main.rsrepresentation of the Principal.
+/// // representation of the Principal.
 /// assert_eq!(
 ///     serde_json::to_string(&Data { id: id.clone() }).unwrap(),
 ///     r#"{"id":"2chl6-4hpzw-vqaaa-aaaaa-c"}"#
@@ -104,52 +139,81 @@ impl TryFrom<u8> for PrincipalClass {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Principal(PrincipalInner);
 
-/// Inner structure of a Principal. This is not meant to be public as the different classes
-/// of principals are not public.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum PrincipalInner {
-    /// An empty principal that marks the system canister.
-    ManagementCanister,
-
-    /// A Principal created by the system (the Internet Computer). This can only be created by
-    /// using [`try_from`].
-    OpaqueId(Vec<u8>),
-
-    /// Defined as H(public_key) || 0x02.
-    SelfAuthenticating(Vec<u8>),
-
-    /// A Principal derived by another.
-    /// Defined as H(|registering_principal| || registering_principal || derivation_nonce) || 0x03
-    DerivedId(Vec<u8>),
-
-    /// The anonymous Principal.
-    Anonymous,
-
-    /// An unknown principal class was found. This is unspecified from the spec, but we can use it.
-    Unassigned(Vec<u8>),
-}
-
 impl Principal {
-    pub fn management_canister() -> Self {
-        Self(PrincipalInner::ManagementCanister)
+    const CRC_LENGTH_IN_BYTES: usize = 4;
+
+    /// An empty principal that marks the system canister.
+    pub const fn management_canister() -> Self {
+        Self(PrincipalInner::new())
     }
 
     /// Right now we are enforcing a Twisted Edwards Curve 25519 point
     /// as the public key.
     pub fn self_authenticating<P: AsRef<[u8]>>(public_key: P) -> Self {
-        let mut bytes: Vec<u8> = Vec::with_capacity(Sha224::output_size() + 1);
-        let hash = Sha224::digest(public_key.as_ref());
-        bytes.extend(&hash);
-
+        let public_key = public_key.as_ref();
+        let hash = Sha224::digest(public_key);
+        let mut inner = PrincipalInner::from_slice(hash.as_slice());
         // Now add a suffix denoting the identifier as representing a
         // self-authenticating principal.
-        bytes.push(PrincipalClass::SelfAuthenticating as u8);
-        Self(PrincipalInner::SelfAuthenticating(bytes))
+        inner.push(PrincipalClass::SelfAuthenticating as u8);
+
+        Self(inner)
     }
 
     /// An anonymous Principal.
-    pub fn anonymous() -> Self {
-        Self(PrincipalInner::Anonymous)
+    pub const fn anonymous() -> Self {
+        Self(PrincipalInner::from_slice(&[
+            PrincipalClass::Anonymous as u8
+        ]))
+    }
+
+    /// Attempt to decode a slice into a Principal.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the bytes can't be interpreted.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ic_types::Principal;
+    /// const FOO: Principal = Principal::from_slice(&[0; 29]);    // normal length
+    /// const MGMT: Principal = Principal::from_slice(&[]);        // management
+    /// const OPQ: Principal = Principal::from_slice(&[4,3,2,1]);  // opaque id
+    /// ```
+    ///
+    /// ```compile_fail
+    /// # use ic_types::Principal;
+    /// const BAR: Principal = Principal::from_slice(&[0; 32]); // Fails, too long
+    /// ```
+    ///
+    /// ```compile_fail
+    /// # use ic_types::Principal;
+    /// // Fails, ends in 0x04 (anonymous), but has a prefix
+    /// const BAZ: Principal = Principal::from_slice(&[1,2,3,4]);
+    /// ```
+    pub const fn from_slice(bytes: &[u8]) -> Self {
+        if let Ok(v) = Self::try_from_slice(bytes) {
+            v
+        } else {
+            // TODO: replace with panic (blocked by rust-lang/rust#85194)
+            const_panic!("slice length exceeded capacity");
+            //panic!("slice length exceeds capacity")
+            Self::management_canister()
+        }
+    }
+
+    /// Attempt to decode a slice into a Principal.
+    pub const fn try_from_slice(bytes: &[u8]) -> Result<Self, PrincipalBufferError> {
+        match bytes {
+            [] => Ok(Principal::management_canister()),
+            [4] => Ok(Principal::anonymous()),
+            [.., 4] => Err(PrincipalBufferError::BufferTooLong()),
+            bytes @ [..] => match PrincipalInner::try_from_slice(bytes) {
+                None => Err(PrincipalBufferError::BufferTooLong()),
+                Some(v) => Ok(Principal(v)),
+            },
+        }
     }
 
     /// Parse the text format for canister IDs (e.g., `jkies-sibbb-ap6`).
@@ -164,10 +228,10 @@ impl Principal {
         s.retain(|c| c != '-');
         match base32::decode(base32::Alphabet::RFC4648 { padding: false }, &s) {
             Some(mut bytes) => {
-                if bytes.len() < 4 {
+                if bytes.len() < Principal::CRC_LENGTH_IN_BYTES {
                     return Err(PrincipalError::TextTooSmall());
                 }
-                let result = Self::try_from(bytes.split_off(4))?;
+                let result = Self::try_from(bytes.split_off(Principal::CRC_LENGTH_IN_BYTES))?;
                 let expected = format!("{}", result);
 
                 if text.as_ref() != expected {
@@ -210,11 +274,11 @@ impl std::fmt::Display for Principal {
         s.make_ascii_lowercase();
 
         // write out string with dashes
+        let mut s = s.as_str();
         while s.len() > 5 {
-            // to bad split_off does not work the other way
-            let rest = s.split_off(5);
-            f.write_fmt(format_args!("{}-", s))?;
-            s = rest;
+            f.write_str(&s[..5])?;
+            f.write_char('-')?;
+            s = &s[5..];
         }
         f.write_str(&s)
     }
@@ -238,33 +302,15 @@ impl TryFrom<&str> for Principal {
 
 /// Vector TryFrom. The slice and array version of this trait are defined below.
 impl TryFrom<Vec<u8>> for Principal {
-    type Error = PrincipalError;
+    type Error = PrincipalBufferError;
 
     fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
-        if let Some(last_byte) = bytes.last() {
-            match PrincipalClass::try_from(*last_byte)? {
-                PrincipalClass::OpaqueId => Ok(Principal(PrincipalInner::OpaqueId(bytes))),
-                PrincipalClass::SelfAuthenticating => {
-                    Ok(Principal(PrincipalInner::SelfAuthenticating(bytes)))
-                }
-                PrincipalClass::DerivedId => Ok(Principal(PrincipalInner::DerivedId(bytes))),
-                PrincipalClass::Anonymous => {
-                    if bytes.len() == 1 {
-                        Ok(Principal(PrincipalInner::Anonymous))
-                    } else {
-                        Err(PrincipalError::BufferTooLong())
-                    }
-                }
-                PrincipalClass::Unassigned => Ok(Principal(PrincipalInner::Unassigned(bytes))),
-            }
-        } else {
-            Ok(Principal(PrincipalInner::ManagementCanister))
-        }
+        Self::try_from(bytes.as_slice())
     }
 }
 
 impl TryFrom<&Vec<u8>> for Principal {
-    type Error = PrincipalError;
+    type Error = PrincipalBufferError;
 
     fn try_from(bytes: &Vec<u8>) -> Result<Self, Self::Error> {
         Self::try_from(bytes.as_slice())
@@ -273,29 +319,16 @@ impl TryFrom<&Vec<u8>> for Principal {
 
 /// Implement try_from for a generic sized slice.
 impl TryFrom<&[u8]> for Principal {
-    type Error = PrincipalError;
+    type Error = PrincipalBufferError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        Self::try_from(bytes.to_vec())
+        Self::try_from_slice(bytes)
     }
 }
 
 impl AsRef<[u8]> for Principal {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
-    }
-}
-
-impl AsRef<[u8]> for PrincipalInner {
-    fn as_ref(&self) -> &[u8] {
-        match self {
-            PrincipalInner::Unassigned(v) => v,
-            PrincipalInner::ManagementCanister => &[],
-            PrincipalInner::OpaqueId(v) => v,
-            PrincipalInner::SelfAuthenticating(v) => v,
-            PrincipalInner::DerivedId(v) => v,
-            PrincipalInner::Anonymous => ID_ANONYMOUS_BYTES,
-        }
     }
 }
 
@@ -365,10 +398,118 @@ impl<'de> serde::Deserialize<'de> for Principal {
     }
 }
 
+mod inner {
+    use sha2::{digest::generic_array::typenum::Unsigned, Digest, Sha224};
+
+    /// Inner structure of a Principal. This is not meant to be public as the different classes
+    /// of principals are not public.
+    ///
+    /// This is a length (1 byte) and 29 bytes. The length can be 0, but won't ever be longer
+    /// than 29. The current interface spec says that principals cannot be longer than 29 bytes.
+    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[repr(packed)]
+    pub struct PrincipalInner {
+        /// Length.
+        len: u8,
+
+        /// The content buffer. When returning slices this should always be sized according to
+        /// `len`.
+        bytes: [u8; Self::MAX_LENGTH_IN_BYTES],
+    }
+
+    impl PrincipalInner {
+        const HASH_LEN_IN_BYTES: usize = <<Sha224 as Digest>::OutputSize as Unsigned>::USIZE; // 28
+        const MAX_LENGTH_IN_BYTES: usize = Self::HASH_LEN_IN_BYTES + 1; // 29
+
+        pub const fn new() -> Self {
+            PrincipalInner {
+                len: 0,
+                bytes: [0; Self::MAX_LENGTH_IN_BYTES],
+            }
+        }
+
+        /// Panics if the length is over `HASH_LEN_IN_BYTES`
+        pub const fn from_slice(slice: &[u8]) -> Self {
+            if let Some(v) = Self::try_from_slice(slice) {
+                v
+            } else {
+                // TODO: replace with panic (blocked by rust-lang/rust#85194)
+                const_panic!("slice length exceeded capacity");
+                Self::new()
+                //panic!("slice length exceeds capacity")
+            }
+        }
+
+        /// Returns none if the slice length is over `MAX_LENGTH_IN_BYTES`
+        pub const fn try_from_slice(slice: &[u8]) -> Option<Self> {
+            let len = slice.len();
+            const MAX_LENGTH_IN_BYTES: usize = PrincipalInner::MAX_LENGTH_IN_BYTES;
+            if len > MAX_LENGTH_IN_BYTES {
+                None
+            } else {
+                // for-loops in const fn are not supported
+                const fn assign_recursive(
+                    mut v: [u8; MAX_LENGTH_IN_BYTES],
+                    slice: &[u8],
+                    index: usize,
+                ) -> [u8; MAX_LENGTH_IN_BYTES] {
+                    if index == 0 {
+                        v
+                    } else {
+                        let index = index - 1;
+                        v[index] = slice[index];
+                        assign_recursive(v, slice, index)
+                    }
+                }
+                let bytes = assign_recursive([0; MAX_LENGTH_IN_BYTES], slice, len);
+                //bytes.copy_from_slice(slice);
+                Some(PrincipalInner {
+                    bytes,
+                    len: len as u8,
+                })
+            }
+        }
+
+        #[inline]
+        pub fn as_slice(&self) -> &[u8] {
+            &self.bytes[..self.len as usize]
+        }
+
+        pub fn push(&mut self, val: u8) {
+            if self.len >= Self::MAX_LENGTH_IN_BYTES as u8 {
+                panic!("capacity overflow");
+            } else {
+                self.bytes[self.len as usize] = val;
+                self.len += 1;
+            }
+        }
+    }
+
+    impl AsRef<[u8]> for PrincipalInner {
+        fn as_ref(&self) -> &[u8] {
+            self.as_slice()
+        }
+    }
+}
+use inner::PrincipalInner;
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::str::FromStr;
+
+    #[test]
+    #[should_panic]
+    fn inner_fails() {
+        let _ = inner::PrincipalInner::from_slice(&[0; 32]);
+    }
+
+    #[test]
+    fn inner() {
+        let _ = inner::PrincipalInner::from_slice(&[0; 29]);
+        let _ = inner::PrincipalInner::from_slice(&[0; 0]);
+        let _ = inner::PrincipalInner::from_slice(&[0; 4]);
+    }
 
     #[cfg(feature = "serde")]
     #[test]
@@ -394,7 +535,7 @@ mod tests {
     fn parse_management_canister_ok() {
         assert_eq!(
             Principal::from_str("aaaaa-aa").unwrap(),
-            Principal(PrincipalInner::ManagementCanister)
+            Principal::management_canister(),
         );
     }
 
