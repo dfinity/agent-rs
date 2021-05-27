@@ -418,6 +418,12 @@ async fn forward_api(
     Ok(response)
 }
 
+async fn not_found() -> Result<Response<Body>, Box<dyn Error>> {
+    Ok(Response::builder()
+        .status(StatusCode::NOT_FOUND)
+        .body("Not found".into())?)
+}
+
 async fn handle_request(
     ip_addr: IpAddr,
     request: Request<Body>,
@@ -435,13 +441,22 @@ async fn handle_request(
             &request.uri().path()
         );
         forward_api(&ip_addr, request, &replica_url).await
-    } else if proxy_url.is_some() && request_uri_path.starts_with("/_/") {
-        slog::debug!(
-            logger,
-            "URI Request to path '{}' being forwarded to proxy",
-            &request.uri().path(),
-        );
-        forward_api(&ip_addr, request, &proxy_url.unwrap()).await
+    } else if request_uri_path.starts_with("/_/") {
+        if let Some(proxy_url) = proxy_url {
+            slog::debug!(
+                logger,
+                "URI Request to path '{}' being forwarded to proxy",
+                &request.uri().path(),
+            );
+            forward_api(&ip_addr, request, &proxy_url).await
+        } else {
+            slog::warn!(
+                logger,
+                "Unable to proxy {} because no --proxy is configured",
+                &request.uri().path()
+            );
+            not_found().await
+        }
     } else {
         let agent = Arc::new(
             ic_agent::Agent::builder()
