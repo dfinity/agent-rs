@@ -418,7 +418,7 @@ async fn forward_api(
     Ok(response)
 }
 
-async fn not_found() -> Result<Response<Body>, Box<dyn Error>> {
+fn not_found() -> Result<Response<Body>, Box<dyn Error>> {
     Ok(Response::builder()
         .status(StatusCode::NOT_FOUND)
         .body("Not found".into())?)
@@ -455,7 +455,7 @@ async fn handle_request(
                 "Unable to proxy {} because no --proxy is configured",
                 &request.uri().path()
             );
-            not_found().await
+            not_found()
         }
     } else {
         let agent = Arc::new(
