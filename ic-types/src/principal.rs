@@ -1,5 +1,4 @@
 use sha2::{Digest, Sha224};
-use std::cmp::min;
 use std::convert::TryFrom;
 use std::fmt::Write;
 use thiserror::Error;
@@ -117,19 +116,28 @@ impl TryFrom<u8> for PrincipalClass {
 pub struct Principal(PrincipalInner);
 
 impl Principal {
+    const CRC_LENGTH_IN_BYTES: usize = 4;
+
     pub fn management_canister() -> Self {
-        Self(PrincipalInner::management_canister())
+        Self(From::<&[u8]>::from(&[]))
     }
 
     /// Right now we are enforcing a Twisted Edwards Curve 25519 point
     /// as the public key.
     pub fn self_authenticating<P: AsRef<[u8]>>(public_key: P) -> Self {
-        Self(PrincipalInner::self_authenticating(public_key.as_ref()))
+        let public_key = public_key.as_ref();
+        let hash = Sha224::digest(public_key);
+        let mut inner = PrincipalInner::from(hash.as_slice());
+        // Now add a suffix denoting the identifier as representing a
+        // self-authenticating principal.
+        inner.push(PrincipalClass::SelfAuthenticating as u8);
+
+        Self(inner)
     }
 
     /// An anonymous Principal.
     pub fn anonymous() -> Self {
-        Self(PrincipalInner::anonymous())
+        Self(From::<&[u8]>::from(&[PrincipalClass::Anonymous as u8]))
     }
 
     /// Parse the text format for canister IDs (e.g., `jkies-sibbb-ap6`).
@@ -144,10 +152,10 @@ impl Principal {
         s.retain(|c| c != '-');
         match base32::decode(base32::Alphabet::RFC4648 { padding: false }, &s) {
             Some(mut bytes) => {
-                if bytes.len() < PrincipalInner::CRC_LENGTH_IN_BYTES {
+                if bytes.len() < Principal::CRC_LENGTH_IN_BYTES {
                     return Err(PrincipalError::TextTooSmall());
                 }
-                let result = Self::try_from(bytes.split_off(PrincipalInner::CRC_LENGTH_IN_BYTES))?;
+                let result = Self::try_from(bytes.split_off(Principal::CRC_LENGTH_IN_BYTES))?;
                 let expected = format!("{}", result);
 
                 if text.as_ref() != expected {
@@ -221,12 +229,7 @@ impl TryFrom<Vec<u8>> for Principal {
     type Error = PrincipalError;
 
     fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
-        match bytes.as_slice() {
-            [] => Ok(Principal(PrincipalInner::management_canister())),
-            [4] => Ok(Principal(PrincipalInner::anonymous())),
-            [.., 4] => Err(PrincipalError::BufferTooLong()),
-            bytes @ [..] => Ok(Principal(PrincipalInner::from(bytes))),
-        }
+        Self::try_from(bytes.as_slice())
     }
 }
 
@@ -243,7 +246,12 @@ impl TryFrom<&[u8]> for Principal {
     type Error = PrincipalError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        Self::try_from(bytes.to_vec())
+        match bytes {
+            [] => Ok(Principal::management_canister()),
+            [4] => Ok(Principal::anonymous()),
+            [.., 4] => Err(PrincipalError::BufferTooLong()),
+            bytes @ [..] => Ok(Principal(PrincipalInner::from(bytes))),
+        }
     }
 }
 
@@ -319,77 +327,61 @@ impl<'de> serde::Deserialize<'de> for Principal {
     }
 }
 
-/// Inner structure of a Principal. This is not meant to be public as the different classes
-/// of principals are not public.
-///
-/// This is a length (1 byte) and 29 bytes. The length can be 0, but won't ever be longer
-/// than 29. The current interface spec says that principals cannot be longer than 29 bytes.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[repr(packed)]
-struct PrincipalInner {
-    /// Length.
-    len: u8,
+mod inner {
+    use sha2::{digest::generic_array::typenum::Unsigned, Digest, Sha224};
+    use std::cmp::min;
 
-    /// The content buffer. When returning slices this should always be sized according to
-    /// `len`.
-    bytes: [u8; Self::MAX_LENGTH_IN_BYTES],
-}
+    /// Inner structure of a Principal. This is not meant to be public as the different classes
+    /// of principals are not public.
+    ///
+    /// This is a length (1 byte) and 29 bytes. The length can be 0, but won't ever be longer
+    /// than 29. The current interface spec says that principals cannot be longer than 29 bytes.
+    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[repr(packed)]
+    pub struct PrincipalInner {
+        /// Length.
+        len: u8,
 
-impl PrincipalInner {
-    const MAX_LENGTH_IN_BYTES: usize = 29;
-    const CRC_LENGTH_IN_BYTES: usize = 4;
-
-    #[inline]
-    pub fn as_slice(&self) -> &[u8] {
-        &self.bytes[..self.len as usize]
+        /// The content buffer. When returning slices this should always be sized according to
+        /// `len`.
+        bytes: [u8; Self::MAX_LENGTH_IN_BYTES],
     }
 
-    #[inline]
-    pub fn management_canister() -> Self {
-        Self {
-            len: 0,
-            bytes: [0; Self::MAX_LENGTH_IN_BYTES],
+    impl PrincipalInner {
+        const HASH_LEN_IN_BYTES: usize = <<Sha224 as Digest>::OutputSize as Unsigned>::USIZE; // 28
+        const MAX_LENGTH_IN_BYTES: usize = Self::HASH_LEN_IN_BYTES + 1; // 29
+
+        #[inline]
+        pub fn as_slice(&self) -> &[u8] {
+            &self.bytes[..self.len as usize]
+        }
+
+        pub fn push(&mut self, val: u8) {
+            if self.len >= Self::MAX_LENGTH_IN_BYTES as u8 {
+                panic!("capacity overflow");
+            } else {
+                self.bytes[self.len as usize] = val;
+                self.len += 1;
+            }
         }
     }
 
-    #[inline]
-    pub fn anonymous() -> Self {
-        let mut bytes = [0u8; Self::MAX_LENGTH_IN_BYTES];
-        bytes[0] = PrincipalClass::Anonymous as u8;
-        Self { len: 1, bytes }
+    impl AsRef<[u8]> for PrincipalInner {
+        fn as_ref(&self) -> &[u8] {
+            self.as_slice()
+        }
     }
 
-    #[inline]
-    pub fn self_authenticating(public_key: &[u8]) -> Self {
-        let mut bytes = [0u8; PrincipalInner::MAX_LENGTH_IN_BYTES];
-        let hash = Sha224::digest(public_key);
-        let len = hash.len();
-        bytes[..len].copy_from_slice(&hash);
-        // Now add a suffix denoting the identifier as representing a
-        // self-authenticating principal.
-        bytes[len] = PrincipalClass::SelfAuthenticating as u8;
-
-        Self {
-            len: (len + 1) as u8,
-            bytes,
+    impl From<&[u8]> for PrincipalInner {
+        fn from(slice: &[u8]) -> Self {
+            let len = min(slice.len(), Self::MAX_LENGTH_IN_BYTES) as u8;
+            let mut bytes = [0u8; Self::MAX_LENGTH_IN_BYTES];
+            bytes[..len as usize].copy_from_slice(slice);
+            Self { len, bytes }
         }
     }
 }
-
-impl AsRef<[u8]> for PrincipalInner {
-    fn as_ref(&self) -> &[u8] {
-        self.as_slice()
-    }
-}
-
-impl From<&[u8]> for PrincipalInner {
-    fn from(slice: &[u8]) -> Self {
-        let len = min(slice.len(), Self::MAX_LENGTH_IN_BYTES) as u8;
-        let mut bytes = [0u8; Self::MAX_LENGTH_IN_BYTES];
-        bytes[..len as usize].copy_from_slice(slice);
-        Self { len, bytes }
-    }
-}
+use inner::PrincipalInner;
 
 #[cfg(test)]
 mod tests {
