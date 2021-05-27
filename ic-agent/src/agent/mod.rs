@@ -38,6 +38,7 @@ use std::convert::TryFrom;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
+use std::task::{Context, Poll};
 use std::time::Duration;
 
 const IC_REQUEST_DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
@@ -92,6 +93,19 @@ pub trait ReplicaV2Transport {
     fn status<'a>(
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
+}
+
+/// Classification of the result of a request_status_raw (poll) call.
+pub enum PollResult {
+    /// The request has been submitted, but we do not know yet if it
+    /// has been accepted or not.
+    Submitted,
+
+    /// The request has been received and may be processing.
+    Accepted,
+
+    /// The request completed and returned some data.
+    Completed(Vec<u8>),
 }
 
 /// A low level Agent to make calls to a Replica endpoint.
@@ -408,6 +422,76 @@ impl Agent {
         .await
     }
 
+    // Call request_status on the RequestId once and classify the result
+    pub async fn poll(
+        &self,
+        request_id: &RequestId,
+        effective_canister_id: &Principal,
+    ) -> Result<PollResult, AgentError> {
+        match self
+            .request_status_raw(&request_id, effective_canister_id.clone())
+            .await?
+        {
+            RequestStatusResponse::Unknown => Ok(PollResult::Submitted),
+
+            RequestStatusResponse::Received | RequestStatusResponse::Processing => {
+                Ok(PollResult::Accepted)
+            }
+
+            RequestStatusResponse::Replied {
+                reply: Replied::CallReplied(arg),
+            } => Ok(PollResult::Completed(arg)),
+
+            RequestStatusResponse::Rejected {
+                reject_code,
+                reject_message,
+            } => Err(AgentError::ReplicaError {
+                reject_code,
+                reject_message,
+            }),
+            RequestStatusResponse::Done => Err(AgentError::RequestStatusDoneNoReply(String::from(
+                *request_id,
+            ))),
+        }
+    }
+
+    // Call request_status on the RequestId in a loop and return the response as a byte vector.
+    pub async fn wait<W: Waiter>(
+        &self,
+        request_id: RequestId,
+        effective_canister_id: &Principal,
+        mut waiter: W,
+    ) -> Result<Vec<u8>, AgentError> {
+        waiter.start();
+        let mut request_accepted = false;
+        loop {
+            match self.poll(&request_id, effective_canister_id).await? {
+                PollResult::Submitted => {}
+                PollResult::Accepted => {
+                    if !request_accepted {
+                        // The system will return RequestStatusResponse::Unknown
+                        // (PollResult::Submitted) until the request is accepted
+                        // and we generally cannot know how long that will take.
+                        // State transitions between Received and Processing may be
+                        // instantaneous. Therefore, once we know the request is accepted,
+                        // we should restart the waiter so the request does not time out.
+
+                        waiter
+                            .restart()
+                            .map_err(|_| AgentError::WaiterRestartError())?;
+                        request_accepted = true;
+                    }
+                }
+                PollResult::Completed(result) => return Ok(result),
+            };
+
+            waiter
+                .async_wait()
+                .await
+                .map_err(|_| AgentError::TimeoutWaitingForResponse())?;
+        }
+    }
+
     async fn read_state_raw(
         &self,
         paths: Vec<Vec<Label>>,
@@ -602,6 +686,39 @@ impl<'agent> QueryBuilder<'agent> {
     }
 }
 
+pub struct UpdateCall<'agent> {
+    agent: &'agent Agent,
+    request_id: Pin<Box<dyn Future<Output = Result<RequestId, AgentError>> + Send + 'agent>>,
+    effective_canister_id: Principal,
+}
+impl Future for UpdateCall<'_> {
+    type Output = Result<RequestId, AgentError>;
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        self.request_id.as_mut().poll(cx)
+    }
+}
+impl UpdateCall<'_> {
+    fn and_wait<'out, W>(
+        self,
+        waiter: W,
+    ) -> Pin<Box<dyn core::future::Future<Output = Result<Vec<u8>, AgentError>> + Send + 'out>>
+    where
+        Self: 'out,
+        W: Waiter + 'out,
+    {
+        async fn run<W>(_self: UpdateCall<'_>, waiter: W) -> Result<Vec<u8>, AgentError>
+        where
+            W: Waiter,
+        {
+            let request_id = _self.request_id.await?;
+            _self
+                .agent
+                .wait(request_id, &_self.effective_canister_id, waiter)
+                .await
+        }
+        Box::pin(run(self, waiter))
+    }
+}
 /// An Update Request Builder.
 ///
 /// This makes it easier to do update calls without actually passing all arguments or specifying
@@ -671,76 +788,24 @@ impl<'agent> UpdateBuilder<'agent> {
 
     /// Make an update call. This will call request_status on the RequestId in a loop and return
     /// the response as a byte vector.
-    pub async fn call_and_wait<W: Waiter>(&self, mut waiter: W) -> Result<Vec<u8>, AgentError> {
-        let request_id = self
-            .agent
-            .update_raw(
-                &self.canister_id,
-                self.effective_canister_id.clone(),
-                self.method_name.as_str(),
-                self.arg.as_slice(),
-                self.ingress_expiry_datetime,
-            )
-            .await?;
-        waiter.start();
-        let mut request_accepted = false;
-        loop {
-            match self
-                .agent
-                .request_status_raw(&request_id, self.effective_canister_id.clone())
-                .await?
-            {
-                RequestStatusResponse::Replied {
-                    reply: Replied::CallReplied(arg),
-                } => return Ok(arg),
-                RequestStatusResponse::Rejected {
-                    reject_code,
-                    reject_message,
-                } => {
-                    return Err(AgentError::ReplicaError {
-                        reject_code,
-                        reject_message,
-                    })
-                }
-                RequestStatusResponse::Unknown => (),
-                RequestStatusResponse::Received | RequestStatusResponse::Processing => {
-                    // The system will return Unknown until the request is accepted
-                    // and we generally cannot know how long that will take.
-                    // State transitions between Received and Processing may be
-                    // instantaneous. Therefore, once we know the request is accepted,
-                    // we restart the waiter so the request does not time out.
-                    if !request_accepted {
-                        waiter
-                            .restart()
-                            .map_err(|_| AgentError::WaiterRestartError())?;
-                        request_accepted = true;
-                    }
-                }
-                RequestStatusResponse::Done => {
-                    return Err(AgentError::RequestStatusDoneNoReply(String::from(
-                        request_id,
-                    )))
-                }
-            };
-
-            waiter
-                .async_wait()
-                .await
-                .map_err(|_| AgentError::TimeoutWaitingForResponse())?;
-        }
+    pub async fn call_and_wait<W: Waiter>(&self, waiter: W) -> Result<Vec<u8>, AgentError> {
+        self.call().and_wait(waiter).await
     }
 
     /// Make an update call. This will return a RequestId.
     /// The RequestId should then be used for request_status (most likely in a loop).
-    pub async fn call(&self) -> Result<RequestId, AgentError> {
-        self.agent
-            .update_raw(
-                &self.canister_id,
-                self.effective_canister_id.clone(),
-                self.method_name.as_str(),
-                self.arg.as_slice(),
-                self.ingress_expiry_datetime,
-            )
-            .await
+    pub fn call(&self) -> UpdateCall {
+        let request_id_future = self.agent.update_raw(
+            &self.canister_id,
+            self.effective_canister_id.clone(),
+            self.method_name.as_str(),
+            self.arg.as_slice(),
+            self.ingress_expiry_datetime,
+        );
+        UpdateCall {
+            agent: &self.agent,
+            request_id: Box::pin(request_id_future),
+            effective_canister_id: self.effective_canister_id.clone(),
+        }
     }
 }

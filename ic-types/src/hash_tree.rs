@@ -1,7 +1,4 @@
-//! Types used to manage the Hash Tree. This type is currently private and should be improved
-//! and reviewed before being moved to ic-types (where it should ultimately live).
-//!
-//! cf https://docs.dfinity.systems/public/v/0.13.1/#_encoding_of_certificates
+//! cf https://sdk.dfinity.org/docs/interface-spec/index.html#certification-encoding
 
 use crate::Sha256Digest;
 use hex::FromHexError;
