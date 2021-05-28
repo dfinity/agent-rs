@@ -1,3 +1,4 @@
+use crate::call::AsyncCall;
 use crate::call::SyncCall;
 use crate::canister::CanisterBuilder;
 use crate::Canister;
@@ -79,6 +80,23 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
         body: B,
     ) -> impl 'agent + SyncCall<(HttpResponse,)> {
         self.query_("http_request")
+            .with_arg(HttpRequest {
+                method: method.into(),
+                url: url.into(),
+                headers,
+                body: body.as_ref(),
+            })
+            .build()
+    }
+
+    pub fn http_request_update<'canister: 'agent, M: Into<String>, U: Into<String>, B: AsRef<[u8]>>(
+        &'canister self,
+        method: M,
+        url: U,
+        headers: Vec<HeaderField>,
+        body: B,
+    ) -> impl 'agent + AsyncCall<(HttpResponse,)> {
+        self.update_("http_request_update")
             .with_arg(HttpRequest {
                 method: method.into(),
                 url: url.into(),

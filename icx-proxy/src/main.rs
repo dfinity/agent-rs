@@ -9,6 +9,7 @@ use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
 use ic_agent::export::Principal;
 use ic_agent::{Agent, AgentError};
 use ic_utils::call::SyncCall;
+use ic_utils::call::AsyncCall;
 use ic_utils::interfaces::http_request::{
     HeaderField, HttpRequestCanister, StreamingCallbackHttpResponse, StreamingStrategy,
 };
@@ -81,6 +82,10 @@ pub(crate) struct Opts {
     /// is used as the Principal, if it parses as a Principal.
     #[clap(long, default_value = "localhost")]
     dns_suffix: Vec<String>,
+
+    /// Set for non-IC networks: fetch the root key.  If not passed, use real hardcoded key.
+    #[clap(long)]
+    fetch_root_key: bool,
 }
 
 fn resolve_canister_id_from_hostname(
@@ -151,6 +156,7 @@ async fn forward_request(
     agent: Arc<Agent>,
     dns_canister_config: &DnsCanisterConfig,
     logger: slog::Logger,
+    fetch_root_key: bool,
 ) -> Result<Response<Body>, Box<dyn Error>> {
     let canister_id = match resolve_canister_id(&request, dns_canister_config) {
         None => {
@@ -204,10 +210,28 @@ async fn forward_request(
     }
 
     let canister = HttpRequestCanister::create(agent.as_ref(), canister_id.clone());
-    let result = canister
-        .http_request(method, uri.to_string(), headers, &entire_body)
-        .call()
-        .await;
+    let result = match method.to_uppercase().as_str() {
+        "DELETE" | "PATCH" | "POST" | "PUT" => {
+            // We need to fetch the root key for updates.
+            if fetch_root_key {
+                agent.fetch_root_key().await?;
+            }
+            let waiter = garcon::Delay::builder()
+                .throttle(std::time::Duration::from_millis(500))
+                .timeout(std::time::Duration::from_secs(60 * 5))
+                .build();
+            canister
+                .http_request_update(method, uri.to_string(), headers, &entire_body)
+                .call_and_wait(waiter)
+                .await
+        }
+        _ => {
+            canister
+                .http_request(method, uri.to_string(), headers, &entire_body)
+                .call()
+                .await
+        }
+    };
 
     // If the result is a Replica error, returns the 500 code and message. There is no information
     // leak here because a user could use `dfx` to get the same reply.
@@ -421,6 +445,7 @@ async fn handle_request(
     dns_canister_config: Arc<DnsCanisterConfig>,
     logger: slog::Logger,
     debug: bool,
+    fetch_root_key: bool,
 ) -> Result<Response<Body>, Infallible> {
     match if request.uri().path().starts_with("/api/") {
         slog::debug!(
@@ -437,7 +462,7 @@ async fn handle_request(
                 .expect("Could not create agent..."),
         );
 
-        forward_request(request, agent, dns_canister_config.as_ref(), logger.clone()).await
+        forward_request(request, agent, dns_canister_config.as_ref(), logger.clone(), fetch_root_key).await
     } {
         Err(err) => {
             slog::warn!(logger, "Internal Error during request:\n{:#?}", err);
@@ -473,6 +498,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let ip_addr = ip_addr.ip();
         let dns_canister_config = dns_canister_config.clone();
         let logger = logger.clone();
+        let fetch_root_key = opts.fetch_root_key.clone();
 
         // Select an agent.
         let replica_url_array = replicas.lock().unwrap();
@@ -494,6 +520,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     dns_canister_config,
                     logger,
                     debug,
+                    fetch_root_key,
                 )
             }))
         }
