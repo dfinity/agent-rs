@@ -156,7 +156,6 @@ async fn forward_request(
     agent: Arc<Agent>,
     dns_canister_config: &DnsCanisterConfig,
     logger: slog::Logger,
-    fetch_root_key: bool,
 ) -> Result<Response<Body>, Box<dyn Error>> {
     let canister_id = match resolve_canister_id(&request, dns_canister_config) {
         None => {
@@ -212,10 +211,6 @@ async fn forward_request(
     let canister = HttpRequestCanister::create(agent.as_ref(), canister_id.clone());
     let result = match method.to_uppercase().as_str() {
         "DELETE" | "PATCH" | "POST" | "PUT" => {
-            // We need to fetch the root key for updates.
-            if fetch_root_key {
-                agent.fetch_root_key().await?;
-            }
             let waiter = garcon::Delay::builder()
                 .throttle(std::time::Duration::from_millis(500))
                 .timeout(std::time::Duration::from_secs(60 * 5))
@@ -446,7 +441,7 @@ async fn handle_request(
     logger: slog::Logger,
     debug: bool,
     fetch_root_key: bool,
-) -> Result<Response<Body>, Infallible> {
+) -> Result<Response<Body>, AgentError> {
     match if request.uri().path().starts_with("/api/") {
         slog::debug!(
             logger,
@@ -462,7 +457,12 @@ async fn handle_request(
                 .expect("Could not create agent..."),
         );
 
-        forward_request(request, agent, dns_canister_config.as_ref(), logger.clone(), fetch_root_key).await
+        // We need to fetch the root key for updates.
+        if fetch_root_key {
+            agent.fetch_root_key().await?;
+        }
+
+        forward_request(request, agent, dns_canister_config.as_ref(), logger.clone()).await
     } {
         Err(err) => {
             slog::warn!(logger, "Internal Error during request:\n{:#?}", err);
@@ -476,7 +476,7 @@ async fn handle_request(
                 })
                 .unwrap())
         }
-        Ok(x) => Ok::<_, Infallible>(x),
+        Ok(x) => Ok::<_, AgentError>(x),
     }
 }
 
