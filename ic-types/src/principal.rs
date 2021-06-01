@@ -118,7 +118,7 @@ impl TryFrom<u8> for PrincipalClass {
 ///     &[161, 98, 105, 100, 73, 239, 205, 171, 0, 0, 0, 0, 0, 1],
 /// );
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Principal(PrincipalInner);
 
 impl Principal {
@@ -389,7 +389,7 @@ mod inner {
     ///
     /// This is a length (1 byte) and 29 bytes. The length can be 0, but won't ever be longer
     /// than 29. The current interface spec says that principals cannot be longer than 29 bytes.
-    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
     #[repr(packed)]
     pub struct PrincipalInner {
         /// Length.
