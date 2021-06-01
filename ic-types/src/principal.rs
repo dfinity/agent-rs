@@ -187,10 +187,11 @@ impl Principal {
 
     /// Attempt to decode a slice into a Principal.
     pub const fn try_from_slice(bytes: &[u8]) -> Result<Self, PrincipalError> {
+        const ANONYMOUS: u8 = PrincipalClass::Anonymous as u8;
         match bytes {
             [] => Ok(Principal::management_canister()),
-            [4] => Ok(Principal::anonymous()),
-            [.., 4] => Err(PrincipalError::BufferTooLong()),
+            [ANONYMOUS] => Ok(Principal::anonymous()),
+            [.., ANONYMOUS] => Err(PrincipalError::BufferTooLong()),
             bytes @ [..] => match PrincipalInner::try_from_slice(bytes) {
                 None => Err(PrincipalError::BufferTooLong()),
                 Some(v) => Ok(Principal(v)),
@@ -410,7 +411,7 @@ mod inner {
             }
         }
 
-        /// Panics if the length is over `HASH_LEN_IN_BYTES`
+        /// Panics if the length is over `MAX_LENGTH_IN_BYTES`
         pub const fn from_slice(slice: &[u8]) -> Self {
             if let Some(v) = Self::try_from_slice(slice) {
                 v
