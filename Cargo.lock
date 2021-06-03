@@ -174,7 +174,7 @@ dependencies = [
  "candid_derive",
  "codespan-reporting",
  "hex",
- "ic-types",
+ "ic-types 0.1.2",
  "lalrpop",
  "lalrpop-util",
  "leb128",
@@ -757,7 +757,7 @@ dependencies = [
 
 [[package]]
 name = "ic-agent"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "base32",
@@ -767,7 +767,7 @@ dependencies = [
  "garcon",
  "hex",
  "http",
- "ic-types",
+ "ic-types 0.2.0",
  "leb128",
  "mime",
  "mockito",
@@ -790,11 +790,11 @@ dependencies = [
 
 [[package]]
 name = "ic-identity-hsm"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "hex",
  "ic-agent",
- "ic-types",
+ "ic-types 0.2.0",
  "num-bigint 0.3.2",
  "openssl",
  "pkcs11",
@@ -805,6 +805,19 @@ dependencies = [
 [[package]]
 name = "ic-types"
 version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "968dbc1cc04bf93e94c2ffd3cb370c451d2136425dd38e9ed4cc5ca425d737af"
+dependencies = [
+ "base32",
+ "crc32fast",
+ "serde",
+ "sha2",
+ "thiserror",
+]
+
+[[package]]
+name = "ic-types"
+version = "0.2.0"
 dependencies = [
  "base32",
  "crc32fast",
@@ -819,13 +832,13 @@ dependencies = [
 
 [[package]]
 name = "ic-utils"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "async-trait",
  "candid",
  "garcon",
  "ic-agent",
- "ic-types",
+ "ic-types 0.2.0",
  "ring",
  "serde",
  "serde_bytes",
@@ -837,7 +850,7 @@ dependencies = [
 
 [[package]]
 name = "icx"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "candid",
  "clap",
@@ -845,7 +858,7 @@ dependencies = [
  "hex",
  "humantime",
  "ic-agent",
- "ic-types",
+ "ic-types 0.2.0",
  "ic-utils",
  "pem",
  "ring",
@@ -857,7 +870,7 @@ dependencies = [
 
 [[package]]
 name = "icx-proxy"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "candid",
@@ -867,7 +880,7 @@ dependencies = [
  "hyper",
  "hyper-tls",
  "ic-agent",
- "ic-types",
+ "ic-types 0.2.0",
  "ic-utils",
  "serde",
  "serde_json",
