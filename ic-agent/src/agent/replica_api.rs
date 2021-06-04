@@ -2,7 +2,7 @@ use crate::export::Principal;
 use crate::hash_tree::{HashTree, Label};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct Envelope<T: Serialize> {
     pub content: T,
