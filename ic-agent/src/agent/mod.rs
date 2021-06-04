@@ -379,7 +379,7 @@ impl Agent {
             effective_canister_id,
             QueryContent::QueryRequest {
                 sender: self.identity.sender().map_err(AgentError::SigningError)?,
-                canister_id: canister_id.clone(),
+                canister_id: *canister_id,
                 method_name: method_name.to_string(),
                 arg: arg.to_vec(),
                 ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
@@ -411,7 +411,7 @@ impl Agent {
         self.call_endpoint(
             effective_canister_id,
             CallRequestContent::CallRequest {
-                canister_id: canister_id.clone(),
+                canister_id: *canister_id,
                 method_name: method_name.into(),
                 arg: arg.to_vec(),
                 nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
@@ -429,7 +429,7 @@ impl Agent {
         effective_canister_id: &Principal,
     ) -> Result<PollResult, AgentError> {
         match self
-            .request_status_raw(&request_id, effective_canister_id.clone())
+            .request_status_raw(&request_id, *effective_canister_id)
             .await?
         {
             RequestStatusResponse::Unknown => Ok(PollResult::Submitted),
@@ -561,7 +561,7 @@ impl Agent {
             path.into(),
         ]];
 
-        let cert = self.read_state_raw(paths, canister_id.clone()).await?;
+        let cert = self.read_state_raw(paths, canister_id).await?;
 
         lookup_canister_info(cert, canister_id, path)
     }
@@ -586,7 +586,7 @@ impl Agent {
         canister_id: &Principal,
         method_name: S,
     ) -> UpdateBuilder {
-        UpdateBuilder::new(self, canister_id.clone(), method_name.into())
+        UpdateBuilder::new(self, *canister_id, method_name.into())
     }
 
     /// Calls and returns the information returned by the status endpoint of a replica.
@@ -602,7 +602,7 @@ impl Agent {
     /// Returns a QueryBuilder enabling the construction of a query call without
     /// passing all arguments.
     pub fn query<S: Into<String>>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder {
-        QueryBuilder::new(self, canister_id.clone(), method_name.into())
+        QueryBuilder::new(self, *canister_id, method_name.into())
     }
 }
 
@@ -622,7 +622,7 @@ impl<'agent> QueryBuilder<'agent> {
     pub fn new(agent: &'agent Agent, canister_id: Principal, method_name: String) -> Self {
         Self {
             agent,
-            effective_canister_id: canister_id.clone(),
+            effective_canister_id: canister_id,
             canister_id,
             method_name,
             arg: vec![],
@@ -677,7 +677,7 @@ impl<'agent> QueryBuilder<'agent> {
         self.agent
             .query_raw(
                 &self.canister_id,
-                self.effective_canister_id.clone(),
+                self.effective_canister_id,
                 self.method_name.as_str(),
                 self.arg.as_slice(),
                 self.ingress_expiry_datetime,
@@ -736,7 +736,7 @@ impl<'agent> UpdateBuilder<'agent> {
     pub fn new(agent: &'agent Agent, canister_id: Principal, method_name: String) -> Self {
         Self {
             agent,
-            effective_canister_id: canister_id.clone(),
+            effective_canister_id: canister_id,
             canister_id,
             method_name,
             arg: vec![],
@@ -797,7 +797,7 @@ impl<'agent> UpdateBuilder<'agent> {
     pub fn call(&self) -> UpdateCall {
         let request_id_future = self.agent.update_raw(
             &self.canister_id,
-            self.effective_canister_id.clone(),
+            self.effective_canister_id,
             self.method_name.as_str(),
             self.arg.as_slice(),
             self.ingress_expiry_datetime,
@@ -805,7 +805,7 @@ impl<'agent> UpdateBuilder<'agent> {
         UpdateCall {
             agent: &self.agent,
             request_id: Box::pin(request_id_future),
-            effective_canister_id: self.effective_canister_id.clone(),
+            effective_canister_id: self.effective_canister_id,
         }
     }
 }

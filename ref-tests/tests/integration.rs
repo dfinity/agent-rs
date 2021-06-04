@@ -204,12 +204,12 @@ fn wallet_create_and_set_controller() {
         let other_agent = create_agent(other_agent_identity).await?;
         other_agent.fetch_root_key().await?;
 
-        eprintln!("Agent id: {:?}", other_agent_principal.clone().to_text());
+        eprintln!("Agent id: {:?}", other_agent_principal.to_text());
 
         let (create_result,) = wallet
             .wallet_create_wallet(
                 1_000_000_000_000_u64,
-                Some(other_agent_principal.clone()),
+                Some(other_agent_principal),
                 None,
                 None,
                 None,
@@ -302,12 +302,12 @@ fn wallet_create_wallet() {
 
         let child_wallet_two = Canister::builder()
             .with_agent(&agent)
-            .with_canister_id(child_two_create_res.canister_id.clone())
+            .with_canister_id(child_two_create_res.canister_id)
             .build()?;
 
         eprintln!(
             "Created child wallet two.\nChild wallet two canister id: {:?}",
-            child_two_create_res.canister_id.clone().to_text()
+            child_two_create_res.canister_id.to_text()
         );
         let (child_wallet_two_balance,): (ic_utils::interfaces::wallet::BalanceResult,) = wallet
             .call(&child_wallet_two, "wallet_balance", Argument::default(), 0)
@@ -441,7 +441,7 @@ fn wallet_helper_functions() {
         assert_ne!(&controller_list[0], &other_agent_principal);
 
         wallet
-            .add_controller(other_agent_principal.clone())
+            .add_controller(other_agent_principal)
             .call_and_wait(create_waiter())
             .await?;
 
@@ -455,7 +455,7 @@ fn wallet_helper_functions() {
         assert!(added);
 
         wallet
-            .remove_controller(other_agent_principal.clone())
+            .remove_controller(other_agent_principal)
             .call_and_wait(create_waiter())
             .await?;
 

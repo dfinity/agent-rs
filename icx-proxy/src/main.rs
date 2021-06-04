@@ -203,7 +203,7 @@ async fn forward_request(
         );
     }
 
-    let canister = HttpRequestCanister::create(agent.as_ref(), canister_id.clone());
+    let canister = HttpRequestCanister::create(agent.as_ref(), canister_id);
     let result = canister
         .http_request(method, uri.to_string(), headers, &entire_body)
         .call()

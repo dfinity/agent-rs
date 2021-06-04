@@ -315,7 +315,7 @@ impl<'agent, 'canister: 'agent, Interface> SyncCallBuilder<'agent, 'canister, In
         SyncCaller {
             agent: c.agent,
             effective_canister_id: self.effective_canister_id,
-            canister_id: c.canister_id.clone(),
+            canister_id: c.canister_id,
             method_name: self.method_name.clone(),
             arg: self.arg.serialize(),
             expiry: Default::default(),
@@ -387,7 +387,7 @@ impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, I
         AsyncCaller {
             agent: c.agent,
             effective_canister_id: self.effective_canister_id,
-            canister_id: c.canister_id.clone(),
+            canister_id: c.canister_id,
             method_name: self.method_name.clone(),
             arg: self.arg.serialize(),
             expiry: Default::default(),
