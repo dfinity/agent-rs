@@ -342,6 +342,7 @@ impl Agent {
 
     /// Send the signed query to the network. Will return a byte vector.
     /// The bytes will be checked if it is a valid query and the data match with the arguments
+    #[allow(clippy::too_many_arguments)] 
     pub async fn query_signed(
         &self,
         sender: Principal,
@@ -387,7 +388,7 @@ impl Agent {
                     return Err(AgentError::CallDataMismatch {
                         field: "method_name".to_string(),
                         value_arg: method_name.to_string(),
-                        value_cbor: method_name_cbor.to_string(),
+                        value_cbor: method_name_cbor,
                     });
                 }
                 if arg != arg_cbor {
@@ -450,6 +451,7 @@ impl Agent {
 
     /// Send the signed update to the network. Will return a byte vector.
     /// The bytes will be checked if it is a valid update and the data match with the arguments
+    #[allow(clippy::too_many_arguments)] 
     pub async fn update_signed(
         &self,
         sender: Principal,
@@ -496,7 +498,7 @@ impl Agent {
                     return Err(AgentError::CallDataMismatch {
                         field: "method_name".to_string(),
                         value_arg: method_name.to_string(),
-                        value_cbor: method_name_cbor.to_string(),
+                        value_cbor: method_name_cbor,
                     });
                 }
                 if arg != arg_cbor {
