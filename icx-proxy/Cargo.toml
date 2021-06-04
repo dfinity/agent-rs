@@ -1,6 +1,6 @@
 [package]
 name = "icx-proxy"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
 description = "CLI tool to create an HTTP proxy to the Internet Computer."
@@ -24,8 +24,8 @@ garcon = { version = "0.2.3", features = ["async"] }
 hex = "0.4.3"
 hyper = { version = "0.14.4", features = ["full"] }
 hyper-tls = "0.5.0"
-ic-agent = { path = "../ic-agent", version = "0.4" }
-ic-types = { path = "../ic-types", version = "0.1.2" }
+ic-agent = { path = "../ic-agent", version = "0.5" }
+ic-types = { path = "../ic-types", version = "0.1" }
 ic-utils = { path = "../ic-utils", version = "0.3" }
 tokio = { version = "1.2.0", features = ["full"] }
 serde = "1.0.115"

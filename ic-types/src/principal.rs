@@ -12,13 +12,6 @@ macro_rules! const_panic {
     };
 }
 
-/// An error happened while decoding bytes to make a principal.
-#[derive(Error, Clone, Debug, Eq, PartialEq)]
-pub enum PrincipalBufferError {
-    #[error("Buffer is too long.")]
-    BufferTooLong(),
-}
-
 /// An error happened while encoding, decoding or serializing a principal.
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum PrincipalError {
@@ -26,24 +19,13 @@ pub enum PrincipalError {
     BufferTooLong(),
 
     #[error(r#"Invalid textual format: expected "{0}""#)]
-    AbnormalTextualFormat(String),
+    AbnormalTextualFormat(Principal),
 
     #[error("Text must be a base 32 string.")]
     InvalidTextualFormatNotBase32(),
 
     #[error("Text cannot be converted to a Principal; too small.")]
     TextTooSmall(),
-
-    #[error("A custom tool returned an error instead of a Principal: {0}")]
-    ExternalError(String),
-}
-
-impl From<PrincipalBufferError> for PrincipalError {
-    fn from(v: PrincipalBufferError) -> Self {
-        match v {
-            PrincipalBufferError::BufferTooLong() => Self::BufferTooLong(),
-        }
-    }
 }
 
 /// A class of principal. Because this should not be exposed it
@@ -204,13 +186,13 @@ impl Principal {
     }
 
     /// Attempt to decode a slice into a Principal.
-    pub const fn try_from_slice(bytes: &[u8]) -> Result<Self, PrincipalBufferError> {
+    pub const fn try_from_slice(bytes: &[u8]) -> Result<Self, PrincipalError> {
         match bytes {
             [] => Ok(Principal::management_canister()),
             [4] => Ok(Principal::anonymous()),
-            [.., 4] => Err(PrincipalBufferError::BufferTooLong()),
+            [.., 4] => Err(PrincipalError::BufferTooLong()),
             bytes @ [..] => match PrincipalInner::try_from_slice(bytes) {
-                None => Err(PrincipalBufferError::BufferTooLong()),
+                None => Err(PrincipalError::BufferTooLong()),
                 Some(v) => Ok(Principal(v)),
             },
         }
@@ -235,7 +217,7 @@ impl Principal {
                 let expected = format!("{}", result);
 
                 if text.as_ref() != expected {
-                    return Err(PrincipalError::AbnormalTextualFormat(expected));
+                    return Err(PrincipalError::AbnormalTextualFormat(result));
                 }
                 Ok(result)
             }
@@ -302,7 +284,7 @@ impl TryFrom<&str> for Principal {
 
 /// Vector TryFrom. The slice and array version of this trait are defined below.
 impl TryFrom<Vec<u8>> for Principal {
-    type Error = PrincipalBufferError;
+    type Error = PrincipalError;
 
     fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
         Self::try_from(bytes.as_slice())
@@ -310,7 +292,7 @@ impl TryFrom<Vec<u8>> for Principal {
 }
 
 impl TryFrom<&Vec<u8>> for Principal {
-    type Error = PrincipalBufferError;
+    type Error = PrincipalError;
 
     fn try_from(bytes: &Vec<u8>) -> Result<Self, Self::Error> {
         Self::try_from(bytes.as_slice())
@@ -319,7 +301,7 @@ impl TryFrom<&Vec<u8>> for Principal {
 
 /// Implement try_from for a generic sized slice.
 impl TryFrom<&[u8]> for Principal {
-    type Error = PrincipalBufferError;
+    type Error = PrincipalError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         Self::try_from_slice(bytes)
@@ -536,6 +518,14 @@ mod tests {
         assert_eq!(
             Principal::from_str("aaaaa-aa").unwrap(),
             Principal::management_canister(),
+        );
+    }
+
+    #[test]
+    fn parse_text_bad_format() {
+        assert_eq!(
+            Principal::from_str("aaaaa-aA").unwrap_err().to_string(),
+            r#"Invalid textual format: expected "aaaaa-aa""#,
         );
     }
 
