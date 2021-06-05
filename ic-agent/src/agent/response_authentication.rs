@@ -1,6 +1,6 @@
 use crate::{AgentError, RequestId};
 
-use crate::agent::replica_api::Certificate;
+use crate::agent::replica_api::{Certificate, ReadStateResponse};
 use crate::agent::{Replied, RequestStatusResponse};
 use crate::bls::bls12381::bls;
 use crate::hash_tree::{Label, LookupResult};
@@ -143,4 +143,13 @@ pub(crate) fn lookup_value(
         LookupResult::Found(value) => Ok(value),
         LookupResult::Error => Err(AgentError::LookupPathError(path)),
     }
+}
+
+pub fn lookup_read_state_response(
+    read_state_resp_blob: Vec<u8>,
+    request_id: RequestId,
+) -> Result<RequestStatusResponse, AgentError> {
+    let read_state_response: ReadStateResponse = serde_cbor::from_slice(&read_state_resp_blob)?;
+    let certificate: Certificate = serde_cbor::from_slice(&read_state_response.certificate)?;
+    lookup_request_status(certificate, &request_id)
 }
