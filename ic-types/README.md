@@ -12,5 +12,4 @@ tests that runs against a server implementation of the public specification, tho
 tests can be run against a compatible Replica.
 
 ## References
-The Public specification of the Internet Computer is, at this moment, privately shared. When it
-is made public a reference to the version supported will be available here.
+See https://sdk.dfinity.org/docs/interface-spec/index.html

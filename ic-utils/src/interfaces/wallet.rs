@@ -8,7 +8,7 @@ use crate::Canister;
 use async_trait::async_trait;
 use candid::de::ArgumentDecoder;
 use candid::{decode_args, CandidType, Deserialize};
-use delay::Waiter;
+use garcon::Waiter;
 use ic_agent::agent::UpdateBuilder;
 use ic_agent::export::Principal;
 use ic_agent::{Agent, AgentError, RequestId};

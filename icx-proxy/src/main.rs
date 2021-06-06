@@ -7,7 +7,7 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::{body, Body, Client, Request, Response, Server, StatusCode, Uri};
 use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
 use ic_agent::export::Principal;
-use ic_agent::Agent;
+use ic_agent::{Agent, AgentError};
 use ic_utils::call::SyncCall;
 use ic_utils::interfaces::http_request::{
     HeaderField, HttpRequestCanister, StreamingCallbackHttpResponse, StreamingStrategy,
@@ -66,6 +66,10 @@ pub(crate) struct Opts {
     /// boundary node. Multiple replicas can be passed and they'll be used round-robin.
     #[clap(long, default_value = "http://localhost:8000/")]
     replica: Vec<String>,
+
+    /// An address to forward any requests from /_/
+    #[clap(long)]
+    proxy: Option<String>,
 
     /// Whether or not this is run in a debug context (e.g. errors returned in responses
     /// should show full stack and error details).
@@ -203,11 +207,27 @@ async fn forward_request(
         );
     }
 
-    let (http_response,) = HttpRequestCanister::create(agent.as_ref(), canister_id.clone())
+    let canister = HttpRequestCanister::create(agent.as_ref(), canister_id.clone());
+    let result = canister
         .http_request(method, uri.to_string(), headers, &entire_body)
         .call()
-        .await
-        .map_err(Into::<Box<dyn Error>>::into)?;
+        .await;
+
+    // If the result is a Replica error, returns the 500 code and message. There is no information
+    // leak here because a user could use `dfx` to get the same reply.
+    let (http_response,) = match result {
+        Ok(response) => response,
+        Err(AgentError::ReplicaError {
+            reject_code,
+            reject_message,
+        }) => {
+            return Ok(Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(format!(r#"Replica Error ({}): "{}""#, reject_code, reject_message).into())
+                .unwrap());
+        }
+        Err(e) => return Err(e.into()),
+    };
 
     let mut builder = Response::builder().status(StatusCode::from_u16(http_response.status_code)?);
     for HeaderField(name, value) in http_response.headers {
@@ -398,21 +418,45 @@ async fn forward_api(
     Ok(response)
 }
 
+fn not_found() -> Result<Response<Body>, Box<dyn Error>> {
+    Ok(Response::builder()
+        .status(StatusCode::NOT_FOUND)
+        .body("Not found".into())?)
+}
+
 async fn handle_request(
     ip_addr: IpAddr,
     request: Request<Body>,
     replica_url: String,
+    proxy_url: Option<String>,
     dns_canister_config: Arc<DnsCanisterConfig>,
     logger: slog::Logger,
     debug: bool,
 ) -> Result<Response<Body>, Infallible> {
-    match if request.uri().path().starts_with("/api/") {
+    let request_uri_path = request.uri().path();
+    match if request_uri_path.starts_with("/api/") {
         slog::debug!(
             logger,
             "URI Request to path '{}' being forwarded to Replica",
             &request.uri().path()
         );
         forward_api(&ip_addr, request, &replica_url).await
+    } else if request_uri_path.starts_with("/_/") {
+        if let Some(proxy_url) = proxy_url {
+            slog::debug!(
+                logger,
+                "URI Request to path '{}' being forwarded to proxy",
+                &request.uri().path(),
+            );
+            forward_api(&ip_addr, request, &proxy_url).await
+        } else {
+            slog::warn!(
+                logger,
+                "Unable to proxy {} because no --proxy is configured",
+                &request.uri().path()
+            );
+            not_found()
+        }
     } else {
         let agent = Arc::new(
             ic_agent::Agent::builder()
@@ -451,6 +495,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let counter = AtomicUsize::new(0);
     let debug = opts.debug;
+    let proxy_url = opts.proxy.clone();
 
     let service = make_service_fn(|socket: &hyper::server::conn::AddrStream| {
         let ip_addr = socket.remote_addr();
@@ -467,6 +512,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         let replica_url = replica_url.clone();
         slog::debug!(logger, "Replica URL: {}", replica_url);
 
+        let proxy_url = proxy_url.clone();
+
         async move {
             Ok::<_, Infallible>(service_fn(move |req| {
                 let logger = logger.clone();
@@ -475,6 +522,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     ip_addr,
                     req,
                     replica_url.clone(),
+                    proxy_url.clone(),
                     dns_canister_config,
                     logger,
                     debug,
