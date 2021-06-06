@@ -13,7 +13,9 @@ pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
 pub use builder::AgentBuilder;
 pub use nonce::NonceFactory;
+pub use replica_api::QueryResponse;
 pub use response::{Replied, RequestStatusResponse};
+pub use response_authentication::lookup_read_state_response;
 
 #[cfg(test)]
 mod agent_test;
