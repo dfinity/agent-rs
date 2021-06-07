@@ -3,9 +3,10 @@ use cargo_metadata::{Package, Version};
 use clap::Clap;
 use git2::{Commit, DescribeFormatOptions, Repository, RepositoryState};
 use std::collections::HashMap;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use toml_parse::{walk, SyntaxNode, SyntaxToken, TomlKind};
+use toml_parse::{walk, SyntaxElement, SyntaxNode, SyntaxToken, TomlKind};
 
 #[derive(Clap, Debug)]
 struct Options {
@@ -53,6 +54,12 @@ fn check_repo_status(repo: &Repository) -> Result<()> {
         return Err(anyhow!("The repo has local changes. Cannot proceed."));
     }
 
+    if repo.head()?.is_branch() && repo.head()?.name() == Some("main") {
+        return Err(anyhow!(
+            "Cannot run this on main branch. You can use `--force`."
+        ));
+    }
+
     Ok(())
 }
 
@@ -89,7 +96,25 @@ struct PackageDependency {
     pub version_node: SyntaxToken,
 }
 
-fn get_version_value_from_table(node: &SyntaxNode) -> Option<SyntaxToken> {
+fn get_ident_from_str(value: &SyntaxNode) -> Option<SyntaxToken> {
+    // Get the ident
+    walk(value)
+        .filter(|x| x.kind() == TomlKind::Ident)
+        .take(1)
+        .last()?
+        .into_token()
+}
+
+/// ```
+/// let node = parse(r#"
+///   [some_table]
+///   field_1 = "ignored"
+///   version = "1.2.3"  # Will return this.
+///   field_2 = "ignored"
+/// "#);
+/// assert_eq!(get_version_node_from_table(node).unwrap().to_string(), "1.2.3");
+/// ```
+fn get_version_node_from_table(node: &SyntaxNode) -> Option<SyntaxToken> {
     walk(node)
         .filter_map(|el| {
             let n = el.as_node()?;
@@ -128,9 +153,7 @@ fn package_dependencies_from_dependencies_section(
 
             let version_node: SyntaxToken = match value.kind() {
                 TomlKind::InlineTable => get_version_node_from_table(&value)?,
-                TomlKind::Str => {
-                    get_version_node_from_str(&value?)
-                }
+                TomlKind::Str => get_ident_from_str(&value)?,
                 _ => return None,
             };
 
@@ -145,7 +168,7 @@ fn package_dependencies_from_dependencies_section(
 fn package_dependencies_from_dependency_dot(node: &SyntaxNode) -> Option<Vec<PackageDependency>> {
     let title = node.first_token()?.next_sibling_or_token()?.to_string();
     let name = title.split_at("dependencies.".len()).1.to_string();
-    let version_node = get_version_value_from_table(node)?;
+    let version_node = get_version_node_from_table(node)?;
     Some(vec![PackageDependency { name, version_node }])
 }
 
@@ -158,56 +181,51 @@ fn update_manifest(package_name: &str, version_map: &VersionMap) -> Result<Box<A
     let parsed = toml_parse::parse_it(&cargo_toml)?;
     let root = parsed.syntax();
 
-    let mut changes: Vec<(usize, usize, String)> = Vec::new();
+    let mut changes: Vec<(Range<usize>, String)> = Vec::new();
 
     // Find the `[package]` object and the key pair for version = ...,
     // then add a change to the vector above to update the value to the new version.
-    walk(&root)
+    let value = walk(&root)
+        // Filter out all key values
+        .filter(|element| element.kind() != TomlKind::KeyValue)
+        // That are part of a table (a key value cannot not have a parent) that has the heading
+        // `package`.
         .filter_map(|element| {
-            if element.kind() != TomlKind::KeyValue || element.parent().is_none() {
-                return None;
-            }
-
-            // Check that it's inside the package object.
-            let parent = element.parent().unwrap();
-            if parent.kind() != TomlKind::Table {
-                return None;
-            }
-
-            if parent
-                .first_token()
-                .unwrap()
-                .next_sibling_or_token()
-                .unwrap()
-                .to_string()
-                != "package"
+            if element.parent()?.kind() == TomlKind::Table
+                && element
+                    .parent()?
+                    .first_token()?
+                    .next_sibling_or_token()?
+                    .to_string()
+                    == "package"
             {
-                return None;
+                Some(element)
+            } else {
+                None
             }
-
-            let node = element.as_node().unwrap();
+        })
+        // And find the first one which has its key set to `version`.
+        .find_map(|version_kv| {
+            let node = version_kv.as_node().unwrap();
             let key = node.first_token().unwrap();
+
             if key.text() != "version" {
                 None
             } else {
                 let value = node
                     .children()
-                    .nth(1)
-                    .unwrap()
-                    .first_token()
-                    .unwrap()
-                    .next_sibling_or_token()
-                    .unwrap();
-                Some((key, value))
+                    .nth(1)?
+                    .first_token()?
+                    .next_sibling_or_token()?;
+                Some(value)
             }
         })
-        .take(1)
-        .for_each(|(_k, v)| {
-            let range = v.text_range();
-            let start: usize = range.start().into();
-            let end: usize = range.end().into();
-            changes.push((start, end, version.to_string()));
-        });
+        .unwrap();
+
+    let range = value.text_range();
+    let start: usize = range.start().into();
+    let end: usize = range.end().into();
+    changes.push(((start..end), version.to_string()));
 
     // Find the location of all version = ... of dependencies. This is a bit more touchy.
     // This strategy is O(n^m) where `m` is the number of elements we look for, basically
@@ -257,13 +275,13 @@ fn update_manifest(package_name: &str, version_map: &VersionMap) -> Result<Box<A
                 let range = pnv.version_node.text_range();
                 let start: usize = range.start().into();
                 let end: usize = range.end().into();
-                changes.push((start, end, new_version));
+                changes.push((start..end, new_version));
             }
         });
 
     // Sort and apply all changes and return the save function.
-    changes.sort_by(|a, b| b.1.cmp(&a.1));
-    for (start, end, str) in changes {
+    changes.sort_by(|a, b| b.0.start.cmp(&a.0.start));
+    for (Range { start, end }, str) in changes {
         cargo_toml.replace_range(start..end, &str);
     }
 
@@ -464,7 +482,7 @@ fn main() -> Result<()> {
             &repo.find_tree(index.write_tree()?)?,
             &[&repo.find_commit(repo.head()?.target().unwrap())?],
         )?;
-        eprintln!("Commit made. All you need to do is `git push` now.");
+        eprintln!("Commit made. All you need to do is `git push` now and create a PR.");
     }
 
     // Figure out the dependency order. Using bubble sort because it's simple, it saves us
