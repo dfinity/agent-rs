@@ -21,7 +21,7 @@ struct Options {
     #[clap(long = "force")]
     force: bool,
 
-    /// The last release tag, by default the last tag is used if it starts
+    /// The release tag, by default the most recent tag is used if it starts
     /// with `release-`.
     #[clap(long = "release")]
     tag: Option<String>,
