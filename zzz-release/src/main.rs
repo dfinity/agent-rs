@@ -127,7 +127,7 @@ fn package_dependencies_from_dependencies_section(
             let value = x.children().last().unwrap().first_child().unwrap();
 
             let version_node: SyntaxToken = match value.kind() {
-                TomlKind::InlineTable => get_version_value_from_table(&value)?,
+                TomlKind::InlineTable => get_version_node_from_table(&value)?,
                 TomlKind::Str => {
                     // Get the ident
                     walk(&value)
