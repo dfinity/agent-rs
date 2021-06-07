@@ -129,14 +129,7 @@ fn package_dependencies_from_dependencies_section(
             let version_node: SyntaxToken = match value.kind() {
                 TomlKind::InlineTable => get_version_node_from_table(&value)?,
                 TomlKind::Str => {
-                    // Get the ident
-                    walk(&value)
-                        .filter(|x| x.kind() == TomlKind::Ident)
-                        .take(1)
-                        .last()
-                        .unwrap()
-                        .into_token()
-                        .unwrap()
+                    get_version_node_from_str(&value?)
                 }
                 _ => return None,
             };
