@@ -341,65 +341,15 @@ impl Agent {
     }
 
     /// Send the signed query to the network. Will return a byte vector.
-    /// The bytes will be checked if it is a valid query and the data match with the arguments
-    #[allow(clippy::too_many_arguments)]
+    /// The bytes will be checked if it is a valid query.
+    /// If want to inspect the fields of the query, use [`signed_query_inspect`] before call this method.
     pub async fn query_signed(
         &self,
-        sender: Principal,
-        canister_id: Principal,
         effective_canister_id: Principal,
-        method_name: &str,
-        arg: &[u8],
-        ingress_expiry: u64,
         signed_query: Vec<u8>,
     ) -> Result<Vec<u8>, AgentError> {
-        let envelope: Envelope<QueryContent> =
+        let _envelope: Envelope<QueryContent> =
             serde_cbor::from_slice(&signed_query).map_err(AgentError::InvalidCborData)?;
-        match envelope.content {
-            QueryContent::QueryRequest {
-                ingress_expiry: ingress_expiry_cbor,
-                sender: sender_cbor,
-                canister_id: canister_id_cbor,
-                method_name: method_name_cbor,
-                arg: arg_cbor,
-            } => {
-                if ingress_expiry != ingress_expiry_cbor {
-                    return Err(AgentError::CallDataMismatch {
-                        field: "ingress_expiry".to_string(),
-                        value_arg: ingress_expiry.to_string(),
-                        value_cbor: ingress_expiry_cbor.to_string(),
-                    });
-                }
-                if sender != sender_cbor {
-                    return Err(AgentError::CallDataMismatch {
-                        field: "sender".to_string(),
-                        value_arg: sender.to_string(),
-                        value_cbor: sender_cbor.to_string(),
-                    });
-                }
-                if canister_id != canister_id_cbor {
-                    return Err(AgentError::CallDataMismatch {
-                        field: "canister_id".to_string(),
-                        value_arg: canister_id.to_string(),
-                        value_cbor: canister_id_cbor.to_string(),
-                    });
-                }
-                if method_name != method_name_cbor {
-                    return Err(AgentError::CallDataMismatch {
-                        field: "method_name".to_string(),
-                        value_arg: method_name.to_string(),
-                        value_cbor: method_name_cbor,
-                    });
-                }
-                if arg != arg_cbor {
-                    return Err(AgentError::CallDataMismatch {
-                        field: "arg".to_string(),
-                        value_arg: format!("{:?}", arg),
-                        value_cbor: format!("{:?}", arg_cbor),
-                    });
-                }
-            }
-        }
         self.query_endpoint::<replica_api::QueryResponse>(effective_canister_id, signed_query)
             .await
             .and_then(|response| match response {
@@ -449,67 +399,16 @@ impl Agent {
             .await
     }
 
-    /// Send the signed update to the network. Will return a byte vector.
-    /// The bytes will be checked if it is a valid update and the data match with the arguments
-    #[allow(clippy::too_many_arguments)]
+    /// Send the signed update to the network. Will return a [`RequestId`].
+    /// The bytes will be checked if it is a valid update.
+    /// If want to inspect the fields of the query, use [`signed_update_inspect`] before call this method.
     pub async fn update_signed(
         &self,
-        sender: Principal,
-        canister_id: Principal,
         effective_canister_id: Principal,
-        method_name: &str,
-        arg: &[u8],
-        ingress_expiry: u64,
         signed_update: Vec<u8>,
     ) -> Result<RequestId, AgentError> {
         let envelope: Envelope<CallRequestContent> =
             serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
-        match envelope.content.clone() {
-            CallRequestContent::CallRequest {
-                nonce: _nonce,
-                ingress_expiry: ingress_expiry_cbor,
-                sender: sender_cbor,
-                canister_id: canister_id_cbor,
-                method_name: method_name_cbor,
-                arg: arg_cbor,
-            } => {
-                if ingress_expiry != ingress_expiry_cbor {
-                    return Err(AgentError::CallDataMismatch {
-                        field: "ingress_expiry".to_string(),
-                        value_arg: ingress_expiry.to_string(),
-                        value_cbor: ingress_expiry_cbor.to_string(),
-                    });
-                }
-                if sender != sender_cbor {
-                    return Err(AgentError::CallDataMismatch {
-                        field: "sender".to_string(),
-                        value_arg: sender.to_string(),
-                        value_cbor: sender_cbor.to_string(),
-                    });
-                }
-                if canister_id != canister_id_cbor {
-                    return Err(AgentError::CallDataMismatch {
-                        field: "canister_id".to_string(),
-                        value_arg: canister_id.to_string(),
-                        value_cbor: canister_id_cbor.to_string(),
-                    });
-                }
-                if method_name != method_name_cbor {
-                    return Err(AgentError::CallDataMismatch {
-                        field: "method_name".to_string(),
-                        value_arg: method_name.to_string(),
-                        value_cbor: method_name_cbor,
-                    });
-                }
-                if arg != arg_cbor {
-                    return Err(AgentError::CallDataMismatch {
-                        field: "arg".to_string(),
-                        value_arg: format!("{:?}", arg),
-                        value_cbor: format!("{:?}", arg_cbor),
-                    });
-                }
-            }
-        }
         let request_id = to_request_id(&envelope.content)?;
         self.call_endpoint(effective_canister_id, request_id, signed_update)
             .await
@@ -693,50 +592,17 @@ impl Agent {
         lookup_request_status(cert, request_id)
     }
 
-    /// Send the signed request_status to the network. Will return RequestStatusResponse.
-    /// The bytes will be checked if it is a valid request_status and the data match with the arguments
+    /// Send the signed request_status to the network. Will return [`RequestStatusResponse`].
+    /// The bytes will be checked if it is a valid request_status.
+    /// If want to inspect the fields of the request_status, use [`signed_request_status_inspect`] before call this method.
     pub async fn request_status_signed(
         &self,
-        sender: Principal,
         request_id: &RequestId,
         effective_canister_id: Principal,
-        ingress_expiry: u64,
         signed_request_status: Vec<u8>,
     ) -> Result<RequestStatusResponse, AgentError> {
-        let paths: Vec<Vec<Label>> =
-            vec![vec!["request_status".into(), request_id.to_vec().into()]];
-        let envelope: Envelope<ReadStateContent> =
+        let _envelope: Envelope<ReadStateContent> =
             serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
-        match envelope.content.clone() {
-            ReadStateContent::ReadStateRequest {
-                ingress_expiry: ingress_expiry_cbor,
-                sender: sender_cbor,
-                paths: paths_cbor,
-            } => {
-                if ingress_expiry != ingress_expiry_cbor {
-                    return Err(AgentError::CallDataMismatch {
-                        field: "ingress_expiry".to_string(),
-                        value_arg: ingress_expiry.to_string(),
-                        value_cbor: ingress_expiry_cbor.to_string(),
-                    });
-                }
-                if sender != sender_cbor {
-                    return Err(AgentError::CallDataMismatch {
-                        field: "sender".to_string(),
-                        value_arg: sender.to_string(),
-                        value_cbor: sender_cbor.to_string(),
-                    });
-                }
-
-                if paths != paths_cbor {
-                    return Err(AgentError::CallDataMismatch {
-                        field: "paths".to_string(),
-                        value_arg: format!("{:?}", paths),
-                        value_cbor: format!("{:?}", paths_cbor),
-                    });
-                }
-            }
-        }
         let read_state_response: ReadStateResponse = self
             .read_state_endpoint(effective_canister_id, signed_request_status)
             .await?;
@@ -804,6 +670,171 @@ where
     envelope.serialize(&mut serializer)?;
 
     Ok(serialized_bytes)
+}
+
+/// Inspect the bytes to be sent as a query
+/// Return Ok only when the bytes can be deserialized as a query and all fields match with the arguments
+pub fn signed_query_inspect(
+    sender: Principal,
+    canister_id: Principal,
+    method_name: &str,
+    arg: &[u8],
+    ingress_expiry: u64,
+    signed_query: Vec<u8>,
+) -> Result<(), AgentError> {
+    let envelope: Envelope<QueryContent> =
+        serde_cbor::from_slice(&signed_query).map_err(AgentError::InvalidCborData)?;
+    match envelope.content {
+        QueryContent::QueryRequest {
+            ingress_expiry: ingress_expiry_cbor,
+            sender: sender_cbor,
+            canister_id: canister_id_cbor,
+            method_name: method_name_cbor,
+            arg: arg_cbor,
+        } => {
+            if ingress_expiry != ingress_expiry_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "ingress_expiry".to_string(),
+                    value_arg: ingress_expiry.to_string(),
+                    value_cbor: ingress_expiry_cbor.to_string(),
+                });
+            }
+            if sender != sender_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "sender".to_string(),
+                    value_arg: sender.to_string(),
+                    value_cbor: sender_cbor.to_string(),
+                });
+            }
+            if canister_id != canister_id_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "canister_id".to_string(),
+                    value_arg: canister_id.to_string(),
+                    value_cbor: canister_id_cbor.to_string(),
+                });
+            }
+            if method_name != method_name_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "method_name".to_string(),
+                    value_arg: method_name.to_string(),
+                    value_cbor: method_name_cbor,
+                });
+            }
+            if arg != arg_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "arg".to_string(),
+                    value_arg: format!("{:?}", arg),
+                    value_cbor: format!("{:?}", arg_cbor),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Inspect the bytes to be sent as a update
+/// Return Ok only when the bytes can be deserialized as a update and all fields match with the arguments
+pub fn signed_update_inspect(
+    sender: Principal,
+    canister_id: Principal,
+    method_name: &str,
+    arg: &[u8],
+    ingress_expiry: u64,
+    signed_update: Vec<u8>,
+) -> Result<(), AgentError> {
+    let envelope: Envelope<CallRequestContent> =
+        serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
+    match envelope.content {
+        CallRequestContent::CallRequest {
+            nonce: _nonce,
+            ingress_expiry: ingress_expiry_cbor,
+            sender: sender_cbor,
+            canister_id: canister_id_cbor,
+            method_name: method_name_cbor,
+            arg: arg_cbor,
+        } => {
+            if ingress_expiry != ingress_expiry_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "ingress_expiry".to_string(),
+                    value_arg: ingress_expiry.to_string(),
+                    value_cbor: ingress_expiry_cbor.to_string(),
+                });
+            }
+            if sender != sender_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "sender".to_string(),
+                    value_arg: sender.to_string(),
+                    value_cbor: sender_cbor.to_string(),
+                });
+            }
+            if canister_id != canister_id_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "canister_id".to_string(),
+                    value_arg: canister_id.to_string(),
+                    value_cbor: canister_id_cbor.to_string(),
+                });
+            }
+            if method_name != method_name_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "method_name".to_string(),
+                    value_arg: method_name.to_string(),
+                    value_cbor: method_name_cbor,
+                });
+            }
+            if arg != arg_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "arg".to_string(),
+                    value_arg: format!("{:?}", arg),
+                    value_cbor: format!("{:?}", arg_cbor),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Inspect the bytes to be sent as a request_status
+/// Return Ok only when the bytes can be deserialized as a request_status and all fields match with the arguments
+pub fn signed_request_status_inspect(
+    sender: Principal,
+    request_id: &RequestId,
+    ingress_expiry: u64,
+    signed_request_status: Vec<u8>,
+) -> Result<(), AgentError> {
+    let paths: Vec<Vec<Label>> = vec![vec!["request_status".into(), request_id.to_vec().into()]];
+    let envelope: Envelope<ReadStateContent> =
+        serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
+    match envelope.content {
+        ReadStateContent::ReadStateRequest {
+            ingress_expiry: ingress_expiry_cbor,
+            sender: sender_cbor,
+            paths: paths_cbor,
+        } => {
+            if ingress_expiry != ingress_expiry_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "ingress_expiry".to_string(),
+                    value_arg: ingress_expiry.to_string(),
+                    value_cbor: ingress_expiry_cbor.to_string(),
+                });
+            }
+            if sender != sender_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "sender".to_string(),
+                    value_arg: sender.to_string(),
+                    value_cbor: sender_cbor.to_string(),
+                });
+            }
+
+            if paths != paths_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "paths".to_string(),
+                    value_arg: format!("{:?}", paths),
+                    value_cbor: format!("{:?}", paths_cbor),
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 /// A Query Request Builder.
