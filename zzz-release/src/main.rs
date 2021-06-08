@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use toml_parse::{walk, SyntaxElement, SyntaxNode, SyntaxToken, TomlKind};
+use toml_parse::{walk, SyntaxNode, SyntaxToken, TomlKind};
 
 #[derive(Clap, Debug)]
 struct Options {
@@ -99,41 +99,44 @@ struct PackageDependency {
 fn get_ident_from_str(value: &SyntaxNode) -> Option<SyntaxToken> {
     // Get the ident
     walk(value)
-        .filter(|x| x.kind() == TomlKind::Ident)
-        .take(1)
-        .last()?
+        .find(|x| x.kind() == TomlKind::Ident)?
         .into_token()
 }
 
-/// ```
-/// let node = parse(r#"
-///   [some_table]
-///   field_1 = "ignored"
-///   version = "1.2.3"  # Will return this.
-///   field_2 = "ignored"
-/// "#);
-/// assert_eq!(get_version_node_from_table(node).unwrap().to_string(), "1.2.3");
-/// ```
-fn get_version_node_from_table(node: &SyntaxNode) -> Option<SyntaxToken> {
+fn get_value_from_table_for_key(node: &SyntaxNode, key: &str) -> Option<SyntaxToken> {
     walk(node)
         .filter_map(|el| {
-            let n = el.as_node()?;
+            let n = el.into_node()?;
             if n.kind() == TomlKind::KeyValue
-                && n.first_child()?.first_token()?.to_string() == "version"
+                && get_ident_from_str(&n.first_child()?)?.to_string() == key
             {
-                // Get the ident.
-                walk(&n.last_child()?)
-                    .filter(|x| x.kind() == TomlKind::Ident)
-                    .take(1)
-                    .last()
-                    .map(|x| x.into_token().unwrap())
+                Some(n)
             } else {
                 None
             }
         })
-        .take(1)
-        .collect::<Vec<SyntaxToken>>()
-        .pop()
+        .filter_map(|n| get_ident_from_str(&n.last_child()?))
+        .last()
+}
+
+#[test]
+fn get_value_from_table_test() {
+    let parsed = toml_parse::parse_it(
+        r#"# comment
+          [some]
+          field_1 = "ignored"
+          abc = """1.2.3"""  # Will return this.
+          field_2 = "ignored"
+        "#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        get_value_from_table_for_key(&parsed.syntax(), "abc")
+            .unwrap()
+            .to_string(),
+        "1.2.3"
+    );
 }
 
 fn package_dependencies_from_dependencies_section(
@@ -152,7 +155,7 @@ fn package_dependencies_from_dependencies_section(
             let value = x.children().last().unwrap().first_child().unwrap();
 
             let version_node: SyntaxToken = match value.kind() {
-                TomlKind::InlineTable => get_version_node_from_table(&value)?,
+                TomlKind::InlineTable => get_value_from_table_for_key(&value, "version")?,
                 TomlKind::Str => get_ident_from_str(&value)?,
                 _ => return None,
             };
@@ -168,7 +171,7 @@ fn package_dependencies_from_dependencies_section(
 fn package_dependencies_from_dependency_dot(node: &SyntaxNode) -> Option<Vec<PackageDependency>> {
     let title = node.first_token()?.next_sibling_or_token()?.to_string();
     let name = title.split_at("dependencies.".len()).1.to_string();
-    let version_node = get_version_node_from_table(node)?;
+    let version_node = get_value_from_table_for_key(node, "version")?;
     Some(vec![PackageDependency { name, version_node }])
 }
 
@@ -186,40 +189,20 @@ fn update_manifest(package_name: &str, version_map: &VersionMap) -> Result<Box<A
     // Find the `[package]` object and the key pair for version = ...,
     // then add a change to the vector above to update the value to the new version.
     let value = walk(&root)
-        // Filter out all key values
+        // Filter key values.
         .filter(|element| element.kind() != TomlKind::KeyValue)
-        // That are part of a table (a key value cannot not have a parent) that has the heading
-        // `package`.
+        // That are part of a table hat has the heading `package`.
         .filter_map(|element| {
             if element.parent()?.kind() == TomlKind::Table
-                && element
-                    .parent()?
-                    .first_token()?
-                    .next_sibling_or_token()?
-                    .to_string()
-                    == "package"
+                && element.parent()?.first_child()?.to_string() == "package"
             {
-                Some(element)
+                element.into_node()
             } else {
                 None
             }
         })
         // And find the first one which has its key set to `version`.
-        .find_map(|version_kv| {
-            let node = version_kv.as_node().unwrap();
-            let key = node.first_token().unwrap();
-
-            if key.text() != "version" {
-                None
-            } else {
-                let value = node
-                    .children()
-                    .nth(1)?
-                    .first_token()?
-                    .next_sibling_or_token()?;
-                Some(value)
-            }
-        })
+        .find_map(|package_table| get_value_from_table_for_key(&package_table, "version"))
         .unwrap();
 
     let range = value.text_range();
@@ -249,7 +232,6 @@ fn update_manifest(package_name: &str, version_map: &VersionMap) -> Result<Box<A
                 None
             }
         })
-        .map(|x| Ok(x?))
         .collect::<Result<Vec<Vec<PackageDependency>>>>()?
         .into_iter()
         .flatten()
