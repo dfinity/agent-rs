@@ -103,10 +103,12 @@ fn get_ident_from_str(value: &SyntaxNode) -> Option<SyntaxToken> {
         .into_token()
 }
 
+/// Get a value
 fn get_value_from_table_for_key(node: &SyntaxNode, key: &str) -> Option<SyntaxToken> {
-    walk(node)
-        .filter_map(|el| {
-            let n = el.into_node()?;
+    // Children and their children.
+    node.children()
+        .flat_map(|x| x.children())
+        .filter_map(|n| {
             if n.kind() == TomlKind::KeyValue
                 && get_ident_from_str(&n.first_child()?)?.to_string() == key
             {
