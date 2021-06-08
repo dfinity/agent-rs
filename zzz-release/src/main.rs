@@ -107,11 +107,9 @@ fn get_ident_from_str(value: &SyntaxNode) -> Option<SyntaxToken> {
 fn get_value_from_table_for_key(node: &SyntaxNode, key: &str) -> Option<SyntaxToken> {
     // Children and their children.
     node.children()
-        .flat_map(|x| x.children())
+        .filter(|x| x.kind() == TomlKind::KeyValue)
         .filter_map(|n| {
-            if n.kind() == TomlKind::KeyValue
-                && get_ident_from_str(&n.first_child()?)?.to_string() == key
-            {
+            if get_ident_from_str(&n.first_child()?)?.to_string() == key {
                 Some(n)
             } else {
                 None
@@ -127,17 +125,38 @@ fn get_value_from_table_test() {
         r#"# comment
           [some]
           field_1 = "ignored"
-          abc = """1.2.3"""  # Will return this.
+          abc = """REGULAR TABLE"""  # Will return this.
           field_2 = "ignored"
+          inline = { field_2 = "ignored", def = "INLINE TABLE", field_3 = "ignored" }
         "#,
     )
     .unwrap();
 
+    let some_table = walk(&parsed.syntax())
+        .find(|x| x.kind() == TomlKind::Table)
+        .unwrap()
+        .into_node()
+        .unwrap();
+
     assert_eq!(
-        get_value_from_table_for_key(&parsed.syntax(), "abc")
+        get_value_from_table_for_key(&some_table, "abc")
             .unwrap()
             .to_string(),
-        "1.2.3"
+        "REGULAR TABLE"
+    );
+
+    // Chcek with inline table.
+    let inline_table = walk(&parsed.syntax())
+        .find(|x| x.kind() == TomlKind::InlineTable)
+        .unwrap()
+        .into_node()
+        .unwrap();
+
+    assert_eq!(
+        get_value_from_table_for_key(&inline_table, "def")
+            .unwrap()
+            .to_string(),
+        "INLINE TABLE"
     );
 }
 
