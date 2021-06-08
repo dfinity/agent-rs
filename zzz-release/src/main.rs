@@ -103,6 +103,14 @@ fn get_ident_from_str(value: &SyntaxNode) -> Option<SyntaxToken> {
         .into_token()
 }
 
+fn get_key_from_key_value(node: &SyntaxNode) -> Option<SyntaxToken> {
+    if node.kind() != TomlKind::KeyValue {
+        None
+    } else {
+        get_ident_from_str(&node.first_child()?)
+    }
+}
+
 fn get_value_from_table_for_key(node: &SyntaxNode, key: &str) -> Option<SyntaxToken> {
     walk(node)
         .filter_map(|el| {
@@ -189,12 +197,12 @@ fn update_manifest(package_name: &str, version_map: &VersionMap) -> Result<Box<A
     // Find the `[package]` object and the key pair for version = ...,
     // then add a change to the vector above to update the value to the new version.
     let value = walk(&root)
-        // Filter key values.
-        .filter(|element| element.kind() != TomlKind::KeyValue)
+        // Filter key value pairs.
+        .filter(|element| element.kind() == TomlKind::KeyValue)
         // That are part of a table hat has the heading `package`.
         .filter_map(|element| {
             if element.parent()?.kind() == TomlKind::Table
-                && element.parent()?.first_child()?.to_string() == "package"
+                && get_ident_from_str(&element.parent()?.first_child()?)?.to_string() == "package"
             {
                 element.into_node()
             } else {
@@ -202,7 +210,13 @@ fn update_manifest(package_name: &str, version_map: &VersionMap) -> Result<Box<A
             }
         })
         // And find the first one which has its key set to `version`.
-        .find_map(|package_table| get_value_from_table_for_key(&package_table, "version"))
+        .find_map(|version_kv| {
+            if get_ident_from_str(&version_kv.first_child()?)?.to_string() == "version" {
+                get_ident_from_str(&version_kv.last_child()?)
+            } else {
+                None
+            }
+        })
         .unwrap();
 
     let range = value.text_range();
