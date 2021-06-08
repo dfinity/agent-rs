@@ -103,14 +103,6 @@ fn get_ident_from_str(value: &SyntaxNode) -> Option<SyntaxToken> {
         .into_token()
 }
 
-fn get_key_from_key_value(node: &SyntaxNode) -> Option<SyntaxToken> {
-    if node.kind() != TomlKind::KeyValue {
-        None
-    } else {
-        get_ident_from_str(&node.first_child()?)
-    }
-}
-
 fn get_value_from_table_for_key(node: &SyntaxNode, key: &str) -> Option<SyntaxToken> {
     walk(node)
         .filter_map(|el| {
