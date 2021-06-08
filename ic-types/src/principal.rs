@@ -1,3 +1,5 @@
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha224};
 use std::convert::TryFrom;
 use std::fmt::Write;
@@ -14,6 +16,7 @@ macro_rules! const_panic {
 
 /// An error happened while encoding, decoding or serializing a principal.
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PrincipalError {
     #[error("Buffer is too long.")]
     BufferTooLong(),
@@ -118,7 +121,7 @@ impl TryFrom<u8> for PrincipalClass {
 ///     &[161, 98, 105, 100, 73, 239, 205, 171, 0, 0, 0, 0, 0, 1],
 /// );
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Principal(PrincipalInner);
 
 impl Principal {
@@ -187,10 +190,11 @@ impl Principal {
 
     /// Attempt to decode a slice into a Principal.
     pub const fn try_from_slice(bytes: &[u8]) -> Result<Self, PrincipalError> {
+        const ANONYMOUS: u8 = PrincipalClass::Anonymous as u8;
         match bytes {
             [] => Ok(Principal::management_canister()),
-            [4] => Ok(Principal::anonymous()),
-            [.., 4] => Err(PrincipalError::BufferTooLong()),
+            [ANONYMOUS] => Ok(Principal::anonymous()),
+            [.., ANONYMOUS] => Err(PrincipalError::BufferTooLong()),
             bytes @ [..] => match PrincipalInner::try_from_slice(bytes) {
                 None => Err(PrincipalError::BufferTooLong()),
                 Some(v) => Ok(Principal(v)),
@@ -388,7 +392,7 @@ mod inner {
     ///
     /// This is a length (1 byte) and 29 bytes. The length can be 0, but won't ever be longer
     /// than 29. The current interface spec says that principals cannot be longer than 29 bytes.
-    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
     #[repr(packed)]
     pub struct PrincipalInner {
         /// Length.
@@ -410,7 +414,7 @@ mod inner {
             }
         }
 
-        /// Panics if the length is over `HASH_LEN_IN_BYTES`
+        /// Panics if the length is over `MAX_LENGTH_IN_BYTES`
         pub const fn from_slice(slice: &[u8]) -> Self {
             if let Some(v) = Self::try_from_slice(slice) {
                 v
