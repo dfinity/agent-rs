@@ -20,6 +20,7 @@ pub struct SignedQuery {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SignedUpdate {
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(with = "serde_bytes")]
     pub nonce: Option<Vec<u8>>,
