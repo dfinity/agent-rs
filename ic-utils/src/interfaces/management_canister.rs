@@ -109,7 +109,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
 
         self.update_(MgmtMethod::CanisterStatus.as_ref())
             .with_arg(In {
-                canister_id: canister_id.clone(),
+                canister_id: *canister_id,
             })
             .with_effective_canister_id(canister_id.to_owned())
             .build()
@@ -136,7 +136,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
 
         self.update_(MgmtMethod::DepositCycles.as_ref())
             .with_arg(Argument {
-                canister_id: canister_id.clone(),
+                canister_id: *canister_id,
             })
             .with_effective_canister_id(canister_id.to_owned())
             .build()
@@ -154,7 +154,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
 
         self.update_(MgmtMethod::DeleteCanister.as_ref())
             .with_arg(Argument {
-                canister_id: canister_id.clone(),
+                canister_id: *canister_id,
             })
             .with_effective_canister_id(canister_id.to_owned())
             .build()
@@ -177,7 +177,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
 
         self.update_(MgmtMethod::ProvisionalTopUpCanister.as_ref())
             .with_arg(Argument {
-                canister_id: canister_id.clone(),
+                canister_id: *canister_id,
                 amount,
             })
             .with_effective_canister_id(canister_id.to_owned())
@@ -205,7 +205,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
 
         self.update_(MgmtMethod::StartCanister.as_ref())
             .with_arg(Argument {
-                canister_id: canister_id.clone(),
+                canister_id: *canister_id,
             })
             .with_effective_canister_id(canister_id.to_owned())
             .build()
@@ -223,7 +223,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
 
         self.update_(MgmtMethod::StopCanister.as_ref())
             .with_arg(Argument {
-                canister_id: canister_id.clone(),
+                canister_id: *canister_id,
             })
             .with_effective_canister_id(canister_id.to_owned())
             .build()
@@ -247,7 +247,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
 
         self.update_(MgmtMethod::UninstallCode.as_ref())
             .with_arg(Argument {
-                canister_id: canister_id.clone(),
+                canister_id: *canister_id,
             })
             .with_effective_canister_id(canister_id.to_owned())
             .build()

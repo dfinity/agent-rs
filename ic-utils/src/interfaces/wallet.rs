@@ -280,7 +280,7 @@ impl<'agent> Canister<'agent, Wallet> {
 
         self.update_("wallet_send")
             .with_arg(In {
-                canister: destination.canister_id_().clone(),
+                canister: *destination.canister_id_(),
                 amount,
             })
             .build()
@@ -416,7 +416,7 @@ impl<'agent> Canister<'agent, Wallet> {
     {
         CallForwarder {
             wallet: self,
-            destination: destination.canister_id_().clone(),
+            destination: *destination.canister_id_(),
             method_name: method_name.into(),
             amount,
             arg,
