@@ -8,6 +8,7 @@ pub(crate) mod replica_api;
 pub(crate) mod response;
 mod response_authentication;
 
+pub mod signed;
 pub mod status;
 pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
@@ -918,14 +919,32 @@ impl<'agent> QueryBuilder<'agent> {
 
     /// Sign a query call. This will return a byte vector
     /// which is the signed query in CBOR encoding
-    pub fn sign(&self) -> Result<Vec<u8>, AgentError> {
+    pub fn sign(&self) -> Result<signed::SignedQuery, AgentError> {
         let request = self.agent.query_content(
             &self.canister_id,
             &self.method_name,
             &self.arg,
             self.ingress_expiry_datetime,
         )?;
-        sign_request(&request, self.agent.identity.clone())
+
+        let signed_query = sign_request(&request, self.agent.identity.clone())?;
+        match request {
+            QueryContent::QueryRequest {
+                ingress_expiry,
+                sender,
+                canister_id,
+                method_name,
+                arg,
+            } => Ok(signed::SignedQuery {
+                ingress_expiry,
+                sender,
+                canister_id,
+                method_name,
+                arg,
+                effective_canister_id: self.effective_canister_id.clone(),
+                signed_query,
+            }),
+        }
     }
 }
 
@@ -1052,32 +1071,59 @@ impl<'agent> UpdateBuilder<'agent> {
         }
     }
 
-    /// Sign a update call. This will return a byte vector
-    /// which is the signed update in CBOR encoding
-    pub fn sign(&self) -> Result<Vec<u8>, AgentError> {
+    /// Sign a update call. This will return a SignedUpdate
+    /// which contains all fields of the update and the signed bytes of both update and request_status
+    pub fn sign(&self) -> Result<signed::SignedUpdate, AgentError> {
         let request = self.agent.update_content(
             &self.canister_id,
             &self.method_name,
             &self.arg,
             self.ingress_expiry_datetime,
         )?;
-        sign_request(&request, self.agent.identity.clone())
+        let signed_update = sign_request(&request, self.agent.identity.clone())?;
+        let request_id = to_request_id(&request)?;
+        match request {
+            CallRequestContent::CallRequest {
+                nonce,
+                ingress_expiry,
+                sender,
+                canister_id,
+                method_name,
+                arg,
+            } => Ok(signed::SignedUpdate {
+                nonce,
+                ingress_expiry,
+                sender,
+                canister_id,
+                method_name,
+                arg,
+                effective_canister_id: self.effective_canister_id.clone(),
+                signed_update,
+                request_id,
+            }),
+        }
     }
 
-    /// Sign the request_status call accompany with the update call.
-    /// This will return a byte vector
-    /// which is the signed request_status in CBOR encoding
-    pub fn sign_request_status(&self) -> Result<Vec<u8>, AgentError> {
-        let request = self.agent.update_content(
-            &self.canister_id,
-            &self.method_name,
-            &self.arg,
-            self.ingress_expiry_datetime,
-        )?;
-        let request_id = to_request_id(&request)?;
+    pub fn sign_request_status(
+        &self,
+        request_id: RequestId,
+    ) -> Result<signed::SignedRequestStatus, AgentError> {
         let paths: Vec<Vec<Label>> =
             vec![vec!["request_status".into(), request_id.to_vec().into()]];
         let read_state_content = self.agent.read_state_content(paths)?;
-        sign_request(&read_state_content, self.agent.identity.clone())
+        let signed_request_status = sign_request(&read_state_content, self.agent.identity.clone())?;
+        match read_state_content {
+            ReadStateContent::ReadStateRequest {
+                ingress_expiry,
+                sender,
+                paths: _path,
+            } => Ok(signed::SignedRequestStatus {
+                ingress_expiry,
+                sender,
+                effective_canister_id: self.effective_canister_id.clone(),
+                request_id,
+                signed_request_status,
+            }),
+        }
     }
 }
