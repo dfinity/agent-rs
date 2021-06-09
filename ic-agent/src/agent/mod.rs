@@ -917,8 +917,8 @@ impl<'agent> QueryBuilder<'agent> {
             .await
     }
 
-    /// Sign a query call. This will return a byte vector
-    /// which is the signed query in CBOR encoding
+    /// Sign a query call. This will return a [`signed::SignedQuery`]
+    /// which contains all fields of the query and the signed query in CBOR encoding
     pub fn sign(&self) -> Result<signed::SignedQuery, AgentError> {
         let request = self.agent.query_content(
             &self.canister_id,
@@ -1071,8 +1071,8 @@ impl<'agent> UpdateBuilder<'agent> {
         }
     }
 
-    /// Sign a update call. This will return a SignedUpdate
-    /// which contains all fields of the update and the signed bytes of both update and request_status
+    /// Sign a update call. This will return a [`signed::SignedUpdate`]
+    /// which contains all fields of the update and the signed update in CBOR encoding
     pub fn sign(&self) -> Result<signed::SignedUpdate, AgentError> {
         let request = self.agent.update_content(
             &self.canister_id,
@@ -1104,6 +1104,8 @@ impl<'agent> UpdateBuilder<'agent> {
         }
     }
 
+    /// Sign a request_status call. This will return a [`signed::SignedRequestStatus`]
+    /// which contains all fields of the request_status and the signed request_status in CBOR encoding
     pub fn sign_request_status(
         &self,
         request_id: RequestId,
