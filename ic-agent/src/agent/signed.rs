@@ -1,6 +1,5 @@
 use crate::export::Principal;
-use crate::{ RequestId};
-
+use crate::RequestId;
 
 use serde::{Deserialize, Serialize};
 
