@@ -6,9 +6,11 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub struct Envelope<T: Serialize> {
     pub content: T,
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(with = "serde_bytes")]
     pub sender_pubkey: Option<Vec<u8>>,
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(with = "serde_bytes")]
     pub sender_sig: Option<Vec<u8>>,
@@ -19,6 +21,7 @@ pub struct Envelope<T: Serialize> {
 pub enum AsyncContent {
     #[serde(rename = "call")]
     CallRequest {
+        #[serde(default)]
         #[serde(skip_serializing_if = "Option::is_none")]
         #[serde(with = "serde_bytes")]
         nonce: Option<Vec<u8>>,
@@ -37,6 +40,7 @@ pub enum AsyncContent {
 pub enum CallRequestContent {
     #[serde(rename = "call")]
     CallRequest {
+        #[serde(default)]
         #[serde(skip_serializing_if = "Option::is_none")]
         #[serde(with = "serde_bytes")]
         nonce: Option<Vec<u8>>,
