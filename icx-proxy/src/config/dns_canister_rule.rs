@@ -53,7 +53,7 @@ impl DnsCanisterRule {
     pub fn lookup(&self, split_hostname_lowercase: &[String]) -> Option<Principal> {
         if split_hostname_lowercase.ends_with(&self.dns_suffix) {
             match &self.strategy {
-                PrincipalDeterminationStrategy::Alias(principal) => Some(principal.clone()),
+                PrincipalDeterminationStrategy::Alias(principal) => Some(*principal),
                 PrincipalDeterminationStrategy::PrecedingDomainName => {
                     if split_hostname_lowercase.len() > self.dns_suffix.len() {
                         let subdomain = &split_hostname_lowercase

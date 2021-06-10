@@ -166,14 +166,14 @@ mod management_canister {
 
             // Change controller.
             ic00.update_settings(&canister_id)
-                .with_controller(other_agent_principal.clone())
+                .with_controller(other_agent_principal)
                 .call_and_wait(create_waiter())
                 .await?;
 
             // Change controller with wrong controller should fail
             let result = ic00
                 .update_settings(&canister_id)
-                .with_controller(other_agent_principal.clone())
+                .with_controller(other_agent_principal)
                 .call_and_wait(create_waiter())
                 .await;
             assert!(matches!(result, Err(AgentError::HttpError(payload))

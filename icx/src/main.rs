@@ -417,7 +417,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 is_management_canister,
                 &t.method_name,
                 &arg,
-                t.canister_id.clone(),
+                t.canister_id,
             )?;
 
             let result = match &opts.subcommand {

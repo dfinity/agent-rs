@@ -308,7 +308,7 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
     ) -> Self {
         Self {
             canister,
-            canister_id: canister_id.clone(),
+            canister_id: *canister_id,
             wasm,
             arg: Default::default(),
             mode: None,
@@ -347,7 +347,7 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
             .update_(MgmtMethod::InstallCode.as_ref())
             .with_arg(CanisterInstall {
                 mode: self.mode.unwrap_or(InstallMode::Install),
-                canister_id: self.canister_id.clone(),
+                canister_id: self.canister_id,
                 wasm_module: self.wasm.to_owned(),
                 arg: self.arg.serialize()?,
             })
@@ -399,7 +399,7 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
     pub fn builder(canister: &'canister Canister<'agent, T>, canister_id: &Principal) -> Self {
         Self {
             canister,
-            canister_id: canister_id.clone(),
+            canister_id: *canister_id,
             controller: None,
             compute_allocation: None,
             memory_allocation: None,
@@ -541,7 +541,7 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
             .canister
             .update_(MgmtMethod::UpdateSettings.as_ref())
             .with_arg(In {
-                canister_id: self.canister_id.clone(),
+                canister_id: self.canister_id,
                 settings: CanisterSettings {
                     controller,
                     compute_allocation,
