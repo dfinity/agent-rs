@@ -1,0 +1,23 @@
+[package]
+name = "ic-asset"
+version = "0.0.1"
+authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
+edition = "2018"
+description = "Library for storing files on an asset canister."
+homepage = "https://docs.rs/ic-asset"
+documentation = "https://docs.rs/ic-asset"
+license = "Apache-2.0"
+readme = "README.md"
+categories = ["api-bindings", "data-structures"]
+keywords = ["internet-computer", "assets", "icp", "dfinity"]
+include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
+
+[dependencies]
+anyhow = "1.0.34"
+ic-agent = { path = "../ic-agent", version = "0.5", features = [ "pem" ] }
+ic-types = { path = "../ic-types", version = "0.1", features = [ "serde" ] }
+
+[dev-dependencies]
+mockito = "0.27.0"
+proptest = "0.9.5"
+

@@ -839,6 +839,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-asset"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "ic-agent",
+ "ic-types",
+ "mockito",
+ "proptest",
+]
+
+[[package]]
 name = "ic-identity-hsm"
 version = "0.3.2"
 dependencies = [

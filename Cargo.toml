@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "ic-agent",
+    "ic-asset/",
     "ic-identity-hsm",
     "ic-types",
     "ic-utils",
