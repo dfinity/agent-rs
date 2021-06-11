@@ -639,6 +639,32 @@ impl Agent {
     pub fn query<S: Into<String>>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder {
         QueryBuilder::new(self, *canister_id, method_name.into())
     }
+
+    /// Sign a request_status call. This will return a [`signed::SignedRequestStatus`]
+    /// which contains all fields of the request_status and the signed request_status in CBOR encoding
+    pub fn sign_request_status(
+        &self,
+        effective_canister_id: Principal,
+        request_id: RequestId,
+    ) -> Result<signed::SignedRequestStatus, AgentError> {
+        let paths: Vec<Vec<Label>> =
+            vec![vec!["request_status".into(), request_id.to_vec().into()]];
+        let read_state_content = self.read_state_content(paths)?;
+        let signed_request_status = sign_request(&read_state_content, self.identity.clone())?;
+        match read_state_content {
+            ReadStateContent::ReadStateRequest {
+                ingress_expiry,
+                sender,
+                paths: _path,
+            } => Ok(signed::SignedRequestStatus {
+                ingress_expiry,
+                sender,
+                effective_canister_id,
+                request_id,
+                signed_request_status,
+            }),
+        }
+    }
 }
 
 fn construct_message(request_id: &RequestId) -> Vec<u8> {
@@ -1100,31 +1126,6 @@ impl<'agent> UpdateBuilder<'agent> {
                 effective_canister_id: self.effective_canister_id,
                 signed_update,
                 request_id,
-            }),
-        }
-    }
-
-    /// Sign a request_status call. This will return a [`signed::SignedRequestStatus`]
-    /// which contains all fields of the request_status and the signed request_status in CBOR encoding
-    pub fn sign_request_status(
-        &self,
-        request_id: RequestId,
-    ) -> Result<signed::SignedRequestStatus, AgentError> {
-        let paths: Vec<Vec<Label>> =
-            vec![vec!["request_status".into(), request_id.to_vec().into()]];
-        let read_state_content = self.agent.read_state_content(paths)?;
-        let signed_request_status = sign_request(&read_state_content, self.agent.identity.clone())?;
-        match read_state_content {
-            ReadStateContent::ReadStateRequest {
-                ingress_expiry,
-                sender,
-                paths: _path,
-            } => Ok(signed::SignedRequestStatus {
-                ingress_expiry,
-                sender,
-                effective_canister_id: self.effective_canister_id,
-                request_id,
-                signed_request_status,
             }),
         }
     }
