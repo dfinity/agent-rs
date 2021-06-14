@@ -58,16 +58,6 @@ impl From<RequestId> for String {
     }
 }
 
-/// We only allow to serialize a Request ID.
-// impl Serialize for RequestId {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         serializer.serialize_bytes(&self.to_vec())
-//     }
-// }
-
 enum Hasher {
     /// The hasher for the overall request id.  This is the only part
     /// that may directly contain a Struct.
