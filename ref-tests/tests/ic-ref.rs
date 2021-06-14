@@ -777,6 +777,7 @@ mod sign_send {
         signed_query_inspect, signed_request_status_inspect, signed_update_inspect,
     };
     use ic_agent::agent::{Replied, RequestStatusResponse};
+    use ic_agent::AgentError;
     use ref_tests::with_universal_canister;
     use std::{thread, time};
 
@@ -873,15 +874,18 @@ mod sign_send {
 
             signed_query.method_name = "non_query".to_string();
 
-            assert!(signed_query_inspect(
+            let result = signed_query_inspect(
                 signed_query.sender,
                 signed_query.canister_id,
                 &signed_query.method_name,
                 &signed_query.arg,
                 signed_query.ingress_expiry,
-                signed_query.signed_query.clone()
-            )
-            .is_err());
+                signed_query.signed_query.clone(),
+            );
+
+            assert!(matches!(result,
+                    Err(AgentError::CallDataMismatch{field, value_arg, value_cbor})
+                    if field == *"method_name" && value_arg == *"non_query" && value_cbor == *"query"));
 
             Ok(())
         })
