@@ -8,7 +8,7 @@
 //! (a 256 bits slice) or an error.
 use error::RequestIdFromStringError;
 use openssl::sha::Sha256;
-use serde::{ser, Serialize, Serializer};
+use serde::{ser, Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::iter::Extend;
 use std::str::FromStr;
@@ -20,7 +20,7 @@ pub use error::RequestIdError;
 type Sha256Hash = [u8; 32];
 
 /// A Request ID.
-#[derive(Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq, Deserialize, Serialize)]
 pub struct RequestId(Sha256Hash);
 
 impl RequestId {
@@ -55,16 +55,6 @@ impl FromStr for RequestId {
 impl From<RequestId> for String {
     fn from(id: RequestId) -> String {
         hex::encode(id.0)
-    }
-}
-
-/// We only allow to serialize a Request ID.
-impl Serialize for RequestId {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_bytes(&self.to_vec())
     }
 }
 
