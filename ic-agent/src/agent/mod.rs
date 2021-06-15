@@ -343,7 +343,7 @@ impl Agent {
 
     /// Send the signed query to the network. Will return a byte vector.
     /// The bytes will be checked if it is a valid query.
-    /// If want to inspect the fields of the query, use [`signed_query_inspect`] before call this method.
+    /// If you want to inspect the fields of the query call, use [`signed_query_inspect`] before calling this method.
     pub async fn query_signed(
         &self,
         effective_canister_id: Principal,
@@ -401,8 +401,8 @@ impl Agent {
     }
 
     /// Send the signed update to the network. Will return a [`RequestId`].
-    /// The bytes will be checked if it is a valid update.
-    /// If want to inspect the fields of the query, use [`signed_update_inspect`] before call this method.
+    /// The bytes will be checked to verify that it is a valid update.
+    /// If you want to inspect the fields of the update, use [`signed_update_inspect`] before calling this method.
     pub async fn update_signed(
         &self,
         effective_canister_id: Principal,
@@ -594,8 +594,8 @@ impl Agent {
     }
 
     /// Send the signed request_status to the network. Will return [`RequestStatusResponse`].
-    /// The bytes will be checked if it is a valid request_status.
-    /// If want to inspect the fields of the request_status, use [`signed_request_status_inspect`] before call this method.
+    /// The bytes will be checked to verify that it is a valid request_status.
+    /// If you want to inspect the fields of the request_status, use [`signed_request_status_inspect`] before calling this method.
     pub async fn request_status_signed(
         &self,
         request_id: &RequestId,
@@ -759,8 +759,8 @@ pub fn signed_query_inspect(
     Ok(())
 }
 
-/// Inspect the bytes to be sent as a update
-/// Return Ok only when the bytes can be deserialized as a update and all fields match with the arguments
+/// Inspect the bytes to be sent as an update
+/// Return Ok only when the bytes can be deserialized as an update and all fields match with the arguments
 pub fn signed_update_inspect(
     sender: Principal,
     canister_id: Principal,

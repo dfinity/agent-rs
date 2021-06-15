@@ -11,9 +11,7 @@ pub struct SignedQuery {
     pub method_name: String,
     #[serde(with = "serde_bytes")]
     pub arg: Vec<u8>,
-
     pub effective_canister_id: Principal,
-
     #[serde(with = "serde_bytes")]
     pub signed_query: Vec<u8>,
 }
@@ -30,12 +28,9 @@ pub struct SignedUpdate {
     pub method_name: String,
     #[serde(with = "serde_bytes")]
     pub arg: Vec<u8>,
-
     pub effective_canister_id: Principal,
-
     #[serde(with = "serde_bytes")]
     pub signed_update: Vec<u8>,
-
     pub request_id: RequestId,
 }
 
