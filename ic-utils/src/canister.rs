@@ -12,7 +12,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum CanisterBuilderError {
     #[error("Getting the Canister ID returned an error: {0}")]
-    PrincipalError(#[from] Box<dyn std::error::Error>),
+    PrincipalError(#[from] Box<dyn std::error::Error + std::marker::Send + std::marker::Sync>),
 
     #[error("Must specify an Agent")]
     MustSpecifyAnAgent(),
@@ -32,7 +32,7 @@ impl<'agent, T> CanisterBuilder<'agent, T> {
     /// Attach a canister ID to this canister.
     pub fn with_canister_id<E, P>(self, canister_id: P) -> Self
     where
-        E: 'static + std::error::Error,
+        E: 'static + std::error::Error + std::marker::Send + std::marker::Sync,
         P: TryInto<Principal, Error = E>,
     {
         Self {
