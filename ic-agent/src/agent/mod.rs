@@ -8,6 +8,7 @@ pub(crate) mod replica_api;
 pub(crate) mod response;
 mod response_authentication;
 
+pub mod signed;
 pub mod status;
 pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
@@ -272,36 +273,14 @@ impl Agent {
             .saturating_sub(permitted_drift.as_nanos())) as u64
     }
 
-    fn construct_message(&self, request_id: &RequestId) -> Vec<u8> {
-        let mut buf = vec![];
-        buf.extend_from_slice(IC_REQUEST_DOMAIN_SEPARATOR);
-        buf.extend_from_slice(request_id.as_slice());
-        buf
-    }
-
     async fn query_endpoint<A>(
         &self,
         effective_canister_id: Principal,
-        request: QueryContent,
+        serialized_bytes: Vec<u8>,
     ) -> Result<A, AgentError>
     where
         A: serde::de::DeserializeOwned,
     {
-        let request_id = to_request_id(&request)?;
-        let msg = self.construct_message(&request_id);
-        let signature = self.identity.sign(&msg).map_err(AgentError::SigningError)?;
-
-        let envelope = Envelope {
-            content: request,
-            sender_pubkey: signature.public_key,
-            sender_sig: signature.signature,
-        };
-
-        let mut serialized_bytes = Vec::new();
-        let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
-        serializer.self_describe()?;
-        envelope.serialize(&mut serializer)?;
-
         let bytes = self
             .transport
             .query(effective_canister_id, serialized_bytes)
@@ -312,26 +291,11 @@ impl Agent {
     async fn read_state_endpoint<A>(
         &self,
         effective_canister_id: Principal,
-        request: ReadStateContent,
+        serialized_bytes: Vec<u8>,
     ) -> Result<A, AgentError>
     where
         A: serde::de::DeserializeOwned,
     {
-        let request_id = to_request_id(&request)?;
-        let msg = self.construct_message(&request_id);
-        let signature = self.identity.sign(&msg).map_err(AgentError::SigningError)?;
-
-        let envelope = Envelope {
-            content: request,
-            sender_pubkey: signature.public_key,
-            sender_sig: signature.signature,
-        };
-
-        let mut serialized_bytes = Vec::new();
-        let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
-        serializer.self_describe()?;
-        envelope.serialize(&mut serializer)?;
-
         let bytes = self
             .transport
             .read_state(effective_canister_id, serialized_bytes)
@@ -342,23 +306,9 @@ impl Agent {
     async fn call_endpoint(
         &self,
         effective_canister_id: Principal,
-        request: CallRequestContent,
+        request_id: RequestId,
+        serialized_bytes: Vec<u8>,
     ) -> Result<RequestId, AgentError> {
-        let request_id = to_request_id(&request)?;
-        let msg = self.construct_message(&request_id);
-        let signature = self.identity.sign(&msg).map_err(AgentError::SigningError)?;
-
-        let envelope = Envelope {
-            content: request,
-            sender_pubkey: signature.public_key,
-            sender_sig: signature.signature,
-        };
-
-        let mut serialized_bytes = Vec::new();
-        let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
-        serializer.self_describe()?;
-        envelope.serialize(&mut serializer)?;
-
         self.transport
             .call(effective_canister_id, serialized_bytes, request_id)
             .await?;
@@ -375,26 +325,59 @@ impl Agent {
         arg: &[u8],
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<Vec<u8>, AgentError> {
-        self.query_endpoint::<replica_api::QueryResponse>(
-            effective_canister_id,
-            QueryContent::QueryRequest {
-                sender: self.identity.sender().map_err(AgentError::SigningError)?,
-                canister_id: *canister_id,
-                method_name: method_name.to_string(),
-                arg: arg.to_vec(),
-                ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
-            },
-        )
-        .await
-        .and_then(|response| match response {
-            replica_api::QueryResponse::Replied { reply } => Ok(reply.arg),
-            replica_api::QueryResponse::Rejected {
-                reject_code,
-                reject_message,
-            } => Err(AgentError::ReplicaError {
-                reject_code,
-                reject_message,
-            }),
+        let request = self.query_content(canister_id, method_name, arg, ingress_expiry_datetime)?;
+        let serialized_bytes = sign_request(&request, self.identity.clone())?;
+        self.query_endpoint::<replica_api::QueryResponse>(effective_canister_id, serialized_bytes)
+            .await
+            .and_then(|response| match response {
+                replica_api::QueryResponse::Replied { reply } => Ok(reply.arg),
+                replica_api::QueryResponse::Rejected {
+                    reject_code,
+                    reject_message,
+                } => Err(AgentError::ReplicaError {
+                    reject_code,
+                    reject_message,
+                }),
+            })
+    }
+
+    /// Send the signed query to the network. Will return a byte vector.
+    /// The bytes will be checked if it is a valid query.
+    /// If you want to inspect the fields of the query call, use [`signed_query_inspect`] before calling this method.
+    pub async fn query_signed(
+        &self,
+        effective_canister_id: Principal,
+        signed_query: Vec<u8>,
+    ) -> Result<Vec<u8>, AgentError> {
+        let _envelope: Envelope<QueryContent> =
+            serde_cbor::from_slice(&signed_query).map_err(AgentError::InvalidCborData)?;
+        self.query_endpoint::<replica_api::QueryResponse>(effective_canister_id, signed_query)
+            .await
+            .and_then(|response| match response {
+                replica_api::QueryResponse::Replied { reply } => Ok(reply.arg),
+                replica_api::QueryResponse::Rejected {
+                    reject_code,
+                    reject_message,
+                } => Err(AgentError::ReplicaError {
+                    reject_code,
+                    reject_message,
+                }),
+            })
+    }
+
+    fn query_content(
+        &self,
+        canister_id: &Principal,
+        method_name: &str,
+        arg: &[u8],
+        ingress_expiry_datetime: Option<u64>,
+    ) -> Result<QueryContent, AgentError> {
+        Ok(QueryContent::QueryRequest {
+            sender: self.identity.sender().map_err(AgentError::SigningError)?,
+            canister_id: *canister_id,
+            method_name: method_name.to_string(),
+            arg: arg.to_vec(),
+            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
         })
     }
 
@@ -408,18 +391,45 @@ impl Agent {
         arg: &[u8],
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestId, AgentError> {
-        self.call_endpoint(
-            effective_canister_id,
-            CallRequestContent::CallRequest {
-                canister_id: *canister_id,
-                method_name: method_name.into(),
-                arg: arg.to_vec(),
-                nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
-                sender: self.identity.sender().map_err(AgentError::SigningError)?,
-                ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
-            },
-        )
-        .await
+        let request =
+            self.update_content(canister_id, method_name, arg, ingress_expiry_datetime)?;
+        let request_id = to_request_id(&request)?;
+        let serialized_bytes = sign_request(&request, self.identity.clone())?;
+
+        self.call_endpoint(effective_canister_id, request_id, serialized_bytes)
+            .await
+    }
+
+    /// Send the signed update to the network. Will return a [`RequestId`].
+    /// The bytes will be checked to verify that it is a valid update.
+    /// If you want to inspect the fields of the update, use [`signed_update_inspect`] before calling this method.
+    pub async fn update_signed(
+        &self,
+        effective_canister_id: Principal,
+        signed_update: Vec<u8>,
+    ) -> Result<RequestId, AgentError> {
+        let envelope: Envelope<CallRequestContent> =
+            serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
+        let request_id = to_request_id(&envelope.content)?;
+        self.call_endpoint(effective_canister_id, request_id, signed_update)
+            .await
+    }
+
+    fn update_content(
+        &self,
+        canister_id: &Principal,
+        method_name: &str,
+        arg: &[u8],
+        ingress_expiry_datetime: Option<u64>,
+    ) -> Result<CallRequestContent, AgentError> {
+        Ok(CallRequestContent::CallRequest {
+            canister_id: *canister_id,
+            method_name: method_name.into(),
+            arg: arg.to_vec(),
+            nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
+            sender: self.identity.sender().map_err(AgentError::SigningError)?,
+            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
+        })
     }
 
     // Call request_status on the RequestId once and classify the result
@@ -497,21 +507,25 @@ impl Agent {
         paths: Vec<Vec<Label>>,
         effective_canister_id: Principal,
     ) -> Result<Certificate<'_>, AgentError> {
+        let request = self.read_state_content(paths)?;
+        let serialized_bytes = sign_request(&request, self.identity.clone())?;
+
         let read_state_response: ReadStateResponse = self
-            .read_state_endpoint(
-                effective_canister_id,
-                ReadStateContent::ReadStateRequest {
-                    sender: self.identity.sender().map_err(AgentError::SigningError)?,
-                    paths,
-                    ingress_expiry: self.get_expiry_date(),
-                },
-            )
+            .read_state_endpoint(effective_canister_id, serialized_bytes)
             .await?;
 
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
         self.verify(&cert)?;
         Ok(cert)
+    }
+
+    fn read_state_content(&self, paths: Vec<Vec<Label>>) -> Result<ReadStateContent, AgentError> {
+        Ok(ReadStateContent::ReadStateRequest {
+            sender: self.identity.sender().map_err(AgentError::SigningError)?,
+            paths,
+            ingress_expiry: self.get_expiry_date(),
+        })
     }
 
     fn verify(&self, cert: &Certificate) -> Result<(), AgentError> {
@@ -579,6 +593,27 @@ impl Agent {
         lookup_request_status(cert, request_id)
     }
 
+    /// Send the signed request_status to the network. Will return [`RequestStatusResponse`].
+    /// The bytes will be checked to verify that it is a valid request_status.
+    /// If you want to inspect the fields of the request_status, use [`signed_request_status_inspect`] before calling this method.
+    pub async fn request_status_signed(
+        &self,
+        request_id: &RequestId,
+        effective_canister_id: Principal,
+        signed_request_status: Vec<u8>,
+    ) -> Result<RequestStatusResponse, AgentError> {
+        let _envelope: Envelope<ReadStateContent> =
+            serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
+        let read_state_response: ReadStateResponse = self
+            .read_state_endpoint(effective_canister_id, signed_request_status)
+            .await?;
+
+        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
+            .map_err(AgentError::InvalidCborData)?;
+        self.verify(&cert)?;
+        lookup_request_status(cert, request_id)
+    }
+
     /// Returns an UpdateBuilder enabling the construction of an update call without
     /// passing all arguments.
     pub fn update<S: Into<String>>(
@@ -604,6 +639,229 @@ impl Agent {
     pub fn query<S: Into<String>>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder {
         QueryBuilder::new(self, *canister_id, method_name.into())
     }
+
+    /// Sign a request_status call. This will return a [`signed::SignedRequestStatus`]
+    /// which contains all fields of the request_status and the signed request_status in CBOR encoding
+    pub fn sign_request_status(
+        &self,
+        effective_canister_id: Principal,
+        request_id: RequestId,
+    ) -> Result<signed::SignedRequestStatus, AgentError> {
+        let paths: Vec<Vec<Label>> =
+            vec![vec!["request_status".into(), request_id.to_vec().into()]];
+        let read_state_content = self.read_state_content(paths)?;
+        let signed_request_status = sign_request(&read_state_content, self.identity.clone())?;
+        match read_state_content {
+            ReadStateContent::ReadStateRequest {
+                ingress_expiry,
+                sender,
+                paths: _path,
+            } => Ok(signed::SignedRequestStatus {
+                ingress_expiry,
+                sender,
+                effective_canister_id,
+                request_id,
+                signed_request_status,
+            }),
+        }
+    }
+}
+
+fn construct_message(request_id: &RequestId) -> Vec<u8> {
+    let mut buf = vec![];
+    buf.extend_from_slice(IC_REQUEST_DOMAIN_SEPARATOR);
+    buf.extend_from_slice(request_id.as_slice());
+    buf
+}
+
+fn sign_request<'a, V>(
+    request: &V,
+    identity: Arc<dyn Identity + Send + Sync>,
+) -> Result<Vec<u8>, AgentError>
+where
+    V: 'a + Serialize,
+{
+    let request_id = to_request_id(&request)?;
+    let msg = construct_message(&request_id);
+    let signature = identity.sign(&msg).map_err(AgentError::SigningError)?;
+
+    let envelope = Envelope {
+        content: request,
+        sender_pubkey: signature.public_key,
+        sender_sig: signature.signature,
+    };
+
+    let mut serialized_bytes = Vec::new();
+    let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
+    serializer.self_describe()?;
+    envelope.serialize(&mut serializer)?;
+
+    Ok(serialized_bytes)
+}
+
+/// Inspect the bytes to be sent as a query
+/// Return Ok only when the bytes can be deserialized as a query and all fields match with the arguments
+pub fn signed_query_inspect(
+    sender: Principal,
+    canister_id: Principal,
+    method_name: &str,
+    arg: &[u8],
+    ingress_expiry: u64,
+    signed_query: Vec<u8>,
+) -> Result<(), AgentError> {
+    let envelope: Envelope<QueryContent> =
+        serde_cbor::from_slice(&signed_query).map_err(AgentError::InvalidCborData)?;
+    match envelope.content {
+        QueryContent::QueryRequest {
+            ingress_expiry: ingress_expiry_cbor,
+            sender: sender_cbor,
+            canister_id: canister_id_cbor,
+            method_name: method_name_cbor,
+            arg: arg_cbor,
+        } => {
+            if ingress_expiry != ingress_expiry_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "ingress_expiry".to_string(),
+                    value_arg: ingress_expiry.to_string(),
+                    value_cbor: ingress_expiry_cbor.to_string(),
+                });
+            }
+            if sender != sender_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "sender".to_string(),
+                    value_arg: sender.to_string(),
+                    value_cbor: sender_cbor.to_string(),
+                });
+            }
+            if canister_id != canister_id_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "canister_id".to_string(),
+                    value_arg: canister_id.to_string(),
+                    value_cbor: canister_id_cbor.to_string(),
+                });
+            }
+            if method_name != method_name_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "method_name".to_string(),
+                    value_arg: method_name.to_string(),
+                    value_cbor: method_name_cbor,
+                });
+            }
+            if arg != arg_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "arg".to_string(),
+                    value_arg: format!("{:?}", arg),
+                    value_cbor: format!("{:?}", arg_cbor),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Inspect the bytes to be sent as an update
+/// Return Ok only when the bytes can be deserialized as an update and all fields match with the arguments
+pub fn signed_update_inspect(
+    sender: Principal,
+    canister_id: Principal,
+    method_name: &str,
+    arg: &[u8],
+    ingress_expiry: u64,
+    signed_update: Vec<u8>,
+) -> Result<(), AgentError> {
+    let envelope: Envelope<CallRequestContent> =
+        serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
+    match envelope.content {
+        CallRequestContent::CallRequest {
+            nonce: _nonce,
+            ingress_expiry: ingress_expiry_cbor,
+            sender: sender_cbor,
+            canister_id: canister_id_cbor,
+            method_name: method_name_cbor,
+            arg: arg_cbor,
+        } => {
+            if ingress_expiry != ingress_expiry_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "ingress_expiry".to_string(),
+                    value_arg: ingress_expiry.to_string(),
+                    value_cbor: ingress_expiry_cbor.to_string(),
+                });
+            }
+            if sender != sender_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "sender".to_string(),
+                    value_arg: sender.to_string(),
+                    value_cbor: sender_cbor.to_string(),
+                });
+            }
+            if canister_id != canister_id_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "canister_id".to_string(),
+                    value_arg: canister_id.to_string(),
+                    value_cbor: canister_id_cbor.to_string(),
+                });
+            }
+            if method_name != method_name_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "method_name".to_string(),
+                    value_arg: method_name.to_string(),
+                    value_cbor: method_name_cbor,
+                });
+            }
+            if arg != arg_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "arg".to_string(),
+                    value_arg: format!("{:?}", arg),
+                    value_cbor: format!("{:?}", arg_cbor),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Inspect the bytes to be sent as a request_status
+/// Return Ok only when the bytes can be deserialized as a request_status and all fields match with the arguments
+pub fn signed_request_status_inspect(
+    sender: Principal,
+    request_id: &RequestId,
+    ingress_expiry: u64,
+    signed_request_status: Vec<u8>,
+) -> Result<(), AgentError> {
+    let paths: Vec<Vec<Label>> = vec![vec!["request_status".into(), request_id.to_vec().into()]];
+    let envelope: Envelope<ReadStateContent> =
+        serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
+    match envelope.content {
+        ReadStateContent::ReadStateRequest {
+            ingress_expiry: ingress_expiry_cbor,
+            sender: sender_cbor,
+            paths: paths_cbor,
+        } => {
+            if ingress_expiry != ingress_expiry_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "ingress_expiry".to_string(),
+                    value_arg: ingress_expiry.to_string(),
+                    value_cbor: ingress_expiry_cbor.to_string(),
+                });
+            }
+            if sender != sender_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "sender".to_string(),
+                    value_arg: sender.to_string(),
+                    value_cbor: sender_cbor.to_string(),
+                });
+            }
+
+            if paths != paths_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "paths".to_string(),
+                    value_arg: format!("{:?}", paths),
+                    value_cbor: format!("{:?}", paths_cbor),
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 /// A Query Request Builder.
@@ -683,6 +941,36 @@ impl<'agent> QueryBuilder<'agent> {
                 self.ingress_expiry_datetime,
             )
             .await
+    }
+
+    /// Sign a query call. This will return a [`signed::SignedQuery`]
+    /// which contains all fields of the query and the signed query in CBOR encoding
+    pub fn sign(&self) -> Result<signed::SignedQuery, AgentError> {
+        let request = self.agent.query_content(
+            &self.canister_id,
+            &self.method_name,
+            &self.arg,
+            self.ingress_expiry_datetime,
+        )?;
+
+        let signed_query = sign_request(&request, self.agent.identity.clone())?;
+        match request {
+            QueryContent::QueryRequest {
+                ingress_expiry,
+                sender,
+                canister_id,
+                method_name,
+                arg,
+            } => Ok(signed::SignedQuery {
+                ingress_expiry,
+                sender,
+                canister_id,
+                method_name,
+                arg,
+                effective_canister_id: self.effective_canister_id,
+                signed_query,
+            }),
+        }
     }
 }
 
@@ -806,6 +1094,39 @@ impl<'agent> UpdateBuilder<'agent> {
             agent: &self.agent,
             request_id: Box::pin(request_id_future),
             effective_canister_id: self.effective_canister_id,
+        }
+    }
+
+    /// Sign a update call. This will return a [`signed::SignedUpdate`]
+    /// which contains all fields of the update and the signed update in CBOR encoding
+    pub fn sign(&self) -> Result<signed::SignedUpdate, AgentError> {
+        let request = self.agent.update_content(
+            &self.canister_id,
+            &self.method_name,
+            &self.arg,
+            self.ingress_expiry_datetime,
+        )?;
+        let signed_update = sign_request(&request, self.agent.identity.clone())?;
+        let request_id = to_request_id(&request)?;
+        match request {
+            CallRequestContent::CallRequest {
+                nonce,
+                ingress_expiry,
+                sender,
+                canister_id,
+                method_name,
+                arg,
+            } => Ok(signed::SignedUpdate {
+                nonce,
+                ingress_expiry,
+                sender,
+                canister_id,
+                method_name,
+                arg,
+                effective_canister_id: self.effective_canister_id,
+                signed_update,
+                request_id,
+            }),
         }
     }
 }
