@@ -26,6 +26,7 @@ serde_json = "1.0.57"
 
 [dependencies.serde]
 version = "1.0.115"
+features = ["derive"]
 optional = true
 
 [dependencies.serde_bytes]
