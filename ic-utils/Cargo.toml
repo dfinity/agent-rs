@@ -1,6 +1,6 @@
 [package]
 name = "ic-utils"
-version = "0.3.2"
+version = "0.3.3"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
 description = "Collection of utilities for Rust, on top of ic-agent, to communicate with the Internet Computer, following the Public Specification."
