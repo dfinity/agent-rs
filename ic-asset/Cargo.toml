@@ -3,7 +3,7 @@ name = "ic-asset"
 version = "0.0.1"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
-description = "Library for storing files on an asset canister."
+description = "Library for storing files in an asset canister."
 homepage = "https://docs.rs/ic-asset"
 documentation = "https://docs.rs/ic-asset"
 license = "Apache-2.0"
@@ -14,8 +14,20 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
 anyhow = "1.0.34"
+candid = { version = "0.6.20", features = [ "random" ] }
+flate2 = "1.0.11"
+futures = "0.3.5"
+futures-intrusive = "0.4.0"
+garcon = { version = "0.2", features = ["async"] }
+hex = {version = "0.4.2", features = ["serde"] }
 ic-agent = { path = "../ic-agent", version = "0.5", features = [ "pem" ] }
 ic-types = { path = "../ic-types", version = "0.1", features = [ "serde" ] }
+mime = "0.3.16"
+mime_guess = "2.0.3"
+openssl = "0.10.32"
+serde = "1.0"
+serde_bytes = "0.11.2"
+walkdir = "2.2.9"
 
 [dev-dependencies]
 mockito = "0.27.0"
