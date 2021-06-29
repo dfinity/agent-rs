@@ -10,7 +10,7 @@ mod pprint;
 )]
 enum Command {
     /// Fetches the specified URL and pretty-prints the certificate.
-    #[clap(name = "pprint")]
+    #[clap(name = "print")]
     PPrint { url: String },
 }
 

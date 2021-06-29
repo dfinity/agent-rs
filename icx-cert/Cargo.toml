@@ -10,8 +10,10 @@ edition = "2018"
 anyhow = "1.0"
 base64 = "0.12"
 clap = "3.0.0-beta.2"
+chrono = "0.4.19"
 hex = "0.4.2"
 ic-types = { path = "../ic-types", version = "0.1", features = [ "serde" ] }
+leb128 = "0.2.4"
 reqwest = { version = "0.11",features = [ "blocking", "rustls-tls" ] }
 sha2 = "0.9.1"
 serde = { version = "1.0.115", features = ["derive"] }

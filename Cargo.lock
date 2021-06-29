@@ -911,9 +911,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64 0.12.3",
+ "chrono",
  "clap",
  "hex",
  "ic-types",
+ "leb128",
  "reqwest",
  "serde",
  "serde_bytes",

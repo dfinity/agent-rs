@@ -1,5 +1,9 @@
 use anyhow::{anyhow, Context, Result};
-use ic_types::HashTree;
+use chrono::TimeZone;
+use ic_types::{
+    hash_tree::{Label, LookupResult},
+    HashTree,
+};
 use serde::{de::DeserializeOwned, Deserialize};
 use sha2::Digest;
 
@@ -89,6 +93,17 @@ pub fn pprint(url: String) -> Result<()> {
     );
     println!("TREE HASH: {}", hex::encode(&tree.digest()));
     println!("SIGNATURE: {}", hex::encode(cert.signature.as_ref()));
+    if let LookupResult::Found(mut date_bytes) = cert.tree.lookup_path(&[Label::from("time")]) {
+        let timestamp_nanos = leb128::read::unsigned(&mut date_bytes)
+            .with_context(|| "failed to decode certificate time as LEB128")?;
+        const NANOS_PER_SEC: u64 = 1_000_000_000;
+
+        let dt = chrono::Utc.timestamp(
+            (timestamp_nanos / NANOS_PER_SEC) as i64,
+            (timestamp_nanos % NANOS_PER_SEC) as u32,
+        );
+        println!("CERTIFICATE TIME: {}", dt.to_rfc3339());
+    }
     println!("CERTIFICATE TREE: {:#?}", cert.tree);
     println!("TREE:             {:#?}", tree);
     Ok(())
