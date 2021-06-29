@@ -1,5 +1,5 @@
 use crate::call::{AsyncCaller, SyncCaller};
-use candid::de::ArgumentDecoder;
+use candid::utils::ArgumentDecoder;
 use candid::parser::value::IDLValue;
 use candid::ser::IDLBuilder;
 use candid::CandidType;
