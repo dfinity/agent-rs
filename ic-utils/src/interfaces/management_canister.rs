@@ -83,10 +83,12 @@ impl std::fmt::Display for StatusCallResult {
 /// The status of a Canister, whether it's running, in the process of stopping, or
 /// stopped.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, CandidType)]
-#[serde(rename_all = "snake_case")]
 pub enum CanisterStatus {
+    #[serde(rename = "running")]
     Running,
+    #[serde(rename = "stopping")]
     Stopping,
+    #[serde(rename = "stopped")]
     Stopped,
 }
 
