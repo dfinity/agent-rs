@@ -3,7 +3,6 @@ use crate::content_encoder::ContentEncoder;
 use candid::Nat;
 use ic_agent::Agent;
 use ic_types::principal::Principal as CanisterId;
-use ic_types::Principal;
 
 use crate::asset_canister::batch::{commit_batch, create_batch};
 use crate::asset_canister::chunk::create_chunk;
@@ -21,6 +20,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use walkdir::WalkDir;
+use crate::params::CanisterCallParams;
 
 const CONTENT_ENCODING_IDENTITY: &str = "identity";
 
@@ -88,15 +88,9 @@ fn gather_asset_locations(dir: &Path) -> Vec<AssetLocation> {
 }
 
 #[derive(Clone, Debug)]
-pub struct AssetLocation {
-    pub source: PathBuf,
-    pub key: String,
-}
-
-pub struct CanisterCallParams<'a> {
-    pub agent: &'a Agent,
-    pub canister_id: Principal,
-    pub timeout: Duration,
+struct AssetLocation {
+    source: PathBuf,
+    key: String,
 }
 
 struct ProjectAssetEncoding {

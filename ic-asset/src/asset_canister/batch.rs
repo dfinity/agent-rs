@@ -3,8 +3,8 @@ use crate::asset_canister::protocol::{
     BatchOperationKind, CommitBatchArguments, CreateBatchRequest, CreateBatchResponse,
 };
 use crate::convenience::waiter_with_timeout;
-use crate::sync::CanisterCallParams;
 use candid::{Decode, Encode, Nat};
+use crate::params::CanisterCallParams;
 
 pub(crate) async fn create_batch(
     canister_call_params: &CanisterCallParams<'_>,
