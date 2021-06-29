@@ -8,24 +8,20 @@ use ic_types::Principal;
 use futures::future::try_join_all;
 use futures::TryFutureExt;
 use futures_intrusive::sync::SharedSemaphore;
-use garcon::{Delay, Waiter};
 use mime::Mime;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use walkdir::WalkDir;
-use crate::asset_canister::protocol::{CreateBatchRequest, CreateBatchResponse, CreateChunkRequest, CreateChunkResponse, AssetDetails, BatchOperationKind, CreateAssetArguments, UnsetAssetContentArguments, SetAssetContentArguments, ListAssetsRequest, CommitBatchArguments, DeleteAssetArguments};
-
-fn waiter_with_timeout(duration: Duration) -> Delay {
-    Delay::builder().timeout(duration).build()
-}
+use crate::asset_canister::protocol::{AssetDetails, BatchOperationKind, CreateAssetArguments, UnsetAssetContentArguments, SetAssetContentArguments, ListAssetsRequest, CommitBatchArguments, DeleteAssetArguments};
+use crate::asset_canister::batch::create_batch;
+use crate::convenience::waiter_with_timeout;
+use crate::asset_canister::chunk::create_chunk;
+use crate::asset_canister::method_names::{COMMIT_BATCH, LIST};
 
 const CONTENT_ENCODING_IDENTITY: &str = "identity";
-const CREATE_BATCH: &str = "create_batch";
-const CREATE_CHUNK: &str = "create_chunk";
-const COMMIT_BATCH: &str = "commit_batch";
-const LIST: &str = "list";
+
 const MAX_CHUNK_SIZE: usize = 1_900_000;
 
 // Maximum MB of file data to load at once.  More memory may be used, due to encodings.
@@ -131,66 +127,6 @@ struct ProjectAsset {
     encodings: HashMap<String, ProjectAssetEncoding>,
 }
 
-async fn create_chunk(
-    canister_call_params: &CanisterCallParams<'_>,
-    batch_id: &Nat,
-    content: &[u8],
-    create_chunk_call_semaphore: &SharedSemaphore,
-    create_chunk_wait_semaphore: &SharedSemaphore,
-) -> anyhow::Result<Nat> {
-    let batch_id = batch_id.clone();
-    let args = CreateChunkRequest { batch_id, content };
-    let args = candid::Encode!(&args)?;
-
-    let mut waiter = Delay::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .throttle(std::time::Duration::from_secs(1))
-        .build();
-    waiter.start();
-
-    loop {
-        let mut builder = canister_call_params
-            .agent
-            .update(&canister_call_params.canister_id, CREATE_CHUNK);
-        let builder = builder.with_arg(&args);
-        let request_id_result = {
-            let _releaser = create_chunk_call_semaphore.acquire(1).await;
-            builder
-                .expire_after(canister_call_params.timeout)
-                .call()
-                .await
-        };
-        let wait_result = match request_id_result {
-            Ok(request_id) => {
-                let _releaser = create_chunk_wait_semaphore.acquire(1).await;
-                canister_call_params
-                    .agent
-                    .wait(
-                        request_id,
-                        &canister_call_params.canister_id,
-                        waiter_with_timeout(canister_call_params.timeout),
-                    )
-                    .await
-            }
-            Err(err) => Err(err),
-        };
-        match wait_result
-            .map_err(|e| anyhow::anyhow!("{}", e))
-            .and_then(|response| {
-                candid::Decode!(&response, CreateChunkResponse)
-                    .map_err(|e| anyhow::anyhow!("{}", e))
-                    .map(|x| x.chunk_id)
-            }) {
-            Ok(chunk_id) => {
-                break Ok(chunk_id);
-            }
-            Err(agent_err) => match waiter.wait() {
-                Ok(()) => {}
-                Err(_) => break Err(agent_err),
-            },
-        }
-    }
-}
 
 async fn upload_content_chunks(
     canister_call_params: &CanisterCallParams<'_>,
@@ -601,19 +537,6 @@ fn set_encodings(
             ));
         }
     }
-}
-
-async fn create_batch(canister_call_params: &CanisterCallParams<'_>) -> anyhow::Result<Nat> {
-    let create_batch_args = CreateBatchRequest {};
-    let response = canister_call_params
-        .agent
-        .update(&canister_call_params.canister_id, CREATE_BATCH)
-        .with_arg(candid::Encode!(&create_batch_args)?)
-        .expire_after(canister_call_params.timeout)
-        .call_and_wait(waiter_with_timeout(canister_call_params.timeout))
-        .await?;
-    let create_batch_response = candid::Decode!(&response, CreateBatchResponse)?;
-    Ok(create_batch_response.batch_id)
 }
 
 async fn list_assets(
