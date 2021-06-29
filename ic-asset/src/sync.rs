@@ -1,6 +1,6 @@
 use crate::content::Content;
 use crate::content_encoder::ContentEncoder;
-use candid::{CandidType, Decode, Encode, Nat};
+use candid::{Decode, Encode, Nat};
 use ic_agent::Agent;
 use ic_types::principal::Principal as CanisterId;
 use ic_types::Principal;
@@ -10,12 +10,12 @@ use futures::TryFutureExt;
 use futures_intrusive::sync::SharedSemaphore;
 use garcon::{Delay, Waiter};
 use mime::Mime;
-use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use walkdir::WalkDir;
+use crate::asset_canister::protocol::{CreateBatchRequest, CreateBatchResponse, CreateChunkRequest, CreateChunkResponse, AssetDetails, BatchOperationKind, CreateAssetArguments, UnsetAssetContentArguments, SetAssetContentArguments, ListAssetsRequest, CommitBatchArguments, DeleteAssetArguments};
 
 fn waiter_with_timeout(duration: Duration) -> Delay {
     Delay::builder().timeout(duration).build()
@@ -118,98 +118,6 @@ pub struct CanisterCallParams<'a> {
     pub timeout: Duration,
 }
 
-#[derive(CandidType, Debug)]
-struct CreateBatchRequest {}
-
-#[derive(CandidType, Debug, Deserialize)]
-struct CreateBatchResponse {
-    batch_id: Nat,
-}
-
-#[derive(CandidType, Debug, Deserialize)]
-struct CreateChunkRequest<'a> {
-    batch_id: Nat,
-    #[serde(with = "serde_bytes")]
-    content: &'a [u8],
-}
-
-#[derive(CandidType, Debug, Deserialize)]
-struct CreateChunkResponse {
-    chunk_id: Nat,
-}
-
-#[derive(CandidType, Debug)]
-struct GetRequest {
-    key: String,
-    accept_encodings: Vec<String>,
-}
-
-#[derive(CandidType, Debug, Deserialize)]
-struct GetResponse {
-    #[serde(with = "serde_bytes")]
-    contents: Vec<u8>,
-    content_type: String,
-    content_encoding: String,
-}
-
-#[derive(CandidType, Debug)]
-struct ListAssetsRequest {}
-
-#[derive(CandidType, Debug, Deserialize)]
-struct AssetEncodingDetails {
-    content_encoding: String,
-    sha256: Option<Vec<u8>>,
-}
-
-#[derive(CandidType, Debug, Deserialize)]
-struct AssetDetails {
-    key: String,
-    encodings: Vec<AssetEncodingDetails>,
-    content_type: String,
-}
-
-#[derive(CandidType, Debug)]
-struct CreateAssetArguments {
-    key: String,
-    content_type: String,
-}
-#[derive(CandidType, Debug)]
-struct SetAssetContentArguments {
-    key: String,
-    content_encoding: String,
-    chunk_ids: Vec<Nat>,
-    sha256: Option<Vec<u8>>,
-}
-#[derive(CandidType, Debug)]
-struct UnsetAssetContentArguments {
-    key: String,
-    content_encoding: String,
-}
-#[derive(CandidType, Debug)]
-struct DeleteAssetArguments {
-    key: String,
-}
-#[derive(CandidType, Debug)]
-struct ClearArguments {}
-
-#[derive(CandidType, Debug)]
-enum BatchOperationKind {
-    CreateAsset(CreateAssetArguments),
-
-    SetAssetContent(SetAssetContentArguments),
-
-    UnsetAssetContent(UnsetAssetContentArguments),
-
-    DeleteAsset(DeleteAssetArguments),
-
-    _Clear(ClearArguments),
-}
-
-#[derive(CandidType, Debug)]
-struct CommitBatchArguments<'a> {
-    batch_id: &'a Nat,
-    operations: Vec<BatchOperationKind>,
-}
 
 struct ProjectAssetEncoding {
     chunk_ids: Vec<Nat>,
