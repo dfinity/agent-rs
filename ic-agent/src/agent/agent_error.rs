@@ -108,6 +108,13 @@ pub enum AgentError {
 
     #[error("An error happened during communication with the replica: {0}")]
     TransportError(Box<dyn std::error::Error + Send + Sync>),
+
+    #[error("There is a mismatch between the CBOR encoded call and the arguments: field {field}, value in argument is {value_arg}, value in CBOR is {value_cbor}")]
+    CallDataMismatch {
+        field: String,
+        value_arg: String,
+        value_cbor: String,
+    },
 }
 
 impl PartialEq for AgentError {
