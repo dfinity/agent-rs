@@ -1,6 +1,6 @@
 use crate::content::Content;
 use crate::content_encoder::ContentEncoder;
-use candid::{Decode, Encode, Nat};
+use candid::Nat;
 use ic_agent::Agent;
 use ic_types::principal::Principal as CanisterId;
 use ic_types::Principal;
@@ -14,11 +14,10 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use walkdir::WalkDir;
-use crate::asset_canister::protocol::{AssetDetails, BatchOperationKind, CreateAssetArguments, UnsetAssetContentArguments, SetAssetContentArguments, ListAssetsRequest, CommitBatchArguments, DeleteAssetArguments};
-use crate::asset_canister::batch::create_batch;
-use crate::convenience::waiter_with_timeout;
+use crate::asset_canister::protocol::{AssetDetails, BatchOperationKind, CreateAssetArguments, UnsetAssetContentArguments, SetAssetContentArguments, DeleteAssetArguments};
+use crate::asset_canister::batch::{create_batch, commit_batch};
 use crate::asset_canister::chunk::create_chunk;
-use crate::asset_canister::method_names::{COMMIT_BATCH, LIST};
+use crate::asset_canister::list::list_assets;
 
 const CONTENT_ENCODING_IDENTITY: &str = "identity";
 
@@ -91,11 +90,12 @@ pub async fn sync(
     )
     .await?;
 
+    let operations = assemble_synchronization_operations(project_assets, container_assets);
+
     commit_batch(
         &canister_call_params,
         &batch_id,
-        project_assets,
-        container_assets,
+        operations,
     )
     .await?;
 
@@ -422,12 +422,9 @@ async fn make_project_assets(
     Ok(hm)
 }
 
-async fn commit_batch(
-    canister_call_params: &CanisterCallParams<'_>,
-    batch_id: &Nat,
-    project_assets: HashMap<String, ProjectAsset>,
-    container_assets: HashMap<String, AssetDetails>,
-) -> anyhow::Result<()> {
+fn assemble_synchronization_operations(    project_assets: HashMap<String, ProjectAsset>,
+                                           container_assets: HashMap<String, AssetDetails>,
+) -> Vec<BatchOperationKind> {
     let mut container_assets = container_assets;
 
     let mut operations = vec![];
@@ -437,19 +434,7 @@ async fn commit_batch(
     unset_obsolete_encodings(&mut operations, &project_assets, &container_assets);
     set_encodings(&mut operations, project_assets);
 
-    let arg = CommitBatchArguments {
-        batch_id,
-        operations,
-    };
-    let arg = candid::Encode!(&arg)?;
-    canister_call_params
-        .agent
-        .update(&canister_call_params.canister_id, COMMIT_BATCH)
-        .with_arg(arg)
-        .expire_after(canister_call_params.timeout)
-        .call_and_wait(waiter_with_timeout(canister_call_params.timeout))
-        .await?;
-    Ok(())
+    operations
 }
 
 fn delete_obsolete_assets(
@@ -539,22 +524,3 @@ fn set_encodings(
     }
 }
 
-async fn list_assets(
-    canister_call_params: &CanisterCallParams<'_>,
-) -> anyhow::Result<HashMap<String, AssetDetails>> {
-    let args = ListAssetsRequest {};
-    let response = canister_call_params
-        .agent
-        .update(&canister_call_params.canister_id, LIST)
-        .with_arg(candid::Encode!(&args)?)
-        .expire_after(canister_call_params.timeout)
-        .call_and_wait(waiter_with_timeout(canister_call_params.timeout))
-        .await?;
-
-    let assets: HashMap<_, _> = candid::Decode!(&response, Vec<AssetDetails>)?
-        .into_iter()
-        .map(|d| (d.key.clone(), d))
-        .collect();
-
-    Ok(assets)
-}
