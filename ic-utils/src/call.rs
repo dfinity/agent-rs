@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use candid::utils::ArgumentDecoder;
-use candid::{decode_args, decode_one, CandidType};
+use candid::de::ArgumentDecoder;
+use candid::{decode_args, decode_one};
 use garcon::Waiter;
 use ic_agent::agent::UpdateBuilder;
 use ic_agent::export::Principal;
@@ -239,7 +239,7 @@ where
     pub async fn call_and_wait_one<W, T>(self, waiter: W) -> Result<T, AgentError>
     where
         W: Waiter,
-        T: DeserializeOwned + CandidType,
+        T: DeserializeOwned,
     {
         self.build_call()?
             .call_and_wait(waiter)

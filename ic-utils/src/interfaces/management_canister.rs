@@ -57,7 +57,7 @@ impl ManagementCanister {
 /// The complete canister status information of a canister. This includes
 /// the CanisterStatus, a hash of the module installed on the canister (None if nothing installed),
 /// the contoller of the canister, the canisters memory size, and its balance in cycles.
-#[derive(Clone, Debug, Deserialize, CandidType)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct StatusCallResult {
     pub status: CanisterStatus,
     pub settings: DefiniteCanisterSettings,
@@ -66,7 +66,7 @@ pub struct StatusCallResult {
     pub cycles: candid::Nat,
 }
 
-#[derive(Clone, Debug, Deserialize, CandidType)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct DefiniteCanisterSettings {
     pub controller: Principal,
     pub compute_allocation: candid::Nat,
@@ -82,7 +82,7 @@ impl std::fmt::Display for StatusCallResult {
 
 /// The status of a Canister, whether it's running, in the process of stopping, or
 /// stopped.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, CandidType)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum CanisterStatus {
     Running,

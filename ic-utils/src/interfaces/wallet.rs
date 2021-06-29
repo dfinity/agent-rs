@@ -6,7 +6,7 @@ use crate::interfaces::management_canister::attributes::{
 use crate::interfaces::management_canister::builders::CanisterSettings;
 use crate::Canister;
 use async_trait::async_trait;
-use candid::utils::ArgumentDecoder;
+use candid::de::ArgumentDecoder;
 use candid::{decode_args, CandidType, Deserialize};
 use garcon::Waiter;
 use ic_agent::agent::UpdateBuilder;

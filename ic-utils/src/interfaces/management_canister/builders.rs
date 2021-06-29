@@ -186,7 +186,7 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
             None => None,
         };
 
-        #[derive(Deserialize, CandidType)]
+        #[derive(Deserialize)]
         struct Out {
             canister_id: Principal,
         }
