@@ -7,4 +7,3 @@ pub struct CanisterCallParams<'a> {
     pub canister_id: Principal,
     pub timeout: Duration,
 }
-

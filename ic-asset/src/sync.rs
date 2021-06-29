@@ -11,6 +11,7 @@ use crate::asset_canister::protocol::{
     AssetDetails, BatchOperationKind, CreateAssetArguments, DeleteAssetArguments,
     SetAssetContentArguments, UnsetAssetContentArguments,
 };
+use crate::params::CanisterCallParams;
 use futures::future::try_join_all;
 use futures::TryFutureExt;
 use futures_intrusive::sync::SharedSemaphore;
@@ -20,7 +21,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use walkdir::WalkDir;
-use crate::params::CanisterCallParams;
 
 const CONTENT_ENCODING_IDENTITY: &str = "identity";
 
