@@ -148,6 +148,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6736e2428df2ca2848d846c43e88745121a6654696e349ce0054a420815a7409"
 
 [[package]]
+name = "binread"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a883c66db6f3c86b19210ceed1b2b18de64b617c92cb0f0bc90b8c05f18dba87"
+dependencies = [
+ "binread_derive",
+ "lazy_static",
+]
+
+[[package]]
+name = "binread_derive"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c575d9a28eb4c2d61747b23d50271c6699b941448c35a738af35267f90b3d4d2"
+dependencies = [
+ "either",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "bit-set"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -244,11 +266,13 @@ dependencies = [
 
 [[package]]
 name = "candid"
-version = "0.6.21"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65f05b872d010281c905c4e6ff2079c1341d1e527e05f3bfab88d49ea3269def"
+checksum = "a656d2564dd6fe665cff6051aeaa022bcee3dfc3b91ce2a573d3e593a19bb751"
 dependencies = [
  "arbitrary",
+ "anyhow",
+ "binread",
  "byteorder",
  "candid_derive",
  "codespan-reporting",
@@ -259,7 +283,7 @@ dependencies = [
  "lalrpop-util",
  "leb128",
  "logos",
- "num-bigint 0.3.2",
+ "num-bigint 0.4.0",
  "num-traits",
  "num_enum",
  "paste",
@@ -377,9 +401,9 @@ dependencies = [
 
 [[package]]
 name = "codespan-reporting"
-version = "0.9.5"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e0762455306b1ed42bc651ef6a2197aabda5e1d4a43c34d5eab5c1a3634e81d"
+checksum = "3538270d33cc669650c4b093848450d380def10c331d38c768e34cac80576e6e"
 dependencies = [
  "termcolor",
  "unicode-width",
