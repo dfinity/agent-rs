@@ -5,6 +5,13 @@ use ic_agent::Agent;
 use ic_types::principal::Principal as CanisterId;
 use ic_types::Principal;
 
+use crate::asset_canister::batch::{commit_batch, create_batch};
+use crate::asset_canister::chunk::create_chunk;
+use crate::asset_canister::list::list_assets;
+use crate::asset_canister::protocol::{
+    AssetDetails, BatchOperationKind, CreateAssetArguments, DeleteAssetArguments,
+    SetAssetContentArguments, UnsetAssetContentArguments,
+};
 use futures::future::try_join_all;
 use futures::TryFutureExt;
 use futures_intrusive::sync::SharedSemaphore;
@@ -14,10 +21,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use walkdir::WalkDir;
-use crate::asset_canister::protocol::{AssetDetails, BatchOperationKind, CreateAssetArguments, UnsetAssetContentArguments, SetAssetContentArguments, DeleteAssetArguments};
-use crate::asset_canister::batch::{create_batch, commit_batch};
-use crate::asset_canister::chunk::create_chunk;
-use crate::asset_canister::list::list_assets;
 
 const CONTENT_ENCODING_IDENTITY: &str = "identity";
 
@@ -42,18 +45,7 @@ pub async fn sync(
     canister_id: &CanisterId,
     timeout: Duration,
 ) -> anyhow::Result<()> {
-    let asset_locations: Vec<AssetLocation> = WalkDir::new(dir)
-        .into_iter()
-        .filter_map(|r| {
-            r.ok().filter(|entry| entry.file_type().is_file()).map(|e| {
-                let source = e.path().to_path_buf();
-                let relative = source.strip_prefix(dir).expect("cannot strip prefix");
-                let key = String::from("/") + relative.to_string_lossy().as_ref();
-
-                AssetLocation { source, key }
-            })
-        })
-        .collect();
+    let asset_locations = gather_asset_locations(dir);
 
     let canister_call_params = CanisterCallParams {
         agent,
@@ -65,41 +57,34 @@ pub async fn sync(
 
     let batch_id = create_batch(&canister_call_params).await?;
 
-    // The "file" semaphore limits how much file data to load at once.  A given loaded file's data
-    // may be simultaneously encoded (gzip and so forth).
-    let file_semaphore = SharedSemaphore::new(true, MAX_SIMULTANEOUS_LOADED_MB);
-
-    // The create_chunk call semaphore limits the number of simultaneous
-    // agent.call()s to create_chunk.
-    let create_chunk_call_semaphore =
-        SharedSemaphore::new(true, MAX_SIMULTANEOUS_CREATE_CHUNK_CALLS);
-
-    // The create_chunk wait semaphore limits the number of simultaneous
-    // agent.wait() calls for outstanding create_chunk requests.
-    let create_chunk_wait_semaphore =
-        SharedSemaphore::new(true, MAX_SIMULTANEOUS_CREATE_CHUNK_WAITS);
-
     let project_assets = make_project_assets(
         &canister_call_params,
         &batch_id,
         asset_locations,
         &container_assets,
-        &file_semaphore,
-        &create_chunk_call_semaphore,
-        &create_chunk_wait_semaphore,
     )
     .await?;
 
     let operations = assemble_synchronization_operations(project_assets, container_assets);
 
-    commit_batch(
-        &canister_call_params,
-        &batch_id,
-        operations,
-    )
-    .await?;
+    commit_batch(&canister_call_params, &batch_id, operations).await?;
 
     Ok(())
+}
+
+fn gather_asset_locations(dir: &Path) -> Vec<AssetLocation> {
+    WalkDir::new(dir)
+        .into_iter()
+        .filter_map(|r| {
+            r.ok().filter(|entry| entry.file_type().is_file()).map(|e| {
+                let source = e.path().to_path_buf();
+                let relative = source.strip_prefix(dir).expect("cannot strip prefix");
+                let key = String::from("/") + relative.to_string_lossy().as_ref();
+
+                AssetLocation { source, key }
+            })
+        })
+        .collect()
 }
 
 #[derive(Clone, Debug)]
@@ -114,7 +99,6 @@ pub struct CanisterCallParams<'a> {
     pub timeout: Duration,
 }
 
-
 struct ProjectAssetEncoding {
     chunk_ids: Vec<Nat>,
     sha256: Vec<u8>,
@@ -126,7 +110,6 @@ struct ProjectAsset {
     media_type: Mime,
     encodings: HashMap<String, ProjectAssetEncoding>,
 }
-
 
 async fn upload_content_chunks(
     canister_call_params: &CanisterCallParams<'_>,
@@ -395,10 +378,21 @@ async fn make_project_assets(
     batch_id: &Nat,
     locs: Vec<AssetLocation>,
     container_assets: &HashMap<String, AssetDetails>,
-    file_semaphore: &SharedSemaphore,
-    create_chunk_call_semaphore: &SharedSemaphore,
-    create_chunk_wait_semaphore: &SharedSemaphore,
 ) -> anyhow::Result<HashMap<String, ProjectAsset>> {
+    // The "file" semaphore limits how much file data to load at once.  A given loaded file's data
+    // may be simultaneously encoded (gzip and so forth).
+    let file_semaphore = SharedSemaphore::new(true, MAX_SIMULTANEOUS_LOADED_MB);
+
+    // The create_chunk call semaphore limits the number of simultaneous
+    // agent.call()s to create_chunk.
+    let create_chunk_call_semaphore =
+        SharedSemaphore::new(true, MAX_SIMULTANEOUS_CREATE_CHUNK_CALLS);
+
+    // The create_chunk wait semaphore limits the number of simultaneous
+    // agent.wait() calls for outstanding create_chunk requests.
+    let create_chunk_wait_semaphore =
+        SharedSemaphore::new(true, MAX_SIMULTANEOUS_CREATE_CHUNK_WAITS);
+
     let project_asset_futures: Vec<_> = locs
         .iter()
         .map(|loc| {
@@ -407,9 +401,9 @@ async fn make_project_assets(
                 batch_id,
                 loc.clone(),
                 &container_assets,
-                file_semaphore,
-                create_chunk_call_semaphore,
-                create_chunk_wait_semaphore,
+                &file_semaphore,
+                &create_chunk_call_semaphore,
+                &create_chunk_wait_semaphore,
             )
         })
         .collect();
@@ -422,8 +416,9 @@ async fn make_project_assets(
     Ok(hm)
 }
 
-fn assemble_synchronization_operations(    project_assets: HashMap<String, ProjectAsset>,
-                                           container_assets: HashMap<String, AssetDetails>,
+fn assemble_synchronization_operations(
+    project_assets: HashMap<String, ProjectAsset>,
+    container_assets: HashMap<String, AssetDetails>,
 ) -> Vec<BatchOperationKind> {
     let mut container_assets = container_assets;
 
@@ -523,4 +518,3 @@ fn set_encodings(
         }
     }
 }
-

@@ -1,11 +1,10 @@
-use candid::{Decode, Encode, Nat};
-use crate::sync::CanisterCallParams;
-use futures_intrusive::sync::SharedSemaphore;
-use crate::asset_canister::protocol::{CreateChunkRequest, CreateChunkResponse};
-use garcon::{Delay, Waiter};
 use crate::asset_canister::method_names::CREATE_CHUNK;
+use crate::asset_canister::protocol::{CreateChunkRequest, CreateChunkResponse};
 use crate::convenience::waiter_with_timeout;
-
+use crate::sync::CanisterCallParams;
+use candid::{Decode, Encode, Nat};
+use futures_intrusive::sync::SharedSemaphore;
+use garcon::{Delay, Waiter};
 
 pub(crate) async fn create_chunk(
     canister_call_params: &CanisterCallParams<'_>,

@@ -1,9 +1,9 @@
-use candid::{Decode, Encode};
-use crate::sync::CanisterCallParams;
-use crate::asset_canister::protocol::{AssetDetails, ListAssetsRequest};
-use std::collections::HashMap;
 use crate::asset_canister::method_names::LIST;
+use crate::asset_canister::protocol::{AssetDetails, ListAssetsRequest};
 use crate::convenience::waiter_with_timeout;
+use crate::sync::CanisterCallParams;
+use candid::{Decode, Encode};
+use std::collections::HashMap;
 
 pub(crate) async fn list_assets(
     canister_call_params: &CanisterCallParams<'_>,

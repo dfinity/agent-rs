@@ -1,10 +1,14 @@
+use crate::asset_canister::method_names::{COMMIT_BATCH, CREATE_BATCH};
+use crate::asset_canister::protocol::{
+    BatchOperationKind, CommitBatchArguments, CreateBatchRequest, CreateBatchResponse,
+};
+use crate::convenience::waiter_with_timeout;
 use crate::sync::CanisterCallParams;
 use candid::{Decode, Encode, Nat};
-use crate::asset_canister::protocol::{CreateBatchRequest, CreateBatchResponse, BatchOperationKind, CommitBatchArguments};
-use crate::asset_canister::method_names::{CREATE_BATCH, COMMIT_BATCH};
-use crate::convenience::waiter_with_timeout;
 
-pub(crate) async fn create_batch(canister_call_params: &CanisterCallParams<'_>) -> anyhow::Result<Nat> {
+pub(crate) async fn create_batch(
+    canister_call_params: &CanisterCallParams<'_>,
+) -> anyhow::Result<Nat> {
     let create_batch_args = CreateBatchRequest {};
     let response = canister_call_params
         .agent
@@ -22,7 +26,6 @@ pub(crate) async fn commit_batch(
     batch_id: &Nat,
     operations: Vec<BatchOperationKind>,
 ) -> anyhow::Result<()> {
-
     let arg = CommitBatchArguments {
         batch_id,
         operations,
