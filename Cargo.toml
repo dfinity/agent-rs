@@ -3,13 +3,9 @@ members = [
     "ic-agent",
     "icx-cert",
     "ic-identity-hsm",
-    "ic-types",
     "ic-utils",
     "icx",
     "icx-proxy",
     "ref-tests",
     "zzz-release",
 ]
-
-[patch.crates-io]
-ic-types = { path = "./ic-types", features = [ "serde" ] }

@@ -1,4 +1,4 @@
-use crate::{AgentError, RequestId};
+use crate::{ic_types::Principal, AgentError, RequestId};
 
 use crate::agent::replica_api::Certificate;
 use crate::agent::{Replied, RequestStatusResponse};
@@ -45,7 +45,7 @@ pub fn extract_der(buf: Vec<u8>) -> Result<Vec<u8>, AgentError> {
 
 pub(crate) fn lookup_canister_info(
     certificate: Certificate,
-    canister_id: ic_types::Principal,
+    canister_id: Principal,
     path: &str,
 ) -> Result<Vec<u8>, AgentError> {
     let path_canister = vec!["canister".into(), canister_id.into(), path.into()];

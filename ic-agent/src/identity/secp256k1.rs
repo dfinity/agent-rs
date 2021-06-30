@@ -12,7 +12,7 @@ use openssl::pkey::{Private, Public};
 use openssl::sha::sha256;
 use simple_asn1::ASN1Block;
 use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, Sequence};
-use simple_asn1::{oid, to_der, BigUint, OID};
+use simple_asn1::{oid, to_der};
 
 #[derive(Clone, Debug)]
 pub struct Secp256k1Identity {

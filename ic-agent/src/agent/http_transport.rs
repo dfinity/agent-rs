@@ -2,9 +2,9 @@
 #![cfg(feature = "reqwest")]
 
 use crate::agent::agent_error::HttpErrorPayload;
+use crate::ic_types::Principal;
 use crate::AgentError;
 use crate::RequestId;
-use ic_types::Principal;
 use reqwest::Method;
 use std::future::Future;
 use std::pin::Pin;

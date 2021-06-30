@@ -18,14 +18,13 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.34"
-candid = "0.7"
+candid = "0.7.1"
 clap = "3.0.0-beta.2"
 garcon = { version = "0.2.3", features = ["async"] }
 hex = "0.4.3"
 hyper = { version = "0.14.4", features = ["full"] }
 hyper-tls = "0.5.0"
 ic-agent = { path = "../ic-agent", version = "0.5" }
-ic-types = { path = "../ic-types", version = "0.1" }
 ic-utils = { path = "../ic-utils", version = "0.3" }
 tokio = { version = "1.2.0", features = ["full"] }
 serde = "1.0.115"
