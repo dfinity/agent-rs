@@ -39,7 +39,6 @@ This repo has multiple packages in its Cargo workspace.
 | Package Name | Links | Description |
 |---|---|---|
 | `ic-agent` | [![README](https://img.shields.io/badge/-README-green)](https://github.com/dfinity/agent-rs/tree/next/ic-agent) [![DOC](https://img.shields.io/badge/-DOC-blue)](https://docs.rs/ic_agent) | The `ic-agent` is a library to talk directly to the Replica. |  
-| `ic-types` | [![README](https://img.shields.io/badge/-README-green)](https://github.com/dfinity/agent-rs/tree/next/ic-types) [![DOC](https://img.shields.io/badge/-DOC-blue)](https://docs.rs/ic_types) | A list of types relevant to talking to the Replica, and building canisters on the Internet Computer. |  
-| `ic-utils` | [![README](https://img.shields.io/badge/-README-green)](https://github.com/dfinity/agent-rs/tree/next/ic-types) [![DOC](https://img.shields.io/badge/-DOC-blue)](https://docs.rs/ic_utils) | A library of utilities for managing calls and canisters. |  
+| `ic-utils` | [![README](https://img.shields.io/badge/-README-green)](https://github.com/dfinity/agent-rs/tree/next/ic-utils) [![DOC](https://img.shields.io/badge/-DOC-blue)](https://docs.rs/ic_utils) | A library of utilities for managing calls and canisters. |  
 | `icx` | [![README](https://img.shields.io/badge/-README-green)](https://github.com/dfinity/agent-rs/tree/next/icx) | A command line utility to use the agent. Not meant to be published, only available in this repo for tests. |
 | `ref-tests` | | A package that only exists to run the ic-ref tests with the ic-agent as the connection. |

@@ -17,13 +17,12 @@ name = "icx"
 path = "src/main.rs"
 
 [dependencies]
-candid = "0.7"
+candid = "0.7.1"
 clap = "3.0.0-beta.1"
 garcon = { version = "0.2.3", features = ["async"] }
 hex = "0.4.2"
 humantime = "2.0.1"
 ic-agent = { path = "../ic-agent", version = "0.5" }
-ic-types = { path = "../ic-types", version = "0.1" }
 ic-utils = { path = "../ic-utils", version = "0.3" }
 pem = "0.8.1"
 ring = "0.16.11"

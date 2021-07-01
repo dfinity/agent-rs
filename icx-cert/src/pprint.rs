@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use chrono::TimeZone;
-use ic_types::{
+use ic_agent::ic_types::{
     hash_tree::{Label, LookupResult},
     HashTree,
 };

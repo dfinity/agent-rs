@@ -1,5 +1,5 @@
 use crate::config::dns_canister_rule::DnsCanisterRule;
-use ic_types::Principal;
+use ic_agent::ic_types::Principal;
 use std::cmp::Reverse;
 
 /// Configuration for determination of Domain Name to Principal
@@ -50,7 +50,7 @@ impl DnsCanisterConfig {
 #[cfg(test)]
 mod tests {
     use crate::config::dns_canister_config::DnsCanisterConfig;
-    use ic_types::Principal;
+    use ic_agent::ic_types::Principal;
 
     #[test]
     fn matches_whole_hostname() {

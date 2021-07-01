@@ -3,8 +3,7 @@ use candid::parser::value::IDLValue;
 use candid::ser::IDLBuilder;
 use candid::utils::ArgumentDecoder;
 use candid::CandidType;
-use ic_agent::{Agent, AgentError};
-use ic_types::Principal;
+use ic_agent::{ic_types::Principal, Agent, AgentError};
 use std::convert::TryInto;
 use thiserror::Error;
 
