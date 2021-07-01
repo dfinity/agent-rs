@@ -17,16 +17,9 @@
  * limitations under the License.
  */
 
-use crate::bls::bls12381::big::BIG;
-use crate::bls::bls12381::ecp;
-use crate::bls::bls12381::ecp::ECP;
-use crate::bls::bls12381::ecp2::ECP2;
-use crate::bls::bls12381::fp::FP;
-use crate::bls::bls12381::fp12;
-use crate::bls::bls12381::fp12::FP12;
-use crate::bls::bls12381::fp2::FP2;
-use crate::bls::bls12381::fp4::FP4;
-use crate::bls::bls12381::rom;
+use crate::bls::bls12381::{
+    big::BIG, ecp, ecp::ECP, ecp2::ECP2, fp::FP, fp12, fp12::FP12, fp2::FP2, fp4::FP4, rom,
+};
 
 #[allow(unused_imports)]
 use crate::bls::bls12381::dbig::DBIG;

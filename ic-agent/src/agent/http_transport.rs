@@ -1,13 +1,9 @@
 //! A [ReplicaV2Transport] that connects using a reqwest client.
 #![cfg(feature = "reqwest")]
 
-use crate::agent::agent_error::HttpErrorPayload;
-use crate::ic_types::Principal;
-use crate::AgentError;
-use crate::RequestId;
+use crate::{agent::agent_error::HttpErrorPayload, ic_types::Principal, AgentError, RequestId};
 use reqwest::Method;
-use std::future::Future;
-use std::pin::Pin;
+use std::{future::Future, pin::Pin};
 
 /// Implemented by the Agent environment to cache and update an HTTP Auth password.
 /// It returns a tuple of `(username, password)`.

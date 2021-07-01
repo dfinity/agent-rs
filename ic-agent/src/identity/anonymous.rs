@@ -1,6 +1,4 @@
-use crate::export::Principal;
-use crate::identity::Identity;
-use crate::Signature;
+use crate::{export::Principal, identity::Identity, Signature};
 
 pub struct AnonymousIdentity;
 

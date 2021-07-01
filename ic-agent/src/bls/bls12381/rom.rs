@@ -17,8 +17,7 @@
  * limitations under the License.
  */
 
-use crate::bls::arch::Chunk;
-use crate::bls::bls12381::big::NLEN;
+use crate::bls::{arch::Chunk, bls12381::big::NLEN};
 
 // Base Bits= 58
 // bls12381 Modulus

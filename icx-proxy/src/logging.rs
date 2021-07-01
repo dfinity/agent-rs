@@ -1,7 +1,6 @@
 use crate::Opts;
 use slog::{Drain, Level, LevelFilter, Logger};
-use std::fs::File;
-use std::path::PathBuf;
+use std::{fs::File, path::PathBuf};
 
 /// The logging mode to use.
 enum LoggingMode {

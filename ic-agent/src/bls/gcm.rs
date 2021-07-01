@@ -25,8 +25,7 @@ const GCM_FINISHED: usize = 3;
 //const GCM_ENCRYPTING: usize = 0;
 //const GCM_DECRYPTING: usize = 1;
 
-use crate::bls::aes;
-use crate::bls::aes::AES;
+use crate::bls::{aes, aes::AES};
 
 pub struct GCM {
     table: [[u32; 4]; 128],

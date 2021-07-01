@@ -1,19 +1,14 @@
-use crate::call::AsyncCall;
-use crate::canister::Argument;
-use crate::interfaces::management_canister::MgmtMethod;
-use crate::Canister;
+use crate::{
+    call::AsyncCall, canister::Argument, interfaces::management_canister::MgmtMethod, Canister,
+};
 use async_trait::async_trait;
 use candid::{CandidType, Deserialize};
 use garcon::Waiter;
-use ic_agent::export::Principal;
-use ic_agent::{AgentError, RequestId};
+use ic_agent::{export::Principal, AgentError, RequestId};
 use std::str::FromStr;
 
-pub use super::attributes::ComputeAllocation;
-pub use super::attributes::FreezingThreshold;
-pub use super::attributes::MemoryAllocation;
-use std::convert::From;
-use std::convert::TryInto;
+pub use super::attributes::{ComputeAllocation, FreezingThreshold, MemoryAllocation};
+use std::convert::{From, TryInto};
 
 #[derive(CandidType, Deserialize)]
 pub struct CanisterSettings {

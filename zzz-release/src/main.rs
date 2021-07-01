@@ -2,10 +2,12 @@ use anyhow::{anyhow, Result};
 use cargo_metadata::{Package, Version};
 use clap::Clap;
 use git2::{Commit, DescribeFormatOptions, Repository, RepositoryState};
-use std::collections::HashMap;
-use std::ops::Range;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use std::{
+    collections::HashMap,
+    ops::Range,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 use toml_parse::{walk, SyntaxNode, SyntaxToken, TomlKind};
 
 #[derive(Clap, Debug)]

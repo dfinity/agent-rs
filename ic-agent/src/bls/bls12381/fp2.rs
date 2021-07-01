@@ -17,12 +17,7 @@
  * limitations under the License.
  */
 
-use crate::bls::bls12381::big;
-use crate::bls::bls12381::big::BIG;
-use crate::bls::bls12381::dbig::DBIG;
-use crate::bls::bls12381::fp;
-use crate::bls::bls12381::fp::FP;
-use crate::bls::bls12381::rom;
+use crate::bls::bls12381::{big, big::BIG, dbig::DBIG, fp, fp::FP, rom};
 
 use crate::bls::rand::RAND;
 

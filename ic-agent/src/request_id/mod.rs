@@ -9,9 +9,7 @@
 use error::RequestIdFromStringError;
 use openssl::sha::Sha256;
 use serde::{ser, Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::iter::Extend;
-use std::str::FromStr;
+use std::{collections::BTreeMap, iter::Extend, str::FromStr};
 
 pub mod error;
 pub use error::RequestIdError;

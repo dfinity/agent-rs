@@ -1,6 +1,7 @@
-use crate::agent::{NonceFactory, ReplicaV2Transport};
-use crate::identity::anonymous::AnonymousIdentity;
-use crate::identity::Identity;
+use crate::{
+    agent::{NonceFactory, ReplicaV2Transport},
+    identity::{anonymous::AnonymousIdentity, Identity},
+};
 use std::sync::Arc;
 
 /// A configuration for an agent.
