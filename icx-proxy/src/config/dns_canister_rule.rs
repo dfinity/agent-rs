@@ -1,4 +1,4 @@
-use ic_types::Principal;
+use ic_agent::ic_types::Principal;
 
 use anyhow::anyhow;
 

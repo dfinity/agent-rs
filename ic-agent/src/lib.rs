@@ -29,8 +29,7 @@
 //! ```ignore
 //! # // This test is ignored because it requires an ic to be running. We run these
 //! # // in the ic-ref workflow.
-//! use ic_agent::Agent;
-//! use ic_types::Principal;
+//! use ic_agent::{Agent, ic_types::Principal};
 //! use candid::{Encode, Decode, CandidType, Nat};
 //! use serde::Deserialize;
 //!
@@ -120,4 +119,5 @@ pub use agent::{agent_error, agent_error::AgentError, nonce::NonceFactory, Agent
 pub use identity::{Identity, Signature};
 pub use request_id::{to_request_id, RequestId, RequestIdError};
 
-pub(crate) use ic_types::hash_tree;
+pub(crate) use crate::ic_types::hash_tree;
+pub use candid::types::ic_types;
