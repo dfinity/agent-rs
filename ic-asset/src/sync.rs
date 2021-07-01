@@ -1,7 +1,3 @@
-use crate::content::Content;
-use crate::content_encoder::ContentEncoder;
-use ic_agent::Agent;
-use ic_types::principal::Principal as CanisterId;
 use crate::asset_canister::batch::{commit_batch, create_batch};
 use crate::asset_canister::chunk::create_chunk;
 use crate::asset_canister::list::list_assets;
@@ -9,7 +5,11 @@ use crate::asset_canister::protocol::{
     AssetDetails, BatchOperationKind, CreateAssetArguments, DeleteAssetArguments,
     SetAssetContentArguments, UnsetAssetContentArguments,
 };
+use crate::content::Content;
+use crate::content_encoder::ContentEncoder;
 use crate::params::CanisterCallParams;
+use ic_agent::Agent;
+use ic_types::principal::Principal as CanisterId;
 
 use candid::Nat;
 use futures::future::try_join_all;
