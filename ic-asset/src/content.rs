@@ -6,7 +6,7 @@ use openssl::sha::Sha256;
 use std::io::Write;
 use std::path::Path;
 
-pub struct Content {
+pub(crate) struct Content {
     pub data: Vec<u8>,
     pub media_type: Mime,
 }
