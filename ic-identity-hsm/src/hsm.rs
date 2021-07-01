@@ -9,7 +9,7 @@ use pkcs11::types::{
 };
 use pkcs11::Ctx;
 use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, OctetString, Sequence};
-use simple_asn1::{from_der, oid, to_der, ASN1DecodeErr, ASN1EncodeErr};
+use simple_asn1::{from_der, oid, to_der, ASN1DecodeErr, ASN1EncodeErr, BigUint, OID};
 use std::path::Path;
 use std::ptr;
 use thiserror::Error;
