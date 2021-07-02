@@ -158,18 +158,26 @@ pub fn check_candid_file(idl_path: &std::path::Path) -> Result<(TypeEnv, Option<
 }
 
 fn blob_from_arguments(
-    arguments: Option<&str>,
+    mut arguments: Option<&str>,
     arg_type: &ArgType,
     method_type: &Option<(candid::parser::typing::TypeEnv, candid::types::Function)>,
 ) -> Result<Vec<u8>, String> {
+    let mut buffer = Vec::new();
+    let args = if arguments == Some("-") {
+        use std::io::Read;
+        std::io::stdin().read_to_end(&mut buffer).unwrap();
+        std::str::from_utf8(&buffer).ok()
+    } else {
+        arguments
+    };
     match arg_type {
         ArgType::Raw => {
-            let bytes = hex::decode(&arguments.unwrap_or(""))
+            let bytes = hex::decode(&args.unwrap_or(""))
                 .map_err(|e| format!("Argument is not a valid hex string: {}", e))?;
             Ok(bytes)
         }
         ArgType::Idl => {
-            let arguments = arguments.unwrap_or("()");
+            let arguments = args.unwrap_or("()");
             let args: Result<IDLArgs, String> = arguments
                 .parse::<IDLArgs>()
                 .map_err(|e: candid::Error| format!("Invalid Candid values: {}", e));
