@@ -3,7 +3,9 @@ use crate::{export::Principal, Identity, Signature};
 #[cfg(feature = "pem")]
 use crate::identity::error::PemError;
 
-use ring::signature::{Ed25519KeyPair, KeyPair};
+use ed25519_dalek::{Keypair as Ed25519KeyPair, Signer};
+#[cfg(feature = "pem")]
+use pkcs8::PrivateKeyDocument;
 use simple_asn1::{
     oid, to_der,
     ASN1Block::{BitString, ObjectIdentifier, Sequence},
@@ -28,15 +30,55 @@ impl BasicIdentity {
         let bytes: Vec<u8> = pem_reader
             .bytes()
             .collect::<Result<Vec<u8>, std::io::Error>>()?;
+        let file = std::str::from_utf8(&bytes).unwrap();
+        let pem_file: PrivateKeyDocument = file.parse().map_err(|_| PemError::PemError)?;
+        let key_info = pem_file.private_key_info();
 
-        Ok(BasicIdentity::from_key_pair(Ed25519KeyPair::from_pkcs8(
-            pem::parse(&bytes)?.contents.as_slice(),
-        )?))
+        // Check OID
+        if key_info.algorithm.oid != "1.3.101.112".parse().unwrap() {
+            return Err(PemError::KeyRejected(format!(
+                "Wrong OID, expected \"1.3.101.112\", got {}",
+                key_info.algorithm.oid,
+            )));
+        }
+
+        // Check that there are no parameters on the key
+        if key_info.algorithm.parameters.is_some() {
+            return Err(PemError::KeyRejected(
+                "Parameters on the key are not allowed".to_string(),
+            ));
+        }
+
+        // Retrieve the secret key and perform some checks
+        let sk = key_info.private_key;
+        if sk[0] != 4 || sk[1] != 32 {
+            return Err(PemError::KeyRejected(
+                "Key is not a ECC private key".to_string(),
+            ));
+        }
+
+        // Retrieve the public key, error if it was not provided
+        let pk = match key_info.public_key {
+            Some(pk) => pk,
+            None => {
+                return Err(PemError::KeyRejected(
+                    "Public Key must be included in the file".to_string(),
+                ))
+            }
+        };
+
+        // The first two bytes should be
+        let mut key = sk[2..].to_vec();
+        key.extend_from_slice(pk);
+
+        let key_pair = Ed25519KeyPair::from_bytes(&key)
+            .map_err(|err| PemError::KeyRejected(format!("Key invalid: {}", err)))?;
+        Ok(BasicIdentity::from_key_pair(key_pair))
     }
 
     /// Create a BasicIdentity from a KeyPair from the ring crate.
     pub fn from_key_pair(key_pair: Ed25519KeyPair) -> Self {
-        let der_encoded_public_key = der_encode_public_key(key_pair.public_key().as_ref().to_vec());
+        let der_encoded_public_key = der_encode_public_key(key_pair.public.as_ref().to_vec());
 
         Self {
             key_pair,
@@ -69,4 +111,22 @@ fn der_encode_public_key(public_key: Vec<u8>) -> Vec<u8> {
     let subject_public_key = BitString(0, public_key.len() * 8, public_key);
     let subject_public_key_info = Sequence(0, vec![algorithm, subject_public_key]);
     to_der(&subject_public_key_info).unwrap()
+}
+
+#[cfg(feature = "pem")]
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    // Generated with dfx identity new
+    const IDENTITY_FILE: &str = "-----BEGIN PRIVATE KEY-----
+MFMCAQEwBQYDK2VwBCIEILcugDIk2LHOj/6MUerC94QkWswslgjuiEYKqoJw/rx+
+oSMDIQC0pDnxK4FLbD03g2a4BdZxYX4w+RQvwSestgNDEwzHHA==
+-----END PRIVATE KEY-----";
+
+    // Tests that identities generate with `dfx identity new` are parsable
+    #[test]
+    fn identity_from_pem() {
+        BasicIdentity::from_pem(IDENTITY_FILE.as_bytes()).unwrap();
+    }
 }
