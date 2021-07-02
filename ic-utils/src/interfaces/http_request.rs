@@ -1,8 +1,8 @@
 use crate::{call::SyncCall, canister::CanisterBuilder, Canister};
 use candid::{parser::value::IDLValue, CandidType, Deserialize, Func, Nat};
 use ic_agent::{export::Principal, Agent};
-use std::fmt::Debug;
 use serde_bytes::ByteBuf;
+use std::fmt::Debug;
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub struct HttpRequestCanister;
