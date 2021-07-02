@@ -1,8 +1,5 @@
 use crate::call::{AsyncCaller, SyncCaller};
-use candid::parser::value::IDLValue;
-use candid::ser::IDLBuilder;
-use candid::utils::ArgumentDecoder;
-use candid::CandidType;
+use candid::{parser::value::IDLValue, ser::IDLBuilder, utils::ArgumentDecoder, CandidType};
 use ic_agent::{ic_types::Principal, Agent, AgentError};
 use std::convert::TryInto;
 use thiserror::Error;

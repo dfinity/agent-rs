@@ -1,5 +1,4 @@
-use std::collections::BTreeMap;
-use std::fmt::Debug;
+use std::{collections::BTreeMap, fmt::Debug};
 
 /// Value returned by the status endpoint of a replica. This is a loose mapping to CBOR values.
 /// Because the agent should not return [`serde_cbor::Value`] directly across API boundaries,

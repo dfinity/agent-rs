@@ -1,5 +1,4 @@
-use rand::rngs::OsRng;
-use rand::Rng;
+use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Mutex};
 
 /// A Factory for nonce blobs.

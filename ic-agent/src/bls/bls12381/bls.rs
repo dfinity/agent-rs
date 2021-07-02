@@ -16,17 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-use crate::bls::bls12381::big;
-use crate::bls::bls12381::big::BIG;
-use crate::bls::bls12381::dbig::DBIG;
-use crate::bls::bls12381::ecp;
-use crate::bls::bls12381::ecp::ECP;
-use crate::bls::bls12381::ecp2::ECP2;
-use crate::bls::bls12381::fp::FP;
-use crate::bls::bls12381::fp4::FP4;
-use crate::bls::bls12381::pair;
-use crate::bls::bls12381::rom;
-use crate::bls::hmac;
+use crate::bls::{
+    bls12381::{big, big::BIG, dbig::DBIG, ecp, ecp::ECP, ecp2::ECP2, fp::FP, fp4::FP4, pair, rom},
+    hmac,
+};
 
 /* Boneh-Lynn-Shacham signature 128-bit API Functions */
 

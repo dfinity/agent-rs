@@ -17,14 +17,7 @@
  * limitations under the License.
  */
 
-use crate::bls::bls12381::big;
-use crate::bls::bls12381::big::BIG;
-use crate::bls::bls12381::dbig::DBIG;
-use crate::bls::bls12381::ecp;
-use crate::bls::bls12381::fp;
-use crate::bls::bls12381::fp::FP;
-use crate::bls::bls12381::fp2::FP2;
-use crate::bls::bls12381::rom;
+use crate::bls::bls12381::{big, big::BIG, dbig::DBIG, ecp, fp, fp::FP, fp2::FP2, rom};
 
 #[derive(Clone)]
 pub struct ECP2 {

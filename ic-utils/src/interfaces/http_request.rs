@@ -1,10 +1,6 @@
-use crate::call::SyncCall;
-use crate::canister::CanisterBuilder;
-use crate::Canister;
-use candid::parser::value::IDLValue;
-use candid::{CandidType, Deserialize};
-use ic_agent::export::Principal;
-use ic_agent::Agent;
+use crate::{call::SyncCall, canister::CanisterBuilder, Canister};
+use candid::{parser::value::IDLValue, CandidType, Deserialize};
+use ic_agent::{export::Principal, Agent};
 use std::fmt::Debug;
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]

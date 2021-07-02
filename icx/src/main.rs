@@ -1,24 +1,29 @@
-use candid::parser::value::IDLValue;
-use candid::types::{Function, Type};
-use candid::{check_prog, IDLArgs, IDLProg, TypeEnv};
-use candid::{CandidType, Decode, Deserialize};
+use candid::{
+    check_prog,
+    parser::value::IDLValue,
+    types::{Function, Type},
+    CandidType, Decode, Deserialize, IDLArgs, IDLProg, TypeEnv,
+};
 use clap::{crate_authors, crate_version, AppSettings, Clap};
-use ic_agent::agent::agent_error::HttpErrorPayload;
-use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
-use ic_agent::agent::ReplicaV2Transport;
-use ic_agent::export::Principal;
-use ic_agent::identity::BasicIdentity;
-use ic_agent::{agent, Agent, AgentError, Identity, RequestId};
-use ic_utils::interfaces::management_canister::builders::{CanisterInstall, CanisterSettings};
-use ic_utils::interfaces::management_canister::MgmtMethod;
+use ic_agent::{
+    agent,
+    agent::{
+        agent_error::HttpErrorPayload, http_transport::ReqwestHttpReplicaV2Transport,
+        ReplicaV2Transport,
+    },
+    export::Principal,
+    identity::BasicIdentity,
+    Agent, AgentError, Identity, RequestId,
+};
+use ic_utils::interfaces::management_canister::{
+    builders::{CanisterInstall, CanisterSettings},
+    MgmtMethod,
+};
 use ring::signature::Ed25519KeyPair;
-use std::collections::VecDeque;
-use std::convert::TryFrom;
-use std::future::Future;
-use std::io::BufRead;
-use std::path::PathBuf;
-use std::pin::Pin;
-use std::str::FromStr;
+use std::{
+    collections::VecDeque, convert::TryFrom, future::Future, io::BufRead, path::PathBuf, pin::Pin,
+    str::FromStr,
+};
 use thiserror::Error;
 
 #[derive(Clap)]

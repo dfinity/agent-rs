@@ -17,13 +17,7 @@
  * limitations under the License.
  */
 
-use crate::bls::bls12381::big;
-use crate::bls::bls12381::big::BIG;
-use crate::bls::bls12381::ecp;
-use crate::bls::bls12381::fp::FP;
-use crate::bls::bls12381::fp2::FP2;
-use crate::bls::bls12381::fp4::FP4;
-use crate::bls::bls12381::rom;
+use crate::bls::bls12381::{big, big::BIG, ecp, fp::FP, fp2::FP2, fp4::FP4, rom};
 
 pub const ZERO: usize = 0;
 pub const ONE: usize = 1;

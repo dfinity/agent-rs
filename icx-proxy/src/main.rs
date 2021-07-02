@@ -1,25 +1,34 @@
 use crate::config::dns_canister_config::DnsCanisterConfig;
 use candid::parser::value::IDLValue;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
-use hyper::body::Bytes;
-use hyper::http::uri::Parts;
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{body, Body, Client, Request, Response, Server, StatusCode, Uri};
-use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
-use ic_agent::export::Principal;
-use ic_agent::{Agent, AgentError};
-use ic_utils::call::SyncCall;
-use ic_utils::interfaces::http_request::{
-    HeaderField, HttpRequestCanister, StreamingCallbackHttpResponse, StreamingStrategy,
+use hyper::{
+    body,
+    body::Bytes,
+    http::uri::Parts,
+    service::{make_service_fn, service_fn},
+    Body, Client, Request, Response, Server, StatusCode, Uri,
+};
+use ic_agent::{
+    agent::http_transport::ReqwestHttpReplicaV2Transport, export::Principal, Agent, AgentError,
+};
+use ic_utils::{
+    call::SyncCall,
+    interfaces::http_request::{
+        HeaderField, HttpRequestCanister, StreamingCallbackHttpResponse, StreamingStrategy,
+    },
 };
 use slog::Drain;
-use std::convert::Infallible;
-use std::error::Error;
-use std::net::{IpAddr, SocketAddr};
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::{
+    convert::Infallible,
+    error::Error,
+    net::{IpAddr, SocketAddr},
+    path::PathBuf,
+    str::FromStr,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
+};
 
 mod config;
 mod logging;

@@ -1,5 +1,7 @@
-use crate::agent::{AgentConfig, ReplicaV2Transport};
-use crate::{Agent, AgentError, Identity, NonceFactory};
+use crate::{
+    agent::{AgentConfig, ReplicaV2Transport},
+    Agent, AgentError, Identity, NonceFactory,
+};
 use std::sync::Arc;
 
 pub struct AgentBuilder {
