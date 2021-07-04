@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  linux-x86_64-static:
+    name: Release binary for Linux x86_64
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - uses: gmiam/rust-musl-action@master
+      with:
+        args: cargo build --target x86_64-unknown-linux-musl --release --locked
+    - name: Upload icx binaries to release
+      uses: svenstaro/upload-release-action@v2
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: target/x86_64-unknown-linux-musl/release/icx
+        asset_name: icx-linux-x86_64
+        tag: ${{ github.ref }}
+    - name: Upload icx-proxy binaries to release
+      uses: svenstaro/upload-release-action@v2
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: target/x86_64-unknown-linux-musl/release/icx-proxy
+        asset_name: icx-proxy-linux-x86_64
+        tag: ${{ github.ref }}
+
+  macos-x86_64:
+    name: Release binary for MacOS x86_64
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@master
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    - name: build
+      run: cargo build --release --locked
+    - name: Upload icx binaries to release
+      uses: svenstaro/upload-release-action@v2
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: target/release/icx
+        asset_name: icx-macos-x86_64
+        tag: ${{ github.ref }}
+    - name: Upload icx-proxy binaries to release
+      uses: svenstaro/upload-release-action@v2
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: target/release/icx-proxy
+        asset_name: icx-proxy-macos-x86_64
+        tag: ${{ github.ref }}
