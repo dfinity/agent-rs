@@ -118,15 +118,21 @@ fn der_encode_public_key(public_key: Vec<u8>) -> Vec<u8> {
 mod test {
     use super::*;
 
-    // Generated with dfx identity new
+    // Generated with `dfx identity new`
     const IDENTITY_FILE: &str = "-----BEGIN PRIVATE KEY-----
 MFMCAQEwBQYDK2VwBCIEILcugDIk2LHOj/6MUerC94QkWswslgjuiEYKqoJw/rx+
 oSMDIQC0pDnxK4FLbD03g2a4BdZxYX4w+RQvwSestgNDEwzHHA==
 -----END PRIVATE KEY-----";
 
+    // Generated with `dfx identity get-principal`
+    const PRICIPAL: &str = "egnpc-ce26d-7fywe-lnoor-gu2r2-ogz7w-ls2yd-q7uee-wfpfn-oien7-3qe";
+
     // Tests that identities generate with `dfx identity new` are parsable
     #[test]
     fn identity_from_pem() {
-        BasicIdentity::from_pem(IDENTITY_FILE.as_bytes()).unwrap();
+        let identity =
+            BasicIdentity::from_pem(IDENTITY_FILE.as_bytes()).expect("Failed to parse PEM file");
+        let principal = identity.sender().expect("Failed to get principal");
+        assert_eq!(principal.to_text(), PRICIPAL);
     }
 }
