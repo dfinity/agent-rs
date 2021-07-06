@@ -1,6 +1,7 @@
 use crate::{call::SyncCall, canister::CanisterBuilder, Canister};
-use candid::{parser::value::IDLValue, CandidType, Deserialize};
+use candid::{parser::value::IDLValue, CandidType, Deserialize, Func, Nat};
 use ic_agent::{export::Principal, Agent};
+use serde_bytes::ByteBuf;
 use std::fmt::Debug;
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
@@ -19,9 +20,19 @@ pub struct HttpRequest<'body> {
 }
 
 #[derive(CandidType, Deserialize)]
+pub struct Token {
+    key: String,
+    content_encoding: String,
+    index: Nat,
+    // The sha ensures that a client doesn't stream part of one version of an asset
+    // followed by part of a different asset, even if not checking the certificate.
+    sha256: Option<ByteBuf>,
+}
+
+#[derive(CandidType, Deserialize)]
 pub struct CallbackStrategy {
-    pub callback: IDLValue,
-    pub token: IDLValue,
+    pub callback: Func,
+    pub token: Token,
 }
 
 #[derive(CandidType, Deserialize)]
@@ -42,7 +53,7 @@ pub struct HttpResponse {
 pub struct StreamingCallbackHttpResponse {
     #[serde(with = "serde_bytes")]
     pub body: Vec<u8>,
-    pub token: Option<IDLValue>,
+    pub token: Option<Token>,
 }
 
 impl HttpRequestCanister {
@@ -87,8 +98,8 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
     pub fn http_request_stream_callback<'canister: 'agent, M: Into<String>>(
         &'canister self,
         method: M,
-        token: IDLValue,
+        token: Token,
     ) -> impl 'agent + SyncCall<(StreamingCallbackHttpResponse,)> {
-        self.query_(&method.into()).with_value_arg(token).build()
+        self.query_(&method.into()).with_arg(token).build()
     }
 }
