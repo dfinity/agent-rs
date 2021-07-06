@@ -1,9 +1,9 @@
-use crate::agent::status::Status;
-use crate::hash_tree::Label;
-use crate::RequestIdError;
+use crate::{agent::status::Status, hash_tree::Label, RequestIdError};
 use leb128::read;
-use std::fmt::{Debug, Display, Formatter};
-use std::str::Utf8Error;
+use std::{
+    fmt::{Debug, Display, Formatter},
+    str::Utf8Error,
+};
 use thiserror::Error;
 
 #[derive(Error, Debug)]

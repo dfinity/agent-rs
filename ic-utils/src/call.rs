@@ -1,10 +1,7 @@
 use async_trait::async_trait;
-use candid::utils::ArgumentDecoder;
-use candid::{decode_args, decode_one, CandidType};
+use candid::{decode_args, decode_one, utils::ArgumentDecoder, CandidType};
 use garcon::Waiter;
-use ic_agent::agent::UpdateBuilder;
-use ic_agent::export::Principal;
-use ic_agent::{Agent, AgentError, RequestId};
+use ic_agent::{agent::UpdateBuilder, export::Principal, Agent, AgentError, RequestId};
 use serde::de::DeserializeOwned;
 use std::future::Future;
 

@@ -1,5 +1,7 @@
-use crate::export::Principal;
-use crate::hash_tree::{HashTree, Label};
+use crate::{
+    export::Principal,
+    hash_tree::{HashTree, Label},
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

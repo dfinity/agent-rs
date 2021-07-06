@@ -2,19 +2,19 @@
 //!
 //! Contrary to ic-ref.rs, these tests are not meant to match any other tests. They're
 //! integration tests with a running IC-Ref.
-use ic_agent::agent::agent_error::HttpErrorPayload;
-use ic_agent::export::Principal;
-use ic_agent::AgentError;
-use ic_utils::call::AsyncCall;
-use ic_utils::call::SyncCall;
-use ic_utils::interfaces::management_canister::builders::{CanisterSettings, InstallMode};
-use ic_utils::interfaces::Wallet;
-use ic_utils::{Argument, Canister};
-use ref_tests::universal_canister::payload;
+use ic_agent::{agent::agent_error::HttpErrorPayload, export::Principal, AgentError};
+use ic_utils::{
+    call::{AsyncCall, SyncCall},
+    interfaces::{
+        management_canister::builders::{CanisterSettings, InstallMode},
+        Wallet,
+    },
+    Argument, Canister,
+};
 use ref_tests::{
     create_agent, create_basic_identity, create_universal_canister, create_waiter,
-    create_wallet_canister, get_wallet_wasm_from_env, with_universal_canister,
-    with_wallet_canister,
+    create_wallet_canister, get_wallet_wasm_from_env, universal_canister::payload,
+    with_universal_canister, with_wallet_canister,
 };
 
 #[ignore]
@@ -468,13 +468,14 @@ fn wallet_helper_functions() {
 }
 
 mod sign_send {
-    use ic_agent::agent::{
-        signed_query_inspect, signed_request_status_inspect, signed_update_inspect,
+    use ic_agent::{
+        agent::{
+            signed_query_inspect, signed_request_status_inspect, signed_update_inspect, Replied,
+            RequestStatusResponse,
+        },
+        AgentError,
     };
-    use ic_agent::agent::{Replied, RequestStatusResponse};
-    use ic_agent::AgentError;
-    use ref_tests::universal_canister::payload;
-    use ref_tests::with_universal_canister;
+    use ref_tests::{universal_canister::payload, with_universal_canister};
     use std::{thread, time};
 
     #[ignore]

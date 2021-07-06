@@ -1,25 +1,33 @@
 use crate::config::dns_canister_config::DnsCanisterConfig;
-use candid::parser::value::IDLValue;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
-use hyper::body::Bytes;
-use hyper::http::uri::Parts;
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{body, Body, Client, Request, Response, Server, StatusCode, Uri};
-use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
-use ic_agent::export::Principal;
-use ic_agent::{Agent, AgentError};
-use ic_utils::call::SyncCall;
-use ic_utils::interfaces::http_request::{
-    HeaderField, HttpRequestCanister, StreamingCallbackHttpResponse, StreamingStrategy,
+use hyper::{
+    body,
+    body::Bytes,
+    http::uri::Parts,
+    service::{make_service_fn, service_fn},
+    Body, Client, Request, Response, Server, StatusCode, Uri,
+};
+use ic_agent::{
+    agent::http_transport::ReqwestHttpReplicaV2Transport, export::Principal, Agent, AgentError,
+};
+use ic_utils::{
+    call::SyncCall,
+    interfaces::http_request::{
+        HeaderField, HttpRequestCanister, StreamingCallbackHttpResponse, StreamingStrategy,
+    },
 };
 use slog::Drain;
-use std::convert::Infallible;
-use std::error::Error;
-use std::net::{IpAddr, SocketAddr};
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::{
+    convert::Infallible,
+    error::Error,
+    net::{IpAddr, SocketAddr},
+    path::PathBuf,
+    str::FromStr,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
+};
 
 mod config;
 mod logging;
@@ -247,58 +255,45 @@ async fn forward_request(
 
         match streaming_strategy {
             StreamingStrategy::Callback(callback) => {
-                match callback.callback {
-                    IDLValue::Func(streaming_canister_id_id, method_name) => {
-                        let mut callback_token = callback.token;
-                        let logger = logger.clone();
-                        tokio::spawn(async move {
-                            let canister =
-                                HttpRequestCanister::create(&agent, streaming_canister_id_id);
-                            // We have not yet called http_request_stream_callback.
-                            let mut count = 0;
-                            loop {
-                                count += 1;
-                                if count > MAX_HTTP_REQUEST_STREAM_CALLBACK_CALL_COUNT {
+                let streaming_canister_id_id = callback.callback.principal;
+                let method_name = callback.callback.method;
+                let mut callback_token = callback.token;
+                let logger = logger.clone();
+                tokio::spawn(async move {
+                    let canister = HttpRequestCanister::create(&agent, streaming_canister_id_id);
+                    // We have not yet called http_request_stream_callback.
+                    let mut count = 0;
+                    loop {
+                        count += 1;
+                        if count > MAX_HTTP_REQUEST_STREAM_CALLBACK_CALL_COUNT {
+                            sender.abort();
+                            break;
+                        }
+
+                        match canister
+                            .http_request_stream_callback(&method_name, callback_token)
+                            .call()
+                            .await
+                        {
+                            Ok((StreamingCallbackHttpResponse { body, token },)) => {
+                                if sender.send_data(Bytes::from(body)).await.is_err() {
                                     sender.abort();
                                     break;
                                 }
-
-                                match canister
-                                    .http_request_stream_callback(&method_name, callback_token)
-                                    .call()
-                                    .await
-                                {
-                                    Ok((StreamingCallbackHttpResponse { body, token },)) => {
-                                        if sender.send_data(Bytes::from(body)).await.is_err() {
-                                            sender.abort();
-                                            break;
-                                        }
-                                        if let Some(next_token) = token {
-                                            callback_token = next_token;
-                                        } else {
-                                            break;
-                                        }
-                                    }
-                                    Err(e) => {
-                                        slog::debug!(
-                                            logger,
-                                            "Error happened during streaming: {}",
-                                            e
-                                        );
-                                        sender.abort();
-                                        break;
-                                    }
+                                if let Some(next_token) = token {
+                                    callback_token = next_token;
+                                } else {
+                                    break;
                                 }
                             }
-                        });
+                            Err(e) => {
+                                slog::debug!(logger, "Error happened during streaming: {}", e);
+                                sender.abort();
+                                break;
+                            }
+                        }
                     }
-                    _ => {
-                        return Ok(Response::builder()
-                            .status(StatusCode::INTERNAL_SERVER_ERROR)
-                            .body("Streaming callback must be a function.".into())
-                            .unwrap())
-                    }
-                }
+                });
             }
         }
 

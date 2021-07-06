@@ -19,28 +19,34 @@ pub use response::{Replied, RequestStatusResponse};
 #[cfg(test)]
 mod agent_test;
 
-use crate::agent::replica_api::{
-    CallRequestContent, Certificate, Delegation, Envelope, QueryContent, ReadStateContent,
-    ReadStateResponse,
+use crate::{
+    agent::replica_api::{
+        CallRequestContent, Certificate, Delegation, Envelope, QueryContent, ReadStateContent,
+        ReadStateResponse,
+    },
+    export::Principal,
+    hash_tree::Label,
+    identity::Identity,
+    to_request_id, RequestId,
 };
-use crate::export::Principal;
-use crate::hash_tree::Label;
-use crate::identity::Identity;
-use crate::{to_request_id, RequestId};
 use garcon::Waiter;
 use serde::Serialize;
 use status::Status;
 
-use crate::agent::response_authentication::{
-    extract_der, initialize_bls, lookup_canister_info, lookup_request_status, lookup_value,
+use crate::{
+    agent::response_authentication::{
+        extract_der, initialize_bls, lookup_canister_info, lookup_request_status, lookup_value,
+    },
+    bls::bls12381::bls,
 };
-use crate::bls::bls12381::bls;
-use std::convert::TryFrom;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::{Arc, RwLock};
-use std::task::{Context, Poll};
-use std::time::Duration;
+use std::{
+    convert::TryFrom,
+    future::Future,
+    pin::Pin,
+    sync::{Arc, RwLock},
+    task::{Context, Poll},
+    time::Duration,
+};
 
 const IC_REQUEST_DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";

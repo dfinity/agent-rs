@@ -1,11 +1,7 @@
-use crate::call::AsyncCall;
-use crate::canister::CanisterBuilder;
-use crate::Canister;
+use crate::{call::AsyncCall, canister::CanisterBuilder, Canister};
 use candid::{CandidType, Deserialize};
-use ic_agent::export::Principal;
-use ic_agent::Agent;
-use std::convert::AsRef;
-use std::fmt::Debug;
+use ic_agent::{export::Principal, Agent};
+use std::{convert::AsRef, fmt::Debug};
 use strum_macros::{AsRefStr, EnumString};
 
 pub mod attributes;
