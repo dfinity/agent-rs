@@ -27,7 +27,7 @@ with `fix:` or which dependencies were changed will update their patch version.
 To run, simply do
 
 ```sh
-cargo run zzz-release
+cargo run --bin zzz-release
 ```
 
 If there are any errors (e.g. the workspace is modified locally), an error will be given. Otherwise
