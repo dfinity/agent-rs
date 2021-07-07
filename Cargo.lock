@@ -202,7 +202,7 @@ dependencies = [
  "candid_derive",
  "codespan-reporting",
  "hex",
- "ic-types 0.2.0",
+ "ic-types",
  "lalrpop",
  "lalrpop-util",
  "leb128",
@@ -919,7 +919,7 @@ dependencies = [
  "garcon",
  "hex",
  "ic-agent",
- "ic-types 0.2.0",
+ "ic-types",
  "mime",
  "mime_guess",
  "mockito",
@@ -940,21 +940,6 @@ dependencies = [
  "openssl",
  "pkcs11",
  "simple_asn1",
- "thiserror",
-]
-
-[[package]]
-name = "ic-types"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94dd8ec75019bc7159efe6ca2de5392e14a8e82c02ec6dae6d1b32af5337acd1"
-dependencies = [
- "base32",
- "crc32fast",
- "hex",
- "serde",
- "serde_bytes",
- "sha2",
  "thiserror",
 ]
 
@@ -1020,7 +1005,7 @@ dependencies = [
  "garcon",
  "ic-agent",
  "ic-asset",
- "ic-types 0.1.5",
+ "ic-types",
  "ic-utils",
  "libflate",
  "num-traits",
