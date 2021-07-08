@@ -76,7 +76,8 @@ async fn main() -> Result {
         .with_boxed_identity(create_identity(opts.pem))
         .build()?;
 
-    if !opts.replica.starts_with(DEFAULT_IC_GATEWAY) {
+    let normalized_replica = opts.replica.strip_suffix("/").unwrap_or(&opts.replica);
+    if normalized_replica != DEFAULT_IC_GATEWAY {
         agent.fetch_root_key().await?;
     }
 
