@@ -6,6 +6,8 @@ use candid::Principal as CanisterId;
 use std::path::PathBuf;
 use std::time::Duration;
 
+const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
+
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[derive(Clap)]
@@ -19,10 +21,6 @@ struct Opts {
     /// Some input. Because this isn't an Option<T> it's required to be used
     #[clap(long, default_value = "http://localhost:8000/")]
     replica: String,
-
-    /// Set for non-IC networks: fetch the root key.  If not passed, use real hardcoded key.
-    #[clap(long)]
-    fetch_root_key: bool,
 
     /// An optional PEM file to read the identity from. If none is passed,
     /// a random identity will be created.
@@ -78,7 +76,7 @@ async fn main() -> Result {
         .with_boxed_identity(create_identity(opts.pem))
         .build()?;
 
-    if opts.fetch_root_key {
+    if !opts.replica.starts_with(DEFAULT_IC_GATEWAY) {
         agent.fetch_root_key().await?;
     }
 
