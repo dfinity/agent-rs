@@ -27,7 +27,7 @@ thiserror = "1.0.20"
 
 [dev-dependencies]
 ring = "0.16.11"
-tokio = { version = "1.2.0", features = ["full"] }
+tokio = { version = "1.8.1", features = ["full"] }
 
 [features]
 raw = []
