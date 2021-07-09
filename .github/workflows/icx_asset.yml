@@ -1,0 +1,37 @@
+name: test-icx-asset
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+jobs:
+  icx-asset-darwin:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - macos-10.15
+          - macos-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Provision Darwin
+        run: bash .github/workflows/provision-darwin.sh
+      - name: 'Test icx-asset'
+        run: bats e2e/bash/test.bats
+
+  icx-asset-linux:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-16.04
+          - ubuntu-18.04
+          - ubuntu-20.04
+          - ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v1
+      - name: Provision Linux
+        run: bash .github/workflows/provision-linux.sh
+      - name: 'Test icx-asset'
+        run: bats e2e/bash/test.bats

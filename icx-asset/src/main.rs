@@ -1,8 +1,8 @@
+use candid::Principal;
+use candid::Principal as CanisterId;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use ic_agent::identity::{AnonymousIdentity, BasicIdentity};
 use ic_agent::{agent, Agent, Identity};
-use candid::Principal;
-use candid::Principal as CanisterId;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -26,6 +26,11 @@ struct Opts {
     /// a random identity will be created.
     #[clap(long)]
     pem: Option<PathBuf>,
+
+    /// An optional field to set the expiry time on requests. Can be a human
+    /// readable time (like `100s`) or a number of seconds.
+    #[clap(long)]
+    ttl: Option<humantime::Duration>,
 
     #[clap(subcommand)]
     subcommand: SubCommand,
@@ -51,23 +56,22 @@ fn create_identity(maybe_pem: Option<PathBuf>) -> Box<dyn Identity + Sync + Send
     if let Some(pem_path) = maybe_pem {
         Box::new(BasicIdentity::from_pem_file(pem_path).expect("Could not read the key pair."))
     } else {
-      Box::new(AnonymousIdentity)
+        Box::new(AnonymousIdentity)
     }
 }
 
-pub fn expiry_duration() -> Duration {
-    // 5 minutes is max ingress timeout
-    Duration::from_secs(60 * 5)
-}
-
-async fn sync(agent: &Agent, canister_id: &CanisterId, o: &SyncOpts) -> Result {
-    let timeout = expiry_duration();
+async fn sync(agent: &Agent, canister_id: &CanisterId, timeout: Duration, o: &SyncOpts) -> Result {
     ic_asset::sync(&agent, &o.directory, canister_id, timeout).await?;
     Ok(())
 }
 #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() -> Result {
     let opts: Opts = Opts::parse();
+
+    let ttl: std::time::Duration = opts
+        .ttl
+        .map(|ht| ht.into())
+        .unwrap_or_else(|| Duration::from_secs(60 * 5)); // 5 minutes is max ingress timeout
 
     let agent = Agent::builder()
         .with_transport(
@@ -84,7 +88,7 @@ async fn main() -> Result {
     match &opts.subcommand {
         SubCommand::Sync(o) => {
             let canister_id = Principal::from_text(&o.canister_id)?;
-            sync(&agent, &canister_id, o).await?;
+            sync(&agent, &canister_id, ttl, o).await?;
         }
     }
 
