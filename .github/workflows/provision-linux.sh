@@ -29,8 +29,8 @@ DFX_VERSION=$version bash install-dfx.sh < <(yes Y)
 rm install-dfx.sh
 
 # Set environment variables.
-echo "::set-env name=BATSLIB::/usr/local/lib/bats-support"
-echo "::add-path::/home/runner/bin"
+BATS_SUPPORT="/usr/local/lib/bats-support"
+echo "BATS_SUPPORT=${BATS_SUPPORT}" >> ${GITHUB_ENV}
 echo "$HOME/bin" >> $GITHUB_PATH
 
 # Exit temporary directory.
