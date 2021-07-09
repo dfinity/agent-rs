@@ -6,7 +6,7 @@ set -ex
 # Enter temporary directory.
 pushd /tmp
 
-sudo apt-get install --yes glibc_2.25 glibc_2.29
+sudo apt-get install --yes glibc_2
 
 # Install Node.
 wget --output-document install-node.sh "https://deb.nodesource.com/setup_14.x"
