@@ -35,7 +35,7 @@ rm install-dfx.sh
 
 # Set environment variables.
 BATS_SUPPORT="/usr/local/lib/bats-support"
-echo "BATS_SUPPORT=${BATS_SUPPORT}" >> ${GITHUB_ENV}
+echo "BATS_SUPPORT=${BATS_SUPPORT}" >> "$GITHUB_ENV"
 
 # Exit temporary directory.
 popd
@@ -43,7 +43,5 @@ popd
 # Build icx-asset
 cargo build -p icx-asset
 ICX_ASSET="$(pwd)/target/debug/icx-asset"
-echo "ICX_ASSET=$ICX_ASSET" >> $GITHUB_ENV
-echo $PATH
-$ICX_ASSET help
+echo "ICX_ASSET=$ICX_ASSET" >> "$GITHUB_ENV"
 
