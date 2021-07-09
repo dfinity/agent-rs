@@ -16,11 +16,25 @@ curl --location --output node.pkg "https://nodejs.org/dist/v$version/node-v$vers
 sudo installer -pkg node.pkg -store -target /
 rm node.pkg
 
+# Install Bats.
+brew unlink bats
+brew install bats-core
+
+# Install Bats support.
+version=0.3.0
+curl --location --output bats-support.tar.gz https://github.com/ztombol/bats-support/archive/v$version.tar.gz
+mkdir /usr/local/lib/bats-support
+tar --directory /usr/local/lib/bats-support --extract --file bats-support.tar.gz --strip-components 1
+rm bats-support.tar.gz
+
 # Install DFINITY SDK.
 version=0.7.2
 curl --location --output install-dfx.sh "https://sdk.dfinity.org/install.sh"
 DFX_VERSION=$version bash install-dfx.sh < <(yes Y)
 rm install-dfx.sh
+
+# Set environment variables.
+echo "::set-env name=BATSLIB::/usr/local/lib/bats-support"
 
 # Exit temporary directory.
 popd
