@@ -42,4 +42,7 @@ popd
 
 # Build icx-asset
 cargo build -p icx-asset
+echo "ICX_ASSET=$(pwd)/target/debug/icx-asset" >> $GITHUB_ENV
+echo $PATH
+$ICX_ASSET help
 
