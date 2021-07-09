@@ -7,17 +7,21 @@
 # Returns:
 #   none
 assert_command() {
-    local stderrf="$(mktemp)"
-    local stdoutf="$(mktemp)"
-    local statusf="$(mktemp)"
+    x="$(mktemp)"
+    local stderrf="$x"
+    x="$(mktemp)"
+    local stdoutf="$x"
+    x="$(mktemp)"
+    local statusf="$x"
     ( set +e; "$@" 2>"$stderrf" >"$stdoutf"; echo -n "$?" > "$statusf" )
-    status="$(<$statusf)"; rm "$statusf"
+    status="$(<"$statusf")"; rm "$statusf"
 
-    stderr="$(cat $stderrf)"; rm "$stderrf"
-    stdout="$(cat $stdoutf)"; rm "$stdoutf"
+    stderr="$(cat "$stderrf")"; rm "$stderrf"
+    stdout="$(cat "$stdoutf")"; rm "$stdoutf"
+    # shellcheck disable=SC2015
     output="$( \
-        [ "$stderr" ] && echo $stderr || true; \
-        [ "$stdout" ] && echo $stdout || true; \
+        [ "$stderr" ] && echo "$stderr" || true; \
+        [ "$stdout" ] && echo "$stdout" || true; \
     )"
 
     [[ $status == 0 ]] || \
@@ -33,17 +37,21 @@ assert_command() {
 # Returns:
 #   none
 assert_command_fail() {
-    local stderrf="$(mktemp)"
-    local stdoutf="$(mktemp)"
-    local statusf="$(mktemp)"
+    x="$(mktemp)"
+    local stderrf="$x"
+    x="$(mktemp)"
+    local stdoutf="$x"
+    x="$(mktemp)"
+    local statusf="$x"
     ( set +e; "$@" 2>"$stderrf" >"$stdoutf"; echo -n "$?" >"$statusf" )
-    status="$(<$statusf)"; rm "$statusf"
+    status="$(<"$statusf")"; rm "$statusf"
 
-    stderr="$(cat $stderrf)"; rm "$stderrf"
-    stdout="$(cat $stdoutf)"; rm "$stdoutf"
+    stderr="$(cat "$stderrf")"; rm "$stderrf"
+    stdout="$(cat "$stdoutf")"; rm "$stdoutf"
+    # shellcheck disable=SC2015
     output="$(
-        [ "$stderr" ] && echo $stderr || true;
-        [ "$stdout" ] && echo $stdout || true;
+        [ "$stderr" ] && echo "$stderr" || true;
+        [ "$stdout" ] && echo "$stdout" || true;
     )"
 
     [[ $status != 0 ]] || \
@@ -59,7 +67,7 @@ assert_command_fail() {
 #         $output.
 assert_match() {
     regex="$1"
-    if [[ $# < 2 ]]; then
+    if [[ $# -lt 2 ]]; then
         text="$output"
     else
         text="$2"
@@ -77,7 +85,7 @@ assert_match() {
 #         $output.
 assert_not_match() {
     regex="$1"
-    if [[ $# < 2 ]]; then
+    if [[ $# -lt 2 ]]; then
         text="$output"
     else
         text="$2"
@@ -101,7 +109,7 @@ assert_not_match() {
 #    $2 - The actual value.
 assert_eq() {
     expected="$1"
-    if [[ $# < 2 ]]; then
+    if [[ $# -lt 2 ]]; then
         actual="$output"
     else
         actual="$2"
@@ -119,7 +127,7 @@ assert_eq() {
 #    $2 - The actual value.
 assert_neq() {
     expected="$1"
-    if [[ $# < 2 ]]; then
+    if [[ $# -lt 2 ]]; then
         actual="$output"
     else
         actual="$2"
@@ -140,7 +148,7 @@ assert_process_exits() {
     pid="$1"
     timeout="$2"
 
-    timeout $timeout sh -c \
+    timeout "$timeout" sh -c \
       "while kill -0 $pid; do echo waiting for process $pid to exit; sleep 1; done" \
       || (echo "process $pid did not exit" && ps aux && exit 1)
 
@@ -150,7 +158,7 @@ assert_file_eventually_exists() {
     filename="$1"
     timeout="$2"
 
-    timeout $timeout sh -c \
+    timeout "$timeout" sh -c \
       "until [ -f $filename ]; do echo waiting for $filename; sleep 1; done" \
       || (echo "file $filename was never created" && ls && exit 1)
 }
