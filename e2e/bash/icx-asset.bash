@@ -1,13 +1,13 @@
 #!/usr/bin/env bats
 
-source $BATS_SUPPORT/load.bash
+#source "$BATS_SUPPORT"/load.bash
 
 load util/assertions
 
 setup() {
-    cd $(mktemp -d -t icx-asset-e2e-XXXXXXXX)
+    cd "$(mktemp -d -t icx-asset-e2e-XXXXXXXX)" || exit 1
     dfx new --no-frontend e2e_project
-    cd e2e_project
+    cd e2e_project || exit 1
     dfx start --background
     dfx deploy
 }
@@ -19,7 +19,7 @@ teardown() {
 
 icx_asset_sync() {
   CANISTER_ID=$(dfx canister id e2e_project_assets)
-  assert_command $ICX_ASSET --pem $HOME/.config/dfx/identity/default/identity.pem sync $CANISTER_ID src/e2e_project_assets/assets
+  assert_command "$ICX_ASSET" --pem "$HOME"/.config/dfx/identity/default/identity.pem sync "$CANISTER_ID" src/e2e_project_assets/assets
 }
 
 @test "creates new files" {
