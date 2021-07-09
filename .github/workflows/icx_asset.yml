@@ -17,7 +17,7 @@ jobs:
       - name: Provision Darwin
         run: bash .github/workflows/provision-darwin.sh
       - name: 'Test icx-asset'
-        run: bats e2e/bash/test.bats
+        run: bats e2e/bash/icx-asset.bash
 
   icx-asset-linux:
     runs-on: ${{ matrix.os }}
@@ -34,4 +34,4 @@ jobs:
       - name: Provision Linux
         run: bash .github/workflows/provision-linux.sh
       - name: 'Test icx-asset'
-        run: bats e2e/bash/test.bats
+        run: bats e2e/bash/icx-asset.bash
