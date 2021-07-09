@@ -7,7 +7,7 @@ source $BATS_SUPPORT/load.bash
 
 setup() {
     cd $(mktemp -d -t icx-asset-e2e-XXXXXXXX)
-    dfx new e2e_project
+    dfx new --no-frontend e2e_project
     cd e2e_project
     dfx start --background
     dfx deploy
