@@ -22,7 +22,7 @@ use ic_utils::interfaces::management_canister::{
 use ring::signature::Ed25519KeyPair;
 use std::{
     collections::VecDeque, convert::TryFrom, future::Future, io::BufRead, path::PathBuf, pin::Pin,
-    std::process::exit, str::FromStr,
+    process::exit, str::FromStr,
 };
 use thiserror::Error;
 
