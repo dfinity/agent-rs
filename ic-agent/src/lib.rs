@@ -120,4 +120,4 @@ pub use identity::{Identity, Signature};
 pub use request_id::{to_request_id, RequestId, RequestIdError};
 
 pub(crate) use crate::ic_types::hash_tree;
-pub use candid::types::ic_types;
+pub use ic_types;
