@@ -1,6 +1,6 @@
 [package]
 name = "ic-agent"
-version = "0.5.2"
+version = "0.6.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
 description = "Agent library to communicate with the Internet Computer, following the Public Specification."
@@ -22,6 +22,7 @@ ed25519-dalek = "1.0.1"
 garcon = { version = "0.2", features = ["async"] }
 hex = "0.4.0"
 http = "0.2.3"
+ic-types = "0.2.0"
 leb128 = "0.2.4"
 mime = "0.3.16"
 openssl = "0.10.32"
@@ -42,9 +43,10 @@ features = [ "blocking", "json", "rustls-tls" ]
 optional = true
 
 [dev-dependencies]
+candid = "0.7.1"
 mockito = "0.27.0"
 proptest = "0.9.5"
-tokio = { version = "1.2.0", features = ["full"] }
+tokio = { version = "1.8.1", features = ["full"] }
 
 [features]
 default = ["pem", "reqwest"]
