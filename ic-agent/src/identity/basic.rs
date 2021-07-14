@@ -49,7 +49,8 @@ impl BasicIdentity {
             ));
         }
 
-        // Retrieve the secret key and perform some checks
+        // Retrieve the secret key and check that we have an uncompressed
+        // point of 32 byte length
         let sk = key_info.private_key;
         if sk[0] != 4 || sk[1] != 32 {
             return Err(PemError::KeyRejected(
@@ -67,9 +68,9 @@ impl BasicIdentity {
             }
         };
 
-        // The first two bytes should be
-        let mut key = sk[2..].to_vec();
-        key.extend_from_slice(pk);
+        let mut key = [0; 64];
+        key[..32].copy_from_slice(&sk[2..]);
+        key[32..].copy_from_slice(pk);
 
         let key_pair = Ed25519KeyPair::from_bytes(&key)
             .map_err(|err| PemError::KeyRejected(format!("Key invalid: {}", err)))?;
