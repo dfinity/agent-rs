@@ -1,0 +1,28 @@
+[package]
+name = "icx-asset"
+version = "0.1.0"
+authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+candid = "0.7.1"
+chrono = "0.4.19"
+clap = "3.0.0-beta.2"
+delay = "0.3.1"
+garcon = "0.2.2"
+humantime = "2.0.1"
+ic-agent = { path = "../ic-agent", version = "0.6" }
+ic-asset = { path = "../ic-asset", version = "0.1" }
+ic-types = { version = "0.2" }
+ic-utils = { path = "../ic-utils", version = "0.4" }
+libflate = "1.1.0"
+num-traits = "0.2"
+pem = "0.8.1"
+serde = "1.0.115"
+serde_bytes = "0.11.5"
+serde_json = "1.0.57"
+tokio = { version = "1.2.0", features = ["full", "rt"] }
+thiserror = "1.0.24"
+walkdir = "2.3.1"
