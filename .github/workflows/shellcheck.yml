@@ -10,7 +10,7 @@ on:
       - '.github/**'
   push:
     branches:
-      - master
+      - main
 
 jobs:
   check_macos:
