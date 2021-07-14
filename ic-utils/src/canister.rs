@@ -404,14 +404,8 @@ mod tests {
         use super::Canister;
         use garcon::Delay;
 
-        let rng = ring::rand::SystemRandom::new();
-        let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
-            .expect("Could not generate a key pair.");
-
-        let identity = BasicIdentity::from_key_pair(
-            ring::signature::Ed25519KeyPair::from_pkcs8(key_pair.as_ref())
-                .expect("Could not read the key pair."),
-        );
+        let key_pair = ed25519_dalek::Keypair::generate(&mut rand::rngs::OsRng);
+        let identity = BasicIdentity::from_key_pair(key_pair);
 
         let agent = ic_agent::Agent::builder()
             .with_url("http://localhost:8001")

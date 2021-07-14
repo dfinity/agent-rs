@@ -66,14 +66,8 @@ where
     ///
     /// # let canister_wasm = b"\0asm\x01\0\0\0";
     /// # fn create_identity() -> impl ic_agent::Identity {
-    /// #     let rng = ring::rand::SystemRandom::new();
-    /// #     let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
-    /// #         .expect("Could not generate a key pair.");
-    /// #
-    /// #     ic_agent::BasicIdentity::from_key_pair(
-    /// #         ring::signature::Ed25519KeyPair::from_pkcs8(key_pair.as_ref())
-    /// #           .expect("Could not read the key pair."),
-    /// #     )
+    /// #     let key_pair = ed25519_dalek::Keypair::generate(&mut rand::rngs::OsRng);
+    /// #     ic_agent::identity::BasicIdentity::from_key_pair(key_pair)
     /// # }
     /// #
     /// # const URL: &'static str = concat!("http://localhost:", env!("IC_REF_PORT"));
