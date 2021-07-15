@@ -34,7 +34,7 @@ struct Opts {
     #[clap(default_value = "http://localhost:8000/")]
     replica: String,
 
-    /// Set for non-IC networks: fetch the root key.  If not passed, use real hardcoded key.
+    /// Set for non-IC networks: fetch the root key.  If not passed, use real hard-coded key.
     #[clap(long)]
     fetch_root_key: bool,
 

@@ -22,8 +22,8 @@ To read a PEM file, you can pass it with the `--pem` argument. The PEM file must
 key that can be used for the Internet Computer signing and validation.
 
 ### Root Key
-For non-IC networks, pass --fetch-root-key to fetch the root key.  When this argument is not present,
-icx uses the hardcoded public key.
+For non-IC networks, pass `--fetch-root-key` to fetch the root key.  When this argument is not present,
+icx uses the hard-coded public key.
 
 ### Examples
 To call the management canister's `create_canister` function, you can use the following:
@@ -38,3 +38,31 @@ If you have a candid file, you can use it to validate arguments. Pass it in with
 ```shell script
 icx query 75hes-oqbaa-aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-q greet --candid=~/path/greet.did '("World")' 
 ```
+
+#### Sign and Send Separation
+Pass `--serialize` when use `icx update` and `icx query` will serialize the signed canister call message as json.
+The output will print to stdout. When use `icx update`, a corresponding request_status message is also generated and printed to stderr.
+
+In the default IC project generated with `dfx new` and the local emulator has started with `dfx start --background`.
+
+##### Sign
+```shell script
+icx --fetch-root-key update --serialize rwlgt-iiaaa-aaaaa-aaaaa-cai greet '("everyone")' 1> update.json 2>request_status.json
+```
+> `rwlgt-iiaaa-aaaaa-aaaaa-cai` is the ID of hello canister in the default project.
+
+##### Send
+```shell script
+cat update.json | icx send
+...
+RequestID: 0x1234....
+```
+
+##### Request status
+```shell script
+cat request_status.json | icx --fetch-root-key send
+...
+("Hello, everyone!")
+```
+
+When sending message to the IC main net, all `--fech-root-key` are not required. So the sign step can be executed on an air-gapped machine.
