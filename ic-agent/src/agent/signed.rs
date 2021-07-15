@@ -63,4 +63,36 @@ mod tests {
         let deserialized = serde_json::from_str::<SignedQuery>(&serialized);
         assert!(deserialized.is_ok());
     }
+
+    #[test]
+    fn test_update_serde() {
+        let update = SignedUpdate {
+            nonce: None,
+            ingress_expiry: 1,
+            sender: Principal::from_slice(&[0; 29]),
+            canister_id: Principal::from_slice(&[0; 29]),
+            method_name: "greet".to_string(),
+            arg: vec![0, 1],
+            effective_canister_id: Principal::from_slice(&[0; 29]),
+            signed_update: vec![0, 1, 2, 3],
+            request_id: RequestId::new(&[0; 32]),
+        };
+        let serialized = serde_json::to_string(&update).unwrap();
+        let deserialized = serde_json::from_str::<SignedUpdate>(&serialized);
+        assert!(deserialized.is_ok());
+    }
+
+    #[test]
+    fn test_request_status_serde() {
+        let request_status = SignedRequestStatus {
+            ingress_expiry: 1,
+            sender: Principal::from_slice(&[0; 29]),
+            effective_canister_id: Principal::from_slice(&[0; 29]),
+            request_id: RequestId::new(&[0; 32]),
+            signed_request_status: vec![0, 1, 2, 3],
+        };
+        let serialized = serde_json::to_string(&request_status).unwrap();
+        let deserialized = serde_json::from_str::<SignedRequestStatus>(&serialized);
+        assert!(deserialized.is_ok());
+    }
 }
