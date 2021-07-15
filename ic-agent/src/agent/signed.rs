@@ -55,9 +55,9 @@ mod tests {
             sender: Principal::from_slice(&[0; 29]),
             canister_id: Principal::from_slice(&[0; 29]),
             method_name: "greet".to_string(),
-            arg: vec![0,1],
+            arg: vec![0, 1],
             effective_canister_id: Principal::from_slice(&[0; 29]),
-            signed_query: vec![0,1,2,3],
+            signed_query: vec![0, 1, 2, 3],
         };
         let serialized = serde_json::to_string(&query).unwrap();
         let deserialized = serde_json::from_str::<SignedQuery>(&serialized);
