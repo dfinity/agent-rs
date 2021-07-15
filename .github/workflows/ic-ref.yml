@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v2
         with:
           repository: 'dfinity/ic-hs'
-          path: ic-ref
+          path: ic-hs
           ref: ${{ matrix.spec }}
       - uses: actions/checkout@v2
         with:
