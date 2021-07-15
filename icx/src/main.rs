@@ -402,6 +402,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 match &opts.subcommand {
                     SubCommand::Update(_) => {
+                        // For local emulator, we need to fetch the root key for updates.
+                        // So on an air-gapped machine, we can only generate message for the IC main net
+                        // which agent hard-coded its root key
+                        if opts.fetch_root_key {
+                            agent.fetch_root_key().await?;
+                        }
+
                         let mut builder = agent.update(&t.canister_id, &t.method_name);
                         if let Some(d) = expire_after {
                             builder.expire_after(d);
@@ -468,7 +475,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .build()?;
 
             if let Ok(signed_update) = serde_json::from_str::<SignedUpdate>(&buffer) {
-                agent.fetch_root_key().await?;
+                if opts.fetch_root_key {
+                    agent.fetch_root_key().await?;
+                }
                 let request_id = agent
                     .update_signed(
                         signed_update.effective_canister_id,
@@ -487,6 +496,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else if let Ok(signed_request_status) =
                 serde_json::from_str::<SignedRequestStatus>(&buffer)
             {
+                if opts.fetch_root_key {
+                    agent.fetch_root_key().await?;
+                }
                 let response = agent
                     .request_status_signed(
                         &signed_request_status.request_id,
