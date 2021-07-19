@@ -1,10 +1,16 @@
+use candid::CandidType;
 use candid::Principal;
 use candid::Principal as CanisterId;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use ic_agent::identity::{AnonymousIdentity, BasicIdentity};
 use ic_agent::{agent, Agent, Identity};
+use ic_utils::call::SyncCall;
+
+use num_traits::ToPrimitive;
+use serde::Deserialize;
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
+use ic_utils::Canister;
 
 const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
 
@@ -38,8 +44,19 @@ struct Opts {
 
 #[derive(Clap)]
 enum SubCommand {
+    /// List keys from the asset canister.
+    #[clap(name = "ls")]
+    List(ListOpts),
+
     /// Synchronize a directory to the asset canister
     Sync(SyncOpts),
+}
+
+#[derive(Clap)]
+struct ListOpts {
+    /// The canister ID.
+    #[clap()]
+    canister_id: String,
 }
 
 #[derive(Clap)]
@@ -86,11 +103,66 @@ async fn main() -> Result {
     }
 
     match &opts.subcommand {
+        SubCommand::List(o) => {
+            let canister = ic_utils::Canister::builder()
+                .with_agent(&agent)
+                .with_canister_id(Principal::from_text(&o.canister_id)?)
+                .build()?;
+            list(&canister).await?;
+        }
         SubCommand::Sync(o) => {
             let canister_id = Principal::from_text(&o.canister_id)?;
             sync(&agent, &canister_id, ttl, o).await?;
         }
     }
 
+    Ok(())
+}
+
+async fn list(canister: &Canister<'_>) -> Result {
+    #[derive(CandidType, Deserialize)]
+    struct Encoding {
+        modified: candid::Int,
+        content_encoding: String,
+        sha256: Option<Vec<u8>>,
+        length: candid::Nat,
+    }
+
+    #[derive(CandidType, Deserialize)]
+    struct ListEntry {
+        key: String,
+        content_type: String,
+        encodings: Vec<Encoding>,
+    }
+
+    #[derive(CandidType, Deserialize)]
+    struct EmptyRecord {}
+
+    let (entries,): (Vec<ListEntry>,) = canister
+        .query_("list")
+        .with_arg(EmptyRecord {})
+        .build()
+        .call()
+        .await?;
+
+    use chrono::offset::Local;
+    use chrono::DateTime;
+
+    for entry in entries {
+        for encoding in entry.encodings {
+            let modified = encoding.modified;
+            let modified = SystemTime::UNIX_EPOCH
+                + std::time::Duration::from_nanos(modified.0.to_u64().unwrap());
+
+            eprintln!(
+                "{:>20} {:>15} {:50} ({}, {})",
+                DateTime::<Local>::from(modified).format("%F %X"),
+                encoding.length.0.to_string(),
+                entry.key,
+                entry.content_type,
+                encoding.content_encoding
+            );
+        }
+    }
     Ok(())
 }
