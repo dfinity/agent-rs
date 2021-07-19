@@ -465,14 +465,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("{}", buffer);
 
-            let agent = Agent::builder()
-                .with_transport(
-                    agent::http_transport::ReqwestHttpReplicaV2Transport::create(
-                        opts.replica.clone(),
-                    )?,
-                )
-                .build()?;
-
             if let Ok(signed_update) = serde_json::from_str::<SignedUpdate>(&buffer) {
                 if opts.fetch_root_key {
                     agent.fetch_root_key().await?;
