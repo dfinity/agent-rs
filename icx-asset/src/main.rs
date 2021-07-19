@@ -6,11 +6,11 @@ use ic_agent::identity::{AnonymousIdentity, BasicIdentity};
 use ic_agent::{agent, Agent, Identity};
 use ic_utils::call::SyncCall;
 
+use ic_utils::Canister;
 use num_traits::ToPrimitive;
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
-use ic_utils::Canister;
 
 const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
 
