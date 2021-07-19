@@ -4,11 +4,7 @@ on:
   push:
     branches:
       - main
-  pull_request_target:
-  # Also run on every pull_request that changes the workflow, as the repo.
   pull_request:
-    paths:
-      - '.github/**'
 
 jobs:
   test:
@@ -25,8 +21,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-        with:
-          path: main
       - uses: actions/checkout@v2
         with:
           repository: 'dfinity/ic-hs'
