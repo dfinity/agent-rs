@@ -423,8 +423,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let signed_request_status = agent
                             .sign_request_status(effective_canister_id, signed_update.request_id)?;
                         let serialized = serde_json::to_string(&signed_request_status).unwrap();
-                        // print request_status to stderr
-                        eprintln!("{}", serialized);
+                        println!("{}", serialized);
                     }
                     &SubCommand::Query(_) => {
                         let mut builder = agent.query(&t.canister_id, &t.method_name);
