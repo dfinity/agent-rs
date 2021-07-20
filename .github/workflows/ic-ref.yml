@@ -73,6 +73,7 @@ jobs:
       - name: Build universal-canister
         run: |
           cd ic-hs/universal-canister
+          echo "[workspace]" >>Cargo.toml
           cargo build --target wasm32-unknown-unknown --release
           cp target/wasm32-unknown-unknown/release/universal_canister.wasm $HOME/canister.wasm
 
