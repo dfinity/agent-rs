@@ -21,6 +21,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+        with:
+          path: main
       - uses: actions/checkout@v2
         with:
           repository: 'dfinity/ic-hs'
@@ -73,14 +75,12 @@ jobs:
       - name: Build universal-canister
         run: |
           cd ic-hs/universal-canister
-          echo "[workspace]" >>Cargo.toml
           cargo build --target wasm32-unknown-unknown --release
           cp target/wasm32-unknown-unknown/release/universal_canister.wasm $HOME/canister.wasm
 
       - name: Build wallet canister
         run: |
           cd wallet-rs/
-          echo "[workspace]" >>Cargo.toml
           sh ./wallet/build.sh
           cp wallet/target/wasm32-unknown-unknown/release/wallet-opt.wasm $HOME/wallet.wasm
 
