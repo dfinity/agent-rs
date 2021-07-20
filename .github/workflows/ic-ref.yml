@@ -80,6 +80,7 @@ jobs:
       - name: Build wallet canister
         run: |
           cd wallet-rs/
+          echo "[workspace]" >>Cargo.toml
           sh ./wallet/build.sh
           cp wallet/target/wasm32-unknown-unknown/release/wallet-opt.wasm $HOME/wallet.wasm
 
