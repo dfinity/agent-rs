@@ -4,11 +4,7 @@ on:
   push:
     branches:
       - main
-  pull_request_target:
-  # Also run on every pull_request that changes the workflow, as the repo.
   pull_request:
-    paths:
-      - '.github/**'
 
 jobs:
   test:
@@ -29,16 +25,12 @@ jobs:
           path: main
       - uses: actions/checkout@v2
         with:
-          repository: 'dfinity-lab/ic-ref'
-          # Personal Read-only Access Token created by hans.larsen@dfinity.org
-          token: ${{ secrets.IC_REF_TOKEN }}
-          path: ic-ref
+          repository: 'dfinity/ic-hs'
+          path: ic-hs
           ref: ${{ matrix.spec }}
       - uses: actions/checkout@v2
         with:
           repository: 'dfinity/wallet-rs'
-          # Personal Read-only Access Token created by hans.larsen@dfinity.org
-          token: ${{ secrets.IC_REF_TOKEN }}
           path: wallet-rs
           ref: b5e38e1f1e3f414f15c139a49eee269769928ee2
 
@@ -69,20 +61,20 @@ jobs:
           rustup default ${{ matrix.rust }}
           rustup target add wasm32-unknown-unknown
 
-      - name: Build ic-ref
+      - name: Build ic-hs
         run: |
           ls -l /opt/ghc/
           export PATH=/opt/ghc/bin:$PATH
           cabal --version
           ghc-${{ matrix.ghc }} --version
           mkdir -p $HOME/bin
-          cd ic-ref/impl
+          cd ic-hs
           cabal update
           cabal install exe:ic-ref -w ghc-${{ matrix.ghc }} --overwrite-policy=always  --installdir=$HOME/bin
 
       - name: Build universal-canister
         run: |
-          cd ic-ref/universal-canister
+          cd ic-hs/universal-canister
           cargo build --target wasm32-unknown-unknown --release
           cp target/wasm32-unknown-unknown/release/universal_canister.wasm $HOME/canister.wasm
 
