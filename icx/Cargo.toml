@@ -17,7 +17,7 @@ name = "icx"
 path = "src/main.rs"
 
 [dependencies]
-candid = "0.7.1"
+candid = "0.7.4"
 clap = "3.0.0-beta.1"
 garcon = { version = "0.2.3", features = ["async"] }
 hex = "0.4.2"
