@@ -23,6 +23,24 @@ icx_asset_sync() {
   assert_command "$ICX_ASSET" --pem "$HOME"/.config/dfx/identity/default/identity.pem sync "$CANISTER_ID" src/e2e_project_assets/assets
 }
 
+icx_asset_list() {
+  CANISTER_ID=$(dfx canister id e2e_project_assets)
+  assert_command "$ICX_ASSET" --pem "$HOME"/.config/dfx/identity/default/identity.pem ls "$CANISTER_ID"
+}
+
+@test "lists assets" {
+    for i in $(seq 1 400); do
+      echo "some easily duplicate text $i" >>src/e2e_project_assets/assets/notreally.js
+    done
+    icx_asset_sync
+
+    icx_asset_list
+
+    assert_match "sample-asset.txt.*text/plain.*identity"
+    assert_match "notreally.js.*application/javascript.*gzip"
+    assert_match "notreally.js.*application/javascript.*identity"
+}
+
 @test "creates new files" {
   echo "new file content" >src/e2e_project_assets/assets/new-asset.txt
   icx_asset_sync
@@ -77,3 +95,4 @@ icx_asset_sync() {
     assert_command dfx canister --no-wallet call --query e2e_project_assets get '(record{key="/sample-asset.txt";accept_encodings=vec{"identity"}})'
     assert_command_fail dfx canister --no-wallet call --query e2e_project_assets get '(record{key="/sample-asset.txt";accept_encodings=vec{"arbitrary"}})'
 }
+
