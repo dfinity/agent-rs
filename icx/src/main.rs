@@ -6,25 +6,21 @@ use candid::{
 };
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use ic_agent::{
-    agent,
+    agent::{self, signed::SignedUpdate, Replied},
     agent::{
-        agent_error::HttpErrorPayload, http_transport::ReqwestHttpReplicaV2Transport,
-        ReplicaV2Transport,
+        agent_error::HttpErrorPayload,
+        signed::{SignedQuery, SignedRequestStatus},
     },
     export::Principal,
     identity::BasicIdentity,
-    Agent, AgentError, Identity, RequestId,
+    Agent, AgentError, Identity,
 };
 use ic_utils::interfaces::management_canister::{
     builders::{CanisterInstall, CanisterSettings},
     MgmtMethod,
 };
 use ring::signature::Ed25519KeyPair;
-use std::{
-    collections::VecDeque, convert::TryFrom, future::Future, io::BufRead, path::PathBuf, pin::Pin,
-    str::FromStr,
-};
-use thiserror::Error;
+use std::{collections::VecDeque, convert::TryFrom, io::BufRead, path::PathBuf, str::FromStr};
 
 #[derive(Clap)]
 #[clap(
@@ -38,7 +34,7 @@ struct Opts {
     #[clap(default_value = "http://localhost:8000/")]
     replica: String,
 
-    /// Set for non-IC networks: fetch the root key.  If not passed, use real hardcoded key.
+    /// Set for non-IC networks: fetch the root key.  If not passed, use real hard-coded key.
     #[clap(long)]
     fetch_root_key: bool,
 
@@ -300,111 +296,16 @@ fn create_identity(maybe_pem: Option<PathBuf>) -> impl Identity {
     }
 }
 
-#[derive(Error, Debug)]
-enum SerializeError {
-    #[error("")]
-    Success,
-}
-
-struct SerializingTransport;
-
-impl agent::ReplicaV2Transport for SerializingTransport {
-    fn query<'a>(
-        &'a self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(
-            _: &SerializingTransport,
-            effective_canister_id: Principal,
-            envelope: Vec<u8>,
-        ) -> Result<Vec<u8>, AgentError> {
-            print!(
-                "query\n\n{}\n\n{}",
-                hex::encode(envelope),
-                hex::encode(effective_canister_id)
-            );
-            Err(AgentError::TransportError(SerializeError::Success.into()))
-        }
-
-        Box::pin(run(self, effective_canister_id, envelope))
-    }
-
-    fn read_state<'a>(
-        &'a self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(
-            _: &SerializingTransport,
-            effective_canister_id: Principal,
-            envelope: Vec<u8>,
-        ) -> Result<Vec<u8>, AgentError> {
-            print!(
-                "read_state\n\n{}\n\n{}",
-                hex::encode(envelope),
-                hex::encode(effective_canister_id)
-            );
-            Err(AgentError::TransportError(SerializeError::Success.into()))
-        }
-
-        Box::pin(run(self, effective_canister_id, envelope))
-    }
-
-    fn call<'a>(
-        &'a self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-        request_id: RequestId,
-    ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
-        async fn run(
-            _: &SerializingTransport,
-            effective_canister_id: Principal,
-            envelope: Vec<u8>,
-            request_id: RequestId,
-        ) -> Result<(), AgentError> {
-            print!(
-                "call\n{}\n\n{}\n\n{}",
-                hex::encode(request_id.as_slice()),
-                hex::encode(envelope),
-                hex::encode(effective_canister_id)
-            );
-            Err(AgentError::MessageError(String::new()))
-        }
-
-        Box::pin(run(self, effective_canister_id, envelope, request_id))
-    }
-
-    fn status<'a>(
-        &'a self,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(_: &SerializingTransport) -> Result<Vec<u8>, AgentError> {
-            Err(AgentError::MessageError(
-                "status calls not supported".to_string(),
-            ))
-        }
-
-        Box::pin(run(self))
-    }
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts: Opts = Opts::parse();
 
-    let agent = match &opts.subcommand {
-        SubCommand::Query(CallOpts {
-            serialize: true, ..
-        })
-        | SubCommand::Update(CallOpts {
-            serialize: true, ..
-        }) => Agent::builder().with_transport(SerializingTransport),
-        _ => Agent::builder().with_transport(
+    let agent = Agent::builder()
+        .with_transport(
             agent::http_transport::ReqwestHttpReplicaV2Transport::create(opts.replica.clone())?,
-        ),
-    }
-    .with_boxed_identity(Box::new(create_identity(opts.pem)))
-    .build()?;
+        )
+        .with_boxed_identity(Box::new(create_identity(opts.pem)))
+        .build()?;
 
     // You can handle information about subcommands by requesting their matches by name
     // (as below), requesting just the name used, or both at the same time
@@ -425,77 +326,119 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 t.canister_id,
             )?;
 
-            let result = match &opts.subcommand {
-                SubCommand::Update(_) => {
-                    // We need to fetch the root key for updates.
-                    if opts.fetch_root_key {
-                        agent.fetch_root_key().await?;
-                    }
-
-                    let mut builder = agent.update(&t.canister_id, &t.method_name);
-
-                    if let Some(d) = expire_after {
-                        builder.expire_after(d);
-                    }
-
-                    eprint!(".");
-                    let result = builder
-                        .with_arg(arg)
-                        .with_effective_canister_id(effective_canister_id)
-                        .call_and_wait(
-                            garcon::Delay::builder()
-                                .exponential_backoff(std::time::Duration::from_secs(1), 1.1)
-                                .side_effect(|| {
-                                    eprint!(".");
-                                    Ok(())
-                                })
-                                .timeout(std::time::Duration::from_secs(60 * 5))
-                                .build(),
-                        )
-                        .await;
-                    eprintln!();
-                    result
-                }
-                SubCommand::Query(_) => {
-                    let mut builder = agent.query(&t.canister_id, &t.method_name);
-                    if let Some(d) = expire_after {
-                        builder.expire_after(d);
-                    }
-
-                    builder
-                        .with_arg(&arg)
-                        .with_effective_canister_id(effective_canister_id)
-                        .call()
-                        .await
-                }
-                _ => unreachable!(),
-            };
-
-            match result {
-                Ok(blob) => {
-                    print_idl_blob(&blob, &t.output, &method_type)
-                        .map_err(|e| format!("Invalid IDL blob: {}", e))?;
-                }
-                Err(AgentError::TransportError(_)) => return Ok(()),
-                Err(AgentError::HttpError(HttpErrorPayload {
-                    status,
-                    content_type,
-                    content,
-                })) => {
-                    eprintln!("Server returned an HTTP Error:\n  Code: {}", status);
-                    match content_type.as_deref() {
-                        None => eprintln!("  Content: {}", hex::encode(content)),
-                        Some("text/plain; charset=UTF-8") | Some("text/plain") => {
-                            eprintln!("  ContentType: text/plain");
-                            eprintln!("  Content:     {}", String::from_utf8_lossy(&content));
+            if !t.serialize {
+                let result = match &opts.subcommand {
+                    SubCommand::Update(_) => {
+                        // We need to fetch the root key for updates.
+                        if opts.fetch_root_key {
+                            agent.fetch_root_key().await?;
                         }
-                        Some(x) => {
-                            eprintln!("  ContentType: {}", x);
-                            eprintln!("  Content:     {}", hex::encode(&content));
+
+                        let mut builder = agent.update(&t.canister_id, &t.method_name);
+
+                        if let Some(d) = expire_after {
+                            builder.expire_after(d);
+                        }
+
+                        eprint!(".");
+                        let result = builder
+                            .with_arg(arg)
+                            .with_effective_canister_id(effective_canister_id)
+                            .call_and_wait(
+                                garcon::Delay::builder()
+                                    .exponential_backoff(std::time::Duration::from_secs(1), 1.1)
+                                    .side_effect(|| {
+                                        eprint!(".");
+                                        Ok(())
+                                    })
+                                    .timeout(std::time::Duration::from_secs(60 * 5))
+                                    .build(),
+                            )
+                            .await;
+                        eprintln!();
+                        result
+                    }
+                    SubCommand::Query(_) => {
+                        let mut builder = agent.query(&t.canister_id, &t.method_name);
+                        if let Some(d) = expire_after {
+                            builder.expire_after(d);
+                        }
+
+                        builder
+                            .with_arg(&arg)
+                            .with_effective_canister_id(effective_canister_id)
+                            .call()
+                            .await
+                    }
+                    _ => unreachable!(),
+                };
+
+                match result {
+                    Ok(blob) => {
+                        print_idl_blob(&blob, &t.output, &method_type)
+                            .map_err(|e| format!("Invalid IDL blob: {}", e))?;
+                    }
+                    Err(AgentError::TransportError(_)) => return Ok(()),
+                    Err(AgentError::HttpError(HttpErrorPayload {
+                        status,
+                        content_type,
+                        content,
+                    })) => {
+                        eprintln!("Server returned an HTTP Error:\n  Code: {}", status);
+                        match content_type.as_deref() {
+                            None => eprintln!("  Content: {}", hex::encode(content)),
+                            Some("text/plain; charset=UTF-8") | Some("text/plain") => {
+                                eprintln!("  ContentType: text/plain");
+                                eprintln!("  Content:     {}", String::from_utf8_lossy(&content));
+                            }
+                            Some(x) => {
+                                eprintln!("  ContentType: {}", x);
+                                eprintln!("  Content:     {}", hex::encode(&content));
+                            }
                         }
                     }
+                    Err(s) => eprintln!("Error: {:?}", s),
                 }
-                Err(s) => eprintln!("Error: {:?}", s),
+            } else {
+                match &opts.subcommand {
+                    SubCommand::Update(_) => {
+                        // For local emulator, we need to fetch the root key for updates.
+                        // So on an air-gapped machine, we can only generate message for the IC main net
+                        // which agent hard-coded its root key
+                        if opts.fetch_root_key {
+                            agent.fetch_root_key().await?;
+                        }
+
+                        let mut builder = agent.update(&t.canister_id, &t.method_name);
+                        if let Some(d) = expire_after {
+                            builder.expire_after(d);
+                        }
+                        let signed_update = builder
+                            .with_arg(arg)
+                            .with_effective_canister_id(effective_canister_id)
+                            .sign()?;
+                        let serialized = serde_json::to_string(&signed_update).unwrap();
+                        println!("{}", serialized);
+
+                        let signed_request_status = agent
+                            .sign_request_status(effective_canister_id, signed_update.request_id)?;
+                        let serialized = serde_json::to_string(&signed_request_status).unwrap();
+                        println!("{}", serialized);
+                    }
+                    &SubCommand::Query(_) => {
+                        let mut builder = agent.query(&t.canister_id, &t.method_name);
+                        if let Some(d) = expire_after {
+                            builder.expire_after(d);
+                        }
+                        let signed_query = builder
+                            .with_arg(arg)
+                            .with_effective_canister_id(effective_canister_id)
+                            .sign()?;
+                        let serialized = serde_json::to_string(&signed_query).unwrap();
+                        println!("{}", serialized);
+                    }
+                    _ => unreachable!(),
+                }
             }
         }
         SubCommand::Status => println!("{:#}", agent.status().await?),
@@ -511,62 +454,69 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         SubCommand::Send => {
-            let mut input: VecDeque<String> = std::io::stdin()
+            let input: VecDeque<String> = std::io::stdin()
                 .lock()
                 .lines()
                 .collect::<Result<VecDeque<String>, std::io::Error>>()?;
-            let mut line = input.pop_front().unwrap();
-            while line == "" {
-                line = input.pop_front().unwrap();
+            let mut buffer = String::new();
+            for line in input {
+                buffer.push_str(&line);
             }
 
-            let transport = ReqwestHttpReplicaV2Transport::create(opts.replica)?;
-            match line.as_str() {
-                "call" => {
-                    line = input.pop_front().unwrap(); // request id.
-                    let request_id = RequestId::from_str(&line)?;
-                    input.pop_front().unwrap(); // empty line.
-                    line = input.pop_front().unwrap(); // envelope
-                    let envelope = hex::decode(line)?;
-                    input.pop_front().unwrap(); // empty line.
-                    line = input.pop_front().unwrap(); // effective_canister_id
-                    let effective_canister_id = Principal::try_from(hex::decode(line)?)?;
-                    transport
-                        .call(effective_canister_id, envelope, request_id)
-                        .await?;
-                    eprint!("Request ID: ");
-                    println!("0x{}", hex::encode(request_id.as_slice()));
+            println!("{}", buffer);
+
+            if let Ok(signed_update) = serde_json::from_str::<SignedUpdate>(&buffer) {
+                if opts.fetch_root_key {
+                    agent.fetch_root_key().await?;
                 }
-                "read_state" => {
-                    input.pop_front().unwrap(); // empty line.
-                    line = input.pop_front().unwrap(); // envelope
-                    let envelope = hex::decode(line)?;
-                    input.pop_front().unwrap(); // empty line.
-                    line = input.pop_front().unwrap(); // effective_canister_id
-                    let effective_canister_id = Principal::try_from(hex::decode(line)?)?;
-                    let result = transport
-                        .read_state(effective_canister_id, envelope)
-                        .await?;
-                    eprint!("Result: ");
-                    println!("{}", hex::encode(result));
+                let request_id = agent
+                    .update_signed(
+                        signed_update.effective_canister_id,
+                        signed_update.signed_update,
+                    )
+                    .await?;
+                eprintln!("RequestID: 0x{}", String::from(request_id));
+            } else if let Ok(signed_query) = serde_json::from_str::<SignedQuery>(&buffer) {
+                let blob = agent
+                    .query_signed(
+                        signed_query.effective_canister_id,
+                        signed_query.signed_query,
+                    )
+                    .await?;
+                print_idl_blob(&blob, &ArgType::Idl, &None)?;
+            } else if let Ok(signed_request_status) =
+                serde_json::from_str::<SignedRequestStatus>(&buffer)
+            {
+                if opts.fetch_root_key {
+                    agent.fetch_root_key().await?;
                 }
-                "query" => {
-                    input.pop_front().unwrap(); // empty line.
-                    line = input.pop_front().unwrap(); // envelope
-                    let envelope = hex::decode(line)?;
-                    input.pop_front().unwrap(); // empty line.
-                    line = input.pop_front().unwrap(); // effective_canister_id
-                    let effective_canister_id = Principal::try_from(hex::decode(line)?)?;
-                    let result = transport.query(effective_canister_id, envelope).await?;
-                    eprint!("Result: ");
-                    println!("{}", hex::encode(result));
+                let response = agent
+                    .request_status_signed(
+                        &signed_request_status.request_id,
+                        signed_request_status.effective_canister_id,
+                        signed_request_status.signed_request_status,
+                    )
+                    .await?;
+
+                match response {
+                    agent::RequestStatusResponse::Replied {
+                        reply: Replied::CallReplied(blob),
+                    } => {
+                        print_idl_blob(&blob, &ArgType::Idl, &None)?;
+                    }
+                    agent::RequestStatusResponse::Rejected {
+                        reject_code,
+                        reject_message,
+                    } => {
+                        eprintln!(
+                            r#"The Replica returned an error: code {}, message: "{}""#,
+                            reject_code, reject_message
+                        );
+                    }
+                    _ => eprintln!("Can't get valid status of the request.",),
                 }
-                other => {
-                    eprintln!(
-                        r#"Error: Invalid STDIN format. Unexpected line: "{}""#,
-                        other
-                    );
-                }
+            } else {
+                eprintln!("Error: Invalid input.");
             }
         }
     }

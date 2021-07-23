@@ -45,3 +45,7 @@ cargo build -p icx-asset
 ICX_ASSET="$(pwd)/target/debug/icx-asset"
 echo "ICX_ASSET=$ICX_ASSET" >> "$GITHUB_ENV"
 
+# Build icx
+cargo build -p icx
+ICX="$(pwd)/target/debug/icx"
+echo "ICX=$ICX" >> "$GITHUB_ENV"
