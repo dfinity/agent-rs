@@ -6,5 +6,6 @@ mod operations;
 mod params;
 mod plumbing;
 mod sync;
+mod upload;
 
 pub use sync::sync;

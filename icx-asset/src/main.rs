@@ -10,6 +10,7 @@ use ic_agent::{agent, Agent, Identity};
 
 use std::path::PathBuf;
 use std::time::Duration;
+use crate::commands::upload::upload;
 
 const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
 
@@ -47,6 +48,9 @@ enum SubCommand {
 
     /// Synchronize a directory to the asset canister
     Sync(SyncOpts),
+
+    /// Uploads an asset to an asset canister.
+    Upload(UploadOpts),
 }
 
 #[derive(Clap)]
@@ -66,6 +70,18 @@ struct SyncOpts {
     #[clap()]
     directory: PathBuf,
 }
+
+#[derive(Clap)]
+struct UploadOpts {
+    /// The asset canister ID to manage.
+    #[clap()]
+    canister_id: String,
+
+    /// Files or folders to send.
+    #[clap()]
+    files: Vec<String>,
+}
+
 fn create_identity(maybe_pem: Option<PathBuf>) -> Box<dyn Identity + Sync + Send> {
     if let Some(pem_path) = maybe_pem {
         Box::new(BasicIdentity::from_pem_file(pem_path).expect("Could not read the key pair."))
@@ -109,6 +125,13 @@ async fn main() -> support::Result {
                 .with_canister_id(Principal::from_text(&o.canister_id)?)
                 .build()?;
             sync(&canister, ttl, o).await?;
+        }
+        SubCommand::Upload(o) => {
+            let canister = ic_utils::Canister::builder()
+                .with_agent(&agent)
+                .with_canister_id(Principal::from_text(&o.canister_id)?)
+                .build()?;
+            upload(&canister, o).await?;
         }
     }
 
