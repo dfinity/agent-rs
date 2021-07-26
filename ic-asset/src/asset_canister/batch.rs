@@ -5,6 +5,8 @@ use crate::asset_canister::protocol::{
 use crate::convenience::waiter_with_timeout;
 use crate::params::CanisterCallParams;
 use candid::{Decode, Encode, Nat};
+use ic_utils::Canister;
+use std::time::Duration;
 
 pub(crate) async fn create_batch(
     canister_call_params: &CanisterCallParams<'_>,
@@ -19,6 +21,22 @@ pub(crate) async fn create_batch(
         .await?;
     let create_batch_response = candid::Decode!(&response, CreateBatchResponse)?;
     Ok(create_batch_response.batch_id)
+}
+
+pub(crate) async fn _create_batch(
+    canister: &Canister<'_>,
+    timeout: Duration,
+) -> anyhow::Result<Nat> {
+    let create_batch_args = CreateBatchRequest {};
+    let response = canister
+        .update_(CREATE_BATCH)
+        .with_arg(candid::Encode!(&create_batch_args)?)
+        //.expire_after(canister_call_params.timeout)
+        .build()
+        .map(|result: (CreateBatchResponse,)| (result.0,))
+        .call_and_wait(waiter_with_timeout(timeout))
+        .await?;
+    Ok(response.0.batch_id)
 }
 
 pub(crate) async fn commit_batch(

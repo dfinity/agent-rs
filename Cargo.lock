@@ -922,6 +922,7 @@ dependencies = [
  "hex",
  "ic-agent",
  "ic-types",
+ "ic-utils",
  "mime",
  "mime_guess",
  "mockito",
