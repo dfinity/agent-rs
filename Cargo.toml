@@ -1,13 +1,13 @@
 [workspace]
 members = [
-    "ic-agent/",
-    "ic-identity-hsm/",
-    "ic-types/",
-    "ic-utils/",
-    "icx/",
-    "icx-proxy/",
-    "ref-tests/",
+    "ic-agent",
+    "ic-asset",
+    "icx-cert",
+    "ic-identity-hsm",
+    "ic-utils",
+    "icx",
+    "icx-asset",
+    "icx-proxy",
+    "ref-tests",
+    "zzz-release",
 ]
-
-[patch.crates-io]
-ic-types = { path = "./ic-types", version = "0.1", features = [ "serde" ] }

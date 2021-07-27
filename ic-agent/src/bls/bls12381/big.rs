@@ -17,13 +17,11 @@
  * limitations under the License.
  */
 
-use crate::bls::arch;
-use crate::bls::arch::Chunk;
+use crate::bls::{arch, arch::Chunk};
 
 use crate::bls::arch::DChunk;
 
-use crate::bls::bls12381::dbig::DBIG;
-use crate::bls::rand::RAND;
+use crate::bls::{bls12381::dbig::DBIG, rand::RAND};
 
 pub const MODBYTES: usize = 48;
 pub const BASEBITS: usize = 58;

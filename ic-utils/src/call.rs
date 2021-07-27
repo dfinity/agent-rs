@@ -1,10 +1,7 @@
 use async_trait::async_trait;
-use candid::de::ArgumentDecoder;
-use candid::{decode_args, decode_one};
+use candid::{decode_args, decode_one, utils::ArgumentDecoder, CandidType};
 use garcon::Waiter;
-use ic_agent::agent::UpdateBuilder;
-use ic_agent::export::Principal;
-use ic_agent::{Agent, AgentError, RequestId};
+use ic_agent::{agent::UpdateBuilder, export::Principal, Agent, AgentError, RequestId};
 use serde::de::DeserializeOwned;
 use std::future::Future;
 
@@ -239,7 +236,7 @@ where
     pub async fn call_and_wait_one<W, T>(self, waiter: W) -> Result<T, AgentError>
     where
         W: Waiter,
-        T: DeserializeOwned,
+        T: DeserializeOwned + CandidType,
     {
         self.build_call()?
             .call_and_wait(waiter)

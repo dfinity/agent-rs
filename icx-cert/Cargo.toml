@@ -1,0 +1,21 @@
+[package]
+name = "icx-cert"
+version = "0.2.0"
+authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0"
+base64 = "0.12"
+clap = "3.0.0-beta.2"
+chrono = "0.4.19"
+hex = "0.4.2"
+ic-agent = { path = "../ic-agent", version = "0.6" }
+leb128 = "0.2.4"
+reqwest = { version = "0.11",features = [ "blocking", "rustls-tls" ] }
+sha2 = "0.9.1"
+serde = { version = "1.0.115", features = ["derive"] }
+serde_bytes = "0.11"
+serde_cbor = "0.11"

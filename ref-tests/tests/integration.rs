@@ -2,19 +2,19 @@
 //!
 //! Contrary to ic-ref.rs, these tests are not meant to match any other tests. They're
 //! integration tests with a running IC-Ref.
-use ic_agent::agent::agent_error::HttpErrorPayload;
-use ic_agent::export::Principal;
-use ic_agent::AgentError;
-use ic_utils::call::AsyncCall;
-use ic_utils::call::SyncCall;
-use ic_utils::interfaces::management_canister::builders::{CanisterSettings, InstallMode};
-use ic_utils::interfaces::Wallet;
-use ic_utils::{Argument, Canister};
-use ref_tests::universal_canister::payload;
+use ic_agent::{agent::agent_error::HttpErrorPayload, export::Principal, AgentError};
+use ic_utils::{
+    call::{AsyncCall, SyncCall},
+    interfaces::{
+        management_canister::builders::{CanisterSettings, InstallMode},
+        Wallet,
+    },
+    Argument, Canister,
+};
 use ref_tests::{
     create_agent, create_basic_identity, create_universal_canister, create_waiter,
-    create_wallet_canister, get_wallet_wasm_from_env, with_universal_canister,
-    with_wallet_canister,
+    create_wallet_canister, get_wallet_wasm_from_env, universal_canister::payload,
+    with_universal_canister, with_wallet_canister,
 };
 
 #[ignore]
@@ -204,12 +204,12 @@ fn wallet_create_and_set_controller() {
         let other_agent = create_agent(other_agent_identity).await?;
         other_agent.fetch_root_key().await?;
 
-        eprintln!("Agent id: {:?}", other_agent_principal.clone().to_text());
+        eprintln!("Agent id: {:?}", other_agent_principal.to_text());
 
         let (create_result,) = wallet
             .wallet_create_wallet(
                 1_000_000_000_000_u64,
-                Some(other_agent_principal.clone()),
+                Some(other_agent_principal),
                 None,
                 None,
                 None,
@@ -302,12 +302,12 @@ fn wallet_create_wallet() {
 
         let child_wallet_two = Canister::builder()
             .with_agent(&agent)
-            .with_canister_id(child_two_create_res.canister_id.clone())
+            .with_canister_id(child_two_create_res.canister_id)
             .build()?;
 
         eprintln!(
             "Created child wallet two.\nChild wallet two canister id: {:?}",
-            child_two_create_res.canister_id.clone().to_text()
+            child_two_create_res.canister_id.to_text()
         );
         let (child_wallet_two_balance,): (ic_utils::interfaces::wallet::BalanceResult,) = wallet
             .call(&child_wallet_two, "wallet_balance", Argument::default(), 0)
@@ -441,7 +441,7 @@ fn wallet_helper_functions() {
         assert_ne!(&controller_list[0], &other_agent_principal);
 
         wallet
-            .add_controller(other_agent_principal.clone())
+            .add_controller(other_agent_principal)
             .call_and_wait(create_waiter())
             .await?;
 
@@ -455,7 +455,7 @@ fn wallet_helper_functions() {
         assert!(added);
 
         wallet
-            .remove_controller(other_agent_principal.clone())
+            .remove_controller(other_agent_principal)
             .call_and_wait(create_waiter())
             .await?;
 
@@ -465,4 +465,126 @@ fn wallet_helper_functions() {
 
         Ok(())
     });
+}
+
+mod sign_send {
+    use ic_agent::{
+        agent::{
+            signed_query_inspect, signed_request_status_inspect, signed_update_inspect, Replied,
+            RequestStatusResponse,
+        },
+        AgentError,
+    };
+    use ref_tests::{universal_canister::payload, with_universal_canister};
+    use std::{thread, time};
+
+    #[ignore]
+    #[test]
+    fn query() {
+        with_universal_canister(|agent, canister_id| async move {
+            let arg = payload().reply_data(b"hello").build();
+            let signed_query = agent.query(&canister_id, "query").with_arg(arg).sign()?;
+
+            assert!(signed_query_inspect(
+                signed_query.sender,
+                signed_query.canister_id,
+                &signed_query.method_name,
+                &signed_query.arg,
+                signed_query.ingress_expiry,
+                signed_query.signed_query.clone()
+            )
+            .is_ok());
+
+            let result = agent
+                .query_signed(
+                    signed_query.effective_canister_id,
+                    signed_query.signed_query,
+                )
+                .await?;
+
+            assert_eq!(result, b"hello");
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn update_then_request_status() {
+        with_universal_canister(|agent, canister_id| async move {
+            let arg = payload().reply_data(b"hello").build();
+            let signed_update = agent.update(&canister_id, "update").with_arg(arg).sign()?;
+
+            assert!(signed_update_inspect(
+                signed_update.sender,
+                signed_update.canister_id,
+                &signed_update.method_name,
+                &signed_update.arg,
+                signed_update.ingress_expiry,
+                signed_update.signed_update.clone()
+            )
+            .is_ok());
+
+            let signed_request_status = agent.sign_request_status(
+                signed_update.effective_canister_id,
+                signed_update.request_id,
+            )?;
+
+            assert!(signed_request_status_inspect(
+                signed_request_status.sender,
+                &signed_request_status.request_id,
+                signed_request_status.ingress_expiry,
+                signed_request_status.signed_request_status.clone()
+            )
+            .is_ok());
+
+            let _request_id = agent
+                .update_signed(
+                    signed_update.effective_canister_id,
+                    signed_update.signed_update,
+                )
+                .await?;
+
+            let ten_secs = time::Duration::from_secs(10);
+            thread::sleep(ten_secs);
+
+            let response = agent
+                .request_status_signed(
+                    &signed_request_status.request_id,
+                    signed_request_status.effective_canister_id,
+                    signed_request_status.signed_request_status.clone(),
+                )
+                .await?;
+
+            assert!(
+                matches!(response, RequestStatusResponse::Replied{reply: Replied::CallReplied(result)} if result == b"hello")
+            );
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn forged_query() {
+        with_universal_canister(|agent, canister_id| async move {
+            let arg = payload().reply_data(b"hello").build();
+            let mut signed_query = agent.query(&canister_id, "query").with_arg(arg).sign()?;
+
+            signed_query.method_name = "non_query".to_string();
+
+            let result = signed_query_inspect(
+                signed_query.sender,
+                signed_query.canister_id,
+                &signed_query.method_name,
+                &signed_query.arg,
+                signed_query.ingress_expiry,
+                signed_query.signed_query.clone(),
+            );
+
+            assert!(matches!(result,
+                    Err(AgentError::CallDataMismatch{field, value_arg, value_cbor})
+                    if field == *"method_name" && value_arg == *"non_query" && value_cbor == *"query"));
+
+            Ok(())
+        })
+    }
 }

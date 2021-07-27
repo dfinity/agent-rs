@@ -1,11 +1,7 @@
-use crate::call::AsyncCall;
-use crate::canister::CanisterBuilder;
-use crate::Canister;
+use crate::{call::AsyncCall, canister::CanisterBuilder, Canister};
 use candid::{CandidType, Deserialize};
-use ic_agent::export::Principal;
-use ic_agent::Agent;
-use std::convert::AsRef;
-use std::fmt::Debug;
+use ic_agent::{export::Principal, Agent};
+use std::{convert::AsRef, fmt::Debug};
 use strum_macros::{AsRefStr, EnumString};
 
 pub mod attributes;
@@ -57,7 +53,7 @@ impl ManagementCanister {
 /// The complete canister status information of a canister. This includes
 /// the CanisterStatus, a hash of the module installed on the canister (None if nothing installed),
 /// the contoller of the canister, the canisters memory size, and its balance in cycles.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, CandidType)]
 pub struct StatusCallResult {
     pub status: CanisterStatus,
     pub settings: DefiniteCanisterSettings,
@@ -66,7 +62,7 @@ pub struct StatusCallResult {
     pub cycles: candid::Nat,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, CandidType)]
 pub struct DefiniteCanisterSettings {
     pub controller: Principal,
     pub compute_allocation: candid::Nat,
@@ -82,11 +78,13 @@ impl std::fmt::Display for StatusCallResult {
 
 /// The status of a Canister, whether it's running, in the process of stopping, or
 /// stopped.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "snake_case")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, CandidType)]
 pub enum CanisterStatus {
+    #[serde(rename = "running")]
     Running,
+    #[serde(rename = "stopping")]
     Stopping,
+    #[serde(rename = "stopped")]
     Stopped,
 }
 
@@ -109,7 +107,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
 
         self.update_(MgmtMethod::CanisterStatus.as_ref())
             .with_arg(In {
-                canister_id: canister_id.clone(),
+                canister_id: *canister_id,
             })
             .with_effective_canister_id(canister_id.to_owned())
             .build()
@@ -136,7 +134,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
 
         self.update_(MgmtMethod::DepositCycles.as_ref())
             .with_arg(Argument {
-                canister_id: canister_id.clone(),
+                canister_id: *canister_id,
             })
             .with_effective_canister_id(canister_id.to_owned())
             .build()
@@ -154,7 +152,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
 
         self.update_(MgmtMethod::DeleteCanister.as_ref())
             .with_arg(Argument {
-                canister_id: canister_id.clone(),
+                canister_id: *canister_id,
             })
             .with_effective_canister_id(canister_id.to_owned())
             .build()
@@ -177,7 +175,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
 
         self.update_(MgmtMethod::ProvisionalTopUpCanister.as_ref())
             .with_arg(Argument {
-                canister_id: canister_id.clone(),
+                canister_id: *canister_id,
                 amount,
             })
             .with_effective_canister_id(canister_id.to_owned())
@@ -205,7 +203,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
 
         self.update_(MgmtMethod::StartCanister.as_ref())
             .with_arg(Argument {
-                canister_id: canister_id.clone(),
+                canister_id: *canister_id,
             })
             .with_effective_canister_id(canister_id.to_owned())
             .build()
@@ -223,7 +221,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
 
         self.update_(MgmtMethod::StopCanister.as_ref())
             .with_arg(Argument {
-                canister_id: canister_id.clone(),
+                canister_id: *canister_id,
             })
             .with_effective_canister_id(canister_id.to_owned())
             .build()
@@ -247,7 +245,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
 
         self.update_(MgmtMethod::UninstallCode.as_ref())
             .with_arg(Argument {
-                canister_id: canister_id.clone(),
+                canister_id: *canister_id,
             })
             .with_effective_canister_id(canister_id.to_owned())
             .build()

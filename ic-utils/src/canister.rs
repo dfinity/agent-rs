@@ -1,10 +1,6 @@
 use crate::call::{AsyncCaller, SyncCaller};
-use candid::de::ArgumentDecoder;
-use candid::parser::value::IDLValue;
-use candid::ser::IDLBuilder;
-use candid::CandidType;
-use ic_agent::{Agent, AgentError};
-use ic_types::{Principal, PrincipalError};
+use candid::{parser::value::IDLValue, ser::IDLBuilder, utils::ArgumentDecoder, CandidType};
+use ic_agent::{ic_types::Principal, Agent, AgentError};
 use std::convert::TryInto;
 use thiserror::Error;
 
@@ -12,7 +8,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum CanisterBuilderError {
     #[error("Getting the Canister ID returned an error: {0}")]
-    PrincipalError(#[from] PrincipalError),
+    PrincipalError(#[from] Box<dyn std::error::Error + std::marker::Send + std::marker::Sync>),
 
     #[error("Must specify an Agent")]
     MustSpecifyAnAgent(),
@@ -24,7 +20,7 @@ pub enum CanisterBuilderError {
 /// A canister builder, which can be used to create a canister abstraction.
 pub struct CanisterBuilder<'agent, T = ()> {
     agent: Option<&'agent Agent>,
-    canister_id: Option<Result<Principal, PrincipalError>>,
+    canister_id: Option<Result<Principal, CanisterBuilderError>>,
     interface: T,
 }
 
@@ -32,14 +28,14 @@ impl<'agent, T> CanisterBuilder<'agent, T> {
     /// Attach a canister ID to this canister.
     pub fn with_canister_id<E, P>(self, canister_id: P) -> Self
     where
-        E: std::error::Error,
+        E: 'static + std::error::Error + std::marker::Send + std::marker::Sync,
         P: TryInto<Principal, Error = E>,
     {
         Self {
             canister_id: Some(
                 canister_id
                     .try_into()
-                    .map_err(|e| PrincipalError::ExternalError(format!("{}", e))),
+                    .map_err(|e| CanisterBuilderError::PrincipalError(Box::new(e))),
             ),
             ..self
         }
@@ -315,7 +311,7 @@ impl<'agent, 'canister: 'agent, Interface> SyncCallBuilder<'agent, 'canister, In
         SyncCaller {
             agent: c.agent,
             effective_canister_id: self.effective_canister_id,
-            canister_id: c.canister_id.clone(),
+            canister_id: c.canister_id,
             method_name: self.method_name.clone(),
             arg: self.arg.serialize(),
             expiry: Default::default(),
@@ -387,7 +383,7 @@ impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, I
         AsyncCaller {
             agent: c.agent,
             effective_canister_id: self.effective_canister_id,
-            canister_id: c.canister_id.clone(),
+            canister_id: c.canister_id,
             method_name: self.method_name.clone(),
             arg: self.arg.serialize(),
             expiry: Default::default(),

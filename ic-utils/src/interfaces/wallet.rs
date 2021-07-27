@@ -1,17 +1,16 @@
-use crate::call::{AsyncCall, AsyncCaller, SyncCall};
-use crate::canister::{Argument, CanisterBuilder};
-use crate::interfaces::management_canister::attributes::{
-    ComputeAllocation, FreezingThreshold, MemoryAllocation,
+use crate::{
+    call::{AsyncCall, AsyncCaller, SyncCall},
+    canister::{Argument, CanisterBuilder},
+    interfaces::management_canister::{
+        attributes::{ComputeAllocation, FreezingThreshold, MemoryAllocation},
+        builders::CanisterSettings,
+    },
+    Canister,
 };
-use crate::interfaces::management_canister::builders::CanisterSettings;
-use crate::Canister;
 use async_trait::async_trait;
-use candid::de::ArgumentDecoder;
-use candid::{decode_args, CandidType, Deserialize};
+use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize};
 use garcon::Waiter;
-use ic_agent::agent::UpdateBuilder;
-use ic_agent::export::Principal;
-use ic_agent::{Agent, AgentError, RequestId};
+use ic_agent::{agent::UpdateBuilder, export::Principal, Agent, AgentError, RequestId};
 
 pub struct CallForwarder<'agent, 'canister: 'agent, Out>
 where
@@ -280,7 +279,7 @@ impl<'agent> Canister<'agent, Wallet> {
 
         self.update_("wallet_send")
             .with_arg(In {
-                canister: destination.canister_id_().clone(),
+                canister: *destination.canister_id_(),
                 amount,
             })
             .build()
@@ -416,7 +415,7 @@ impl<'agent> Canister<'agent, Wallet> {
     {
         CallForwarder {
             wallet: self,
-            destination: destination.canister_id_().clone(),
+            destination: *destination.canister_id_(),
             method_name: method_name.into(),
             amount,
             arg,

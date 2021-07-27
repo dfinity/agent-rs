@@ -1,15 +1,9 @@
 use garcon::Delay;
-use ic_agent::export::Principal;
-use ic_agent::identity::BasicIdentity;
-use ic_agent::{Agent, Identity};
+use ic_agent::{export::Principal, identity::BasicIdentity, Agent, Identity};
 use ic_identity_hsm::HardwareIdentity;
-use ic_utils::interfaces::management_canister::builders::MemoryAllocation;
-use ic_utils::interfaces::ManagementCanister;
+use ic_utils::interfaces::{management_canister::builders::MemoryAllocation, ManagementCanister};
 use ring::signature::Ed25519KeyPair;
-use std::convert::TryFrom;
-use std::error::Error;
-use std::future::Future;
-use std::path::Path;
+use std::{convert::TryFrom, error::Error, future::Future, path::Path};
 
 const HSM_PKCS11_LIBRARY_PATH: &str = "HSM_PKCS11_LIBRARY_PATH";
 const HSM_SLOT_INDEX: &str = "HSM_SLOT_INDEX";

@@ -17,10 +17,11 @@
  * limitations under the License.
  */
 
-use crate::bls::arch;
-use crate::bls::arch::Chunk;
-use crate::bls::bls12381::big;
-use crate::bls::bls12381::big::BIG;
+use crate::bls::{
+    arch,
+    arch::Chunk,
+    bls12381::{big, big::BIG},
+};
 
 pub struct DBIG {
     pub w: [Chunk; big::DNLEN],

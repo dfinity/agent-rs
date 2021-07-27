@@ -1,6 +1,6 @@
 [package]
 name = "ic-agent"
-version = "0.4.1"
+version = "0.6.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
 description = "Agent library to communicate with the Internet Computer, following the Public Specification."
@@ -20,7 +20,7 @@ byteorder = "1.3.2"
 garcon = { version = "0.2", features = ["async"] }
 hex = "0.4.0"
 http = "0.2.3"
-ic-types = { path = "../ic-types", version = "0.1", features = [ "serde" ] }
+ic-types = "0.2.1"
 leb128 = "0.2.4"
 mime = "0.3.16"
 openssl = "0.10.32"
@@ -30,7 +30,7 @@ ring = { version = "0.16.11", features = ["std"] }
 serde = { version = "1.0.101", features = ["derive"] }
 serde_bytes = "0.11.2"
 serde_cbor = "0.11.1"
-simple_asn1 = "0.5.0"
+simple_asn1 = "0.5.4"
 thiserror = "1.0.20"
 url = "2.1.0"
 webpki-roots = "0.20.0"
@@ -45,10 +45,11 @@ version = "0.8.1"
 optional = true
 
 [dev-dependencies]
-candid = "0.6.17"
+candid = "0.7.4"
 mockito = "0.27.0"
 proptest = "0.9.5"
-tokio = { version = "1.2.0", features = ["full"] }
+serde_json = "1.0.57"
+tokio = { version = "1.8.1", features = ["full"] }
 
 [features]
 default = ["pem", "reqwest"]

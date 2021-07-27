@@ -10,8 +10,7 @@
 //! tests (like invalid CBOR or special Headers) might not be translatable, in
 //! which case they should still be added here but do nothing (just keep the
 //! use case being tested).
-use ref_tests::universal_canister;
-use ref_tests::with_agent;
+use ref_tests::{universal_canister, with_agent};
 
 const EXPECTED_IC_API_VERSION: &str = "0.17.0";
 
@@ -37,14 +36,19 @@ fn spec_compliance_claimed() {
 }
 
 mod management_canister {
-    use ic_agent::export::Principal;
-    use ic_agent::AgentError;
-    use ic_utils::call::AsyncCall;
-    use ic_utils::interfaces::management_canister::builders::{CanisterSettings, InstallMode};
-    use ic_utils::interfaces::management_canister::{CanisterStatus, StatusCallResult};
-    use ic_utils::interfaces::wallet::CreateResult;
-    use ic_utils::interfaces::{ManagementCanister, Wallet};
-    use ic_utils::{Argument, Canister};
+    use ic_agent::{export::Principal, AgentError};
+    use ic_utils::{
+        call::AsyncCall,
+        interfaces::{
+            management_canister::{
+                builders::{CanisterSettings, InstallMode},
+                CanisterStatus, StatusCallResult,
+            },
+            wallet::CreateResult,
+            ManagementCanister, Wallet,
+        },
+        Argument, Canister,
+    };
     use openssl::sha::Sha256;
     use ref_tests::{
         create_agent, create_basic_identity, create_waiter, with_agent, with_wallet_canister,
@@ -52,8 +56,7 @@ mod management_canister {
 
     mod create_canister {
         use super::{create_waiter, with_agent};
-        use ic_agent::export::Principal;
-        use ic_agent::AgentError;
+        use ic_agent::{export::Principal, AgentError};
         use ic_utils::interfaces::ManagementCanister;
         use std::str::FromStr;
 
@@ -166,14 +169,14 @@ mod management_canister {
 
             // Change controller.
             ic00.update_settings(&canister_id)
-                .with_controller(other_agent_principal.clone())
+                .with_controller(other_agent_principal)
                 .call_and_wait(create_waiter())
                 .await?;
 
             // Change controller with wrong controller should fail
             let result = ic00
                 .update_settings(&canister_id)
-                .with_controller(other_agent_principal.clone())
+                .with_controller(other_agent_principal)
                 .call_and_wait(create_waiter())
                 .await;
             assert!(matches!(result, Err(AgentError::HttpError(payload))
@@ -666,9 +669,10 @@ mod simple_calls {
 }
 
 mod extras {
-    use ic_utils::call::AsyncCall;
-    use ic_utils::interfaces::management_canister::builders::ComputeAllocation;
-    use ic_utils::interfaces::ManagementCanister;
+    use ic_utils::{
+        call::AsyncCall,
+        interfaces::{management_canister::builders::ComputeAllocation, ManagementCanister},
+    };
     use ref_tests::{create_waiter, with_agent};
 
     #[ignore]

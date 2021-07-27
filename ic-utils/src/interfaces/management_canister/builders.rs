@@ -1,19 +1,14 @@
-use crate::call::AsyncCall;
-use crate::canister::Argument;
-use crate::interfaces::management_canister::MgmtMethod;
-use crate::Canister;
+use crate::{
+    call::AsyncCall, canister::Argument, interfaces::management_canister::MgmtMethod, Canister,
+};
 use async_trait::async_trait;
 use candid::{CandidType, Deserialize};
 use garcon::Waiter;
-use ic_agent::export::Principal;
-use ic_agent::{AgentError, RequestId};
+use ic_agent::{export::Principal, AgentError, RequestId};
 use std::str::FromStr;
 
-pub use super::attributes::ComputeAllocation;
-pub use super::attributes::FreezingThreshold;
-pub use super::attributes::MemoryAllocation;
-use std::convert::From;
-use std::convert::TryInto;
+pub use super::attributes::{ComputeAllocation, FreezingThreshold, MemoryAllocation};
+use std::convert::{From, TryInto};
 
 #[derive(CandidType, Deserialize)]
 pub struct CanisterSettings {
@@ -186,7 +181,7 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
             None => None,
         };
 
-        #[derive(Deserialize)]
+        #[derive(Deserialize, CandidType)]
         struct Out {
             canister_id: Principal,
         }
@@ -308,7 +303,7 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
     ) -> Self {
         Self {
             canister,
-            canister_id: canister_id.clone(),
+            canister_id: *canister_id,
             wasm,
             arg: Default::default(),
             mode: None,
@@ -347,7 +342,7 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
             .update_(MgmtMethod::InstallCode.as_ref())
             .with_arg(CanisterInstall {
                 mode: self.mode.unwrap_or(InstallMode::Install),
-                canister_id: self.canister_id.clone(),
+                canister_id: self.canister_id,
                 wasm_module: self.wasm.to_owned(),
                 arg: self.arg.serialize()?,
             })
@@ -399,7 +394,7 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
     pub fn builder(canister: &'canister Canister<'agent, T>, canister_id: &Principal) -> Self {
         Self {
             canister,
-            canister_id: canister_id.clone(),
+            canister_id: *canister_id,
             controller: None,
             compute_allocation: None,
             memory_allocation: None,
@@ -541,7 +536,7 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
             .canister
             .update_(MgmtMethod::UpdateSettings.as_ref())
             .with_arg(In {
-                canister_id: self.canister_id.clone(),
+                canister_id: self.canister_id,
                 settings: CanisterSettings {
                     controller,
                     compute_allocation,

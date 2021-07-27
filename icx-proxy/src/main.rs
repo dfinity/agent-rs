@@ -1,26 +1,34 @@
 use crate::config::dns_canister_config::DnsCanisterConfig;
-use candid::parser::value::IDLValue;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
-use hyper::body::Bytes;
-use hyper::http::uri::Parts;
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{body, Body, Client, Request, Response, Server, StatusCode, Uri};
-use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
-use ic_agent::export::Principal;
-use ic_agent::{Agent, AgentError};
-use ic_utils::call::SyncCall;
-use ic_utils::call::AsyncCall;
-use ic_utils::interfaces::http_request::{
-    HeaderField, HttpRequestCanister, StreamingCallbackHttpResponse, StreamingStrategy,
+use hyper::{
+    body,
+    body::Bytes,
+    http::uri::Parts,
+    service::{make_service_fn, service_fn},
+    Body, Client, Request, Response, Server, StatusCode, Uri,
+};
+use ic_agent::{
+    agent::http_transport::ReqwestHttpReplicaV2Transport, export::Principal, Agent, AgentError,
+};
+use ic_utils::{
+    call::AsyncCall,
+    call::SyncCall,
+    interfaces::http_request::{
+        HeaderField, HttpRequestCanister, StreamingCallbackHttpResponse, StreamingStrategy,
+    },
 };
 use slog::Drain;
-use std::convert::Infallible;
-use std::error::Error;
-use std::net::{IpAddr, SocketAddr};
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::{
+    convert::Infallible,
+    error::Error,
+    net::{IpAddr, SocketAddr},
+    path::PathBuf,
+    str::FromStr,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
+};
 
 mod config;
 mod logging;
@@ -67,6 +75,10 @@ pub(crate) struct Opts {
     /// boundary node. Multiple replicas can be passed and they'll be used round-robin.
     #[clap(long, default_value = "http://localhost:8000/")]
     replica: Vec<String>,
+
+    /// An address to forward any requests from /_/
+    #[clap(long)]
+    proxy: Option<String>,
 
     /// Whether or not this is run in a debug context (e.g. errors returned in responses
     /// should show full stack and error details).
@@ -262,58 +274,45 @@ async fn forward_request(
 
         match streaming_strategy {
             StreamingStrategy::Callback(callback) => {
-                match callback.callback {
-                    IDLValue::Func(streaming_canister_id_id, method_name) => {
-                        let mut callback_token = callback.token;
-                        let logger = logger.clone();
-                        tokio::spawn(async move {
-                            let canister =
-                                HttpRequestCanister::create(&agent, streaming_canister_id_id);
-                            // We have not yet called http_request_stream_callback.
-                            let mut count = 0;
-                            loop {
-                                count += 1;
-                                if count > MAX_HTTP_REQUEST_STREAM_CALLBACK_CALL_COUNT {
+                let streaming_canister_id_id = callback.callback.principal;
+                let method_name = callback.callback.method;
+                let mut callback_token = callback.token;
+                let logger = logger.clone();
+                tokio::spawn(async move {
+                    let canister = HttpRequestCanister::create(&agent, streaming_canister_id_id);
+                    // We have not yet called http_request_stream_callback.
+                    let mut count = 0;
+                    loop {
+                        count += 1;
+                        if count > MAX_HTTP_REQUEST_STREAM_CALLBACK_CALL_COUNT {
+                            sender.abort();
+                            break;
+                        }
+
+                        match canister
+                            .http_request_stream_callback(&method_name, callback_token)
+                            .call()
+                            .await
+                        {
+                            Ok((StreamingCallbackHttpResponse { body, token },)) => {
+                                if sender.send_data(Bytes::from(body)).await.is_err() {
                                     sender.abort();
                                     break;
                                 }
-
-                                match canister
-                                    .http_request_stream_callback(&method_name, callback_token)
-                                    .call()
-                                    .await
-                                {
-                                    Ok((StreamingCallbackHttpResponse { body, token },)) => {
-                                        if sender.send_data(Bytes::from(body)).await.is_err() {
-                                            sender.abort();
-                                            break;
-                                        }
-                                        if let Some(next_token) = token {
-                                            callback_token = next_token;
-                                        } else {
-                                            break;
-                                        }
-                                    }
-                                    Err(e) => {
-                                        slog::debug!(
-                                            logger,
-                                            "Error happened during streaming: {}",
-                                            e
-                                        );
-                                        sender.abort();
-                                        break;
-                                    }
+                                if let Some(next_token) = token {
+                                    callback_token = next_token;
+                                } else {
+                                    break;
                                 }
                             }
-                        });
+                            Err(e) => {
+                                slog::debug!(logger, "Error happened during streaming: {}", e);
+                                sender.abort();
+                                break;
+                            }
+                        }
                     }
-                    _ => {
-                        return Ok(Response::builder()
-                            .status(StatusCode::INTERNAL_SERVER_ERROR)
-                            .body("Streaming callback must be a function.".into())
-                            .unwrap())
-                    }
-                }
+                });
             }
         }
 
@@ -433,22 +432,46 @@ async fn forward_api(
     Ok(response)
 }
 
+fn not_found() -> Result<Response<Body>, Box<dyn Error>> {
+    Ok(Response::builder()
+        .status(StatusCode::NOT_FOUND)
+        .body("Not found".into())?)
+}
+
 async fn handle_request(
     ip_addr: IpAddr,
     request: Request<Body>,
     replica_url: String,
+    proxy_url: Option<String>,
     dns_canister_config: Arc<DnsCanisterConfig>,
     logger: slog::Logger,
     debug: bool,
     fetch_root_key: bool,
 ) -> Result<Response<Body>, AgentError> {
-    match if request.uri().path().starts_with("/api/") {
+    let request_uri_path = request.uri().path();
+    match if request_uri_path.starts_with("/api/") {
         slog::debug!(
             logger,
             "URI Request to path '{}' being forwarded to Replica",
             &request.uri().path()
         );
         forward_api(&ip_addr, request, &replica_url).await
+    } else if request_uri_path.starts_with("/_/") {
+        if let Some(proxy_url) = proxy_url {
+            slog::debug!(
+                logger,
+                "URI Request to path '{}' being forwarded to proxy",
+                &request.uri().path(),
+            );
+            forward_api(&ip_addr, request, &proxy_url).await
+        } else {
+            slog::warn!(
+                logger,
+                "Unable to proxy {} because no --proxy is configured",
+                &request.uri().path()
+            );
+            not_found()
+        }
     } else {
         let agent = Arc::new(
             ic_agent::Agent::builder()
@@ -492,6 +515,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let counter = AtomicUsize::new(0);
     let debug = opts.debug;
+    let proxy_url = opts.proxy.clone();
 
     let service = make_service_fn(|socket: &hyper::server::conn::AddrStream| {
         let ip_addr = socket.remote_addr();
@@ -509,6 +533,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         let replica_url = replica_url.clone();
         slog::debug!(logger, "Replica URL: {}", replica_url);
 
+        let proxy_url = proxy_url.clone();
+
         async move {
             Ok::<_, Infallible>(service_fn(move |req| {
                 let logger = logger.clone();
@@ -517,6 +543,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     ip_addr,
                     req,
                     replica_url.clone(),
+                    proxy_url.clone(),
                     dns_canister_config,
                     logger,
                     debug,
