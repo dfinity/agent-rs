@@ -1,4 +1,5 @@
 use garcon::Delay;
+use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
 use ic_agent::{export::Principal, identity::BasicIdentity, Agent, Identity};
 use ic_identity_hsm::HardwareIdentity;
 use ic_utils::interfaces::{management_canister::builders::MemoryAllocation, ManagementCanister};
@@ -68,7 +69,9 @@ pub async fn create_agent(identity: Box<dyn Identity + Send + Sync>) -> Result<A
         .expect("Could not parse the IC_REF_PORT environment variable as an integer.");
 
     Agent::builder()
-        .with_url(format!("http://127.0.0.1:{}", port))
+        .with_transport(
+            ReqwestHttpReplicaV2Transport::create(format!("http://127.0.0.1:{}", port)).unwrap(),
+        )
         .with_boxed_identity(identity)
         .build()
         .map_err(|e| format!("{:?}", e))

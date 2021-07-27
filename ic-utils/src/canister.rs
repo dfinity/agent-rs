@@ -396,6 +396,7 @@ impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, I
 mod tests {
     use super::super::interfaces::ManagementCanister;
     use crate::call::AsyncCall;
+    use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
     use ic_agent::identity::BasicIdentity;
 
     #[ignore]
@@ -414,7 +415,7 @@ mod tests {
         );
 
         let agent = ic_agent::Agent::builder()
-            .with_url("http://localhost:8001")
+            .with_transport(ReqwestHttpReplicaV2Transport::create("http://localhost:8001").unwrap())
             .with_identity(identity)
             .build()
             .unwrap();

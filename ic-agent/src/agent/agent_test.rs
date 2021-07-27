@@ -3,6 +3,7 @@
 
 use crate::{
     agent::{
+        http_transport::ReqwestHttpReplicaV2Transport,
         replica_api::{CallReply, QueryResponse},
         Status,
     },
@@ -25,7 +26,11 @@ fn query() -> Result<(), AgentError> {
         .with_body(serde_cbor::to_vec(&response)?)
         .create();
 
-    let agent = Agent::builder().with_url(&mockito::server_url()).build()?;
+    let agent = Agent::builder()
+        .with_transport(ReqwestHttpReplicaV2Transport::create(
+            &mockito::server_url(),
+        )?)
+        .build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
         agent
@@ -51,7 +56,11 @@ fn query_error() -> Result<(), AgentError> {
     let query_mock = mock("POST", "/api/v2/canister/aaaaa-aa/query")
         .with_status(500)
         .create();
-    let agent = Agent::builder().with_url(&mockito::server_url()).build()?;
+    let agent = Agent::builder()
+        .with_transport(ReqwestHttpReplicaV2Transport::create(
+            &mockito::server_url(),
+        )?)
+        .build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
 
     let result = runtime.block_on(async {
@@ -86,7 +95,11 @@ fn query_rejected() -> Result<(), AgentError> {
         .with_body(serde_cbor::to_vec(&response)?)
         .create();
 
-    let agent = Agent::builder().with_url(&mockito::server_url()).build()?;
+    let agent = Agent::builder()
+        .with_transport(ReqwestHttpReplicaV2Transport::create(
+            &mockito::server_url(),
+        )?)
+        .build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
 
     let result = runtime.block_on(async {
@@ -123,7 +136,11 @@ fn call_error() -> Result<(), AgentError> {
         .with_status(500)
         .create();
 
-    let agent = Agent::builder().with_url(&mockito::server_url()).build()?;
+    let agent = Agent::builder()
+        .with_transport(ReqwestHttpReplicaV2Transport::create(
+            &mockito::server_url(),
+        )?)
+        .build()?;
 
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
@@ -155,7 +172,11 @@ fn status() -> Result<(), AgentError> {
         .with_body(serde_cbor::to_vec(&response)?)
         .create();
 
-    let agent = Agent::builder().with_url(mockito::server_url()).build()?;
+    let agent = Agent::builder()
+        .with_transport(ReqwestHttpReplicaV2Transport::create(
+            &mockito::server_url(),
+        )?)
+        .build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async { agent.status().await });
 
@@ -178,7 +199,11 @@ fn status_okay() -> Result<(), AgentError> {
         .with_body(serde_cbor::to_vec(&response)?)
         .create();
 
-    let agent = Agent::builder().with_url(mockito::server_url()).build()?;
+    let agent = Agent::builder()
+        .with_transport(ReqwestHttpReplicaV2Transport::create(
+            &mockito::server_url(),
+        )?)
+        .build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(agent.status());
 
@@ -199,7 +224,11 @@ fn status_error() -> Result<(), AgentError> {
     // it is called.
     let _read_mock = mock("GET", "/api/v2/status").with_status(500).create();
 
-    let agent = Agent::builder().with_url(mockito::server_url()).build()?;
+    let agent = Agent::builder()
+        .with_transport(ReqwestHttpReplicaV2Transport::create(
+            &mockito::server_url(),
+        )?)
+        .build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async { agent.status().await });
 
