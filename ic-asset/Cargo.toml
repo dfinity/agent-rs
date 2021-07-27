@@ -22,6 +22,7 @@ garcon = { version = "0.2", features = ["async"] }
 hex = {version = "0.4.2", features = ["serde"] }
 ic-agent = { path = "../ic-agent", version = "0.7", features = [ "pem" ] }
 ic-types = { version = "0.2.1", features = [ "serde" ] }
+ic-utils = { path = "../ic-utils", version = "0.4" }
 mime = "0.3.16"
 mime_guess = "2.0.3"
 openssl = "0.10.32"

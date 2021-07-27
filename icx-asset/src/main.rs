@@ -104,8 +104,11 @@ async fn main() -> support::Result {
             list(&canister).await?;
         }
         SubCommand::Sync(o) => {
-            let canister_id = Principal::from_text(&o.canister_id)?;
-            sync(&agent, &canister_id, ttl, o).await?;
+            let canister = ic_utils::Canister::builder()
+                .with_agent(&agent)
+                .with_canister_id(Principal::from_text(&o.canister_id)?)
+                .build()?;
+            sync(&canister, ttl, o).await?;
         }
     }
 
