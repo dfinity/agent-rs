@@ -8,9 +8,9 @@ use clap::{crate_authors, crate_version, AppSettings, Clap};
 use ic_agent::identity::{AnonymousIdentity, BasicIdentity};
 use ic_agent::{agent, Agent, Identity};
 
+use crate::commands::upload::upload;
 use std::path::PathBuf;
 use std::time::Duration;
-use crate::commands::upload::upload;
 
 const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
 
