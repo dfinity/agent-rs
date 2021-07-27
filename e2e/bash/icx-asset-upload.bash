@@ -1,0 +1,45 @@
+#!/usr/bin/env bats
+
+# shellcheck disable=SC1090
+source "$BATS_SUPPORT"/load.bash
+
+load util/assertions
+
+setup() {
+    cd "$(mktemp -d -t icx-asset-e2e-XXXXXXXX)" || exit 1
+    dfx new --no-frontend e2e_project
+    cd e2e_project || exit 1
+    dfx start --background
+    dfx deploy
+}
+
+teardown() {
+    echo teardown
+    dfx stop
+}
+
+icx_asset_sync() {
+  CANISTER_ID=$(dfx canister id e2e_project_assets)
+  assert_command "$ICX_ASSET" --pem "$HOME"/.config/dfx/identity/default/identity.pem sync "$CANISTER_ID" src/e2e_project_assets/assets
+}
+
+icx_asset_list() {
+  CANISTER_ID=$(dfx canister id e2e_project_assets)
+  assert_command "$ICX_ASSET" --pem "$HOME"/.config/dfx/identity/default/identity.pem ls "$CANISTER_ID"
+}
+
+icx_asset_upload() {
+  CANISTER_ID=$(dfx canister id e2e_project_assets)
+  assert_command "$ICX_ASSET" --pem "$HOME"/.config/dfx/identity/default/identity.pem upload "$CANISTER_ID" "$*"
+}
+
+@test "uploads a file by name" {
+    echo "this is the file content" >uploaded.txt
+
+    icx_asset_upload uploaded.txt
+
+    icx_asset_list
+
+    assert_match "uploaded.txt.*text/plain.*identity"
+}
+
