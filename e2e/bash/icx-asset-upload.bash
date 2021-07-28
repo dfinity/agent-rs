@@ -43,3 +43,15 @@ icx_asset_upload() {
     assert_match "uploaded.txt.*text/plain.*identity"
 }
 
+@test "uploads a directory by name" {
+    mkdir some_dir
+    echo "some stuff" >some_dir/a.txt
+    echo "more things" >some_dir/b.txt
+
+    icx_asset_upload some_dir
+
+    icx_asset_list
+
+    assert_match "uploaded.txt.*text/plain.*identity"
+}
+

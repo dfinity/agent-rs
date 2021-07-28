@@ -28,6 +28,28 @@ pub(crate) fn delete_obsolete_assets(
     }
 }
 
+pub(crate) fn delete_incompatible_assets(
+    operations: &mut Vec<BatchOperationKind>,
+    project_assets: &HashMap<String, ProjectAsset>,
+    container_assets: &mut HashMap<String, AssetDetails>,
+) {
+    let mut deleted_container_assets = vec![];
+    for (key, container_asset) in container_assets.iter() {
+        if let Some(project_asset) = project_assets.get(key) {
+            if project_asset.media_type.to_string() != container_asset.content_type
+            {
+                operations.push(BatchOperationKind::DeleteAsset(DeleteAssetArguments {
+                    key: key.clone(),
+                }));
+                deleted_container_assets.push(key.clone());
+            }
+        }
+    }
+    for k in deleted_container_assets {
+        container_assets.remove(&k);
+    }
+}
+
 pub(crate) fn create_new_assets(
     operations: &mut Vec<BatchOperationKind>,
     project_assets: &HashMap<String, ProjectAsset>,

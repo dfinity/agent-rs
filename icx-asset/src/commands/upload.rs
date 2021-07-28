@@ -9,7 +9,7 @@ use walkdir::WalkDir;
 pub(crate) async fn upload(canister: &Canister<'_>, opts: &UploadOpts) -> support::Result {
     let key_map = get_key_map(&opts.files)?;
     for (k, v) in &key_map {
-        eprintln!("k: {}  v: {}", k, v.to_string_lossy());
+        println!("k: {}  v: {}", k, v.to_string_lossy());
     }
     ic_asset::upload(canister, Duration::from_secs(500), key_map).await?;
     Ok(())
@@ -41,6 +41,12 @@ fn get_key_map(files: &[String]) -> anyhow::Result<HashMap<String, PathBuf>> {
                 .filter_map(std::result::Result::ok)
                 .filter(|e| !e.file_type().is_dir())
             {
+                // let source = p.path().to_path_buf();
+                // let relative = source.strip_prefix(dir).expect("cannot strip prefix");
+                // let key = String::from("/") + relative.to_string_lossy().as_ref();
+                //
+                // AssetLocation { source, key }
+
                 let p: &Path = p.path();
                 let key = key.to_string() + "/" + &p.to_string_lossy();
                 let source = p.to_path_buf();
