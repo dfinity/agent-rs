@@ -20,7 +20,10 @@ use ic_utils::interfaces::management_canister::{
     MgmtMethod,
 };
 use ring::signature::Ed25519KeyPair;
-use std::{collections::VecDeque, convert::TryFrom, io::BufRead, path::PathBuf, str::FromStr};
+use std::{
+    collections::VecDeque, convert::TryFrom, io::BufRead, path::PathBuf, process::exit,
+    str::FromStr,
+};
 
 #[derive(Clap)]
 #[clap(
@@ -158,14 +161,22 @@ fn blob_from_arguments(
     arg_type: &ArgType,
     method_type: &Option<(candid::parser::typing::TypeEnv, candid::types::Function)>,
 ) -> Result<Vec<u8>, String> {
+    let mut buffer = Vec::new();
+    let args = if arguments == Some("-") {
+        use std::io::Read;
+        std::io::stdin().read_to_end(&mut buffer).unwrap();
+        std::str::from_utf8(&buffer).ok()
+    } else {
+        arguments
+    };
     match arg_type {
         ArgType::Raw => {
-            let bytes = hex::decode(&arguments.unwrap_or(""))
+            let bytes = hex::decode(&args.unwrap_or(""))
                 .map_err(|e| format!("Argument is not a valid hex string: {}", e))?;
             Ok(bytes)
         }
         ArgType::Idl => {
-            let arguments = arguments.unwrap_or("()");
+            let arguments = args.unwrap_or("()");
             let args: Result<IDLArgs, String> = arguments
                 .parse::<IDLArgs>()
                 .map_err(|e: candid::Error| format!("Invalid Candid values: {}", e));
@@ -408,7 +419,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         if opts.fetch_root_key {
                             agent.fetch_root_key().await?;
                         }
-
                         let mut builder = agent.update(&t.canister_id, &t.method_name);
                         if let Some(d) = expire_after {
                             builder.expire_after(d);
@@ -440,6 +450,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     _ => unreachable!(),
                 }
             }
+            exit(1)
         }
         SubCommand::Status => println!("{:#}", agent.status().await?),
         SubCommand::PrincipalConvert(t) => {
