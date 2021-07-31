@@ -877,7 +877,7 @@ dependencies = [
 
 [[package]]
 name = "ic-agent"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "base32",
@@ -901,6 +901,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_cbor",
+ "serde_json",
  "simple_asn1",
  "thiserror",
  "tokio",
@@ -910,7 +911,7 @@ dependencies = [
 
 [[package]]
 name = "ic-asset"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "candid",
@@ -933,7 +934,7 @@ dependencies = [
 
 [[package]]
 name = "ic-identity-hsm"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "hex",
  "ic-agent",
@@ -961,7 +962,7 @@ dependencies = [
 
 [[package]]
 name = "ic-utils"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "candid",
@@ -978,7 +979,7 @@ dependencies = [
 
 [[package]]
 name = "icx"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "candid",
  "clap",
@@ -997,7 +998,7 @@ dependencies = [
 
 [[package]]
 name = "icx-asset"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "candid",
  "chrono",
@@ -1022,7 +1023,7 @@ dependencies = [
 
 [[package]]
 name = "icx-cert"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "base64 0.12.3",
@@ -1040,7 +1041,7 @@ dependencies = [
 
 [[package]]
 name = "icx-proxy"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "clap",

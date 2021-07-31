@@ -1,6 +1,6 @@
 [package]
 name = "ic-agent"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
 description = "Agent library to communicate with the Internet Computer, following the Public Specification."
@@ -48,6 +48,7 @@ optional = true
 candid = "0.7.4"
 mockito = "0.27.0"
 proptest = "0.9.5"
+serde_json = "1.0.57"
 tokio = { version = "1.8.1", features = ["full"] }
 
 [features]
