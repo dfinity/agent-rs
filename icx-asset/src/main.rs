@@ -1,20 +1,17 @@
-use candid::CandidType;
+mod commands;
+mod support;
+
+use crate::commands::list::list;
+use crate::commands::sync::sync;
 use candid::Principal;
-use candid::Principal as CanisterId;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use ic_agent::identity::{AnonymousIdentity, BasicIdentity};
 use ic_agent::{agent, Agent, Identity};
-use ic_utils::call::SyncCall;
 
-use ic_utils::Canister;
-use num_traits::ToPrimitive;
-use serde::Deserialize;
 use std::path::PathBuf;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
-
-type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[derive(Clap)]
 #[clap(
@@ -77,12 +74,8 @@ fn create_identity(maybe_pem: Option<PathBuf>) -> Box<dyn Identity + Sync + Send
     }
 }
 
-async fn sync(agent: &Agent, canister_id: &CanisterId, timeout: Duration, o: &SyncOpts) -> Result {
-    ic_asset::sync(&agent, &o.directory, canister_id, timeout).await?;
-    Ok(())
-}
 #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
-async fn main() -> Result {
+async fn main() -> support::Result {
     let opts: Opts = Opts::parse();
 
     let ttl: std::time::Duration = opts
@@ -116,53 +109,5 @@ async fn main() -> Result {
         }
     }
 
-    Ok(())
-}
-
-async fn list(canister: &Canister<'_>) -> Result {
-    #[derive(CandidType, Deserialize)]
-    struct Encoding {
-        modified: candid::Int,
-        content_encoding: String,
-        sha256: Option<Vec<u8>>,
-        length: candid::Nat,
-    }
-
-    #[derive(CandidType, Deserialize)]
-    struct ListEntry {
-        key: String,
-        content_type: String,
-        encodings: Vec<Encoding>,
-    }
-
-    #[derive(CandidType, Deserialize)]
-    struct EmptyRecord {}
-
-    let (entries,): (Vec<ListEntry>,) = canister
-        .query_("list")
-        .with_arg(EmptyRecord {})
-        .build()
-        .call()
-        .await?;
-
-    use chrono::offset::Local;
-    use chrono::DateTime;
-
-    for entry in entries {
-        for encoding in entry.encodings {
-            let modified = encoding.modified;
-            let modified = SystemTime::UNIX_EPOCH
-                + std::time::Duration::from_nanos(modified.0.to_u64().unwrap());
-
-            eprintln!(
-                "{:>20} {:>15} {:50} ({}, {})",
-                DateTime::<Local>::from(modified).format("%F %X"),
-                encoding.length.0.to_string(),
-                entry.key,
-                entry.content_type,
-                encoding.content_encoding
-            );
-        }
-    }
     Ok(())
 }
