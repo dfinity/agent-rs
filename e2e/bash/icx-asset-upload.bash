@@ -40,7 +40,7 @@ icx_asset_upload() {
 
     icx_asset_list
 
-    assert_match "uploaded.txt.*text/plain.*identity"
+    assert_match " /uploaded.txt.*text/plain.*identity"
 }
 
 @test "uploads a directory by name" {
@@ -52,6 +52,45 @@ icx_asset_upload() {
 
     icx_asset_list
 
-    assert_match "uploaded.txt.*text/plain.*identity"
+    # expect:
+    #   /some_dir/a.txt
+    #   /some_dir/b.txt
+
+    assert_match " /uploaded.txt.*text/plain.*identity"
 }
+
+@test "uploads multiple files" {
+    mkdir some_dir
+    echo "some stuff" >some_dir/a.txt
+    echo "more things" >some_dir/b.txt
+
+    icx_asset_upload some_dir/*.txt
+
+    icx_asset_list
+
+    # expect: (is this surprising?)
+    #   /a.txt
+    #   /b.txt
+
+    assert_match " /uploaded.txt.*text/plain.*identity"
+}
+
+
+@test "uploads multiple files from absolute path" {
+    mkdir some_dir
+    echo "some stuff" >some_dir/a.txt
+    echo "more things" >some_dir/b.txt
+
+    icx_asset_upload "$(realpath some_dir/a.txt)" "$(realpath some_dir/b.txt)"
+
+    icx_asset_list
+
+    # expect:
+    #   /a.txt
+    #   /b.txt
+
+    assert_match " /uploaded.txt.*text/plain.*identity"
+}
+
+
 

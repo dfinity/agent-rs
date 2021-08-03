@@ -6,6 +6,16 @@ use std::str::FromStr;
 use std::time::Duration;
 use walkdir::WalkDir;
 
+/// examples:
+///   icx-asset upload a.txt       # upload a.txt to /a.txt
+///   icx-asset upload directory   # uploads directory to /directory
+///   icx-asset upload assets /    # same as icx-asset sync
+///   icx-asset upload assets      # uploads assets to /assets (important, different from sync!)
+///   icx-asset upload /some/absolute/path # uploads to /path
+///   icx-asset upload some/relative/path  # uploads to /some/relative/path
+///   icx-asset upload some/relative/*.txt # uploads to /some/relative/\1
+/// or
+///   icx-asset upload /=assets
 pub(crate) async fn upload(canister: &Canister<'_>, opts: &UploadOpts) -> support::Result {
     let key_map = get_key_map(&opts.files)?;
     for (k, v) in &key_map {
@@ -26,9 +36,15 @@ fn get_key_map(files: &[String]) -> anyhow::Result<HashMap<String, PathBuf>> {
                     PathBuf::from_str(&arg[index + 1..])?,
                 )
             } else {
+                let source = PathBuf::from_str(&arg.clone())?;
+                let key = if source.is_absolute() {
+                    format!("/{}", source.file_name().unwrap().to_string_lossy())
+                } else {
+                    format!("/{}", arg.clone())
+                };
                 (
-                    format!("/{}", arg.clone()),
-                    PathBuf::from_str(&arg.clone())?,
+                    key,
+                    source,
                 )
             }
         };
@@ -41,16 +57,17 @@ fn get_key_map(files: &[String]) -> anyhow::Result<HashMap<String, PathBuf>> {
                 .filter_map(std::result::Result::ok)
                 .filter(|e| !e.file_type().is_dir())
             {
-                // let source = p.path().to_path_buf();
-                // let relative = source.strip_prefix(dir).expect("cannot strip prefix");
-                // let key = String::from("/") + relative.to_string_lossy().as_ref();
+                let p = p.path().to_path_buf();
+                let relative = p.strip_prefix(&source).expect("cannot strip prefix");
+                let key = key.clone() + relative.to_string_lossy().as_ref();
+                key_map.insert( key, p );
                 //
                 // AssetLocation { source, key }
 
-                let p: &Path = p.path();
-                let key = key.to_string() + "/" + &p.to_string_lossy();
-                let source = p.to_path_buf();
-                key_map.insert(key, source);
+                // let p: &Path = p.path();
+                // let key = key.to_string() + "/" + &p.to_string_lossy();
+                // let source = p.to_path_buf();
+                // key_map.insert(key, source);
             }
         }
     }
