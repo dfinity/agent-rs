@@ -36,8 +36,7 @@ pub(crate) fn delete_incompatible_assets(
     let mut deleted_container_assets = vec![];
     for (key, container_asset) in container_assets.iter() {
         if let Some(project_asset) = project_assets.get(key) {
-            if project_asset.media_type.to_string() != container_asset.content_type
-            {
+            if project_asset.media_type.to_string() != container_asset.content_type {
                 operations.push(BatchOperationKind::DeleteAsset(DeleteAssetArguments {
                     key: key.clone(),
                 }));

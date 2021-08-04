@@ -7,7 +7,6 @@ use std::time::Duration;
 use walkdir::WalkDir;
 
 pub(crate) async fn upload(canister: &Canister<'_>, opts: &UploadOpts) -> support::Result {
-
     let key_map = get_key_map(&opts.files)?;
     ic_asset::upload(canister, Duration::from_secs(500), key_map).await?;
     Ok(())
@@ -32,10 +31,7 @@ fn get_key_map(files: &[String]) -> anyhow::Result<HashMap<String, PathBuf>> {
                 // } else {
                 //     format!("/{}", arg.clone())
                 // };
-                (
-                    key,
-                    source,
-                )
+                (key, source)
             }
         };
 
@@ -54,7 +50,7 @@ fn get_key_map(files: &[String]) -> anyhow::Result<HashMap<String, PathBuf>> {
                     key.push('/');
                 }
                 key.push_str(relative.to_string_lossy().as_ref());
-                key_map.insert( key, p );
+                key_map.insert(key, p);
             }
         }
     }
