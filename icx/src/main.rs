@@ -21,7 +21,10 @@ use ic_utils::interfaces::management_canister::{
     MgmtMethod,
 };
 use ring::signature::Ed25519KeyPair;
-use std::{collections::VecDeque, convert::TryFrom, io::BufRead, path::PathBuf, str::FromStr};
+use std::{
+    collections::VecDeque, convert::TryFrom, io::BufRead, path::PathBuf, process::exit,
+    str::FromStr,
+};
 
 #[derive(Clap)]
 #[clap(
@@ -180,6 +183,15 @@ fn blob_from_arguments(
     arg_type: &ArgType,
     method_type: &Option<(candid::parser::typing::TypeEnv, candid::types::Function)>,
 ) -> Result<Vec<u8>> {
+    let mut buffer = Vec::new();
+    let arguments = if arguments == Some("-") {
+        use std::io::Read;
+        std::io::stdin().read_to_end(&mut buffer).unwrap();
+        std::str::from_utf8(&buffer).ok()
+    } else {
+        arguments
+    };
+
     match arg_type {
         ArgType::Raw => {
             let bytes = hex::decode(&arguments.unwrap_or(""))
@@ -448,7 +460,6 @@ async fn main() -> Result<()> {
                                 .await
                                 .context("Failed to fetch root key from replica")?;
                         }
-
                         let mut builder = agent.update(&t.canister_id, &t.method_name);
                         if let Some(d) = expire_after {
                             builder.expire_after(d);
@@ -485,6 +496,7 @@ async fn main() -> Result<()> {
                     _ => unreachable!(),
                 }
             }
+            exit(1)
         }
         SubCommand::Status => {
             let status = agent
