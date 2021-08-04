@@ -137,11 +137,23 @@ struct PrincipalConvertOpts {
 pub fn get_candid_type(
     idl_path: &std::path::Path,
     method_name: &str,
-) -> Option<(TypeEnv, Function)> {
-    let (env, ty) = check_candid_file(idl_path).ok()?;
-    let actor = ty?;
-    let method = env.get_method(&actor, method_name).ok()?.clone();
-    Some((env, method))
+) -> Result<Option<(TypeEnv, Function)>> {
+    let (env, ty) = check_candid_file(idl_path).with_context(|| {
+        format!(
+            "Failed when check the candid file: {}",
+            idl_path.to_string_lossy()
+        )
+    })?;
+    match ty {
+        None => Ok(None),
+        Some(actor) => {
+            let method = env
+                .get_method(&actor, method_name)
+                .with_context(|| format!("Failed to get method: {}", method_name))?
+                .clone();
+            Ok(Some((env, method)))
+        }
+    }
 }
 
 pub fn check_candid_file(idl_path: &std::path::Path) -> Result<(TypeEnv, Option<Type>)> {
@@ -323,8 +335,11 @@ async fn main() -> Result<()> {
             let maybe_candid_path = t.candid.as_ref();
             let expire_after: Option<std::time::Duration> = opts.ttl.map(|ht| ht.into());
 
-            let method_type =
-                maybe_candid_path.and_then(|path| get_candid_type(&path, &t.method_name));
+            let method_type = match maybe_candid_path {
+                None => None,
+                Some(path) => get_candid_type(&path, &t.method_name)
+                    .context("Failed to get method type from candid file")?,
+            };
 
             let arg = blob_from_arguments(t.arg_value.as_deref(), &t.arg, &method_type)?;
             let is_management_canister = t.canister_id == Principal::management_canister();
