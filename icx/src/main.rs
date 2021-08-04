@@ -211,7 +211,8 @@ fn blob_from_arguments(
                             Err(e)
                         }
                     });
-                    args?.to_bytes_with_types(&env, &func.args)
+                    args.context("Failed to parse arguments as Candid values")?
+                        .to_bytes_with_types(&env, &func.args)
                 }
             }
             .context("Failed to serialize Candid values")?;
@@ -341,14 +342,16 @@ async fn main() -> Result<()> {
                     .context("Failed to get method type from candid file")?,
             };
 
-            let arg = blob_from_arguments(t.arg_value.as_deref(), &t.arg, &method_type)?;
+            let arg = blob_from_arguments(t.arg_value.as_deref(), &t.arg, &method_type)
+                .context("Invalid arguments")?;
             let is_management_canister = t.canister_id == Principal::management_canister();
             let effective_canister_id = get_effective_canister_id(
                 is_management_canister,
                 &t.method_name,
                 &arg,
                 t.canister_id,
-            )?;
+            )
+            .context("Failed to get effective_canister_id for this call")?;
 
             if !t.serialize {
                 let result = match &opts.subcommand {
