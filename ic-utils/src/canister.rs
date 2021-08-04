@@ -136,6 +136,7 @@ impl<'agent, T> Canister<'agent, T> {
         SyncCallBuilder::new(self, method_name)
     }
 
+    /// Call request_status on the RequestId in a loop and return the response as a byte vector.
     pub async fn wait<'canister: 'agent, W>(
         &'canister self,
         request_id: RequestId,
