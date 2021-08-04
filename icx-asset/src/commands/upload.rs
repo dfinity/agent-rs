@@ -1,7 +1,7 @@
 use crate::{support, UploadOpts};
 use ic_utils::Canister;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use walkdir::WalkDir;

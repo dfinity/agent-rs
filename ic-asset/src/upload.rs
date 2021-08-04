@@ -1,6 +1,3 @@
-use ic_agent::Agent;
-use ic_types::principal::Principal as CanisterId;
-
 use crate::asset_canister::batch::{commit_batch, create_batch};
 use crate::asset_canister::list::list_assets;
 use crate::asset_canister::protocol::{AssetDetails, BatchOperationKind};
