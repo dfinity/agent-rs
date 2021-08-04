@@ -17,6 +17,8 @@ use walkdir::WalkDir;
 /// or
 ///   icx-asset upload /=assets
 pub(crate) async fn upload(canister: &Canister<'_>, opts: &UploadOpts) -> support::Result {
+    println!("*** icx-asset upload {:?} ***", &opts);
+
     let key_map = get_key_map(&opts.files)?;
     for (k, v) in &key_map {
         println!("k: {}  v: {}", k, v.to_string_lossy());
@@ -26,6 +28,7 @@ pub(crate) async fn upload(canister: &Canister<'_>, opts: &UploadOpts) -> suppor
 }
 
 fn get_key_map(files: &[String]) -> anyhow::Result<HashMap<String, PathBuf>> {
+    println!("*** icx-asset get_key_map ***");
     let mut key_map: HashMap<String, PathBuf> = HashMap::new();
 
     for arg in files {
@@ -37,11 +40,13 @@ fn get_key_map(files: &[String]) -> anyhow::Result<HashMap<String, PathBuf>> {
                 )
             } else {
                 let source = PathBuf::from_str(&arg.clone())?;
-                let key = if source.is_absolute() {
-                    format!("/{}", source.file_name().unwrap().to_string_lossy())
-                } else {
-                    format!("/{}", arg.clone())
-                };
+                let key = format!("/{}", source.file_name().unwrap().to_string_lossy());
+                // or if we want to retain relative paths:
+                // let key = if source.is_absolute() {
+                //     format!("/{}", source.file_name().unwrap().to_string_lossy())
+                // } else {
+                //     format!("/{}", arg.clone())
+                // };
                 (
                     key,
                     source,
@@ -59,7 +64,11 @@ fn get_key_map(files: &[String]) -> anyhow::Result<HashMap<String, PathBuf>> {
             {
                 let p = p.path().to_path_buf();
                 let relative = p.strip_prefix(&source).expect("cannot strip prefix");
-                let key = key.clone() + relative.to_string_lossy().as_ref();
+                let mut key = key.clone();
+                if !key.ends_with('/') {
+                    key.push('/');
+                }
+                key.push_str(relative.to_string_lossy().as_ref());
                 key_map.insert( key, p );
                 //
                 // AssetLocation { source, key }

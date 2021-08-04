@@ -33,42 +33,20 @@ icx_asset_list() {
 }
 
 icx_asset_upload() {
+  # for some reason, if you pass more than 1 parameter, this function doesn't call icx-asset at all.
   CANISTER_ID=$(dfx canister id e2e_project_assets)
-  assert_command "$ICX_ASSET" --pem "$DFX_CONFIG_ROOT"/.config/dfx/identity/default/identity.pem upload "$CANISTER_ID" "$*"
-}
-
-@test "uploads a file by name" {
-    echo "this is the file content" >uploaded.txt
-
-    icx_asset_upload uploaded.txt
-
-    icx_asset_list
-
-    assert_match " /uploaded.txt.*text/plain.*identity"
-}
-
-@test "uploads a directory by name" {
-    mkdir some_dir
-    echo "some stuff" >some_dir/a.txt
-    echo "more things" >some_dir/b.txt
-
-    icx_asset_upload some_dir
-
-    icx_asset_list
-
-    # expect:
-    #   /some_dir/a.txt
-    #   /some_dir/b.txt
-
-    assert_match " /some_dir/a.txt.*text/plain.*identity"
+  assert_command "$ICX_ASSET" --pem "$DFX_CONFIG_ROOT"/.config/dfx/identity/default/identity.pem upload "$CANISTER_ID" "$1"
 }
 
 @test "uploads multiple files" {
+    echo "this is the file content" >uploaded.txt
+    echo "this is the file content ttt" >xyz.txt
     mkdir some_dir
     echo "some stuff" >some_dir/a.txt
     echo "more things" >some_dir/b.txt
 
-    icx_asset_upload some_dir/*.txt
+    CANISTER_ID=$(dfx canister id e2e_project_assets)
+    assert_command "$ICX_ASSET" --pem "$DFX_CONFIG_ROOT"/.config/dfx/identity/default/identity.pem upload "$CANISTER_ID" some_dir/*.txt
 
     icx_asset_list
 
@@ -76,7 +54,8 @@ icx_asset_upload() {
     #   /a.txt
     #   /b.txt
 
-    assert_match " /uploaded.txt.*text/plain.*identity"
+    assert_match " /a.txt.*text/plain.*identity"
+    assert_match " /b.txt.*text/plain.*identity"
 }
 
 
@@ -93,8 +72,60 @@ icx_asset_upload() {
     #   /a.txt
     #   /b.txt
 
-    assert_match " /uploaded.txt.*text/plain.*identity"
+    assert_match " /a.txt.*text/plain.*identity"
+    assert_match " /b.txt.*text/plain.*identity"
 }
 
 
+
+
+@test "uploads a file by name" {
+    echo "this is the file content" >uploaded.txt
+
+    icx_asset_upload uploaded.txt
+
+    icx_asset_list
+
+    assert_match " /uploaded.txt.*text/plain.*identity"
+}
+
+@test "can override asset name" {
+    echo "this is the file content" >uploaded.txt
+
+    icx_asset_upload /abcd.txt=uploaded.txt
+
+    icx_asset_list
+
+    assert_match " /abcd.txt.*text/plain.*identity"
+}
+
+@test "uploads a directory by name" {
+    mkdir some_dir
+    echo "some stuff" >some_dir/a.txt
+    echo "more things" >some_dir/b.txt
+
+    icx_asset_upload some_dir
+
+    icx_asset_list
+
+    # expect:
+    #   /some_dir/a.txt
+    #   /some_dir/b.txt
+
+    assert_match " /some_dir/a.txt.*text/plain.*identity"
+    assert_match " /some_dir/b.txt.*text/plain.*identity"
+}
+
+@test "uploads a directory by name as root" {
+    mkdir some_dir
+    echo "some stuff" >some_dir/a.txt
+    echo "more things" >some_dir/b.txt
+
+    icx_asset_upload /=some_dir
+
+    icx_asset_list
+
+    assert_match " /a.txt.*text/plain.*identity"
+    assert_match " /b.txt.*text/plain.*identity"
+}
 
