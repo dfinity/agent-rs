@@ -2,7 +2,7 @@ use crate::asset_canister::method_names::CREATE_CHUNK;
 use crate::asset_canister::protocol::{CreateChunkRequest, CreateChunkResponse};
 use crate::convenience::waiter_with_timeout;
 use crate::params::CanisterCallParams;
-use candid::{Decode, Encode, Nat};
+use candid::{Decode, Nat};
 use futures_intrusive::sync::SharedSemaphore;
 use garcon::{Delay, Waiter};
 
@@ -15,7 +15,6 @@ pub(crate) async fn create_chunk(
 ) -> anyhow::Result<Nat> {
     let batch_id = batch_id.clone();
     let args = CreateChunkRequest { batch_id, content };
-    let args = candid::Encode!(&args)?;
 
     let mut waiter = Delay::builder()
         .timeout(std::time::Duration::from_secs(30))
@@ -24,14 +23,13 @@ pub(crate) async fn create_chunk(
     waiter.start();
 
     loop {
-        let mut builder = canister_call_params
-            .agent
-            .update(&canister_call_params.canister_id, CREATE_CHUNK);
+        let builder = canister_call_params.canister.update_(CREATE_CHUNK);
         let builder = builder.with_arg(&args);
         let request_id_result = {
             let _releaser = create_chunk_call_semaphore.acquire(1).await;
             builder
-                .expire_after(canister_call_params.timeout)
+                .build()
+                .map(|result: (CreateChunkResponse,)| (result.0.chunk_id,))
                 .call()
                 .await
         };
@@ -39,10 +37,9 @@ pub(crate) async fn create_chunk(
             Ok(request_id) => {
                 let _releaser = create_chunk_wait_semaphore.acquire(1).await;
                 canister_call_params
-                    .agent
+                    .canister
                     .wait(
                         request_id,
-                        &canister_call_params.canister_id,
                         waiter_with_timeout(canister_call_params.timeout),
                     )
                     .await

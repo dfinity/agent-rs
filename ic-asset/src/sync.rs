@@ -2,31 +2,21 @@ use crate::asset_canister::batch::{commit_batch, create_batch};
 use crate::asset_canister::list::list_assets;
 use crate::asset_canister::protocol::{AssetDetails, BatchOperationKind};
 use crate::params::CanisterCallParams;
-use ic_agent::Agent;
-use ic_types::principal::Principal as CanisterId;
 
 use crate::operations::{
     create_new_assets, delete_obsolete_assets, set_encodings, unset_obsolete_encodings,
 };
 use crate::plumbing::{make_project_assets, AssetLocation, ProjectAsset};
+use ic_utils::Canister;
 use std::collections::HashMap;
 use std::path::Path;
 use std::time::Duration;
 use walkdir::WalkDir;
 
-pub async fn sync(
-    agent: &Agent,
-    dir: &Path,
-    canister_id: &CanisterId,
-    timeout: Duration,
-) -> anyhow::Result<()> {
+pub async fn sync(canister: &Canister<'_>, dir: &Path, timeout: Duration) -> anyhow::Result<()> {
     let asset_locations = gather_asset_locations(dir);
 
-    let canister_call_params = CanisterCallParams {
-        agent,
-        canister_id: *canister_id,
-        timeout,
-    };
+    let canister_call_params = CanisterCallParams { canister, timeout };
 
     let container_assets = list_assets(&canister_call_params).await?;
 
