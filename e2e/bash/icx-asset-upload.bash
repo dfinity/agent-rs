@@ -33,7 +33,8 @@ icx_asset_list() {
 }
 
 icx_asset_upload() {
-  # for some reason, if you pass more than 1 parameter, this function doesn't call icx-asset at all.
+  # for some reason, if you pass more than 1 parameter, and replace "$1" with "$@",
+  # this function doesn't call icx-asset at all.
   CANISTER_ID=$(dfx canister id e2e_project_assets)
   assert_command "$ICX_ASSET" --pem "$DFX_CONFIG_ROOT"/.config/dfx/identity/default/identity.pem upload "$CANISTER_ID" "$1"
 }
@@ -64,20 +65,16 @@ icx_asset_upload() {
     echo "some stuff" >some_dir/a.txt
     echo "more things" >some_dir/b.txt
 
-    icx_asset_upload "$(realpath some_dir/a.txt)" "$(realpath some_dir/b.txt)"
+    CANISTER_ID=$(dfx canister id e2e_project_assets)
+    assert_command "$ICX_ASSET" --pem "$DFX_CONFIG_ROOT"/.config/dfx/identity/default/identity.pem upload \
+       "$CANISTER_ID" \
+       "$(realpath some_dir/a.txt)" "$(realpath some_dir/b.txt)"
 
     icx_asset_list
-
-    # expect:
-    #   /a.txt
-    #   /b.txt
 
     assert_match " /a.txt.*text/plain.*identity"
     assert_match " /b.txt.*text/plain.*identity"
 }
-
-
-
 
 @test "uploads a file by name" {
     echo "this is the file content" >uploaded.txt
