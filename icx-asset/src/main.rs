@@ -14,7 +14,7 @@ use std::time::Duration;
 
 const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
 
-#[derive(Clap, Debug)]
+#[derive(Clap)]
 #[clap(
 version = crate_version!(),
 author = crate_authors!(),
@@ -40,7 +40,7 @@ struct Opts {
     subcommand: SubCommand,
 }
 
-#[derive(Clap, Debug)]
+#[derive(Clap)]
 enum SubCommand {
     /// List keys from the asset canister.
     #[clap(name = "ls")]
@@ -53,14 +53,14 @@ enum SubCommand {
     Upload(UploadOpts),
 }
 
-#[derive(Clap, Debug)]
+#[derive(Clap)]
 struct ListOpts {
     /// The canister ID.
     #[clap()]
     canister_id: String,
 }
 
-#[derive(Clap, Debug)]
+#[derive(Clap)]
 struct SyncOpts {
     /// The canister ID.
     #[clap()]
@@ -71,7 +71,7 @@ struct SyncOpts {
     directory: PathBuf,
 }
 
-#[derive(Clap, Debug)]
+#[derive(Clap)]
 struct UploadOpts {
     /// The asset canister ID to manage.
     #[clap()]
@@ -92,9 +92,7 @@ fn create_identity(maybe_pem: Option<PathBuf>) -> Box<dyn Identity + Sync + Send
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() -> support::Result {
-    println!("*** icx-asset main ***");
     let opts: Opts = Opts::parse();
-    println!("*** opts = {:?} ***", &opts);
 
     let ttl: std::time::Duration = opts
         .ttl

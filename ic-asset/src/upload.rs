@@ -4,7 +4,7 @@ use ic_types::principal::Principal as CanisterId;
 use crate::asset_canister::batch::{commit_batch, create_batch};
 use crate::asset_canister::list::list_assets;
 use crate::asset_canister::protocol::{AssetDetails, BatchOperationKind};
-use crate::operations::{create_new_assets, set_encodings, unset_obsolete_encodings};
+use crate::operations::{create_new_assets, set_encodings, unset_obsolete_encodings, delete_incompatible_assets};
 use crate::params::CanisterCallParams;
 use crate::plumbing::{make_project_assets, AssetLocation, ProjectAsset};
 use ic_utils::Canister;
@@ -55,7 +55,7 @@ fn assemble_upload_operations(
 
     let mut operations = vec![];
 
-    //delete_obsolete_assets(&mut operations, &project_assets, &mut container_assets);
+    delete_incompatible_assets(&mut operations, &project_assets, &mut container_assets);
     create_new_assets(&mut operations, &project_assets, &container_assets);
     unset_obsolete_encodings(&mut operations, &project_assets, &container_assets);
     set_encodings(&mut operations, project_assets);
