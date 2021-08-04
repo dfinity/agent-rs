@@ -143,7 +143,7 @@ pub fn get_candid_type(
 ) -> Result<Option<(TypeEnv, Function)>> {
     let (env, ty) = check_candid_file(idl_path).with_context(|| {
         format!(
-            "Failed when check the candid file: {}",
+            "Failed when checking candid file: {}",
             idl_path.to_string_lossy()
         )
     })?;
@@ -203,7 +203,7 @@ fn blob_from_arguments(
             let args = arguments.parse::<IDLArgs>();
             let typed_args = match method_type {
                 None => args
-                    .context("Failed to parse arguments as Candid values")?
+                    .context("Failed to parse arguments with no method type info")?
                     .to_bytes(),
                 Some((env, func)) => {
                     let first_char = arguments.chars().next();
@@ -223,7 +223,7 @@ fn blob_from_arguments(
                             Err(e)
                         }
                     });
-                    args.context("Failed to parse arguments as Candid values")?
+                    args.context("Failed to parse arguments with method type info")?
                         .to_bytes_with_types(&env, &func.args)
                 }
             }
@@ -292,7 +292,7 @@ pub fn get_effective_canister_id(
                     canister_id: Principal,
                 }
                 let in_args =
-                    candid::Decode!(arg_value, In).context("Argument is not a valid Principle")?;
+                    candid::Decode!(arg_value, In).context("Argument is not a valid Principal")?;
                 Ok(in_args.canister_id)
             }
             MgmtMethod::ProvisionalCreateCanisterWithCycles => Ok(Principal::management_canister()),
@@ -427,21 +427,23 @@ async fn main() -> Result<()> {
                         content,
                     })) => {
                         let mut error_message =
-                            format!("Server returned an HTTP Error:\n  Code: {}", status);
+                            format!("Server returned an HTTP Error:\n  Code: {}\n", status);
                         match content_type.as_deref() {
                             None => error_message
-                                .push_str(&format!("  Content: {}", hex::encode(content))),
+                                .push_str(&format!("  Content: {}\n", hex::encode(content))),
                             Some("text/plain; charset=UTF-8") | Some("text/plain") => {
-                                error_message.push_str("  ContentType: text/plain");
+                                error_message.push_str("  ContentType: text/plain\n");
                                 error_message.push_str(&format!(
-                                    "  Content:     {}",
+                                    "  Content:     {}\n",
                                     String::from_utf8_lossy(&content)
                                 ));
                             }
                             Some(x) => {
-                                error_message.push_str(&format!("  ContentType: {}", x));
-                                error_message
-                                    .push_str(&format!("  Content:     {}", hex::encode(&content)));
+                                error_message.push_str(&format!("  ContentType: {}\n", x));
+                                error_message.push_str(&format!(
+                                    "  Content:     {}\n",
+                                    hex::encode(&content)
+                                ));
                             }
                         }
                         bail!(error_message);
