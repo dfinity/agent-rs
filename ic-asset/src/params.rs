@@ -1,9 +1,7 @@
-use ic_agent::Agent;
-use ic_types::Principal;
+use ic_utils::Canister;
 use std::time::Duration;
 
 pub(crate) struct CanisterCallParams<'a> {
-    pub(crate) agent: &'a Agent,
-    pub(crate) canister_id: Principal,
+    pub(crate) canister: &'a Canister<'a>,
     pub(crate) timeout: Duration,
 }

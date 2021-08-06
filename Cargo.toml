@@ -6,6 +6,7 @@ members = [
     "ic-identity-hsm",
     "ic-utils",
     "icx",
+    "icx-asset",
     "icx-proxy",
     "ref-tests",
     "zzz-release",

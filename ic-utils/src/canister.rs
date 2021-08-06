@@ -1,6 +1,7 @@
 use crate::call::{AsyncCaller, SyncCaller};
 use candid::{parser::value::IDLValue, ser::IDLBuilder, utils::ArgumentDecoder, CandidType};
-use ic_agent::{ic_types::Principal, Agent, AgentError};
+use garcon::Waiter;
+use ic_agent::{ic_types::Principal, Agent, AgentError, RequestId};
 use std::convert::TryInto;
 use thiserror::Error;
 
@@ -133,6 +134,18 @@ impl<'agent, T> Canister<'agent, T> {
         method_name: &str,
     ) -> SyncCallBuilder<'agent, 'canister, T> {
         SyncCallBuilder::new(self, method_name)
+    }
+
+    /// Call request_status on the RequestId in a loop and return the response as a byte vector.
+    pub async fn wait<'canister: 'agent, W>(
+        &'canister self,
+        request_id: RequestId,
+        waiter: W,
+    ) -> Result<Vec<u8>, AgentError>
+    where
+        W: Waiter,
+    {
+        self.agent.wait(request_id, &self.canister_id, waiter).await
     }
 }
 
@@ -396,6 +409,7 @@ impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, I
 mod tests {
     use super::super::interfaces::ManagementCanister;
     use crate::call::AsyncCall;
+    use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
     use ic_agent::identity::BasicIdentity;
 
     #[ignore]
@@ -408,7 +422,7 @@ mod tests {
         let identity = BasicIdentity::from_key_pair(key_pair);
 
         let agent = ic_agent::Agent::builder()
-            .with_url("http://localhost:8001")
+            .with_transport(ReqwestHttpReplicaV2Transport::create("http://localhost:8001").unwrap())
             .with_identity(identity)
             .build()
             .unwrap();

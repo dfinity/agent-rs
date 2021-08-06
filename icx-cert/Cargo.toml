@@ -1,8 +1,16 @@
 [package]
 name = "icx-cert"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
+description = "CLI tool to download a document from the Internet Computer and pretty-print the contents of its IC-Certificate header."
+homepage = "https://docs.rs/icx-cert"
+documentation = "https://docs.rs/icx-cert"
+license = "Apache-2.0"
+readme = "README.md"
+categories = ["command-line-interface"]
+keywords = ["internet-computer", "agent", "icp", "dfinity", "certificate"]
+include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -12,7 +20,7 @@ base64 = "0.12"
 clap = "3.0.0-beta.2"
 chrono = "0.4.19"
 hex = "0.4.2"
-ic-agent = { path = "../ic-agent", version = "0.6" }
+ic-agent = { path = "../ic-agent", version = "0.7" }
 leb128 = "0.2.4"
 reqwest = { version = "0.11",features = [ "blocking", "rustls-tls" ] }
 sha2 = "0.9.1"
