@@ -54,7 +54,7 @@ impl BasicIdentity {
         let sk = key_info.private_key;
         if sk[0] != 4 || sk[1] != 32 {
             return Err(PemError::KeyRejected(
-                "Key is not a ECC private key".to_string(),
+                "Key is not a Ed25519 private key".to_string(),
             ));
         }
 
