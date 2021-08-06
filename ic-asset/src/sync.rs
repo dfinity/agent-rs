@@ -20,7 +20,11 @@ pub async fn sync(canister: &Canister<'_>, dir: &Path, timeout: Duration) -> any
 
     let container_assets = list_assets(&canister_call_params).await?;
 
+    println!("Starting batch.");
+
     let batch_id = create_batch(&canister_call_params).await?;
+
+    println!("Staging contents of new and changed assets:");
 
     let project_assets = make_project_assets(
         &canister_call_params,
@@ -32,6 +36,7 @@ pub async fn sync(canister: &Canister<'_>, dir: &Path, timeout: Duration) -> any
 
     let operations = assemble_synchronization_operations(project_assets, container_assets);
 
+    println!("Committing batch.");
     commit_batch(&canister_call_params, &batch_id, operations).await?;
 
     Ok(())
