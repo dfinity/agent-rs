@@ -70,22 +70,20 @@ pub(crate) fn unset_obsolete_encodings(
     container_assets: &HashMap<String, AssetDetails>,
 ) {
     for (key, details) in container_assets {
-        let project_asset = project_assets.get(key);
-        for encoding_details in &details.encodings {
-            let project_contains_encoding = project_asset
-                .filter(|project_asset| {
-                    project_asset
-                        .encodings
-                        .contains_key(&encoding_details.content_encoding)
-                })
-                .is_some();
-            if !project_contains_encoding {
-                operations.push(BatchOperationKind::UnsetAssetContent(
-                    UnsetAssetContentArguments {
-                        key: key.clone(),
-                        content_encoding: encoding_details.content_encoding.clone(),
-                    },
-                ));
+        // delete_obsolete_assets handles the case where key is not found in project_assets
+        if let Some(project_asset) = project_assets.get(key) {
+            for encoding_details in &details.encodings {
+                let project_contains_encoding = project_asset
+                            .encodings
+                            .contains_key(&encoding_details.content_encoding);
+                if !project_contains_encoding {
+                    operations.push(BatchOperationKind::UnsetAssetContent(
+                        UnsetAssetContentArguments {
+                            key: key.clone(),
+                            content_encoding: encoding_details.content_encoding.clone(),
+                        },
+                    ));
+                }
             }
         }
     }

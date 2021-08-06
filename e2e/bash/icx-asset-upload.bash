@@ -39,6 +39,48 @@ icx_asset_upload() {
   assert_command "$ICX_ASSET" --pem "$DFX_CONFIG_ROOT"/.config/dfx/identity/default/identity.pem upload "$CANISTER_ID" "$1"
 }
 
+@test "does not delete files that are not being uploaded" {
+    mkdir some_dir
+    echo "some stuff" >some_dir/a.txt
+    echo "more things" >some_dir/b.txt
+
+    icx_asset_upload /=some_dir
+
+    icx_asset_list
+
+    assert_match " /a.txt.*text/plain.*identity"
+    assert_match " /b.txt.*text/plain.*identity"
+
+    echo "ccc" >c.txt
+    icx_asset_upload c.txt
+
+    icx_asset_list
+
+    assert_match " /a.txt.*text/plain.*identity"
+    assert_match " /b.txt.*text/plain.*identity"
+    assert_match " /c.txt.*text/plain.*identity"
+}
+
+@test "deletes asset if necessary in order to change content type" {
+    assert_command dfx canister --no-wallet call --update e2e_project_assets store '(record{key="/sample-asset.txt"; content_type="application/pdf"; content_encoding="identity"; content=blob "whatever contents!"})'
+    assert_command dfx canister --no-wallet call --update e2e_project_assets store '(record{key="/sample-asset.txt"; content_type="application/pdf"; content_encoding="arbitrary"; content=blob "other contents"})'
+
+    icx_asset_list
+
+    assert_match " /sample-asset.txt.*application/pdf.*identity"
+    assert_match " /sample-asset.txt.*application/pdf.*arbitrary"
+
+    echo "just some text" >sample-asset.txt
+
+    # icx-asset upload should delete the asset (and upload its replacement) since the content type is different.
+    icx_asset_upload sample-asset.txt
+
+    icx_asset_list
+
+    assert_match " /sample-asset.txt.*text/plain.*identity"
+    assert_not_match " /sample-asset.txt.*application/pdf.*arbitrary"
+}
+
 @test "uploads multiple files" {
     echo "this is the file content" >uploaded.txt
     echo "this is the file content ttt" >xyz.txt
