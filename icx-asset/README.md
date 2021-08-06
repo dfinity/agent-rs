@@ -15,11 +15,11 @@ $ icx-asset sync src/<project>/assets
 
 ## icx-asset ls
 
-List 
+List assets in the asset canister.
 
 ## icx-asset upload
 
-Usage: `icx-asset upload [<destination>=]<file> [[<destination>=]<file> ...]`
+Usage: `icx-asset upload [<key>=]<file> [[<key>=]<file> ...]`
 
 Examples:
 
