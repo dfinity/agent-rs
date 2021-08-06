@@ -74,8 +74,8 @@ pub(crate) fn unset_obsolete_encodings(
         if let Some(project_asset) = project_assets.get(key) {
             for encoding_details in &details.encodings {
                 let project_contains_encoding = project_asset
-                            .encodings
-                            .contains_key(&encoding_details.content_encoding);
+                    .encodings
+                    .contains_key(&encoding_details.content_encoding);
                 if !project_contains_encoding {
                     operations.push(BatchOperationKind::UnsetAssetContent(
                         UnsetAssetContentArguments {
