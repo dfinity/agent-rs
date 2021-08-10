@@ -26,6 +26,8 @@ use std::{
     str::FromStr,
 };
 
+const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
+
 #[derive(Clap)]
 #[clap(
     version = crate_version!(),
@@ -37,10 +39,6 @@ struct Opts {
     /// Some input. Because this isn't an Option<T> it's required to be used
     #[clap(default_value = "http://localhost:8000/")]
     replica: String,
-
-    /// Set for non-IC networks: fetch the root key.  If not passed, use real hard-coded key.
-    #[clap(long)]
-    fetch_root_key: bool,
 
     /// An optional PEM file to read the identity from. If none is passed,
     /// a random identity will be created.
@@ -257,6 +255,16 @@ fn print_idl_blob(
     Ok(())
 }
 
+async fn fetch_root_key_from_non_ic(agent: &Agent, replica: &str) -> Result<()> {
+    let normalized_replica = replica.strip_suffix("/").unwrap_or(replica);
+    if normalized_replica != DEFAULT_IC_GATEWAY {
+        agent
+            .fetch_root_key()
+            .await
+            .context("Failed to fetch root key from replica")?;
+    }
+    Ok(())
+}
 pub fn get_effective_canister_id(
     is_management_canister: bool,
     method_name: &str,
@@ -369,12 +377,7 @@ async fn main() -> Result<()> {
                 let result = match &opts.subcommand {
                     SubCommand::Update(_) => {
                         // We need to fetch the root key for updates.
-                        if opts.fetch_root_key {
-                            agent
-                                .fetch_root_key()
-                                .await
-                                .context("Failed to fetch root key from replica")?;
-                        }
+                        fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
 
                         let mut builder = agent.update(&t.canister_id, &t.method_name);
 
@@ -456,12 +459,8 @@ async fn main() -> Result<()> {
                         // For local emulator, we need to fetch the root key for updates.
                         // So on an air-gapped machine, we can only generate message for the IC main net
                         // which agent hard-coded its root key
-                        if opts.fetch_root_key {
-                            agent
-                                .fetch_root_key()
-                                .await
-                                .context("Failed to fetch root key from replica")?;
-                        }
+                        fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
+
                         let mut builder = agent.update(&t.canister_id, &t.method_name);
                         if let Some(d) = expire_after {
                             builder.expire_after(d);
@@ -532,12 +531,7 @@ async fn main() -> Result<()> {
             println!("{}", buffer);
 
             if let Ok(signed_update) = serde_json::from_str::<SignedUpdate>(&buffer) {
-                if opts.fetch_root_key {
-                    agent
-                        .fetch_root_key()
-                        .await
-                        .context("Failed to fetch root key from replica")?;
-                }
+                fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
                 let request_id = agent
                     .update_signed(
                         signed_update.effective_canister_id,
@@ -559,12 +553,7 @@ async fn main() -> Result<()> {
             } else if let Ok(signed_request_status) =
                 serde_json::from_str::<SignedRequestStatus>(&buffer)
             {
-                if opts.fetch_root_key {
-                    agent
-                        .fetch_root_key()
-                        .await
-                        .context("Failed to fetch root key from replica")?;
-                }
+                fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
                 let response = agent
                     .request_status_signed(
                         &signed_request_status.request_id,
