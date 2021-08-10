@@ -209,7 +209,7 @@ fn wallet_create_and_set_controller() {
         let (create_result,) = wallet
             .wallet_create_wallet(
                 1_000_000_000_000_u64,
-                Some(vec!(other_agent_principal)),
+                Some(vec![other_agent_principal]),
                 None,
                 None,
                 None,
