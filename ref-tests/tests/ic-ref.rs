@@ -51,7 +51,10 @@ mod management_canister {
         Argument, Canister,
     };
     use openssl::sha::Sha256;
-    use ref_tests::{create_agent, create_basic_identity, create_waiter, with_agent, with_wallet_canister, create_secp256k1_identity};
+    use ref_tests::{
+        create_agent, create_basic_identity, create_secp256k1_identity, create_waiter, with_agent,
+        with_wallet_canister,
+    };
 
     mod create_canister {
         use super::{create_waiter, with_agent};
