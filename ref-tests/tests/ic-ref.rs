@@ -245,7 +245,7 @@ mod management_canister {
 
     #[ignore]
     #[test]
-    fn multiple_canisters_aaaaa_aa() {
+    fn multiple_canisters_aaaaa_aa_but_really_provisional() {
         with_agent(|agent| async move {
             let agent_principal = agent.get_principal()?;
             // Each agent has their own identity.
@@ -265,8 +265,8 @@ mod management_canister {
 
             let (canister_id,) = ic00
                 .create_canister()
-                //                .as_provisional_create_with_amount(None)
-                .with_canister_id("aaaaa-aa")
+                .as_provisional_create_with_amount(None) // ok
+                //.with_canister_id("aaaaa-aa")
                 .with_controller(agent_principal)
                 .with_controller(other_agent_principal)
                 .call_and_wait(create_waiter())
