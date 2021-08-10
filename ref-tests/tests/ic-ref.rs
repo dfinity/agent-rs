@@ -4,6 +4,7 @@
 //! as the IC Ref repo itself.
 //!
 //! The tests can be found in the Spec.hs file in the IC Ref repo.
+//!   https://github.com/dfinity/ic-hs/blob/master/src/IC/Test/Spec.hs
 //!
 //! Try to keep these tests as close to 1-to-1 to the IC Ref test use cases. For
 //! every spec in the IC Ref tests, there should be a matching spec here. Some
@@ -238,6 +239,56 @@ mod management_canister {
             hasher.update(&canister_wasm);
             let sha256_digest = hasher.finish();
             assert_eq!(result.0.module_hash, Some(sha256_digest.into()));
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn multiple_canisters_aaaaa_aa() {
+        with_agent(|agent| async move {
+            let agent_principal = agent.get_principal()?;
+            // Each agent has their own identity.
+            let other_agent_identity = create_basic_identity().await?;
+            let other_agent_principal = other_agent_identity.sender()?;
+            let other_agent = create_agent(other_agent_identity).await?;
+            other_agent.fetch_root_key().await?;
+            let other_ic00 = ManagementCanister::create(&other_agent);
+
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .with_controller(agent_principal)
+                .with_controller(other_agent_principal)
+//                .as_provisional_create_with_amount(None)
+                .call_and_wait(create_waiter())
+                .await?;
+
+
+            // Controllers should be able to fetch the canister status.
+            // Check status for empty canister
+            let result = ic00
+                .canister_status(&canister_id)
+                .call_and_wait(create_waiter())
+                .await?;
+            assert_eq!(result.0.status, CanisterStatus::Running);
+            assert_eq!(result.0.settings.controllers.len(), 2);
+            assert_eq!(result.0.settings.controllers[0], agent_principal);
+            assert_eq!(result.0.settings.controllers[1], other_agent_principal);
+            assert_eq!(result.0.module_hash, None);
+
+            let result = other_ic00
+                .canister_status(&canister_id)
+                .call_and_wait(create_waiter())
+                .await?;
+            assert_eq!(result.0.status, CanisterStatus::Running);
+            assert_eq!(result.0.settings.controllers.len(), 2);
+            assert_eq!(result.0.settings.controllers[0], agent_principal);
+            assert_eq!(result.0.settings.controllers[1], other_agent_principal);
+            assert_eq!(result.0.module_hash, None);
+
 
             Ok(())
         })

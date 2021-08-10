@@ -278,6 +278,11 @@ impl Agent {
             .saturating_sub(permitted_drift.as_nanos())) as u64
     }
 
+    /// Return the principal of the identity.
+    pub fn get_principal(&self) -> Result<Principal, String> {
+        self.identity.sender()
+    }
+
     async fn query_endpoint<A>(
         &self,
         effective_canister_id: Principal,
