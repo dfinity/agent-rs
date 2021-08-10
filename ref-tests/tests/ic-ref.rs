@@ -51,10 +51,7 @@ mod management_canister {
         Argument, Canister,
     };
     use openssl::sha::Sha256;
-    use ref_tests::{
-        create_agent, create_basic_identity, create_ecdsa_identity, create_waiter, with_agent,
-        with_wallet_canister,
-    };
+    use ref_tests::{create_agent, create_basic_identity, create_waiter, with_agent, with_wallet_canister, create_secp256k1_identity};
 
     mod create_canister {
         use super::{create_waiter, with_agent};
@@ -255,11 +252,11 @@ mod management_canister {
             other_agent.fetch_root_key().await?;
             let other_ic00 = ManagementCanister::create(&other_agent);
 
-            let ecdsa_identity = create_ecdsa_identity()?;
-            let ecdsa_principal = ecdsa_identity.sender()?;
-            let ecdsa_agent = create_agent(ecdsa_identity).await?;
-            ecdsa_agent.fetch_root_key().await?;
-            let ecdsa_ic00 = ManagementCanister::create(&other_agent);
+            let secp256k1_identity = create_secp256k1_identity()?;
+            let secp256k1_principal = secp256k1_identity.sender()?;
+            let secp256k1_agent = create_agent(secp256k1_identity).await?;
+            secp256k1_agent.fetch_root_key().await?;
+            let secp256k1_ic00 = ManagementCanister::create(&secp256k1_agent);
 
             let ic00 = ManagementCanister::create(&agent);
 
@@ -290,7 +287,7 @@ mod management_canister {
 
             // Set new controller
             ic00.update_settings(&canister_id)
-                .with_controller(ecdsa_principal)
+                .with_controller(secp256k1_principal)
                 .call_and_wait(create_waiter())
                 .await?;
 
@@ -306,12 +303,12 @@ mod management_canister {
                 .await;
             assert_err_or_reject(result, vec![3, 5]);
 
-            let result = ecdsa_ic00
+            let result = secp256k1_ic00
                 .canister_status(&canister_id)
                 .call_and_wait(create_waiter())
                 .await?;
             assert_eq!(result.0.settings.controllers.len(), 1);
-            assert_eq!(result.0.settings.controllers[0], ecdsa_principal);
+            assert_eq!(result.0.settings.controllers[0], secp256k1_principal);
 
             Ok(())
         })

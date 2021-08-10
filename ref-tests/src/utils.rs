@@ -62,12 +62,12 @@ pub async fn create_basic_identity() -> Result<Box<dyn Identity + Send + Sync>, 
     )))
 }
 
-/// Create an ECDSA identity, unfortunately, will always be the same one
+/// Create a secp256k1identity, which unfortunately will always be the same one
 /// (So can only use one per test)
-pub fn create_ecdsa_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
+pub fn create_secp256k1_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
     // generated from the the following commands:
-    // % openssl ecparam -name secp256k1 -genkey -noout -out identity.pem
-    // [:~/pem] % cat identity.pem
+    // $ openssl ecparam -name secp256k1 -genkey -noout -out identity.pem
+    // $ cat identity.pem
     let identity_file = "
 -----BEGIN EC PRIVATE KEY-----
 MHQCAQEEIJb2C89BvmJERgnT/vJLKpdHZb/hqTiC8EY2QtBRWZScoAcGBSuBBAAK
