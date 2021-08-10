@@ -265,7 +265,6 @@ mod management_canister {
                 .await?;
 
             // Controllers should be able to fetch the canister status.
-            // Check status for empty canister
             let result = ic00
                 .canister_status(&canister_id)
                 .call_and_wait(create_waiter())
@@ -285,6 +284,10 @@ mod management_canister {
             assert_eq!(result.0.settings.controllers[0], agent_principal);
             assert_eq!(result.0.settings.controllers[1], other_agent_principal);
             assert_eq!(result.0.module_hash, None);
+
+            // (TODO) Set new controller
+
+            // (TODO) Only that controller can get canister status
 
             Ok(())
         })
