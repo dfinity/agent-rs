@@ -64,7 +64,7 @@ pub struct StatusCallResult {
 
 #[derive(Clone, Debug, Deserialize, CandidType)]
 pub struct DefiniteCanisterSettings {
-    #[deprecated(since="0.5.1", note = "replaced by controllers")]
+    #[deprecated(since = "0.5.1", note = "replaced by controllers")]
     pub controller: Principal,
     pub controllers: Vec<Principal>,
     pub compute_allocation: candid::Nat,
