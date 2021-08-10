@@ -265,9 +265,10 @@ mod management_canister {
 
             let (canister_id,) = ic00
                 .create_canister()
+                //                .as_provisional_create_with_amount(None)
+                .with_canister_id("aaaaa-aa")
                 .with_controller(agent_principal)
                 .with_controller(other_agent_principal)
-                //                .as_provisional_create_with_amount(None)
                 .call_and_wait(create_waiter())
                 .await?;
 
