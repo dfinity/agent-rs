@@ -262,10 +262,9 @@ mod management_canister {
                 .create_canister()
                 .with_controller(agent_principal)
                 .with_controller(other_agent_principal)
-//                .as_provisional_create_with_amount(None)
+                //                .as_provisional_create_with_amount(None)
                 .call_and_wait(create_waiter())
                 .await?;
-
 
             // Controllers should be able to fetch the canister status.
             // Check status for empty canister
@@ -288,7 +287,6 @@ mod management_canister {
             assert_eq!(result.0.settings.controllers[0], agent_principal);
             assert_eq!(result.0.settings.controllers[1], other_agent_principal);
             assert_eq!(result.0.module_hash, None);
-
 
             Ok(())
         })
