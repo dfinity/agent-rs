@@ -216,7 +216,10 @@ mod management_canister {
                 .call_and_wait(create_waiter())
                 .await?;
             assert_eq!(result.0.status, CanisterStatus::Running);
+            #[allow(deprecated)]
             assert_eq!(result.0.settings.controller, other_agent_principal);
+            assert_eq!(result.0.settings.controllers.len(), 1);
+            assert_eq!(result.0.settings.controllers[0], other_agent_principal);
             assert_eq!(result.0.module_hash, None);
 
             // Install wasm.
