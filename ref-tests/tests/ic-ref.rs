@@ -497,7 +497,7 @@ mod management_canister {
             let create_args = InCreate {
                 cycles: 0_u64,
                 settings: CanisterSettings {
-                    controller: None,
+                    controllers: None,
                     compute_allocation: None,
                     memory_allocation: None,
                     freezing_threshold: None,

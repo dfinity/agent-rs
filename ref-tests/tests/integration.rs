@@ -209,7 +209,7 @@ fn wallet_create_and_set_controller() {
         let (create_result,) = wallet
             .wallet_create_wallet(
                 1_000_000_000_000_u64,
-                Some(other_agent_principal),
+                Some(vec!(other_agent_principal)),
                 None,
                 None,
                 None,
@@ -338,7 +338,7 @@ fn wallet_create_wallet() {
         let create_args = In {
             cycles: 1_000_000_000_000_u64,
             settings: CanisterSettings {
-                controller: None,
+                controllers: None,
                 compute_allocation: None,
                 memory_allocation: None,
                 freezing_threshold: None,

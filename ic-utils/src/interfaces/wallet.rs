@@ -293,7 +293,7 @@ impl<'agent> Canister<'agent, Wallet> {
     pub fn wallet_create_canister<'canister: 'agent>(
         &'canister self,
         cycles: u64,
-        controller: Option<Principal>,
+        controllers: Option<Vec<Principal>>,
         compute_allocation: Option<ComputeAllocation>,
         memory_allocation: Option<MemoryAllocation>,
         freezing_threshold: Option<FreezingThreshold>,
@@ -305,7 +305,7 @@ impl<'agent> Canister<'agent, Wallet> {
         }
 
         let settings = CanisterSettings {
-            controller,
+            controllers,
             compute_allocation: compute_allocation.map(u8::from).map(candid::Nat::from),
             memory_allocation: memory_allocation.map(u64::from).map(candid::Nat::from),
             freezing_threshold: freezing_threshold.map(u64::from).map(candid::Nat::from),
@@ -321,7 +321,7 @@ impl<'agent> Canister<'agent, Wallet> {
     pub fn wallet_create_wallet<'canister: 'agent>(
         &'canister self,
         cycles: u64,
-        controller: Option<Principal>,
+        controllers: Option<Vec<Principal>>,
         compute_allocation: Option<ComputeAllocation>,
         memory_allocation: Option<MemoryAllocation>,
         freezing_threshold: Option<FreezingThreshold>,
@@ -333,7 +333,7 @@ impl<'agent> Canister<'agent, Wallet> {
         }
 
         let settings = CanisterSettings {
-            controller,
+            controllers,
             compute_allocation: compute_allocation.map(u8::from).map(candid::Nat::from),
             memory_allocation: memory_allocation.map(u64::from).map(candid::Nat::from),
             freezing_threshold: freezing_threshold.map(u64::from).map(candid::Nat::from),

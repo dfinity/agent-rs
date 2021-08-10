@@ -12,7 +12,7 @@ use std::convert::{From, TryInto};
 
 #[derive(CandidType, Deserialize)]
 pub struct CanisterSettings {
-    pub controller: Option<Principal>,
+    pub controllers: Option<Vec<Principal>>,
     pub compute_allocation: Option<candid::Nat>,
     pub memory_allocation: Option<candid::Nat>,
     pub freezing_threshold: Option<candid::Nat>,
@@ -20,7 +20,7 @@ pub struct CanisterSettings {
 
 pub struct CreateCanisterBuilder<'agent, 'canister: 'agent, T> {
     canister: &'canister Canister<'agent, T>,
-    controller: Option<Result<Principal, AgentError>>,
+    controllers: Option<Result<Vec<Principal>, AgentError>>,
     compute_allocation: Option<Result<ComputeAllocation, AgentError>>,
     memory_allocation: Option<Result<MemoryAllocation, AgentError>>,
     freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
@@ -33,7 +33,7 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
     pub fn builder(canister: &'canister Canister<'agent, T>) -> Self {
         Self {
             canister,
-            controller: None,
+            controllers: None,
             compute_allocation: None,
             memory_allocation: None,
             freezing_threshold: None,
@@ -64,11 +64,24 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
         E: std::fmt::Display,
         C: TryInto<Principal, Error = E>,
     {
+        let controller_to_add: Option<Result<Principal, _>> = controller.map(|ca| {
+            ca.try_into()
+                .map_err(|e| AgentError::MessageError(format!("{}", e)))
+        });
+        let controllers: Option<Result<Vec<Principal>, _>> =
+            match (controller_to_add, self.controllers) {
+                (_, Some(Err(sticky))) => Some(Err(sticky)),
+                (Some(Err(e)), _) => Some(Err(e)),
+                (None, _) => None,
+                (Some(Ok(controller)), Some(Ok(controllers))) => {
+                    let mut controllers = controllers;
+                    controllers.push(controller);
+                    Some(Ok(controllers))
+                }
+                (Some(Ok(controller)), None) => Some(Ok(vec![controller])),
+            };
         Self {
-            controller: controller.map(|ca| {
-                ca.try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
-            }),
+            controllers,
             ..self
         }
     }
@@ -160,7 +173,7 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
     /// Create an [AsyncCall] implementation that, when called, will create a
     /// canister.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<(Principal,)>, AgentError> {
-        let controller = match self.controller {
+        let controllers = match self.controllers {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
             Some(Ok(x)) => Some(x),
             None => None,
@@ -195,7 +208,7 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
             let in_arg = In {
                 amount: self.amount.map(candid::Nat::from),
                 settings: CanisterSettings {
-                    controller,
+                    controllers,
                     compute_allocation,
                     memory_allocation,
                     freezing_threshold,
@@ -208,7 +221,7 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
             self.canister
                 .update_(MgmtMethod::CreateCanister.as_ref())
                 .with_arg(CanisterSettings {
-                    controller,
+                    controllers,
                     compute_allocation,
                     memory_allocation,
                     freezing_threshold,
@@ -383,7 +396,7 @@ impl<'agent, 'canister: 'agent, T: Sync> AsyncCall<()>
 pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent, T> {
     canister: &'canister Canister<'agent, T>,
     canister_id: Principal,
-    controller: Option<Result<Principal, AgentError>>,
+    controllers: Option<Result<Vec<Principal>, AgentError>>,
     compute_allocation: Option<Result<ComputeAllocation, AgentError>>,
     memory_allocation: Option<Result<MemoryAllocation, AgentError>>,
     freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
@@ -395,7 +408,7 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
         Self {
             canister,
             canister_id: *canister_id,
-            controller: None,
+            controllers: None,
             compute_allocation: None,
             memory_allocation: None,
             freezing_threshold: None,
@@ -409,11 +422,25 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
         E: std::fmt::Display,
         C: TryInto<Principal, Error = E>,
     {
+        let controller_to_add: Option<Result<Principal, _>> = controller.map(|ca| {
+            ca.try_into()
+                .map_err(|e| AgentError::MessageError(format!("{}", e)))
+        });
+        let controllers: Option<Result<Vec<Principal>, _>> =
+            match (controller_to_add, self.controllers) {
+                (_, Some(Err(sticky))) => Some(Err(sticky)),
+                (Some(Err(e)), _) => Some(Err(e)),
+                (None, _) => None,
+                (Some(Ok(controller)), Some(Ok(controllers))) => {
+                    let mut controllers = controllers;
+                    controllers.push(controller);
+                    Some(Ok(controllers))
+                }
+                (Some(Ok(controller)), None) => Some(Ok(vec![controller])),
+            };
+
         Self {
-            controller: controller.map(|ca| {
-                ca.try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
-            }),
+            controllers,
             ..self
         }
     }
@@ -511,7 +538,7 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
             settings: CanisterSettings,
         }
 
-        let controller = match self.controller {
+        let controllers = match self.controllers {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
             Some(Ok(x)) => Some(x),
             None => None,
@@ -538,7 +565,7 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
             .with_arg(In {
                 canister_id: self.canister_id,
                 settings: CanisterSettings {
-                    controller,
+                    controllers,
                     compute_allocation,
                     memory_allocation,
                     freezing_threshold,
