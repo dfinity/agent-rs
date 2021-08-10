@@ -52,7 +52,8 @@ mod management_canister {
     };
     use openssl::sha::Sha256;
     use ref_tests::{
-        create_agent, create_basic_identity, create_waiter, with_agent, with_wallet_canister,
+        create_agent, create_basic_identity, create_ecdsa_identity, create_waiter, with_agent,
+        with_wallet_canister,
     };
 
     mod create_canister {
@@ -254,6 +255,12 @@ mod management_canister {
             other_agent.fetch_root_key().await?;
             let other_ic00 = ManagementCanister::create(&other_agent);
 
+            let ecdsa_identity = create_ecdsa_identity()?;
+            let ecdsa_principal = ecdsa_identity.sender()?;
+            let ecdsa_agent = create_agent(ecdsa_identity).await?;
+            ecdsa_agent.fetch_root_key().await?;
+            let ecdsa_ic00 = ManagementCanister::create(&other_agent);
+
             let ic00 = ManagementCanister::create(&agent);
 
             let (canister_id,) = ic00
@@ -269,28 +276,62 @@ mod management_canister {
                 .canister_status(&canister_id)
                 .call_and_wait(create_waiter())
                 .await?;
-            assert_eq!(result.0.status, CanisterStatus::Running);
             assert_eq!(result.0.settings.controllers.len(), 2);
             assert_eq!(result.0.settings.controllers[0], agent_principal);
             assert_eq!(result.0.settings.controllers[1], other_agent_principal);
-            assert_eq!(result.0.module_hash, None);
 
             let result = other_ic00
                 .canister_status(&canister_id)
                 .call_and_wait(create_waiter())
                 .await?;
-            assert_eq!(result.0.status, CanisterStatus::Running);
             assert_eq!(result.0.settings.controllers.len(), 2);
             assert_eq!(result.0.settings.controllers[0], agent_principal);
             assert_eq!(result.0.settings.controllers[1], other_agent_principal);
-            assert_eq!(result.0.module_hash, None);
 
-            // (TODO) Set new controller
+            // Set new controller
+            ic00.update_settings(&canister_id)
+                .with_controller(ecdsa_principal)
+                .call_and_wait(create_waiter())
+                .await?;
 
-            // (TODO) Only that controller can get canister status
+            // Only that controller can get canister status
+            let result = ic00
+                .canister_status(&canister_id)
+                .call_and_wait(create_waiter())
+                .await;
+            assert_err_or_reject(result, vec![3, 5]);
+            let result = other_ic00
+                .canister_status(&canister_id)
+                .call_and_wait(create_waiter())
+                .await;
+            assert_err_or_reject(result, vec![3, 5]);
+
+            let result = ecdsa_ic00
+                .canister_status(&canister_id)
+                .call_and_wait(create_waiter())
+                .await?;
+            assert_eq!(result.0.settings.controllers.len(), 1);
+            assert_eq!(result.0.settings.controllers[0], ecdsa_principal);
 
             Ok(())
         })
+    }
+
+    fn assert_err_or_reject<S>(result: Result<S, AgentError>, allowed_reject_codes: Vec<u64>) {
+        for expected_rc in &allowed_reject_codes {
+            if matches!(result, Err(AgentError::ReplicaError {
+                    reject_code: actual_rc,
+                    reject_message: _,
+                }) if actual_rc == *expected_rc)
+            {
+                return;
+            }
+        }
+        assert!(
+            matches!(result, Err(AgentError::HttpError(_))),
+            "expect an HttpError, or a ReplicaError with reject_code in {:?}",
+            allowed_reject_codes
+        );
     }
 
     #[ignore]

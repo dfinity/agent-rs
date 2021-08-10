@@ -1,5 +1,6 @@
 use garcon::Delay;
 use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
+use ic_agent::identity::Secp256k1Identity;
 use ic_agent::{export::Principal, identity::BasicIdentity, Agent, Identity};
 use ic_identity_hsm::HardwareIdentity;
 use ic_utils::interfaces::{management_canister::builders::MemoryAllocation, ManagementCanister};
@@ -61,6 +62,23 @@ pub async fn create_basic_identity() -> Result<Box<dyn Identity + Send + Sync>, 
     )))
 }
 
+/// Create an ECDSA identity, unfortunately, will always be the same one
+/// (So can only use one per test)
+pub fn create_ecdsa_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
+    // generated from the the following commands:
+    // % openssl ecparam -name secp256k1 -genkey -noout -out identity.pem
+    // [:~/pem] % cat identity.pem
+    let identity_file = "
+-----BEGIN EC PRIVATE KEY-----
+MHQCAQEEIJb2C89BvmJERgnT/vJLKpdHZb/hqTiC8EY2QtBRWZScoAcGBSuBBAAK
+oUQDQgAEDMl7g3vGKLsiLDA3fBRxDE9ZkM3GezZFa5HlKM/gYzNZfU3w8Tijjd73
+yeMC60IsMNxDjLqElV7+T7dkb5Ki7Q==
+-----END EC PRIVATE KEY-----";
+
+    let identity = Secp256k1Identity::from_pem(identity_file.as_bytes())
+        .expect("Cannot create secp256k1 identity from PEM file.");
+    Ok(Box::new(identity))
+}
 pub async fn create_agent(identity: Box<dyn Identity + Send + Sync>) -> Result<Agent, String> {
     let port_env = std::env::var("IC_REF_PORT")
         .expect("Need to specify the IC_REF_PORT environment variable.");
