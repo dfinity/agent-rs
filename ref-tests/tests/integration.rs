@@ -224,16 +224,19 @@ fn wallet_create_and_set_controller() {
             create_result.canister_id.clone().to_text()
         );
 
+        eprintln!("...build child_wallet");
         let child_wallet = Canister::builder()
             .with_agent(&other_agent)
             .with_canister_id(create_result.canister_id)
             .with_interface(Wallet)
             .build()?;
 
+        eprintln!("...child_wallet.get_controllers");
         let (controller_list,) = child_wallet.get_controllers().call().await?;
         assert!(controller_list.len() == 1);
         assert_eq!(controller_list[0], other_agent_principal);
 
+        eprintln!("...child_wallet.list_addresses");
         let (address_entries,): (Vec<ic_utils::interfaces::wallet::AddressEntry>,) =
             child_wallet.list_addresses().call().await?;
         for address in address_entries.iter() {
