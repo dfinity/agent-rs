@@ -12,6 +12,11 @@ use std::convert::{From, TryInto};
 
 #[derive(CandidType, Deserialize)]
 pub struct CanisterSettings {
+    // The management canister expects controllers (and seems to handle controller),
+    // but the wallet canister only reads and passes through controller.
+    // So, gross: controller is always controllers[0].
+    pub controller: Option<Principal>,
+
     pub controllers: Option<Vec<Principal>>,
     pub compute_allocation: Option<candid::Nat>,
     pub memory_allocation: Option<candid::Nat>,
@@ -178,6 +183,10 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
             Some(Ok(x)) => Some(x),
             None => None,
         };
+        let controller = match controllers.as_ref() {
+            Some(v) if !v.is_empty() => Some(v[0]),
+            _ => None,
+        };
         let compute_allocation = match self.compute_allocation {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
             Some(Ok(x)) => Some(candid::Nat::from(u8::from(x))),
@@ -208,6 +217,7 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
             let in_arg = In {
                 amount: self.amount.map(candid::Nat::from),
                 settings: CanisterSettings {
+                    controller,
                     controllers,
                     compute_allocation,
                     memory_allocation,
@@ -221,6 +231,7 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
             self.canister
                 .update_(MgmtMethod::CreateCanister.as_ref())
                 .with_arg(CanisterSettings {
+                    controller,
                     controllers,
                     compute_allocation,
                     memory_allocation,
@@ -543,6 +554,10 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
             Some(Ok(x)) => Some(x),
             None => None,
         };
+        let controller = match controllers.as_ref() {
+            Some(v) if !v.is_empty() => Some(v[0]),
+            _ => None,
+        };
         let compute_allocation = match self.compute_allocation {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
             Some(Ok(x)) => Some(candid::Nat::from(u8::from(x))),
@@ -565,6 +580,7 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
             .with_arg(In {
                 canister_id: self.canister_id,
                 settings: CanisterSettings {
+                    controller,
                     controllers,
                     compute_allocation,
                     memory_allocation,

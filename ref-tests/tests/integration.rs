@@ -341,6 +341,7 @@ fn wallet_create_wallet() {
         let create_args = In {
             cycles: 1_000_000_000_000_u64,
             settings: CanisterSettings {
+                controller: None,
                 controllers: None,
                 compute_allocation: None,
                 memory_allocation: None,

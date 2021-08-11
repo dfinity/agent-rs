@@ -304,7 +304,13 @@ impl<'agent> Canister<'agent, Wallet> {
             settings: CanisterSettings,
         }
 
+        let controller = match controllers.as_ref() {
+            Some(v) if !v.is_empty() => Some(v[0].clone()),
+            _ => None,
+        };
+
         let settings = CanisterSettings {
+            controller,
             controllers,
             compute_allocation: compute_allocation.map(u8::from).map(candid::Nat::from),
             memory_allocation: memory_allocation.map(u64::from).map(candid::Nat::from),
@@ -331,8 +337,13 @@ impl<'agent> Canister<'agent, Wallet> {
             cycles: u64,
             settings: CanisterSettings,
         }
+        let controller = match controllers.as_ref() {
+            Some(v) if !v.is_empty() => Some(v[0].clone()),
+            _ => None,
+        };
 
         let settings = CanisterSettings {
+            controller,
             controllers,
             compute_allocation: compute_allocation.map(u8::from).map(candid::Nat::from),
             memory_allocation: memory_allocation.map(u64::from).map(candid::Nat::from),
