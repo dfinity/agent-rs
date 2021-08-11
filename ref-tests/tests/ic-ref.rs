@@ -280,8 +280,10 @@ mod management_canister {
                 .call_and_wait(create_waiter())
                 .await?;
             assert_eq!(result.0.settings.controllers.len(), 2);
-            let actual : HashSet<Principal> = HashSet::from_iter(result.0.settings.controllers.iter().cloned());
-            let expected = HashSet::from_iter(vec!(agent_principal, other_agent_principal).iter().cloned());
+            let actual: HashSet<Principal> =
+                HashSet::from_iter(result.0.settings.controllers.iter().cloned());
+            let expected =
+                HashSet::from_iter(vec![agent_principal, other_agent_principal].iter().cloned());
             assert_eq!(actual, expected);
 
             let result = other_ic00
@@ -289,8 +291,10 @@ mod management_canister {
                 .call_and_wait(create_waiter())
                 .await?;
             assert_eq!(result.0.settings.controllers.len(), 2);
-            let actual : HashSet<Principal> = HashSet::from_iter(result.0.settings.controllers.iter().cloned());
-            let expected = HashSet::from_iter(vec!(agent_principal, other_agent_principal).iter().cloned());
+            let actual: HashSet<Principal> =
+                HashSet::from_iter(result.0.settings.controllers.iter().cloned());
+            let expected =
+                HashSet::from_iter(vec![agent_principal, other_agent_principal].iter().cloned());
             assert_eq!(actual, expected);
 
             // Set new controller
