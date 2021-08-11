@@ -305,7 +305,7 @@ impl<'agent> Canister<'agent, Wallet> {
         }
 
         let controller = match controllers.as_ref() {
-            Some(v) if !v.is_empty() => Some(v[0].clone()),
+            Some(v) if !v.is_empty() => Some(v[0]),
             _ => None,
         };
 
@@ -338,7 +338,7 @@ impl<'agent> Canister<'agent, Wallet> {
             settings: CanisterSettings,
         }
         let controller = match controllers.as_ref() {
-            Some(v) if !v.is_empty() => Some(v[0].clone()),
+            Some(v) if !v.is_empty() => Some(v[0]),
             _ => None,
         };
 
