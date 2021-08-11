@@ -28,6 +28,27 @@ pub(crate) fn delete_obsolete_assets(
     }
 }
 
+pub(crate) fn delete_incompatible_assets(
+    operations: &mut Vec<BatchOperationKind>,
+    project_assets: &HashMap<String, ProjectAsset>,
+    container_assets: &mut HashMap<String, AssetDetails>,
+) {
+    let mut deleted_container_assets = vec![];
+    for (key, container_asset) in container_assets.iter() {
+        if let Some(project_asset) = project_assets.get(key) {
+            if project_asset.media_type.to_string() != container_asset.content_type {
+                operations.push(BatchOperationKind::DeleteAsset(DeleteAssetArguments {
+                    key: key.clone(),
+                }));
+                deleted_container_assets.push(key.clone());
+            }
+        }
+    }
+    for k in deleted_container_assets {
+        container_assets.remove(&k);
+    }
+}
+
 pub(crate) fn create_new_assets(
     operations: &mut Vec<BatchOperationKind>,
     project_assets: &HashMap<String, ProjectAsset>,
@@ -49,22 +70,20 @@ pub(crate) fn unset_obsolete_encodings(
     container_assets: &HashMap<String, AssetDetails>,
 ) {
     for (key, details) in container_assets {
-        let project_asset = project_assets.get(key);
-        for encoding_details in &details.encodings {
-            let project_contains_encoding = project_asset
-                .filter(|project_asset| {
-                    project_asset
-                        .encodings
-                        .contains_key(&encoding_details.content_encoding)
-                })
-                .is_some();
-            if !project_contains_encoding {
-                operations.push(BatchOperationKind::UnsetAssetContent(
-                    UnsetAssetContentArguments {
-                        key: key.clone(),
-                        content_encoding: encoding_details.content_encoding.clone(),
-                    },
-                ));
+        // delete_obsolete_assets handles the case where key is not found in project_assets
+        if let Some(project_asset) = project_assets.get(key) {
+            for encoding_details in &details.encodings {
+                let project_contains_encoding = project_asset
+                    .encodings
+                    .contains_key(&encoding_details.content_encoding);
+                if !project_contains_encoding {
+                    operations.push(BatchOperationKind::UnsetAssetContent(
+                        UnsetAssetContentArguments {
+                            key: key.clone(),
+                            content_encoding: encoding_details.content_encoding.clone(),
+                        },
+                    ));
+                }
             }
         }
     }
