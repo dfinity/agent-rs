@@ -55,6 +55,8 @@ mod management_canister {
         create_agent, create_basic_identity, create_secp256k1_identity, create_waiter, with_agent,
         with_wallet_canister,
     };
+    use std::collections::HashSet;
+    use std::iter::FromIterator;
 
     mod create_canister {
         use super::{create_waiter, with_agent};
@@ -278,16 +280,18 @@ mod management_canister {
                 .call_and_wait(create_waiter())
                 .await?;
             assert_eq!(result.0.settings.controllers.len(), 2);
-            assert_eq!(result.0.settings.controllers[0], agent_principal);
-            assert_eq!(result.0.settings.controllers[1], other_agent_principal);
+            let actual : HashSet<Principal> = HashSet::from_iter(result.0.settings.controllers.iter().cloned());
+            let expected = HashSet::from_iter(vec!(agent_principal, other_agent_principal).iter().cloned());
+            assert_eq!(actual, expected);
 
             let result = other_ic00
                 .canister_status(&canister_id)
                 .call_and_wait(create_waiter())
                 .await?;
             assert_eq!(result.0.settings.controllers.len(), 2);
-            assert_eq!(result.0.settings.controllers[0], agent_principal);
-            assert_eq!(result.0.settings.controllers[1], other_agent_principal);
+            let actual : HashSet<Principal> = HashSet::from_iter(result.0.settings.controllers.iter().cloned());
+            let expected = HashSet::from_iter(vec!(agent_principal, other_agent_principal).iter().cloned());
+            assert_eq!(actual, expected);
 
             // Set new controller
             ic00.update_settings(&canister_id)
