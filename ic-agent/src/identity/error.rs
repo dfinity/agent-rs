@@ -9,8 +9,11 @@ pub enum PemError {
     Io(#[from] std::io::Error),
 
     #[cfg(feature = "pem")]
-    #[error("An error occurred while reading the file")]
+    #[error("Failed to parse the PEM file")]
     PemError,
+
+    #[error("Wrong OID, expected {0}, got {1}")]
+    WrongOid(String, String),
 
     #[error("A key was rejected: {0}")]
     KeyRejected(String),

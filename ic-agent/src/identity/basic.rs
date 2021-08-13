@@ -36,10 +36,10 @@ impl BasicIdentity {
 
         // Check OID
         if key_info.algorithm.oid != "1.3.101.112".parse().unwrap() {
-            return Err(PemError::KeyRejected(format!(
-                "Wrong OID, expected \"1.3.101.112\", got {}",
-                key_info.algorithm.oid,
-            )));
+            return Err(PemError::WrongOid(
+                "1.3.101.112".to_string(),
+                format!("{}", key_info.algorithm.oid),
+            ));
         }
 
         // Check that there are no parameters on the key
@@ -132,6 +132,11 @@ MFMCAQEwBQYDK2VwBCIEILcugDIk2LHOj/6MUerC94QkWswslgjuiEYKqoJw/rx+
 oSMDIQC0pDnxK4FLbD03g2a4BdZxYX4w+RQvwSestgNDEwzHHA==
 -----END PRIVATE KEY-----";
 
+    const WRONG_OID: &str = "-----BEGIN PRIVATE KEY-----
+MFMCAQEwBQYDK2RwBCIEILcugDIk2LHOj/6MUerC94QkWswslgjuiEYKqoJw/rx+
+oSMDIQC0pDnxK4FLbD03g2a4BdZxYX4w+RQvwSestgNDEwzHHA==
+-----END PRIVATE KEY-----";
+
     // Generated with `dfx identity get-principal`
     const PRICIPAL: &str = "egnpc-ce26d-7fywe-lnoor-gu2r2-ogz7w-ls2yd-q7uee-wfpfn-oien7-3qe";
 
@@ -142,5 +147,15 @@ oSMDIQC0pDnxK4FLbD03g2a4BdZxYX4w+RQvwSestgNDEwzHHA==
             BasicIdentity::from_pem(IDENTITY_FILE.as_bytes()).expect("Failed to parse PEM file");
         let principal = identity.sender().expect("Failed to get principal");
         assert_eq!(principal.to_text(), PRICIPAL);
+    }
+
+    // Tests that identities generate with `dfx identity new` are parsable
+    #[test]
+    fn wrong_oid_in_pem() {
+        match BasicIdentity::from_pem(WRONG_OID.as_bytes()) {
+            Err(PemError::WrongOid(exp, got)) if exp == "1.3.101.112" && got == "1.3.100.112" => (),
+            Ok(_) => panic!("Expected wrong OID error but got success"),
+            Err(err) => panic!("Expected wrong OID error but got error {:?}", err),
+        }
     }
 }
