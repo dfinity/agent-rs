@@ -53,7 +53,7 @@ impl BasicIdentity {
         let sk = key_info.private_key;
         if sk[0] != 4 || sk[1] != 32 || sk.len() != 34 {
             return Err(PemError::KeyRejected(
-                "Key is not a Ed25519 private key".to_string(),
+                "Failed to parse Ed25519 private key".to_string(),
             ));
         }
 
@@ -132,15 +132,10 @@ MFMCAQEwBQYDK2VwBCIEILcugDIk2LHOj/6MUerC94QkWswslgjuiEYKqoJw/rx+
 oSMDIQC0pDnxK4FLbD03g2a4BdZxYX4w+RQvwSestgNDEwzHHA==
 -----END PRIVATE KEY-----";
 
-    const WRONG_OID: &str = "-----BEGIN PRIVATE KEY-----
-MFMCAQEwBQYDK2RwBCIEILcugDIk2LHOj/6MUerC94QkWswslgjuiEYKqoJw/rx+
-oSMDIQC0pDnxK4FLbD03g2a4BdZxYX4w+RQvwSestgNDEwzHHA==
------END PRIVATE KEY-----";
-
     // Generated with `dfx identity get-principal`
     const PRICIPAL: &str = "egnpc-ce26d-7fywe-lnoor-gu2r2-ogz7w-ls2yd-q7uee-wfpfn-oien7-3qe";
 
-    // Tests that identities generate with `dfx identity new` are parsable
+    /// Tests that identities generate with `dfx identity new` are parsable
     #[test]
     fn identity_from_pem() {
         let identity =
@@ -149,13 +144,47 @@ oSMDIQC0pDnxK4FLbD03g2a4BdZxYX4w+RQvwSestgNDEwzHHA==
         assert_eq!(principal.to_text(), PRICIPAL);
     }
 
-    // Tests that identities generate with `dfx identity new` are parsable
+    const WRONG_OID: &str = "-----BEGIN PRIVATE KEY-----
+MFMCAQEwBQYDK2RwBCIEILcugDIk2LHOj/6MUerC94QkWswslgjuiEYKqoJw/rx+
+oSMDIQC0pDnxK4FLbD03g2a4BdZxYX4w+RQvwSestgNDEwzHHA==
+-----END PRIVATE KEY-----";
+
+    /// Test whether OID is properly checked
     #[test]
     fn wrong_oid_in_pem() {
         match BasicIdentity::from_pem(WRONG_OID.as_bytes()) {
             Err(PemError::WrongOid(exp, got)) if exp == "1.3.101.112" && got == "1.3.100.112" => (),
             Ok(_) => panic!("Expected wrong OID error but got success"),
             Err(err) => panic!("Expected wrong OID error but got error {:?}", err),
+        }
+    }
+
+    const WRONG_PAIR: &str = "-----BEGIN PRIVATE KEY-----
+MFMCAQEwBQYDK2VwBCIEILcegDIk2LHOj/6MUerC94QkWswslgjuiEYKqoJw/rx+
+oSMDIQC0pDnxK4FLbD03g2a4BdZxYX4w+RQvwSestgNDEwzHHA==
+-----END PRIVATE KEY-----";
+
+    /// Test that matching of (sk pk) pair is checked
+    #[test]
+    fn wrong_sk() {
+        match BasicIdentity::from_pem(WRONG_PAIR.as_bytes()) {
+            Err(PemError::KeyRejected(err)) if err == "Invalid public key" => (),
+            Ok(_) => panic!("Expected Key Rejection but got success"),
+            Err(err) => panic!("Expected Key Rejection error but got error {:?}", err),
+        }
+    }
+
+    const MALFORMED_SK: &str = "-----BEGIN PRIVATE KEY-----
+MFMCAQEwBQYDK2VwBCJEILcugDIk2LHOj/6MUerC94QkWswslgjuiEYKqoJw/rx+
+oSMDIQC0pDnxK4FLbD03g2a4BdZxYX4w+RQvwSestgNDEwzHHA==
+-----END PRIVATE KEY-----";
+    /// Test that malformed sk is checked
+    #[test]
+    fn malformed_sk() {
+        match BasicIdentity::from_pem(MALFORMED_SK.as_bytes()) {
+            Err(PemError::KeyRejected(err)) if err == "Failed to parse Ed25519 private key" => (),
+            Ok(_) => panic!("Expected Key Rejection but got success"),
+            Err(err) => panic!("Expected Key Rejection error but got error {:?}", err),
         }
     }
 }
