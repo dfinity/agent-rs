@@ -3,7 +3,7 @@ use crate::{export::Principal, Identity, Signature};
 #[cfg(feature = "pem")]
 use crate::identity::error::PemError;
 
-use ed25519_dalek::{Keypair as Ed25519KeyPair, Signer};
+use ed25519_dalek::{Keypair as Ed25519KeyPair, PublicKey, Signer};
 #[cfg(feature = "pem")]
 use pkcs8::PrivateKeyDocument;
 use simple_asn1::{
@@ -49,10 +49,9 @@ impl BasicIdentity {
             ));
         }
 
-        // Retrieve the secret key and check that we have an uncompressed
-        // point of 32 byte length
+        // Retrieve the secret key and check that we have a string of 32 byte length
         let sk = key_info.private_key;
-        if sk[0] != 4 || sk[1] != 32 {
+        if sk[0] != 4 || sk[1] != 32 || sk.len() != 34 {
             return Err(PemError::KeyRejected(
                 "Key is not a Ed25519 private key".to_string(),
             ));
@@ -63,7 +62,7 @@ impl BasicIdentity {
             Some(pk) => pk,
             None => {
                 return Err(PemError::KeyRejected(
-                    "Public Key must be included in the file".to_string(),
+                    "Public key must be included in the file".to_string(),
                 ))
             }
         };
@@ -74,6 +73,14 @@ impl BasicIdentity {
 
         let key_pair = Ed25519KeyPair::from_bytes(&key)
             .map_err(|err| PemError::KeyRejected(format!("Key invalid: {}", err)))?;
+
+        // Check that the provided public key matches the secret key
+        // by regenerating and comparing the public key.
+        let pk2 = PublicKey::from(&key_pair.secret);
+        if pk2 != key_pair.public {
+            return Err(PemError::KeyRejected("Invalid public key".to_string()));
+        }
+
         Ok(BasicIdentity::from_key_pair(key_pair))
     }
 
