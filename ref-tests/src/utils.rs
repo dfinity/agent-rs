@@ -3,7 +3,6 @@ use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
 use ic_agent::{export::Principal, identity::BasicIdentity, Agent, Identity};
 use ic_identity_hsm::HardwareIdentity;
 use ic_utils::interfaces::{management_canister::builders::MemoryAllocation, ManagementCanister};
-use ring::signature::Ed25519KeyPair;
 use std::{convert::TryFrom, error::Error, future::Future, path::Path};
 
 const HSM_PKCS11_LIBRARY_PATH: &str = "HSM_PKCS11_LIBRARY_PATH";
@@ -52,13 +51,8 @@ fn get_hsm_pin() -> Result<String, String> {
 //
 // A shared container of Ctx objects might be possible instead, but my rust-fu is inadequate.
 pub async fn create_basic_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
-    let rng = ring::rand::SystemRandom::new();
-    let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
-        .expect("Could not generate a key pair.");
-
-    Ok(Box::new(BasicIdentity::from_key_pair(
-        Ed25519KeyPair::from_pkcs8(key_pair.as_ref()).expect("Could not read the key pair."),
-    )))
+    let key_pair = ed25519_dalek::Keypair::generate(&mut rand::rngs::OsRng);
+    Ok(Box::new(BasicIdentity::from_key_pair(key_pair)))
 }
 
 pub async fn create_agent(identity: Box<dyn Identity + Send + Sync>) -> Result<Agent, String> {
