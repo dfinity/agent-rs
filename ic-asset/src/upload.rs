@@ -1,20 +1,29 @@
 use crate::asset_canister::batch::{commit_batch, create_batch};
 use crate::asset_canister::list::list_assets;
 use crate::asset_canister::protocol::{AssetDetails, BatchOperationKind};
-use crate::params::CanisterCallParams;
-
 use crate::operations::{
-    create_new_assets, delete_obsolete_assets, set_encodings, unset_obsolete_encodings,
+    create_new_assets, delete_incompatible_assets, set_encodings, unset_obsolete_encodings,
 };
+use crate::params::CanisterCallParams;
 use crate::plumbing::{make_project_assets, AssetLocation, ProjectAsset};
 use ic_utils::Canister;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
-use walkdir::WalkDir;
 
-pub async fn sync(canister: &Canister<'_>, dir: &Path, timeout: Duration) -> anyhow::Result<()> {
-    let asset_locations = gather_asset_locations(dir);
+/// Upload the specified files
+pub async fn upload(
+    canister: &Canister<'_>,
+    timeout: Duration,
+    files: HashMap<String, PathBuf>,
+) -> anyhow::Result<()> {
+    let asset_locations: Vec<AssetLocation> = files
+        .iter()
+        .map(|x| AssetLocation {
+            source: x.1.clone(),
+            key: x.0.clone(),
+        })
+        .collect();
 
     let canister_call_params = CanisterCallParams { canister, timeout };
 
@@ -34,30 +43,16 @@ pub async fn sync(canister: &Canister<'_>, dir: &Path, timeout: Duration) -> any
     )
     .await?;
 
-    let operations = assemble_synchronization_operations(project_assets, container_assets);
+    let operations = assemble_upload_operations(project_assets, container_assets);
 
     println!("Committing batch.");
+
     commit_batch(&canister_call_params, &batch_id, operations).await?;
 
     Ok(())
 }
 
-fn gather_asset_locations(dir: &Path) -> Vec<AssetLocation> {
-    WalkDir::new(dir)
-        .into_iter()
-        .filter_map(|r| {
-            r.ok().filter(|entry| entry.file_type().is_file()).map(|e| {
-                let source = e.path().to_path_buf();
-                let relative = source.strip_prefix(dir).expect("cannot strip prefix");
-                let key = String::from("/") + relative.to_string_lossy().as_ref();
-
-                AssetLocation { source, key }
-            })
-        })
-        .collect()
-}
-
-fn assemble_synchronization_operations(
+fn assemble_upload_operations(
     project_assets: HashMap<String, ProjectAsset>,
     container_assets: HashMap<String, AssetDetails>,
 ) -> Vec<BatchOperationKind> {
@@ -65,7 +60,7 @@ fn assemble_synchronization_operations(
 
     let mut operations = vec![];
 
-    delete_obsolete_assets(&mut operations, &project_assets, &mut container_assets);
+    delete_incompatible_assets(&mut operations, &project_assets, &mut container_assets);
     create_new_assets(&mut operations, &project_assets, &container_assets);
     unset_obsolete_encodings(&mut operations, &project_assets, &container_assets);
     set_encodings(&mut operations, project_assets);

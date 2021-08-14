@@ -4,21 +4,22 @@ use crate::asset_canister::protocol::{
 };
 use crate::convenience::waiter_with_timeout;
 use crate::params::CanisterCallParams;
-use candid::{Decode, Encode, Nat};
+use candid::Nat;
 
 pub(crate) async fn create_batch(
     canister_call_params: &CanisterCallParams<'_>,
 ) -> anyhow::Result<Nat> {
     let create_batch_args = CreateBatchRequest {};
     let response = canister_call_params
-        .agent
-        .update(&canister_call_params.canister_id, CREATE_BATCH)
-        .with_arg(candid::Encode!(&create_batch_args)?)
-        .expire_after(canister_call_params.timeout)
+        .canister
+        .update_(CREATE_BATCH)
+        .with_arg(&create_batch_args)
+        .build()
+        .map(|result: (CreateBatchResponse,)| (result.0.batch_id,))
         .call_and_wait(waiter_with_timeout(canister_call_params.timeout))
         .await?;
-    let create_batch_response = candid::Decode!(&response, CreateBatchResponse)?;
-    Ok(create_batch_response.batch_id)
+    let batch_id = response.0;
+    Ok(batch_id)
 }
 
 pub(crate) async fn commit_batch(
@@ -30,12 +31,11 @@ pub(crate) async fn commit_batch(
         batch_id,
         operations,
     };
-    let arg = candid::Encode!(&arg)?;
     canister_call_params
-        .agent
-        .update(&canister_call_params.canister_id, COMMIT_BATCH)
+        .canister
+        .update_(COMMIT_BATCH)
         .with_arg(arg)
-        .expire_after(canister_call_params.timeout)
+        .build()
         .call_and_wait(waiter_with_timeout(canister_call_params.timeout))
         .await?;
     Ok(())

@@ -1,5 +1,5 @@
 use crate::{call::AsyncCall, call::SyncCall, canister::CanisterBuilder, Canister};
-use candid::{parser::value::IDLValue, CandidType, Deserialize, Func, Nat};
+use candid::{CandidType, Deserialize, Func, Nat};
 use ic_agent::{export::Principal, Agent};
 use serde_bytes::ByteBuf;
 use std::fmt::Debug;
