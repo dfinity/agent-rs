@@ -14,7 +14,7 @@ use ic_utils::{
     call::AsyncCall,
     call::SyncCall,
     interfaces::http_request::{
-        HeaderField, HttpRequestCanister, StreamingCallbackHttpResponse, StreamingStrategy,
+        HeaderField, HttpRequestCanister, HttpResponse, StreamingCallbackHttpResponse, StreamingStrategy,
     },
 };
 use slog::Drain;
@@ -201,7 +201,7 @@ async fn forward_request(
         .inspect(|HeaderField(name, value)| {
             slog::trace!(logger, "<< {}: {}", name, value);
         })
-        .collect();
+        .collect::<Vec<_>>();
 
     let entire_body = body::to_bytes(request.into_body()).await?.to_vec();
 
@@ -221,39 +221,50 @@ async fn forward_request(
     }
 
     let canister = HttpRequestCanister::create(agent.as_ref(), canister_id.clone());
-    let result = match method.to_uppercase().as_str() {
-        "DELETE" | "PATCH" | "POST" | "PUT" => {
-            let waiter = garcon::Delay::builder()
-                .throttle(std::time::Duration::from_millis(500))
-                .timeout(std::time::Duration::from_secs(60 * 5))
-                .build();
-            canister
-                .http_request_update(method, uri.to_string(), headers, &entire_body)
-                .call_and_wait(waiter)
-                .await
+    let query_result = canister
+        .http_request(method.clone(), uri.to_string(), headers.clone(), &entire_body)
+        .call()
+        .await;
+
+    fn handle_result(result: Result<(HttpResponse,), AgentError>) -> Result<HttpResponse, Result<Response<Body>, Box<dyn Error>>> {
+        // If the result is a Replica error, returns the 500 code and message. There is no information
+        // leak here because a user could use `dfx` to get the same reply.
+        match result {
+            Ok((http_response,)) => Ok(http_response),
+            Err(AgentError::ReplicaError {
+                reject_code,
+                reject_message,
+            }) => {
+                Err(Ok(Response::builder()
+                          .status(StatusCode::INTERNAL_SERVER_ERROR)
+                          .body(format!(r#"Replica Error ({}): "{}""#, reject_code, reject_message).into())
+                          .unwrap()))
+            }
+            Err(e) => Err(Err(e.into())),
         }
-        _ => {
-            canister
-                .http_request(method, uri.to_string(), headers, &entire_body)
-                .call()
-                .await
-        }
+    }
+
+    let http_response = match handle_result(query_result) {
+        Ok(http_response) => http_response,
+        Err(response_or_error) => return response_or_error,
     };
 
-    // If the result is a Replica error, returns the 500 code and message. There is no information
-    // leak here because a user could use `dfx` to get the same reply.
-    let (http_response,) = match result {
-        Ok(response) => response,
-        Err(AgentError::ReplicaError {
-            reject_code,
-            reject_message,
-        }) => {
-            return Ok(Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(format!(r#"Replica Error ({}): "{}""#, reject_code, reject_message).into())
-                .unwrap());
-        }
-        Err(e) => return Err(e.into()),
+    let http_response = if http_response.upgrade {
+        let waiter = garcon::Delay::builder()
+            .throttle(std::time::Duration::from_millis(500))
+            .timeout(std::time::Duration::from_secs(60 * 5))
+            .build();
+        let update_result = canister
+            .http_request_update(method, uri.to_string(), headers, &entire_body)
+            .call_and_wait(waiter)
+            .await;
+        let http_response = match handle_result(update_result) {
+            Ok(http_response) => http_response,
+            Err(response_or_error) => return response_or_error,
+        };
+        http_response
+    } else {
+        http_response
     };
 
     let mut builder = Response::builder().status(StatusCode::from_u16(http_response.status_code)?);
