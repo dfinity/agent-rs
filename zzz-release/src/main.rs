@@ -462,7 +462,7 @@ fn main() -> Result<()> {
         ch(opts.dry_run)?;
     }
 
-    eprintln!("");
+    eprintln!();
 
     let commit_message = format!(
         "chore: release of ic-agent\n\n{}",

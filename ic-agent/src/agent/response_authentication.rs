@@ -102,7 +102,7 @@ pub(crate) fn lookup_reject_code(
         "reject_code".into(),
     ];
     let code = lookup_value(certificate, path)?;
-    let mut readable = &code[..];
+    let mut readable = code;
     Ok(leb128::read::unsigned(&mut readable)?)
 }
 
