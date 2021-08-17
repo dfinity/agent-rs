@@ -43,7 +43,7 @@ fn basic_expiry() {
 
         match result.unwrap_err() {
             AgentError::HttpError(HttpErrorPayload { status, .. }) => assert_eq!(status, 400),
-            x => assert!(false, "Was expecting an error, got {:?}", x),
+            x => panic!("Was expecting an error, got {:?}", x),
         }
 
         let result = agent

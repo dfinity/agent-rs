@@ -96,7 +96,7 @@ where
             .expect("could not fetch root key");
         match f(agent).await {
             Ok(_) => {}
-            Err(e) => assert!(false, "{:?}", e),
+            Err(e) => panic!("{:?}", e),
         };
     })
 }
