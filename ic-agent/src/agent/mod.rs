@@ -62,7 +62,7 @@ const IC_ROOT_KEY: &[u8; 133] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x
 /// feature flag `reqwest`. This might be deprecated in the future.
 ///
 /// Any error returned by these methods will bubble up to the code that called the [Agent].
-pub trait ReplicaV2Transport {
+pub trait ReplicaV2Transport: Send + Sync {
     /// Sends an asynchronous request to a Replica. The Request ID is non-mutable and
     /// depends on the content of the envelope.
     ///
@@ -188,10 +188,10 @@ pub enum PollResult {
 #[derive(Clone)]
 pub struct Agent {
     nonce_factory: NonceFactory,
-    identity: Arc<dyn Identity + Send + Sync>,
+    identity: Arc<dyn Identity>,
     ingress_expiry_duration: Duration,
     root_key: Arc<RwLock<Option<Vec<u8>>>>,
-    transport: Arc<dyn ReplicaV2Transport + Send + Sync>,
+    transport: Arc<dyn ReplicaV2Transport>,
 }
 
 impl Agent {
@@ -219,7 +219,7 @@ impl Agent {
     }
 
     /// Set the transport of the [`Agent`].
-    pub fn set_transport<F: 'static + ReplicaV2Transport + Send + Sync>(&mut self, transport: F) {
+    pub fn set_transport<F: 'static + ReplicaV2Transport>(&mut self, transport: F) {
         self.transport = Arc::new(transport);
     }
 
@@ -679,10 +679,7 @@ fn construct_message(request_id: &RequestId) -> Vec<u8> {
     buf
 }
 
-fn sign_request<'a, V>(
-    request: &V,
-    identity: Arc<dyn Identity + Send + Sync>,
-) -> Result<Vec<u8>, AgentError>
+fn sign_request<'a, V>(request: &V, identity: Arc<dyn Identity>) -> Result<Vec<u8>, AgentError>
 where
     V: 'a + Serialize,
 {

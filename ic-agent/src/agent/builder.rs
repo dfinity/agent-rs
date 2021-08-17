@@ -32,10 +32,7 @@ impl AgentBuilder {
     }
 
     /// Set a Replica transport to talk to serve as the replica interface.
-    pub fn with_transport<F: 'static + ReplicaV2Transport + Send + Sync>(
-        self,
-        transport: F,
-    ) -> Self {
+    pub fn with_transport<F: 'static + ReplicaV2Transport>(self, transport: F) -> Self {
         Self {
             config: AgentConfig {
                 transport: Some(Arc::new(transport)),
@@ -57,7 +54,7 @@ impl AgentBuilder {
     /// Add an identity provider for signing messages. This is required.
     pub fn with_identity<I>(self, identity: I) -> Self
     where
-        I: 'static + Identity + Send + Sync,
+        I: 'static + Identity,
     {
         AgentBuilder {
             config: AgentConfig {
@@ -69,7 +66,7 @@ impl AgentBuilder {
 
     /// Same as [with_identity], but provides a boxed implementation instead
     /// of a direct type.
-    pub fn with_boxed_identity(self, identity: Box<dyn Identity + Send + Sync>) -> Self {
+    pub fn with_boxed_identity(self, identity: Box<dyn Identity>) -> Self {
         AgentBuilder {
             config: AgentConfig {
                 identity: Arc::from(identity),
