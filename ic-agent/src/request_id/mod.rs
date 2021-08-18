@@ -695,7 +695,7 @@ mod tests {
             method_name: &'static str,
             #[serde(with = "serde_bytes")]
             arg: Vec<u8>,
-        };
+        }
         let data = PublicSpecExampleStruct {
             request_type: "call",
             canister_id: Principal::try_from(&vec![0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
@@ -747,7 +747,7 @@ mod tests {
         struct NestedArraysExample {
             sender: Principal,
             paths: Vec<Vec<serde_bytes::ByteBuf>>,
-        };
+        }
         let data = NestedArraysExample {
             sender: Principal::try_from(&vec![0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
             paths: vec![
@@ -786,7 +786,7 @@ mod tests {
         #[derive(Serialize)]
         struct NestedArraysExample {
             paths: Vec<Vec<serde_bytes::ByteBuf>>,
-        };
+        }
         let data = NestedArraysExample { paths: vec![] };
 
         let request_id = to_request_id(&data).unwrap();
@@ -815,7 +815,7 @@ mod tests {
         #[derive(Serialize)]
         struct NestedArraysExample {
             paths: Vec<Vec<serde_bytes::ByteBuf>>,
-        };
+        }
         let data = NestedArraysExample {
             paths: vec![vec![]],
         };
