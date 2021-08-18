@@ -81,7 +81,7 @@ pub fn pprint(url: String) -> Result<()> {
             certificate_header
         )
     })?;
-    let structured_header = parse_structured_cert_header(&certificate_str[..])?;
+    let structured_header = parse_structured_cert_header(certificate_str)?;
     let tree: HashTree = parse_base64_cbor(structured_header.tree)?;
     let cert: ReplicaCertificate = parse_base64_cbor(structured_header.certificate)?;
 

@@ -71,8 +71,8 @@ impl Identity for Secp256k1Identity {
         let signature = Some(bytes.to_vec());
         let public_key = Some(self.der_encoded_public_key.clone());
         Ok(Signature {
-            signature,
             public_key,
+            signature,
         })
     }
 }
