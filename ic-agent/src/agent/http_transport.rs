@@ -3,11 +3,11 @@
 
 use crate::{agent::agent_error::HttpErrorPayload, ic_types::Principal, AgentError, RequestId};
 use reqwest::Method;
-use std::{future::Future, pin::Pin};
+use std::{future::Future, pin::Pin, sync::Arc};
 
 /// Implemented by the Agent environment to cache and update an HTTP Auth password.
 /// It returns a tuple of `(username, password)`.
-pub trait PasswordManager {
+pub trait PasswordManager: Send + Sync {
     /// Retrieve the cached value for a user. If no cache value exists for this URL,
     /// the manager can return [`None`].
     fn cached(&self, url: &str) -> Result<Option<(String, String)>, String>;
@@ -21,14 +21,56 @@ pub trait PasswordManager {
     fn required(&self, url: &str) -> Result<(String, String), String>;
 }
 
-/// A [ReplicaV2Transport] using Reqwest to make HTTP calls to the internet computer.
-pub struct ReqwestHttpReplicaV2Transport {
-    url: reqwest::Url,
-    client: reqwest::Client,
-    password_manager: Option<Box<dyn PasswordManager + Send + Sync>>,
+/// A type which can never be created used indicate no password manager.
+///
+/// This type is a stable equivalent to the `!` type from `std`.
+///
+/// This is currently an alias for [`std::convert::Infallible`], but in
+/// the future it may be an alias for [`!`][never].
+/// See ["Future compatibility" section of `std::convert::Infallible`][infallible] for more.
+///
+/// [never]: https://doc.rust-lang.org/nightly/std/primitive.never.html
+/// [infallible]: https://doc.rust-lang.org/nightly/std/convert/enum.Infallible.html#future-compatibility
+pub type NoPasswordManager = std::convert::Infallible;
+
+impl PasswordManager for Box<dyn PasswordManager> {
+    fn cached(&self, url: &str) -> Result<Option<(String, String)>, String> {
+        (**self).cached(url)
+    }
+    fn required(&self, url: &str) -> Result<(String, String), String> {
+        (**self).required(url)
+    }
+}
+impl PasswordManager for Arc<dyn PasswordManager> {
+    fn cached(&self, url: &str) -> Result<Option<(String, String)>, String> {
+        (**self).cached(url)
+    }
+    fn required(&self, url: &str) -> Result<(String, String), String> {
+        (**self).required(url)
+    }
 }
 
-impl ReqwestHttpReplicaV2Transport {
+impl PasswordManager for NoPasswordManager {
+    fn cached(&self, _: &str) -> Result<Option<(String, String)>, String> {
+        unreachable!()
+    }
+    fn required(&self, _: &str) -> Result<(String, String), String> {
+        unreachable!()
+    }
+}
+
+/// A [ReplicaV2Transport] using Reqwest to make HTTP calls to the internet computer.
+pub type ReqwestHttpReplicaV2Transport =
+    ReqwestHttpReplicaV2TransportImpl<Box<dyn PasswordManager>>;
+
+/// A [ReplicaV2Transport] using Reqwest to make HTTP calls to the internet computer.
+pub struct ReqwestHttpReplicaV2TransportImpl<P: PasswordManager> {
+    url: reqwest::Url,
+    client: reqwest::Client,
+    password_manager: Option<P>,
+}
+
+impl<P: PasswordManager> ReqwestHttpReplicaV2TransportImpl<P> {
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
         let mut tls_config = rustls::ClientConfig::new();
 
@@ -53,14 +95,23 @@ impl ReqwestHttpReplicaV2Transport {
         })
     }
 
-    pub fn with_password_manager<P: 'static + PasswordManager + Send + Sync>(
+    pub fn with_password_manager<P1: PasswordManager>(
         self,
-        password_manager: P,
-    ) -> Self {
-        Self {
-            password_manager: Some(Box::new(password_manager)),
-            ..self
+        password_manager: P1,
+    ) -> ReqwestHttpReplicaV2TransportImpl<P1> {
+        ReqwestHttpReplicaV2TransportImpl {
+            password_manager: Some(password_manager),
+            url: self.url,
+            client: self.client,
         }
+    }
+
+    pub fn password_manager(&self) -> &Option<P> {
+        &self.password_manager
+    }
+
+    pub fn password_manager_mut(&mut self) -> &mut Option<P> {
+        &mut self.password_manager
     }
 
     fn maybe_add_authorization(

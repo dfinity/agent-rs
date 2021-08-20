@@ -32,6 +32,9 @@ pub enum AgentError {
     #[error(r#"Cannot parse url: "{0}""#)]
     UrlParseError(#[from] url::ParseError),
 
+    #[error(r#"Invalid method: "{0}""#)]
+    InvalidMethodError(#[from] http::method::InvalidMethod),
+
     #[error("Cannot parse Principal: {0}")]
     PrincipalError(#[from] crate::export::PrincipalError),
 
