@@ -359,7 +359,7 @@ impl<N: NonceGenerator> AgentImpl<N> {
     pub fn nonce_factory(&self) -> &N {
         &self.nonce_factory
     }
-    
+
     pub fn nonce_factory_mut(&mut self) -> &mut N {
         &mut self.nonce_factory
     }
