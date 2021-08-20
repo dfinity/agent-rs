@@ -33,7 +33,7 @@ pub trait PasswordManager: Send + Sync {
 /// [infallible]: https://doc.rust-lang.org/nightly/std/convert/enum.Infallible.html#future-compatibility
 pub type NoPasswordManager = std::convert::Infallible;
 
-impl PasswordManager for Box<dyn PasswordManager> {
+impl<P: PasswordManager + ?Sized> PasswordManager for Box<P> {
     fn cached(&self, url: &str) -> Result<Option<(String, String)>, String> {
         (**self).cached(url)
     }
@@ -41,7 +41,7 @@ impl PasswordManager for Box<dyn PasswordManager> {
         (**self).required(url)
     }
 }
-impl PasswordManager for Arc<dyn PasswordManager> {
+impl<P: PasswordManager + ?Sized> PasswordManager for Arc<P> {
     fn cached(&self, url: &str) -> Result<Option<(String, String)>, String> {
         (**self).cached(url)
     }
