@@ -217,15 +217,15 @@ impl<P: PasswordManager> ReqwestHttpReplicaV2TransportImpl<P> {
     }
 }
 
-impl super::ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
+impl<P: PasswordManager> super::ReplicaV2Transport for ReqwestHttpReplicaV2TransportImpl<P> {
     fn call<'a>(
         &'a self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
         _request_id: RequestId,
     ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
-        async fn run(
-            s: &ReqwestHttpReplicaV2Transport,
+        async fn run<P: PasswordManager>(
+            s: &ReqwestHttpReplicaV2TransportImpl<P>,
             effective_canister_id: Principal,
             envelope: Vec<u8>,
         ) -> Result<(), AgentError> {
@@ -242,8 +242,8 @@ impl super::ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
         effective_canister_id: Principal,
         envelope: Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(
-            s: &ReqwestHttpReplicaV2Transport,
+        async fn run<P: PasswordManager>(
+            s: &ReqwestHttpReplicaV2TransportImpl<P>,
             effective_canister_id: Principal,
             envelope: Vec<u8>,
         ) -> Result<Vec<u8>, AgentError> {
@@ -259,8 +259,8 @@ impl super::ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
         effective_canister_id: Principal,
         envelope: Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(
-            s: &ReqwestHttpReplicaV2Transport,
+        async fn run<P: PasswordManager>(
+            s: &ReqwestHttpReplicaV2TransportImpl<P>,
             effective_canister_id: Principal,
             envelope: Vec<u8>,
         ) -> Result<Vec<u8>, AgentError> {
@@ -274,7 +274,9 @@ impl super::ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
     fn status<'a>(
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(s: &ReqwestHttpReplicaV2Transport) -> Result<Vec<u8>, AgentError> {
+        async fn run<P: PasswordManager>(
+            s: &ReqwestHttpReplicaV2TransportImpl<P>,
+        ) -> Result<Vec<u8>, AgentError> {
             s.execute(Method::GET, "status", None).await
         }
 
