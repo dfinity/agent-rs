@@ -18,7 +18,8 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.34"
-clap = "3.0.0-beta.2"
+clap = "=3.0.0-beta.2"
+clap_derive = "=3.0.0-beta.2"
 garcon = { version = "0.2.3", features = ["async"] }
 hex = "0.4.3"
 hyper = { version = "0.14.11", features = ["full"] }
