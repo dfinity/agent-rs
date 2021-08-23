@@ -29,7 +29,7 @@
 //! ```ignore
 //! # // This test is ignored because it requires an ic to be running. We run these
 //! # // in the ic-ref workflow.
-//! use ic_agent::{Agent, ic_types::Principal};
+//! use ic_agent::{agent::http_transport::ReqwestHttpReplicaV2Transport, Agent, ic_types::Principal};
 //! use candid::{Encode, Decode, CandidType, Nat};
 //! use serde::Deserialize;
 //!
@@ -58,7 +58,7 @@
 //! #
 //! async fn create_a_canister() -> Result<Principal, Box<dyn std::error::Error>> {
 //!   let agent = Agent::builder()
-//!     .with_url(URL)
+//!     .with_transport(ReqwestHttpReplicaV2Transport::create(URL).unwrap())
 //!     .with_identity(create_identity())
 //!     .build()?;
 //!   // Only do the following call when not contacting the IC main net (e.g. a local emulator).

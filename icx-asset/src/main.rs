@@ -9,7 +9,7 @@ use ic_agent::identity::{AnonymousIdentity, BasicIdentity};
 use ic_agent::{agent::http_transport::ReqwestHttpReplicaV2Transport, Agent, Identity};
 
 use crate::commands::upload::upload;
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{path::PathBuf, time::Duration};
 
 const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
 
@@ -99,7 +99,7 @@ async fn main() -> support::Result {
         .unwrap_or_else(|| Duration::from_secs(60 * 5)); // 5 minutes is max ingress timeout
 
     let agent = Agent::builder()
-        .with_transport(Arc::new(ReqwestHttpReplicaV2Transport::create(
+        .with_boxed_transport(Box::new(ReqwestHttpReplicaV2Transport::create(
             opts.replica.clone(),
         )?))
         .with_boxed_identity(create_identity(opts.pem))

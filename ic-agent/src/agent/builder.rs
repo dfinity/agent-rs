@@ -40,6 +40,15 @@ impl<N: NonceGenerator, I: Identity, T: ReplicaV2Transport> AgentBuilderImpl<N, 
         }
     }
 
+    /// Same as [with_transport], but provides a boxed implementation instead
+    /// of a direct type.
+    pub fn with_boxed_transport(
+        self,
+        transport: Box<dyn ReplicaV2Transport>,
+    ) -> AgentBuilderImpl<N, I, Arc<dyn ReplicaV2Transport>> {
+        self.with_transport(Arc::from(transport))
+    }
+
     /// Add a NonceFactory to this AgentImpl. By default, no nonce is produced.
     pub fn with_nonce_factory(
         self,
@@ -88,14 +97,7 @@ impl<N: NonceGenerator, I: Identity, T: ReplicaV2Transport> AgentBuilderImpl<N, 
         self,
         identity: Box<dyn Identity>,
     ) -> AgentBuilderImpl<N, Arc<dyn Identity>, T> {
-        AgentBuilderImpl {
-            config: AgentConfigImpl {
-                nonce_factory: self.config.nonce_factory,
-                identity: Arc::from(identity),
-                ingress_expiry_duration: self.config.ingress_expiry_duration,
-                transport: self.config.transport,
-            },
-        }
+        self.with_identity(Arc::from(identity))
     }
 
     /// Provides a _default_ ingress expiry. This is the delta that will be applied
