@@ -24,7 +24,7 @@ garcon = "0.2.2"
 humantime = "2.0.1"
 ic-agent = { path = "../ic-agent", version = "0.7" }
 ic-asset = { path = "../ic-asset", version = "0.2" }
-ic-types = "0.2.1"
+ic-types = "0.2.2"
 ic-utils = { path = "../ic-utils", version = "0.5" }
 libflate = "1.1.0"
 num-traits = "0.2"
