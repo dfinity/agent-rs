@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use candid::{decode_args, decode_one, utils::ArgumentDecoder, CandidType};
 use garcon::Waiter;
-use ic_agent::{agent::UpdateBuilder, export::Principal, Agent, AgentError, RequestId};
+use ic_agent::{agent::AgentTrait, agent::UpdateBuilder, export::Principal, AgentError, RequestId};
 use serde::de::DeserializeOwned;
 use std::future::Future;
 
@@ -148,7 +148,7 @@ pub struct SyncCaller<'agent, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send,
 {
-    pub(crate) agent: &'agent Agent,
+    pub(crate) agent: &'agent dyn AgentTrait,
     pub(crate) effective_canister_id: Principal,
     pub(crate) canister_id: Principal,
     pub(crate) method_name: String,
@@ -163,7 +163,7 @@ where
 {
     /// Perform the call, consuming the the abstraction. This is a private method.
     async fn call_raw(self) -> Result<Vec<u8>, AgentError> {
-        let mut builder = self.agent.query(&self.canister_id, &self.method_name);
+        let mut builder = self.agent.query(&self.canister_id, self.method_name);
         self.expiry.apply_to_query(&mut builder);
         builder.with_arg(&self.arg?);
         builder.with_effective_canister_id(self.effective_canister_id);
@@ -194,7 +194,7 @@ pub struct AsyncCaller<'agent, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send,
 {
-    pub(crate) agent: &'agent Agent,
+    pub(crate) agent: &'agent dyn AgentTrait,
     pub(crate) effective_canister_id: Principal,
     pub(crate) canister_id: Principal,
     pub(crate) method_name: String,
@@ -209,8 +209,8 @@ where
 {
     /// Build an UpdateBuilder call that can be used directly with the [Agent]. This is
     /// essentially downleveling this type into the lower level [ic-agent] abstraction.
-    pub fn build_call(self) -> Result<UpdateBuilder<'agent>, AgentError> {
-        let mut builder = self.agent.update(&self.canister_id, &self.method_name);
+    pub fn build_call(self) -> Result<UpdateBuilder<'agent, 'static>, AgentError> {
+        let mut builder = self.agent.update(&self.canister_id, self.method_name);
         self.expiry.apply_to_update(&mut builder);
         builder.with_arg(&self.arg?);
         builder.with_effective_canister_id(self.effective_canister_id);

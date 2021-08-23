@@ -1,6 +1,6 @@
 use crate::{call::AsyncCall, canister::CanisterBuilder, Canister};
 use candid::{CandidType, Deserialize};
-use ic_agent::{export::Principal, Agent};
+use ic_agent::{agent::AgentTrait, export::Principal};
 use std::{convert::AsRef, fmt::Debug};
 use strum_macros::{AsRefStr, EnumString};
 
@@ -31,7 +31,7 @@ pub enum MgmtMethod {
 impl ManagementCanister {
     /// Create an instance of a [Canister] implementing the ManagementCanister interface
     /// and pointing to the right Canister ID.
-    pub fn create(agent: &Agent) -> Canister<ManagementCanister> {
+    pub fn create(agent: &dyn AgentTrait) -> Canister<ManagementCanister> {
         Canister::builder()
             .with_agent(agent)
             .with_canister_id(Principal::management_canister())
@@ -42,7 +42,7 @@ impl ManagementCanister {
 
     /// Creating a CanisterBuilder with the right interface and Canister Id. This can
     /// be useful, for example, for providing additional Builder information.
-    pub fn with_agent(agent: &Agent) -> CanisterBuilder<ManagementCanister> {
+    pub fn with_agent(agent: &dyn AgentTrait) -> CanisterBuilder<ManagementCanister> {
         Canister::builder()
             .with_agent(agent)
             .with_canister_id(Principal::management_canister())

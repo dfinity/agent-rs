@@ -1,6 +1,6 @@
 use garcon::Delay;
 use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
-use ic_agent::{export::Principal, identity::BasicIdentity, Agent, Identity};
+use ic_agent::{agent::AgentTrait, export::Principal, identity::BasicIdentity, Agent, Identity};
 use ic_identity_hsm::HardwareIdentity;
 use ic_utils::interfaces::{management_canister::builders::MemoryAllocation, ManagementCanister};
 use ring::signature::Ed25519KeyPair;
@@ -61,26 +61,31 @@ pub async fn create_basic_identity() -> Result<Box<dyn Identity>, String> {
     )))
 }
 
-pub async fn create_agent(identity: Box<dyn Identity>) -> Result<Agent, String> {
+pub async fn create_agent<'a, I: 'a + Identity>(
+    identity: I,
+) -> Result<Box<dyn AgentTrait + 'a>, String> {
     let port_env = std::env::var("IC_REF_PORT")
         .expect("Need to specify the IC_REF_PORT environment variable.");
     let port = port_env
         .parse::<u32>()
         .expect("Could not parse the IC_REF_PORT environment variable as an integer.");
 
-    Agent::builder()
-        .with_transport(
-            ReqwestHttpReplicaV2Transport::create(format!("http://127.0.0.1:{}", port)).unwrap(),
-        )
-        .with_boxed_identity(identity)
-        .build()
-        .map_err(|e| format!("{:?}", e))
+    Ok(Box::new(
+        Agent::builder()
+            .with_transport(
+                ReqwestHttpReplicaV2Transport::create(format!("http://127.0.0.1:{}", port))
+                    .unwrap(),
+            )
+            .with_identity(identity)
+            .build()
+            .map_err(|e| format!("{:?}", e))?,
+    ))
 }
 
 pub fn with_agent<F, R>(f: F)
 where
     R: Future<Output = Result<(), Box<dyn Error>>>,
-    F: FnOnce(Agent) -> R,
+    F: FnOnce(Box<dyn AgentTrait>) -> R,
 {
     let runtime = tokio::runtime::Runtime::new().expect("Could not create tokio runtime.");
     runtime.block_on(async {
@@ -101,7 +106,9 @@ where
     })
 }
 
-pub async fn create_universal_canister(agent: &Agent) -> Result<Principal, Box<dyn Error>> {
+pub async fn create_universal_canister(
+    agent: &dyn AgentTrait,
+) -> Result<Principal, Box<dyn Error>> {
     let canister_env = std::env::var("IC_UNIVERSAL_CANISTER_PATH")
         .expect("Need to specify the IC_UNIVERSAL_CANISTER_PATH environment variable.");
 
@@ -113,7 +120,7 @@ pub async fn create_universal_canister(agent: &Agent) -> Result<Principal, Box<d
         std::fs::read(&canister_path).expect("Could not read file.")
     };
 
-    let ic00 = ManagementCanister::create(&agent);
+    let ic00 = ManagementCanister::create(agent);
 
     let (canister_id,) = ic00
         .create_canister()
@@ -143,12 +150,12 @@ pub fn get_wallet_wasm_from_env() -> Vec<u8> {
 }
 
 pub async fn create_wallet_canister(
-    agent: &Agent,
+    agent: &dyn AgentTrait,
     cycles: Option<u64>,
 ) -> Result<Principal, Box<dyn Error>> {
     let canister_wasm = get_wallet_wasm_from_env();
 
-    let ic00 = ManagementCanister::create(&agent);
+    let ic00 = ManagementCanister::create(agent);
 
     let (canister_id,) = ic00
         .create_canister()
@@ -171,7 +178,7 @@ pub async fn create_wallet_canister(
 pub fn with_universal_canister<F, R>(f: F)
 where
     R: Future<Output = Result<(), Box<dyn Error>>>,
-    F: FnOnce(Agent, Principal) -> R,
+    F: FnOnce(Box<dyn AgentTrait>, Principal) -> R,
 {
     with_agent(|agent| async move {
         let canister_id = create_universal_canister(&agent).await?;
@@ -182,7 +189,7 @@ where
 pub fn with_wallet_canister<F, R>(cycles: Option<u64>, f: F)
 where
     R: Future<Output = Result<(), Box<dyn Error>>>,
-    F: FnOnce(Agent, Principal) -> R,
+    F: FnOnce(Box<dyn AgentTrait>, Principal) -> R,
 {
     with_agent(|agent| async move {
         let canister_id = create_wallet_canister(&agent, cycles).await?;

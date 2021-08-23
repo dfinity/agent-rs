@@ -40,6 +40,7 @@ use crate::{
     bls::bls12381::bls,
 };
 use std::{
+    borrow::Cow,
     convert::TryFrom,
     future::Future,
     pin::Pin,
@@ -102,7 +103,7 @@ pub trait ReplicaV2Transport: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
 }
 
-impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Box<I> {
+impl<T: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Box<T> {
     fn call<'a>(
         &'a self,
         effective_canister_id: Principal,
@@ -131,7 +132,7 @@ impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Box<I> {
         (**self).status()
     }
 }
-impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Arc<I> {
+impl<T: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Arc<T> {
     fn call<'a>(
         &'a self,
         effective_canister_id: Principal,
@@ -244,7 +245,7 @@ pub enum PollResult {
 /// ```
 ///
 /// This agent does not understand Candid, and only acts on byte buffers.
-pub type Agent = AgentImpl<NonceFactory>;
+pub type Agent = AgentImpl<NonceFactory, Arc<dyn Identity>, Arc<dyn ReplicaV2Transport>>;
 
 /// A low level Agent to make calls to a Replica endpoint.
 ///
@@ -317,25 +318,634 @@ pub type Agent = AgentImpl<NonceFactory>;
 ///
 /// This agent does not understand Candid, and only acts on byte buffers.
 #[derive(Clone)]
-pub struct AgentImpl<N: NonceGenerator> {
+pub struct AgentImpl<N, I, T> {
     nonce_factory: N,
-    identity: Arc<dyn Identity>,
+    identity: I,
     ingress_expiry_duration: Duration,
     root_key: Arc<RwLock<Option<Vec<u8>>>>,
-    transport: Arc<dyn ReplicaV2Transport>,
+    transport: T,
 }
 
-impl Agent {
+mod private {
+    pub trait Sealed {}
+
+    impl<N, I, T> Sealed for super::AgentImpl<N, I, T> {}
+    impl<T: super::AgentTrait + ?Sized> Sealed for Box<T> {}
+    impl<T: super::AgentTrait + ?Sized> Sealed for std::sync::Arc<T> {}
+}
+
+pub trait AgentTrait: private::Sealed + Sync + Send {
+    /// Gets the ingress expiry.
+    fn ingress_expiry(&self) -> Duration;
+
+    /// Gets a reference to the nonce factory of the agent.
+    fn nonce_factory(&self) -> &dyn NonceGenerator;
+
+    /// Gets a reference to the identity of the agent.
+    fn identity(&self) -> &dyn Identity;
+
+    /// Gets a reference to the transport of the agent.
+    fn transport(&self) -> &dyn ReplicaV2Transport;
+
+    /// By default, the agent is configured to talk to the main Internet Computer, and verifies
+    /// responses using a hard-coded public key.
+    ///
+    /// This function will instruct the agent to ask the endpoint for its public key, and use
+    /// that instead. This is required when talking to a local test instance, for example.
+    ///
+    /// *Only use this when you are  _not_ talking to the main Internet Computer, otherwise
+    /// you are prone to man-in-the-middle attacks! Do not call this function by default.*
+    fn fetch_root_key(&self) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + '_>>;
+
+    /// By default, the agent is configured to talk to the main Internet Computer, and verifies
+    /// responses using a hard-coded public key.
+    ///
+    /// Using this function you can set the root key to a known one if you know if beforehand.
+    fn set_root_key(&self, root_key: Vec<u8>) -> Result<(), AgentError>;
+
+    /// Send the signed query to the network. Will return a byte vector.
+    /// The bytes will be checked if it is a valid query.
+    /// If you want to inspect the fields of the query call, use [`signed_query_inspect`] before calling this method.
+    fn query_signed(
+        &self,
+        effective_canister_id: Principal,
+        signed_query: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + '_>>;
+
+    /// Send the signed update to the network. Will return a [`RequestId`].
+    /// The bytes will be checked to verify that it is a valid update.
+    /// If you want to inspect the fields of the update, use [`signed_update_inspect`] before calling this method.
+    fn update_signed(
+        &self,
+        effective_canister_id: Principal,
+        signed_update: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<RequestId, AgentError>> + Send + '_>>;
+
+    // Call request_status on the RequestId once and classify the result
+    fn poll<'a>(
+        &'a self,
+        request_id: &'a RequestId,
+        effective_canister_id: &'a Principal,
+    ) -> Pin<Box<dyn Future<Output = Result<PollResult, AgentError>> + Send + 'a>>;
+
+    // Call request_status on the RequestId in a loop and return the response as a byte vector.
+    fn wait<'a>(
+        &'a self,
+        request_id: RequestId,
+        effective_canister_id: &'a Principal,
+        waiter: &'a mut dyn Waiter,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
+
+    fn read_state_canister_info<'a>(
+        &'a self,
+        canister_id: Principal,
+        path: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
+
+    fn request_status_raw<'a>(
+        &'a self,
+        request_id: &'a RequestId,
+        effective_canister_id: Principal,
+    ) -> Pin<Box<dyn Future<Output = Result<RequestStatusResponse, AgentError>> + Send + 'a>>;
+
+    /// Send the signed request_status to the network. Will return [`RequestStatusResponse`].
+    /// The bytes will be checked to verify that it is a valid request_status.
+    /// If you want to inspect the fields of the request_status, use [`signed_request_status_inspect`] before calling this method.
+    fn request_status_signed<'a>(
+        &'a self,
+        request_id: &'a RequestId,
+        effective_canister_id: Principal,
+        signed_request_status: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<RequestStatusResponse, AgentError>> + Send + 'a>>;
+
+    /// Returns an UpdateBuilder enabling the construction of an update call without
+    /// passing all arguments.
+    fn update_string(&self, canister_id: &Principal, method_name: String) -> UpdateBuilder;
+
+    /// Calls and returns the information returned by the status endpoint of a replica.
+    fn status(&self) -> Pin<Box<dyn Future<Output = Result<Status, AgentError>> + Send + '_>>;
+
+    /// Returns a QueryBuilder enabling the construction of a query call without
+    /// passing all arguments.
+    fn query_string(&self, canister_id: &Principal, method_name: String) -> QueryBuilder;
+
+    /// Sign a request_status call. This will return a [`signed::SignedRequestStatus`]
+    /// which contains all fields of the request_status and the signed request_status in CBOR encoding
+    fn sign_request_status(
+        &self,
+        effective_canister_id: Principal,
+        request_id: RequestId,
+    ) -> Result<signed::SignedRequestStatus, AgentError>;
+}
+
+impl<'agent> dyn AgentTrait + 'agent {
+    /// Returns an UpdateBuilder enabling the construction of an update call without
+    /// passing all arguments.
+    pub fn update<'method, S: Into<Cow<'method, str>>>(
+        &'agent self,
+        canister_id: &Principal,
+        method_name: S,
+    ) -> UpdateBuilder<'agent, 'method> {
+        UpdateBuilder::new(self, *canister_id, method_name)
+    }
+
+    /// Returns a QueryBuilder enabling the construction of a query call without
+    /// passing all arguments.
+    pub fn query<'method, S: Into<Cow<'method, str>>>(
+        &'agent self,
+        canister_id: &Principal,
+        method_name: S,
+    ) -> QueryBuilder<'agent, 'method> {
+        QueryBuilder::new(self, *canister_id, method_name)
+    }
+}
+
+impl<N: NonceGenerator, I: Identity, T: ReplicaV2Transport> AgentTrait for AgentImpl<N, I, T> {
+    fn ingress_expiry(&self) -> Duration {
+        self.ingress_expiry_duration
+    }
+
+    fn nonce_factory(&self) -> &dyn NonceGenerator {
+        <Self>::nonce_factory(self)
+    }
+
+    fn identity(&self) -> &dyn Identity {
+        <Self>::identity(self)
+    }
+
+    fn transport(&self) -> &dyn ReplicaV2Transport {
+        <Self>::transport(self)
+    }
+
+    fn fetch_root_key(&self) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + '_>> {
+        Box::pin(<Self>::fetch_root_key(self))
+    }
+
+    fn set_root_key(&self, root_key: Vec<u8>) -> Result<(), AgentError> {
+        <Self>::set_root_key(self, root_key)
+    }
+
+    fn query_signed(
+        &self,
+        effective_canister_id: Principal,
+        signed_query: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + '_>> {
+        Box::pin(<Self>::query_signed(
+            self,
+            effective_canister_id,
+            signed_query,
+        ))
+    }
+
+    fn update_signed(
+        &self,
+        effective_canister_id: Principal,
+        signed_update: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<RequestId, AgentError>> + Send + '_>> {
+        Box::pin(<Self>::update_signed(
+            self,
+            effective_canister_id,
+            signed_update,
+        ))
+    }
+
+    // Call request_status on the RequestId once and classify the result
+    fn poll<'a>(
+        &'a self,
+        request_id: &'a RequestId,
+        effective_canister_id: &'a Principal,
+    ) -> Pin<Box<dyn Future<Output = Result<PollResult, AgentError>> + Send + 'a>> {
+        Box::pin(<Self>::poll(self, request_id, effective_canister_id))
+    }
+
+    // Call request_status on the RequestId in a loop and return the response as a byte vector.
+    fn wait<'a>(
+        &'a self,
+        request_id: RequestId,
+        effective_canister_id: &'a Principal,
+        waiter: &'a mut dyn Waiter,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        Box::pin(self.wait_helper(request_id, effective_canister_id, waiter))
+    }
+
+    fn read_state_canister_info<'a>(
+        &'a self,
+        canister_id: Principal,
+        path: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        Box::pin(<Self>::read_state_canister_info(self, canister_id, path))
+    }
+
+    fn request_status_raw<'a>(
+        &'a self,
+        request_id: &'a RequestId,
+        effective_canister_id: Principal,
+    ) -> Pin<Box<dyn Future<Output = Result<RequestStatusResponse, AgentError>> + Send + 'a>> {
+        Box::pin(<Self>::request_status_raw(
+            self,
+            request_id,
+            effective_canister_id,
+        ))
+    }
+
+    fn request_status_signed<'a>(
+        &'a self,
+        request_id: &'a RequestId,
+        effective_canister_id: Principal,
+        signed_request_status: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<RequestStatusResponse, AgentError>> + Send + 'a>> {
+        Box::pin(<Self>::request_status_signed(
+            self,
+            request_id,
+            effective_canister_id,
+            signed_request_status,
+        ))
+    }
+
+    fn update_string(&self, canister_id: &Principal, method_name: String) -> UpdateBuilder {
+        <Self>::update(self, canister_id, method_name)
+    }
+
+    fn status(&self) -> Pin<Box<dyn Future<Output = Result<Status, AgentError>> + Send + '_>> {
+        Box::pin(<Self>::status(self))
+    }
+
+    fn query_string(&self, canister_id: &Principal, method_name: String) -> QueryBuilder {
+        <Self>::query(self, canister_id, method_name)
+    }
+
+    fn sign_request_status(
+        &self,
+        effective_canister_id: Principal,
+        request_id: RequestId,
+    ) -> Result<signed::SignedRequestStatus, AgentError> {
+        <Self>::sign_request_status(self, effective_canister_id, request_id)
+    }
+}
+
+impl<A: AgentTrait + ?Sized> AgentTrait for Box<A> {
+    fn ingress_expiry(&self) -> Duration {
+        (**self).ingress_expiry()
+    }
+
+    fn nonce_factory(&self) -> &dyn NonceGenerator {
+        (**self).nonce_factory()
+    }
+
+    fn identity(&self) -> &dyn Identity {
+        (**self).identity()
+    }
+
+    fn transport(&self) -> &dyn ReplicaV2Transport {
+        (**self).transport()
+    }
+
+    fn fetch_root_key(&self) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + '_>> {
+        (**self).fetch_root_key()
+    }
+
+    fn set_root_key(&self, root_key: Vec<u8>) -> Result<(), AgentError> {
+        (**self).set_root_key(root_key)
+    }
+
+    fn query_signed(
+        &self,
+        effective_canister_id: Principal,
+        signed_query: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + '_>> {
+        (**self).query_signed(effective_canister_id, signed_query)
+    }
+
+    fn update_signed(
+        &self,
+        effective_canister_id: Principal,
+        signed_update: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<RequestId, AgentError>> + Send + '_>> {
+        (**self).update_signed(effective_canister_id, signed_update)
+    }
+
+    // Call request_status on the RequestId once and classify the result
+    fn poll<'a>(
+        &'a self,
+        request_id: &'a RequestId,
+        effective_canister_id: &'a Principal,
+    ) -> Pin<Box<dyn Future<Output = Result<PollResult, AgentError>> + Send + 'a>> {
+        (**self).poll(request_id, effective_canister_id)
+    }
+
+    // Call request_status on the RequestId in a loop and return the response as a byte vector.
+    fn wait<'a>(
+        &'a self,
+        request_id: RequestId,
+        effective_canister_id: &'a Principal,
+        waiter: &'a mut dyn Waiter,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        (**self).wait(request_id, effective_canister_id, waiter)
+    }
+
+    fn read_state_canister_info<'a>(
+        &'a self,
+        canister_id: Principal,
+        path: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        (**self).read_state_canister_info(canister_id, path)
+    }
+
+    fn request_status_raw<'a>(
+        &'a self,
+        request_id: &'a RequestId,
+        effective_canister_id: Principal,
+    ) -> Pin<Box<dyn Future<Output = Result<RequestStatusResponse, AgentError>> + Send + 'a>> {
+        (**self).request_status_raw(request_id, effective_canister_id)
+    }
+
+    fn request_status_signed<'a>(
+        &'a self,
+        request_id: &'a RequestId,
+        effective_canister_id: Principal,
+        signed_request_status: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<RequestStatusResponse, AgentError>> + Send + 'a>> {
+        (**self).request_status_signed(request_id, effective_canister_id, signed_request_status)
+    }
+
+    fn update_string(&self, canister_id: &Principal, method_name: String) -> UpdateBuilder {
+        (**self).update_string(canister_id, method_name)
+    }
+
+    fn status(&self) -> Pin<Box<dyn Future<Output = Result<Status, AgentError>> + Send + '_>> {
+        (**self).status()
+    }
+
+    fn query_string(&self, canister_id: &Principal, method_name: String) -> QueryBuilder {
+        (**self).query_string(canister_id, method_name)
+    }
+
+    fn sign_request_status(
+        &self,
+        effective_canister_id: Principal,
+        request_id: RequestId,
+    ) -> Result<signed::SignedRequestStatus, AgentError> {
+        (**self).sign_request_status(effective_canister_id, request_id)
+    }
+}
+
+impl<A: AgentTrait + ?Sized> AgentTrait for Arc<A> {
+    fn ingress_expiry(&self) -> Duration {
+        (**self).ingress_expiry()
+    }
+
+    fn nonce_factory(&self) -> &dyn NonceGenerator {
+        (**self).nonce_factory()
+    }
+
+    fn identity(&self) -> &dyn Identity {
+        (**self).identity()
+    }
+
+    fn transport(&self) -> &dyn ReplicaV2Transport {
+        (**self).transport()
+    }
+
+    fn fetch_root_key(&self) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + '_>> {
+        (**self).fetch_root_key()
+    }
+
+    fn set_root_key(&self, root_key: Vec<u8>) -> Result<(), AgentError> {
+        (**self).set_root_key(root_key)
+    }
+
+    fn query_signed(
+        &self,
+        effective_canister_id: Principal,
+        signed_query: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + '_>> {
+        (**self).query_signed(effective_canister_id, signed_query)
+    }
+
+    fn update_signed(
+        &self,
+        effective_canister_id: Principal,
+        signed_update: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<RequestId, AgentError>> + Send + '_>> {
+        (**self).update_signed(effective_canister_id, signed_update)
+    }
+
+    // Call request_status on the RequestId once and classify the result
+    fn poll<'a>(
+        &'a self,
+        request_id: &'a RequestId,
+        effective_canister_id: &'a Principal,
+    ) -> Pin<Box<dyn Future<Output = Result<PollResult, AgentError>> + Send + 'a>> {
+        (**self).poll(request_id, effective_canister_id)
+    }
+
+    // Call request_status on the RequestId in a loop and return the response as a byte vector.
+    fn wait<'a>(
+        &'a self,
+        request_id: RequestId,
+        effective_canister_id: &'a Principal,
+        waiter: &'a mut dyn Waiter,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        (**self).wait(request_id, effective_canister_id, waiter)
+    }
+
+    fn read_state_canister_info<'a>(
+        &'a self,
+        canister_id: Principal,
+        path: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        (**self).read_state_canister_info(canister_id, path)
+    }
+
+    fn request_status_raw<'a>(
+        &'a self,
+        request_id: &'a RequestId,
+        effective_canister_id: Principal,
+    ) -> Pin<Box<dyn Future<Output = Result<RequestStatusResponse, AgentError>> + Send + 'a>> {
+        (**self).request_status_raw(request_id, effective_canister_id)
+    }
+
+    fn request_status_signed<'a>(
+        &'a self,
+        request_id: &'a RequestId,
+        effective_canister_id: Principal,
+        signed_request_status: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<RequestStatusResponse, AgentError>> + Send + 'a>> {
+        (**self).request_status_signed(request_id, effective_canister_id, signed_request_status)
+    }
+
+    fn update_string(&self, canister_id: &Principal, method_name: String) -> UpdateBuilder {
+        (**self).update_string(canister_id, method_name)
+    }
+
+    fn status(&self) -> Pin<Box<dyn Future<Output = Result<Status, AgentError>> + Send + '_>> {
+        (**self).status()
+    }
+
+    fn query_string(&self, canister_id: &Principal, method_name: String) -> QueryBuilder {
+        (**self).query_string(canister_id, method_name)
+    }
+
+    fn sign_request_status(
+        &self,
+        effective_canister_id: Principal,
+        request_id: RequestId,
+    ) -> Result<signed::SignedRequestStatus, AgentError> {
+        (**self).sign_request_status(effective_canister_id, request_id)
+    }
+}
+
+fn get_expiry_date(agent: &dyn AgentTrait) -> u64 {
+    // TODO(hansl): evaluate if we need this on the agent side (my hunch is we don't).
+    let permitted_drift = Duration::from_secs(60);
+    (agent
+        .ingress_expiry()
+        .as_nanos()
+        .saturating_add(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time wrapped around.")
+                .as_nanos(),
+        )
+        .saturating_sub(permitted_drift.as_nanos())) as u64
+}
+
+fn update_content(
+    agent: &dyn AgentTrait,
+    canister_id: &Principal,
+    method_name: &str,
+    arg: &[u8],
+    ingress_expiry_datetime: Option<u64>,
+) -> Result<CallRequestContent, AgentError> {
+    Ok(CallRequestContent::CallRequest {
+        canister_id: *canister_id,
+        method_name: method_name.into(),
+        arg: arg.to_vec(),
+        nonce: agent
+            .nonce_factory()
+            .generate()
+            .map(|b| b.as_slice().into()),
+        sender: agent
+            .identity()
+            .sender()
+            .map_err(AgentError::SigningError)?,
+        ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| get_expiry_date(agent)),
+    })
+}
+
+fn query_content(
+    agent: &dyn AgentTrait,
+    canister_id: &Principal,
+    method_name: &str,
+    arg: &[u8],
+    ingress_expiry_datetime: Option<u64>,
+) -> Result<QueryContent, AgentError> {
+    Ok(QueryContent::QueryRequest {
+        sender: agent
+            .identity()
+            .sender()
+            .map_err(AgentError::SigningError)?,
+        canister_id: *canister_id,
+        method_name: method_name.to_string(),
+        arg: arg.to_vec(),
+        ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| get_expiry_date(agent)),
+    })
+}
+
+/// The simplest way to do a query call; sends a byte array and will return a byte vector.
+/// The encoding is left as an exercise to the user.
+pub(crate) async fn query_raw(
+    agent: &dyn AgentTrait,
+    canister_id: &Principal,
+    effective_canister_id: Principal,
+    method_name: &str,
+    arg: &[u8],
+    ingress_expiry_datetime: Option<u64>,
+) -> Result<Vec<u8>, AgentError> {
+    let request = query_content(
+        agent,
+        canister_id,
+        method_name,
+        arg,
+        ingress_expiry_datetime,
+    )?;
+    let serialized_bytes = sign_request(&request, agent.identity())?;
+    query_endpoint::<replica_api::QueryResponse>(agent, effective_canister_id, serialized_bytes)
+        .await
+        .and_then(|response| match response {
+            replica_api::QueryResponse::Replied { reply } => Ok(reply.arg),
+            replica_api::QueryResponse::Rejected {
+                reject_code,
+                reject_message,
+            } => Err(AgentError::ReplicaError {
+                reject_code,
+                reject_message,
+            }),
+        })
+}
+
+async fn query_endpoint<A>(
+    agent: &dyn AgentTrait,
+    effective_canister_id: Principal,
+    serialized_bytes: Vec<u8>,
+) -> Result<A, AgentError>
+where
+    A: serde::de::DeserializeOwned,
+{
+    let bytes = agent
+        .transport()
+        .query(effective_canister_id, serialized_bytes)
+        .await?;
+    serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
+}
+
+/// The simplest way to do an update call; sends a byte array and will return a RequestId.
+/// The RequestId should then be used for request_status (most likely in a loop).
+async fn update_raw(
+    agent: &dyn AgentTrait,
+    canister_id: &Principal,
+    effective_canister_id: Principal,
+    method_name: &str,
+    arg: &[u8],
+    ingress_expiry_datetime: Option<u64>,
+) -> Result<RequestId, AgentError> {
+    let request = update_content(
+        agent,
+        canister_id,
+        method_name,
+        arg,
+        ingress_expiry_datetime,
+    )?;
+    let request_id = to_request_id(&request)?;
+    let serialized_bytes = sign_request(&request, agent.identity())?;
+
+    call_endpoint(agent, effective_canister_id, request_id, serialized_bytes).await
+}
+
+async fn call_endpoint(
+    agent: &dyn AgentTrait,
+    effective_canister_id: Principal,
+    request_id: RequestId,
+    serialized_bytes: Vec<u8>,
+) -> Result<RequestId, AgentError> {
+    agent
+        .transport()
+        .call(effective_canister_id, serialized_bytes, request_id)
+        .await?;
+    Ok(request_id)
+}
+
+impl<N: NonceGenerator, I: Identity, T: ReplicaV2Transport> AgentImpl<N, I, T> {
     /// Create an instance of an [`AgentBuilder`] for building an [`Agent`]. This is simpler than
     /// using the [`AgentConfig`] and [`Agent::new()`].
     pub fn builder() -> builder::AgentBuilder {
         Default::default()
     }
-}
 
-impl<N: NonceGenerator> AgentImpl<N> {
     /// Create an instance of an [`Agent`].
-    pub fn new(config: agent_config::AgentConfigImpl<N>) -> Result<AgentImpl<N>, AgentError> {
+    pub fn new(
+        config: agent_config::AgentConfigImpl<N, I, T>,
+    ) -> Result<AgentImpl<N, I, T>, AgentError> {
         initialize_bls()?;
 
         Ok(AgentImpl {
@@ -352,16 +962,40 @@ impl<N: NonceGenerator> AgentImpl<N> {
     }
 
     /// Set the transport of the [`Agent`].
-    pub fn set_transport<F: 'static + ReplicaV2Transport>(&mut self, transport: F) {
-        self.transport = Arc::new(transport);
+    ///
+    #[deprecated(since = "0.8.0", note = "Prefer using transport_mut().")]
+    pub fn set_transport<T1: Into<T>>(&mut self, transport: T1) {
+        self.transport = transport.into();
     }
 
+    /// Gets a reference to the nonce factory of the agent.
     pub fn nonce_factory(&self) -> &N {
         &self.nonce_factory
     }
 
+    /// Gets a mutable reference to the nonce factory of the agent.
     pub fn nonce_factory_mut(&mut self) -> &mut N {
         &mut self.nonce_factory
+    }
+
+    /// Gets a reference to the identity of the agent.
+    pub fn identity(&self) -> &I {
+        &self.identity
+    }
+
+    /// Gets a mutable reference to the identity of the agent.
+    pub fn identity_mut(&mut self) -> &mut I {
+        &mut self.identity
+    }
+
+    /// Gets a mutable reference to the transport of the agent.
+    pub fn transport(&self) -> &T {
+        &self.transport
+    }
+
+    /// Gets a mutable reference to the transport of the agent.
+    pub fn transport_mut(&mut self) -> &mut T {
+        &mut self.transport
     }
 
     /// By default, the agent is configured to talk to the main Internet Computer, and verifies
@@ -404,36 +1038,6 @@ impl<N: NonceGenerator> AgentImpl<N> {
         }
     }
 
-    fn get_expiry_date(&self) -> u64 {
-        // TODO(hansl): evaluate if we need this on the agent side (my hunch is we don't).
-        let permitted_drift = Duration::from_secs(60);
-        (self
-            .ingress_expiry_duration
-            .as_nanos()
-            .saturating_add(
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("Time wrapped around.")
-                    .as_nanos(),
-            )
-            .saturating_sub(permitted_drift.as_nanos())) as u64
-    }
-
-    async fn query_endpoint<A>(
-        &self,
-        effective_canister_id: Principal,
-        serialized_bytes: Vec<u8>,
-    ) -> Result<A, AgentError>
-    where
-        A: serde::de::DeserializeOwned,
-    {
-        let bytes = self
-            .transport
-            .query(effective_canister_id, serialized_bytes)
-            .await?;
-        serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
-    }
-
     async fn read_state_endpoint<A>(
         &self,
         effective_canister_id: Principal,
@@ -449,44 +1053,6 @@ impl<N: NonceGenerator> AgentImpl<N> {
         serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
     }
 
-    async fn call_endpoint(
-        &self,
-        effective_canister_id: Principal,
-        request_id: RequestId,
-        serialized_bytes: Vec<u8>,
-    ) -> Result<RequestId, AgentError> {
-        self.transport
-            .call(effective_canister_id, serialized_bytes, request_id)
-            .await?;
-        Ok(request_id)
-    }
-
-    /// The simplest way to do a query call; sends a byte array and will return a byte vector.
-    /// The encoding is left as an exercise to the user.
-    async fn query_raw(
-        &self,
-        canister_id: &Principal,
-        effective_canister_id: Principal,
-        method_name: &str,
-        arg: &[u8],
-        ingress_expiry_datetime: Option<u64>,
-    ) -> Result<Vec<u8>, AgentError> {
-        let request = self.query_content(canister_id, method_name, arg, ingress_expiry_datetime)?;
-        let serialized_bytes = sign_request(&request, self.identity.clone())?;
-        self.query_endpoint::<replica_api::QueryResponse>(effective_canister_id, serialized_bytes)
-            .await
-            .and_then(|response| match response {
-                replica_api::QueryResponse::Replied { reply } => Ok(reply.arg),
-                replica_api::QueryResponse::Rejected {
-                    reject_code,
-                    reject_message,
-                } => Err(AgentError::ReplicaError {
-                    reject_code,
-                    reject_message,
-                }),
-            })
-    }
-
     /// Send the signed query to the network. Will return a byte vector.
     /// The bytes will be checked if it is a valid query.
     /// If you want to inspect the fields of the query call, use [`signed_query_inspect`] before calling this method.
@@ -497,7 +1063,7 @@ impl<N: NonceGenerator> AgentImpl<N> {
     ) -> Result<Vec<u8>, AgentError> {
         let _envelope: Envelope<QueryContent> =
             serde_cbor::from_slice(&signed_query).map_err(AgentError::InvalidCborData)?;
-        self.query_endpoint::<replica_api::QueryResponse>(effective_canister_id, signed_query)
+        query_endpoint::<replica_api::QueryResponse>(self, effective_canister_id, signed_query)
             .await
             .and_then(|response| match response {
                 replica_api::QueryResponse::Replied { reply } => Ok(reply.arg),
@@ -509,41 +1075,6 @@ impl<N: NonceGenerator> AgentImpl<N> {
                     reject_message,
                 }),
             })
-    }
-
-    fn query_content(
-        &self,
-        canister_id: &Principal,
-        method_name: &str,
-        arg: &[u8],
-        ingress_expiry_datetime: Option<u64>,
-    ) -> Result<QueryContent, AgentError> {
-        Ok(QueryContent::QueryRequest {
-            sender: self.identity.sender().map_err(AgentError::SigningError)?,
-            canister_id: *canister_id,
-            method_name: method_name.to_string(),
-            arg: arg.to_vec(),
-            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
-        })
-    }
-
-    /// The simplest way to do an update call; sends a byte array and will return a RequestId.
-    /// The RequestId should then be used for request_status (most likely in a loop).
-    async fn update_raw(
-        &self,
-        canister_id: &Principal,
-        effective_canister_id: Principal,
-        method_name: &str,
-        arg: &[u8],
-        ingress_expiry_datetime: Option<u64>,
-    ) -> Result<RequestId, AgentError> {
-        let request =
-            self.update_content(canister_id, method_name, arg, ingress_expiry_datetime)?;
-        let request_id = to_request_id(&request)?;
-        let serialized_bytes = sign_request(&request, self.identity.clone())?;
-
-        self.call_endpoint(effective_canister_id, request_id, serialized_bytes)
-            .await
     }
 
     /// Send the signed update to the network. Will return a [`RequestId`].
@@ -557,25 +1088,7 @@ impl<N: NonceGenerator> AgentImpl<N> {
         let envelope: Envelope<CallRequestContent> =
             serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
         let request_id = to_request_id(&envelope.content)?;
-        self.call_endpoint(effective_canister_id, request_id, signed_update)
-            .await
-    }
-
-    fn update_content(
-        &self,
-        canister_id: &Principal,
-        method_name: &str,
-        arg: &[u8],
-        ingress_expiry_datetime: Option<u64>,
-    ) -> Result<CallRequestContent, AgentError> {
-        Ok(CallRequestContent::CallRequest {
-            canister_id: *canister_id,
-            method_name: method_name.into(),
-            arg: arg.to_vec(),
-            nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
-            sender: self.identity.sender().map_err(AgentError::SigningError)?,
-            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
-        })
+        call_endpoint(self, effective_canister_id, request_id, signed_update).await
     }
 
     // Call request_status on the RequestId once and classify the result
@@ -618,6 +1131,16 @@ impl<N: NonceGenerator> AgentImpl<N> {
         effective_canister_id: &Principal,
         mut waiter: W,
     ) -> Result<Vec<u8>, AgentError> {
+        self.wait_helper(request_id, effective_canister_id, &mut waiter)
+            .await
+    }
+
+    async fn wait_helper(
+        &self,
+        request_id: RequestId,
+        effective_canister_id: &Principal,
+        waiter: &mut dyn Waiter,
+    ) -> Result<Vec<u8>, AgentError> {
         waiter.start();
         let mut request_accepted = false;
         loop {
@@ -654,7 +1177,7 @@ impl<N: NonceGenerator> AgentImpl<N> {
         effective_canister_id: Principal,
     ) -> Result<Certificate<'_>, AgentError> {
         let request = self.read_state_content(paths)?;
-        let serialized_bytes = sign_request(&request, self.identity.clone())?;
+        let serialized_bytes = sign_request(&request, &self.identity)?;
 
         let read_state_response: ReadStateResponse = self
             .read_state_endpoint(effective_canister_id, serialized_bytes)
@@ -670,7 +1193,7 @@ impl<N: NonceGenerator> AgentImpl<N> {
         Ok(ReadStateContent::ReadStateRequest {
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
             paths,
-            ingress_expiry: self.get_expiry_date(),
+            ingress_expiry: get_expiry_date(self),
         })
     }
 
@@ -766,7 +1289,7 @@ impl<N: NonceGenerator> AgentImpl<N> {
         &self,
         canister_id: &Principal,
         method_name: S,
-    ) -> UpdateBuilder<N> {
+    ) -> UpdateBuilder {
         UpdateBuilder::new(self, *canister_id, method_name.into())
     }
 
@@ -782,11 +1305,7 @@ impl<N: NonceGenerator> AgentImpl<N> {
 
     /// Returns a QueryBuilder enabling the construction of a query call without
     /// passing all arguments.
-    pub fn query<S: Into<String>>(
-        &self,
-        canister_id: &Principal,
-        method_name: S,
-    ) -> QueryBuilder<N> {
+    pub fn query<S: Into<String>>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder {
         QueryBuilder::new(self, *canister_id, method_name.into())
     }
 
@@ -800,7 +1319,7 @@ impl<N: NonceGenerator> AgentImpl<N> {
         let paths: Vec<Vec<Label>> =
             vec![vec!["request_status".into(), request_id.to_vec().into()]];
         let read_state_content = self.read_state_content(paths)?;
-        let signed_request_status = sign_request(&read_state_content, self.identity.clone())?;
+        let signed_request_status = sign_request(&read_state_content, &self.identity)?;
         match read_state_content {
             ReadStateContent::ReadStateRequest {
                 ingress_expiry,
@@ -824,7 +1343,7 @@ fn construct_message(request_id: &RequestId) -> Vec<u8> {
     buf
 }
 
-fn sign_request<'a, V>(request: &V, identity: Arc<dyn Identity>) -> Result<Vec<u8>, AgentError>
+fn sign_request<'a, V>(request: &V, identity: &dyn Identity) -> Result<Vec<u8>, AgentError>
 where
     V: 'a + Serialize,
 {
@@ -1014,22 +1533,26 @@ pub fn signed_request_status_inspect(
 /// A Query Request Builder.
 ///
 /// This makes it easier to do query calls without actually passing all arguments.
-pub struct QueryBuilder<'agent, N: NonceGenerator> {
-    agent: &'agent AgentImpl<N>,
+pub struct QueryBuilder<'agent, 'method> {
+    agent: &'agent dyn AgentTrait,
     effective_canister_id: Principal,
     canister_id: Principal,
-    method_name: String,
+    method_name: Cow<'method, str>,
     arg: Vec<u8>,
     ingress_expiry_datetime: Option<u64>,
 }
 
-impl<'agent, N: NonceGenerator> QueryBuilder<'agent, N> {
-    pub fn new(agent: &'agent AgentImpl<N>, canister_id: Principal, method_name: String) -> Self {
+impl<'agent, 'method> QueryBuilder<'agent, 'method> {
+    pub fn new<M: Into<Cow<'method, str>>>(
+        agent: &'agent dyn AgentTrait,
+        canister_id: Principal,
+        method_name: M,
+    ) -> Self {
         Self {
             agent,
             effective_canister_id: canister_id,
             canister_id,
-            method_name,
+            method_name: method_name.into(),
             arg: vec![],
             ingress_expiry_datetime: None,
         }
@@ -1079,28 +1602,29 @@ impl<'agent, N: NonceGenerator> QueryBuilder<'agent, N> {
 
     /// Make a query call. This will return a byte vector.
     pub async fn call(&self) -> Result<Vec<u8>, AgentError> {
-        self.agent
-            .query_raw(
-                &self.canister_id,
-                self.effective_canister_id,
-                self.method_name.as_str(),
-                self.arg.as_slice(),
-                self.ingress_expiry_datetime,
-            )
-            .await
+        query_raw(
+            self.agent,
+            &self.canister_id,
+            self.effective_canister_id,
+            self.method_name.as_ref(),
+            self.arg.as_slice(),
+            self.ingress_expiry_datetime,
+        )
+        .await
     }
 
     /// Sign a query call. This will return a [`signed::SignedQuery`]
     /// which contains all fields of the query and the signed query in CBOR encoding
     pub fn sign(&self) -> Result<signed::SignedQuery, AgentError> {
-        let request = self.agent.query_content(
+        let request = query_content(
+            self.agent,
             &self.canister_id,
-            &self.method_name,
+            self.method_name.as_ref(),
             &self.arg,
             self.ingress_expiry_datetime,
         )?;
 
-        let signed_query = sign_request(&request, self.agent.identity.clone())?;
+        let signed_query = sign_request(&request, self.agent.identity())?;
         match request {
             QueryContent::QueryRequest {
                 ingress_expiry,
@@ -1121,33 +1645,29 @@ impl<'agent, N: NonceGenerator> QueryBuilder<'agent, N> {
     }
 }
 
-pub struct UpdateCall<'agent, N: NonceGenerator = NonceFactory> {
-    agent: &'agent AgentImpl<N>,
+pub struct UpdateCall<'agent> {
+    agent: &'agent dyn AgentTrait,
     request_id: Pin<Box<dyn Future<Output = Result<RequestId, AgentError>> + Send + 'agent>>,
     effective_canister_id: Principal,
 }
-impl<N: NonceGenerator> Future for UpdateCall<'_, N> {
+impl Future for UpdateCall<'_> {
     type Output = Result<RequestId, AgentError>;
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.request_id.as_mut().poll(cx)
     }
 }
-impl<N: NonceGenerator> UpdateCall<'_, N> {
-    fn and_wait<'out, W>(
+impl UpdateCall<'_> {
+    fn and_wait<'out>(
         self,
-        waiter: W,
-    ) -> Pin<Box<dyn core::future::Future<Output = Result<Vec<u8>, AgentError>> + Send + 'out>>
+        waiter: &'out mut dyn Waiter,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'out>>
     where
         Self: 'out,
-        W: Waiter + 'out,
     {
-        async fn run<N: NonceGenerator, W>(
-            _self: UpdateCall<'_, N>,
-            waiter: W,
-        ) -> Result<Vec<u8>, AgentError>
-        where
-            W: Waiter,
-        {
+        async fn run(
+            _self: UpdateCall<'_>,
+            waiter: &mut dyn Waiter,
+        ) -> Result<Vec<u8>, AgentError> {
             let request_id = _self.request_id.await?;
             _self
                 .agent
@@ -1161,22 +1681,26 @@ impl<N: NonceGenerator> UpdateCall<'_, N> {
 ///
 /// This makes it easier to do update calls without actually passing all arguments or specifying
 /// if you want to wait or not.
-pub struct UpdateBuilder<'agent, N: NonceGenerator = NonceFactory> {
-    agent: &'agent AgentImpl<N>,
+pub struct UpdateBuilder<'agent, 'method> {
+    agent: &'agent dyn AgentTrait,
     pub effective_canister_id: Principal,
     pub canister_id: Principal,
-    pub method_name: String,
+    pub method_name: Cow<'method, str>,
     pub arg: Vec<u8>,
     pub ingress_expiry_datetime: Option<u64>,
 }
 
-impl<'agent, N: NonceGenerator> UpdateBuilder<'agent, N> {
-    pub fn new(agent: &'agent AgentImpl<N>, canister_id: Principal, method_name: String) -> Self {
+impl<'agent, 'method> UpdateBuilder<'agent, 'method> {
+    pub fn new<M: Into<Cow<'method, str>>>(
+        agent: &'agent dyn AgentTrait,
+        canister_id: Principal,
+        method_name: M,
+    ) -> Self {
         Self {
             agent,
             effective_canister_id: canister_id,
             canister_id,
-            method_name,
+            method_name: method_name.into(),
             arg: vec![],
             ingress_expiry_datetime: None,
         }
@@ -1226,22 +1750,23 @@ impl<'agent, N: NonceGenerator> UpdateBuilder<'agent, N> {
 
     /// Make an update call. This will call request_status on the RequestId in a loop and return
     /// the response as a byte vector.
-    pub async fn call_and_wait<W: Waiter>(&self, waiter: W) -> Result<Vec<u8>, AgentError> {
-        self.call().and_wait(waiter).await
+    pub async fn call_and_wait<W: Waiter>(&self, mut waiter: W) -> Result<Vec<u8>, AgentError> {
+        self.call().and_wait(&mut waiter).await
     }
 
     /// Make an update call. This will return a RequestId.
     /// The RequestId should then be used for request_status (most likely in a loop).
-    pub fn call(&self) -> UpdateCall<N> {
-        let request_id_future = self.agent.update_raw(
+    pub fn call(&self) -> UpdateCall {
+        let request_id_future = update_raw(
+            self.agent,
             &self.canister_id,
             self.effective_canister_id,
-            self.method_name.as_str(),
+            self.method_name.as_ref(),
             self.arg.as_slice(),
             self.ingress_expiry_datetime,
         );
         UpdateCall {
-            agent: &self.agent,
+            agent: self.agent,
             request_id: Box::pin(request_id_future),
             effective_canister_id: self.effective_canister_id,
         }
@@ -1250,13 +1775,14 @@ impl<'agent, N: NonceGenerator> UpdateBuilder<'agent, N> {
     /// Sign a update call. This will return a [`signed::SignedUpdate`]
     /// which contains all fields of the update and the signed update in CBOR encoding
     pub fn sign(&self) -> Result<signed::SignedUpdate, AgentError> {
-        let request = self.agent.update_content(
+        let request = update_content(
+            self.agent,
             &self.canister_id,
             &self.method_name,
             &self.arg,
             self.ingress_expiry_datetime,
         )?;
-        let signed_update = sign_request(&request, self.agent.identity.clone())?;
+        let signed_update = sign_request(&request, self.agent.identity())?;
         let request_id = to_request_id(&request)?;
         match request {
             CallRequestContent::CallRequest {

@@ -1,5 +1,6 @@
 //! Types and traits dealing with identity across the Internet Computer.
 use crate::export::Principal;
+use std::sync::Arc;
 
 pub(crate) mod anonymous;
 pub(crate) mod basic;
@@ -35,4 +36,21 @@ pub trait Identity: Send + Sync {
     /// Sign a blob, the concatenation of the domain separator & request ID,
     /// creating the sender signature.
     fn sign(&self, blob: &[u8]) -> Result<Signature, String>;
+}
+
+impl<I: Identity + ?Sized> Identity for Box<I> {
+    fn sender(&self) -> Result<Principal, String> {
+        (**self).sender()
+    }
+    fn sign(&self, blob: &[u8]) -> Result<Signature, String> {
+        (**self).sign(blob)
+    }
+}
+impl<I: Identity + ?Sized> Identity for Arc<I> {
+    fn sender(&self) -> Result<Principal, String> {
+        (**self).sender()
+    }
+    fn sign(&self, blob: &[u8]) -> Result<Signature, String> {
+        (**self).sign(blob)
+    }
 }

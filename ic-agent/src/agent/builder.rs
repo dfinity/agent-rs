@@ -4,10 +4,11 @@ use crate::{
 };
 use std::sync::Arc;
 
-pub type AgentBuilder = AgentBuilderImpl<NonceFactory>;
+pub type AgentBuilder =
+    AgentBuilderImpl<NonceFactory, Arc<dyn Identity>, Arc<dyn ReplicaV2Transport>>;
 
-pub struct AgentBuilderImpl<N: NonceGenerator> {
-    config: AgentConfigImpl<N>,
+pub struct AgentBuilderImpl<N: NonceGenerator, I: Identity, T: ReplicaV2Transport> {
+    config: AgentConfigImpl<N, I, T>,
 }
 
 impl Default for AgentBuilder {
@@ -18,33 +19,32 @@ impl Default for AgentBuilder {
     }
 }
 
-impl<N: NonceGenerator> AgentBuilderImpl<N> {
+impl<N: NonceGenerator, I: Identity, T: ReplicaV2Transport> AgentBuilderImpl<N, I, T> {
     /// Create an instance of [AgentImpl] with the information from this builder.
-    pub fn build(self) -> Result<AgentImpl<N>, AgentError> {
+    pub fn build(self) -> Result<AgentImpl<N, I, T>, AgentError> {
         AgentImpl::new(self.config)
     }
 
-    /// Set the URL of the [AgentImpl].
-    #[cfg(feature = "reqwest")]
-    #[deprecated(since = "0.3.0", note = "Prefer using with_transport().")]
-    pub fn with_url<S: Into<String>>(self, url: S) -> Self {
-        use crate::agent::http_transport::ReqwestHttpReplicaV2Transport;
-
-        self.with_transport(ReqwestHttpReplicaV2Transport::create(url).unwrap())
-    }
-
     /// Set a Replica transport to talk to serve as the replica interface.
-    pub fn with_transport<F: 'static + ReplicaV2Transport>(self, transport: F) -> Self {
-        Self {
+    pub fn with_transport<T1: ReplicaV2Transport>(
+        self,
+        transport: T1,
+    ) -> AgentBuilderImpl<N, I, T1> {
+        AgentBuilderImpl {
             config: AgentConfigImpl {
-                transport: Some(Arc::new(transport)),
-                ..self.config
+                nonce_factory: self.config.nonce_factory,
+                identity: self.config.identity,
+                ingress_expiry_duration: self.config.ingress_expiry_duration,
+                transport: Some(transport),
             },
         }
     }
 
     /// Add a NonceFactory to this AgentImpl. By default, no nonce is produced.
-    pub fn with_nonce_factory(self, nonce_factory: NonceFactory) -> AgentBuilderImpl<NonceFactory> {
+    pub fn with_nonce_factory(
+        self,
+        nonce_factory: NonceFactory,
+    ) -> AgentBuilderImpl<NonceFactory, I, T> {
         AgentBuilderImpl {
             config: AgentConfigImpl {
                 nonce_factory,
@@ -59,7 +59,7 @@ impl<N: NonceGenerator> AgentBuilderImpl<N> {
     pub fn with_nonce_generator<N1: NonceGenerator>(
         self,
         nonce_factory: N1,
-    ) -> AgentBuilderImpl<N1> {
+    ) -> AgentBuilderImpl<N1, I, T> {
         AgentBuilderImpl {
             config: AgentConfigImpl {
                 nonce_factory,
@@ -71,25 +71,29 @@ impl<N: NonceGenerator> AgentBuilderImpl<N> {
     }
 
     /// Add an identity provider for signing messages. This is required.
-    pub fn with_identity<I>(self, identity: I) -> Self
-    where
-        I: 'static + Identity,
-    {
+    pub fn with_identity<I1: Identity>(self, identity: I1) -> AgentBuilderImpl<N, I1, T> {
         AgentBuilderImpl {
             config: AgentConfigImpl {
-                identity: Arc::new(identity),
-                ..self.config
+                nonce_factory: self.config.nonce_factory,
+                identity,
+                ingress_expiry_duration: self.config.ingress_expiry_duration,
+                transport: self.config.transport,
             },
         }
     }
 
     /// Same as [with_identity], but provides a boxed implementation instead
     /// of a direct type.
-    pub fn with_boxed_identity(self, identity: Box<dyn Identity>) -> Self {
+    pub fn with_boxed_identity(
+        self,
+        identity: Box<dyn Identity>,
+    ) -> AgentBuilderImpl<N, Arc<dyn Identity>, T> {
         AgentBuilderImpl {
             config: AgentConfigImpl {
+                nonce_factory: self.config.nonce_factory,
                 identity: Arc::from(identity),
-                ..self.config
+                ingress_expiry_duration: self.config.ingress_expiry_duration,
+                transport: self.config.transport,
             },
         }
     }

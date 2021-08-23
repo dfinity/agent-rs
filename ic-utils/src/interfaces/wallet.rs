@@ -10,7 +10,7 @@ use crate::{
 use async_trait::async_trait;
 use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize};
 use garcon::Waiter;
-use ic_agent::{agent::UpdateBuilder, export::Principal, Agent, AgentError, RequestId};
+use ic_agent::{agent::AgentTrait, agent::UpdateBuilder, export::Principal, AgentError, RequestId};
 
 pub struct CallForwarder<'agent, 'canister: 'agent, Out>
 where
@@ -183,7 +183,7 @@ pub struct CallResult {
 impl Wallet {
     /// Create an instance of a [Canister] implementing the Wallet interface
     /// and pointing to the right Canister ID.
-    pub fn create(agent: &Agent, canister_id: Principal) -> Canister<Wallet> {
+    pub fn create(agent: &dyn AgentTrait, canister_id: Principal) -> Canister<Wallet> {
         Canister::builder()
             .with_agent(agent)
             .with_canister_id(canister_id)
@@ -194,7 +194,7 @@ impl Wallet {
 
     /// Creating a CanisterBuilder with the right interface and Canister Id. This can
     /// be useful, for example, for providing additional Builder information.
-    pub fn with_agent(agent: &Agent) -> CanisterBuilder<Wallet> {
+    pub fn with_agent(agent: &dyn AgentTrait) -> CanisterBuilder<Wallet> {
         Canister::builder().with_agent(agent).with_interface(Wallet)
     }
 }
@@ -446,7 +446,7 @@ impl<'agent> Canister<'agent, Wallet> {
         CallForwarder {
             wallet: self,
             destination: canister_id,
-            method_name,
+            method_name: method_name.into(),
             amount,
             arg: argument,
             phantom_out: std::marker::PhantomData,

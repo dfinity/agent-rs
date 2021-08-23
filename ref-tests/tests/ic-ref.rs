@@ -635,7 +635,7 @@ mod simple_calls {
         with_universal_canister(|agent, canister_id| async move {
             let arg = payload().reply_data(b"hello").build();
             let result = agent
-                .update(&canister_id, "non_existent_method")
+                .update(&canister_id, "non_existent_method".to_string())
                 .with_arg(&arg)
                 .call_and_wait(create_waiter())
                 .await;

@@ -6,11 +6,10 @@ use crate::commands::sync::sync;
 use candid::Principal;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use ic_agent::identity::{AnonymousIdentity, BasicIdentity};
-use ic_agent::{agent, Agent, Identity};
+use ic_agent::{agent::http_transport::ReqwestHttpReplicaV2Transport, Agent, Identity};
 
 use crate::commands::upload::upload;
-use std::path::PathBuf;
-use std::time::Duration;
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
 
@@ -100,9 +99,9 @@ async fn main() -> support::Result {
         .unwrap_or_else(|| Duration::from_secs(60 * 5)); // 5 minutes is max ingress timeout
 
     let agent = Agent::builder()
-        .with_transport(
-            agent::http_transport::ReqwestHttpReplicaV2Transport::create(opts.replica.clone())?,
-        )
+        .with_transport(Arc::new(ReqwestHttpReplicaV2Transport::create(
+            opts.replica.clone(),
+        )?))
         .with_boxed_identity(create_identity(opts.pem))
         .build()?;
 

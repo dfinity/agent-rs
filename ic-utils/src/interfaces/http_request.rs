@@ -1,6 +1,6 @@
 use crate::{call::SyncCall, canister::CanisterBuilder, Canister};
 use candid::{CandidType, Deserialize, Func, Nat};
-use ic_agent::{export::Principal, Agent};
+use ic_agent::{agent::AgentTrait, export::Principal};
 use serde_bytes::ByteBuf;
 use std::fmt::Debug;
 
@@ -59,7 +59,7 @@ pub struct StreamingCallbackHttpResponse {
 impl HttpRequestCanister {
     /// Create an instance of a [Canister] implementing the [HttpRequestCanister] interface
     /// and pointing to the right Canister ID.
-    pub fn create(agent: &Agent, canister_id: Principal) -> Canister<HttpRequestCanister> {
+    pub fn create(agent: &dyn AgentTrait, canister_id: Principal) -> Canister<HttpRequestCanister> {
         Canister::builder()
             .with_agent(agent)
             .with_canister_id(canister_id)
@@ -70,7 +70,7 @@ impl HttpRequestCanister {
 
     /// Creating a CanisterBuilder with the right interface and Canister Id. This can
     /// be useful, for example, for providing additional Builder information.
-    pub fn with_agent(agent: &Agent) -> CanisterBuilder<HttpRequestCanister> {
+    pub fn with_agent(agent: &dyn AgentTrait) -> CanisterBuilder<HttpRequestCanister> {
         Canister::builder()
             .with_agent(agent)
             .with_interface(HttpRequestCanister)

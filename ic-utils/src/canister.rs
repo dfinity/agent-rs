@@ -1,7 +1,7 @@
 use crate::call::{AsyncCaller, SyncCaller};
 use candid::{parser::value::IDLValue, ser::IDLBuilder, utils::ArgumentDecoder, CandidType};
 use garcon::Waiter;
-use ic_agent::{ic_types::Principal, Agent, AgentError, RequestId};
+use ic_agent::{agent::AgentTrait, ic_types::Principal, AgentError, RequestId};
 use std::convert::TryInto;
 use thiserror::Error;
 
@@ -20,7 +20,7 @@ pub enum CanisterBuilderError {
 
 /// A canister builder, which can be used to create a canister abstraction.
 pub struct CanisterBuilder<'agent, T = ()> {
-    agent: Option<&'agent Agent>,
+    agent: Option<&'agent dyn AgentTrait>,
     canister_id: Option<Result<Principal, CanisterBuilderError>>,
     interface: T,
 }
@@ -43,7 +43,7 @@ impl<'agent, T> CanisterBuilder<'agent, T> {
     }
 
     /// Assign an agent to the canister being built.
-    pub fn with_agent(self, agent: &'agent Agent) -> Self {
+    pub fn with_agent(self, agent: &'agent dyn AgentTrait) -> Self {
         CanisterBuilder {
             agent: Some(agent),
             ..self
@@ -103,7 +103,7 @@ impl<'agent> CanisterBuilder<'agent, ()> {
 /// This is the higher level construct for talking to a canister on the Internet
 /// Computer.
 pub struct Canister<'agent, T = ()> {
-    pub(super) agent: &'agent Agent,
+    pub(super) agent: &'agent dyn AgentTrait,
     pub(super) canister_id: Principal,
     interface: T,
 }
@@ -140,12 +140,14 @@ impl<'agent, T> Canister<'agent, T> {
     pub async fn wait<'canister: 'agent, W>(
         &'canister self,
         request_id: RequestId,
-        waiter: W,
+        mut waiter: W,
     ) -> Result<Vec<u8>, AgentError>
     where
         W: Waiter,
     {
-        self.agent.wait(request_id, &self.canister_id, waiter).await
+        self.agent
+            .wait(request_id, &self.canister_id, &mut waiter)
+            .await
     }
 }
 

@@ -8,7 +8,9 @@ use hyper::{
     Body, Client, Request, Response, Server, StatusCode, Uri,
 };
 use ic_agent::{
-    agent::http_transport::ReqwestHttpReplicaV2Transport, export::Principal, Agent, AgentError,
+    agent::{http_transport::ReqwestHttpReplicaV2Transport, AgentTrait},
+    export::Principal,
+    AgentError,
 };
 use ic_utils::{
     call::SyncCall,
@@ -160,7 +162,7 @@ fn resolve_canister_id(
 
 async fn forward_request(
     request: Request<Body>,
-    agent: Arc<Agent>,
+    agent: Arc<dyn AgentTrait>,
     dns_canister_config: &DnsCanisterConfig,
     logger: slog::Logger,
 ) -> Result<Response<Body>, Box<dyn Error>> {
@@ -250,7 +252,7 @@ async fn forward_request(
     let is_streaming = http_response.streaming_strategy.is_some();
     let response = if let Some(streaming_strategy) = http_response.streaming_strategy {
         let (mut sender, body) = body::Body::channel();
-        let agent = agent.as_ref().clone();
+        //let agent = agent.as_ref().clone();
         sender.send_data(Bytes::from(http_response.body)).await?;
 
         match streaming_strategy {
@@ -260,7 +262,8 @@ async fn forward_request(
                 let mut callback_token = callback.token;
                 let logger = logger.clone();
                 tokio::spawn(async move {
-                    let canister = HttpRequestCanister::create(&agent, streaming_canister_id_id);
+                    let canister =
+                        HttpRequestCanister::create(agent.as_ref(), streaming_canister_id_id);
                     // We have not yet called http_request_stream_callback.
                     let mut count = 0;
                     loop {

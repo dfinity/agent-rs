@@ -7,7 +7,7 @@ use candid::{
 };
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use ic_agent::{
-    agent::{self, signed::SignedUpdate, Replied},
+    agent::{self, signed::SignedUpdate, AgentTrait, Replied},
     agent::{
         agent_error::HttpErrorPayload,
         signed::{SignedQuery, SignedRequestStatus},
@@ -255,7 +255,7 @@ fn print_idl_blob(
     Ok(())
 }
 
-async fn fetch_root_key_from_non_ic(agent: &Agent, replica: &str) -> Result<()> {
+async fn fetch_root_key_from_non_ic(agent: &dyn AgentTrait, replica: &str) -> Result<()> {
     let normalized_replica = replica.strip_suffix("/").unwrap_or(replica);
     if normalized_replica != DEFAULT_IC_GATEWAY {
         agent

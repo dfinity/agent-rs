@@ -6,13 +6,14 @@ use std::{sync::Arc, time::Duration};
 
 /// A configuration for an agent.
 
-pub type AgentConfig = AgentConfigImpl<NonceFactory>;
+pub type AgentConfig =
+    AgentConfigImpl<NonceFactory, Arc<dyn Identity>, Arc<dyn ReplicaV2Transport>>;
 
-pub struct AgentConfigImpl<N: NonceGenerator> {
+pub struct AgentConfigImpl<N: NonceGenerator, I: Identity, T: ReplicaV2Transport> {
     pub nonce_factory: N,
-    pub identity: Arc<dyn Identity>,
+    pub identity: I,
     pub ingress_expiry_duration: Option<Duration>,
-    pub transport: Option<Arc<dyn ReplicaV2Transport>>,
+    pub transport: Option<T>,
 }
 
 impl Default for AgentConfig {

@@ -4,6 +4,7 @@
 use crate::{
     agent::{
         http_transport::ReqwestHttpReplicaV2Transport,
+        query_raw,
         replica_api::{CallReply, QueryResponse},
         Status,
     },
@@ -33,15 +34,15 @@ fn query() -> Result<(), AgentError> {
         .build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
-        agent
-            .query_raw(
-                &Principal::management_canister(),
-                Principal::management_canister(),
-                "main",
-                &[],
-                None,
-            )
-            .await
+        query_raw(
+            &agent,
+            &Principal::management_canister(),
+            Principal::management_canister(),
+            "main",
+            &[],
+            None,
+        )
+        .await
     });
 
     query_mock.assert();
@@ -64,15 +65,15 @@ fn query_error() -> Result<(), AgentError> {
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
 
     let result = runtime.block_on(async {
-        agent
-            .query_raw(
-                &Principal::management_canister(),
-                Principal::management_canister(),
-                "greet",
-                &[],
-                None,
-            )
-            .await
+        query_raw(
+            &agent,
+            &Principal::management_canister(),
+            Principal::management_canister(),
+            "greet",
+            &[],
+            None,
+        )
+        .await
     });
 
     query_mock.assert();
@@ -103,15 +104,15 @@ fn query_rejected() -> Result<(), AgentError> {
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
 
     let result = runtime.block_on(async {
-        agent
-            .query_raw(
-                &Principal::management_canister(),
-                Principal::management_canister(),
-                "greet",
-                &[],
-                None,
-            )
-            .await
+        query_raw(
+            &agent,
+            &Principal::management_canister(),
+            Principal::management_canister(),
+            "greet",
+            &[],
+            None,
+        )
+        .await
     });
 
     query_mock.assert();
