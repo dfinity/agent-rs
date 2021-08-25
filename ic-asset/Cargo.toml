@@ -1,6 +1,6 @@
 [package]
 name = "ic-asset"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
 description = "Library for storing files in an asset canister."
@@ -13,16 +13,16 @@ keywords = ["internet-computer", "assets", "icp", "dfinity"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
-anyhow = "1.0.34"
+anyhow = "1.0.43"
 candid = "0.7.4"
 flate2 = "1.0.11"
-futures = "0.3.5"
+futures = "0.3.16"
 futures-intrusive = "0.4.0"
 garcon = { version = "0.2", features = ["async"] }
 hex = {version = "0.4.2", features = ["serde"] }
-ic-agent = { path = "../ic-agent", version = "0.7", features = [ "pem" ] }
-ic-types = { version = "0.2.1", features = [ "serde" ] }
-ic-utils = { path = "../ic-utils", version = "0.5" }
+ic-agent = { path = "../ic-agent", version = "0.8", features = [ "pem" ] }
+ic-types = { version = "0.2.2", features = [ "serde" ] }
+ic-utils = { path = "../ic-utils", version = "0.6" }
 mime = "0.3.16"
 mime_guess = "2.0.3"
 openssl = "0.10.32"
@@ -31,6 +31,6 @@ serde_bytes = "0.11.2"
 walkdir = "2.2.9"
 
 [dev-dependencies]
-mockito = "0.27.0"
-proptest = "0.9.5"
+mockito = "0.30.0"
+proptest = "1.0.0"
 

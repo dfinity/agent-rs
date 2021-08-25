@@ -1,4 +1,4 @@
-use ic_agent::agent::{QueryBuilder, UpdateBuilder};
+use ic_agent::agent::{NonceGenerator, QueryBuilder, UpdateBuilder};
 
 /// An expiry value. Either not specified (the default), a delay relative to the time the
 /// call is made, or a specific date time.
@@ -28,7 +28,7 @@ impl Expiry {
         Self::DateTime(dt)
     }
 
-    pub(crate) fn apply_to_update(self, u: &mut UpdateBuilder<'_>) {
+    pub(crate) fn apply_to_update<N: NonceGenerator>(self, u: &mut UpdateBuilder<'_, N>) {
         match self {
             Expiry::Unspecified => {}
             Expiry::Delay(d) => {
@@ -40,7 +40,7 @@ impl Expiry {
         }
     }
 
-    pub(crate) fn apply_to_query(self, u: &mut QueryBuilder<'_>) {
+    pub(crate) fn apply_to_query<N: NonceGenerator>(self, u: &mut QueryBuilder<'_, N>) {
         match self {
             Expiry::Unspecified => {}
             Expiry::Delay(d) => {

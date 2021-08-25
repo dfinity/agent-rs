@@ -18,7 +18,7 @@ pub fn create_waiter() -> Delay {
         .build()
 }
 
-pub async fn create_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
+pub async fn create_identity() -> Result<Box<dyn Identity>, String> {
     if std::env::var(HSM_PKCS11_LIBRARY_PATH).is_ok() {
         create_hsm_identity().await
     } else {
@@ -30,7 +30,7 @@ fn expect_env_var(name: &str) -> Result<String, String> {
     std::env::var(name).map_err(|_| format!("Need to specify the {} environment variable", name))
 }
 
-pub async fn create_hsm_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
+pub async fn create_hsm_identity() -> Result<Box<dyn Identity>, String> {
     let path = expect_env_var(HSM_PKCS11_LIBRARY_PATH)?;
     let slot_index = expect_env_var(HSM_SLOT_INDEX)?
         .parse::<usize>()
@@ -52,7 +52,7 @@ fn get_hsm_pin() -> Result<String, String> {
 // To avoid this, we use a basic identity for any second identity in tests.
 //
 // A shared container of Ctx objects might be possible instead, but my rust-fu is inadequate.
-pub async fn create_basic_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
+pub async fn create_basic_identity() -> Result<Box<dyn Identity>, String> {
     let rng = ring::rand::SystemRandom::new();
     let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
         .expect("Could not generate a key pair.");
@@ -79,7 +79,8 @@ yeMC60IsMNxDjLqElV7+T7dkb5Ki7Q==
         .expect("Cannot create secp256k1 identity from PEM file.");
     Ok(Box::new(identity))
 }
-pub async fn create_agent(identity: Box<dyn Identity + Send + Sync>) -> Result<Agent, String> {
+
+pub async fn create_agent(identity: Box<dyn Identity>) -> Result<Agent, String> {
     let port_env = std::env::var("IC_REF_PORT")
         .expect("Need to specify the IC_REF_PORT environment variable.");
     let port = port_env
