@@ -1,13 +1,11 @@
 use crate::{
-    agent::{agent_config::AgentConfigImpl, AgentImpl, ReplicaV2Transport},
+    agent::{agent_config::AgentConfig, Agent, ReplicaV2Transport},
     AgentError, Identity, NonceFactory, NonceGenerator,
 };
 use std::sync::Arc;
 
-pub type AgentBuilder = AgentBuilderImpl<NonceFactory>;
-
-pub struct AgentBuilderImpl<N: NonceGenerator> {
-    config: AgentConfigImpl<N>,
+pub struct AgentBuilder {
+    config: AgentConfig,
 }
 
 impl Default for AgentBuilder {
@@ -18,13 +16,13 @@ impl Default for AgentBuilder {
     }
 }
 
-impl<N: NonceGenerator> AgentBuilderImpl<N> {
-    /// Create an instance of [AgentImpl] with the information from this builder.
-    pub fn build(self) -> Result<AgentImpl<N>, AgentError> {
-        AgentImpl::new(self.config)
+impl AgentBuilder {
+    /// Create an instance of [Agent] with the information from this builder.
+    pub fn build(self) -> Result<Agent, AgentError> {
+        Agent::new(self.config)
     }
 
-    /// Set the URL of the [AgentImpl].
+    /// Set the URL of the [Agent].
     #[cfg(feature = "reqwest")]
     #[deprecated(since = "0.3.0", note = "Prefer using with_transport().")]
     pub fn with_url<S: Into<String>>(self, url: S) -> Self {
@@ -34,40 +32,35 @@ impl<N: NonceGenerator> AgentBuilderImpl<N> {
     }
 
     /// Set a Replica transport to talk to serve as the replica interface.
-    pub fn with_transport<F: 'static + ReplicaV2Transport>(self, transport: F) -> Self {
-        Self {
-            config: AgentConfigImpl {
-                transport: Some(Arc::new(transport)),
-                ..self.config
-            },
-        }
+    pub fn with_transport<T: 'static + ReplicaV2Transport>(self, transport: T) -> Self {
+        self.with_arc_transport(Arc::new(transport))
     }
 
-    /// Add a NonceFactory to this AgentImpl. By default, no nonce is produced.
-    pub fn with_nonce_factory(self, nonce_factory: NonceFactory) -> AgentBuilderImpl<NonceFactory> {
-        AgentBuilderImpl {
-            config: AgentConfigImpl {
-                nonce_factory,
-                identity: self.config.identity,
-                ingress_expiry_duration: self.config.ingress_expiry_duration,
-                transport: self.config.transport,
-            },
-        }
+    /// Same as [with_transport], but provides a `Arc` boxed implementation instead
+    /// of a direct type.
+    pub fn with_arc_transport(mut self, transport: Arc<dyn ReplicaV2Transport>) -> Self {
+        self.config.transport = Some(transport);
+        self
     }
 
-    /// Add a NonceFactory to this AgentImpl. By default, no nonce is produced.
-    pub fn with_nonce_generator<N1: NonceGenerator>(
+    /// Add a NonceFactory to this Agent. By default, no nonce is produced.
+    pub fn with_nonce_factory(self, nonce_factory: NonceFactory) -> AgentBuilder {
+        self.with_nonce_generator(nonce_factory)
+    }
+
+    /// Same as [with_nonce_factory], but for any `NonceGenerator` type
+    pub fn with_nonce_generator<N: 'static + NonceGenerator>(
         self,
-        nonce_factory: N1,
-    ) -> AgentBuilderImpl<N1> {
-        AgentBuilderImpl {
-            config: AgentConfigImpl {
-                nonce_factory,
-                identity: self.config.identity,
-                ingress_expiry_duration: self.config.ingress_expiry_duration,
-                transport: self.config.transport,
-            },
-        }
+        nonce_factory: N,
+    ) -> AgentBuilder {
+        self.with_arc_nonce_generator(Arc::new(nonce_factory))
+    }
+
+    /// Same as [with_nonce_generator], but provides a `Arc` boxed implementation instead
+    /// of a direct type.
+    pub fn with_arc_nonce_generator(mut self, nonce_factory: Arc<dyn NonceGenerator>) -> AgentBuilder {
+        self.config.nonce_factory = Arc::new(nonce_factory);
+        self
     }
 
     /// Add an identity provider for signing messages. This is required.
@@ -75,31 +68,28 @@ impl<N: NonceGenerator> AgentBuilderImpl<N> {
     where
         I: 'static + Identity,
     {
-        AgentBuilderImpl {
-            config: AgentConfigImpl {
-                identity: Arc::new(identity),
-                ..self.config
-            },
-        }
+        self.with_arc_identity(Arc::new(identity))
     }
 
     /// Same as [with_identity], but provides a boxed implementation instead
     /// of a direct type.
     pub fn with_boxed_identity(self, identity: Box<dyn Identity>) -> Self {
-        AgentBuilderImpl {
-            config: AgentConfigImpl {
-                identity: Arc::from(identity),
-                ..self.config
-            },
-        }
+        self.with_arc_identity(Arc::from(identity))
+    }
+
+    /// Same as [with_identity], but provides a `Arc` boxed implementation instead
+    /// of a direct type.
+    pub fn with_arc_identity(mut self, identity: Arc<dyn Identity>) -> Self {
+        self.config.identity = Arc::from(identity);
+        self
     }
 
     /// Provides a _default_ ingress expiry. This is the delta that will be applied
     /// at the time an update or query is made. The default expiry cannot be a
     /// fixed system time.
     pub fn with_ingress_expiry(self, duration: Option<std::time::Duration>) -> Self {
-        AgentBuilderImpl {
-            config: AgentConfigImpl {
+        AgentBuilder {
+            config: AgentConfig {
                 ingress_expiry_duration: duration,
                 ..self.config
             },
