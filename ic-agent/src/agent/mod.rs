@@ -374,7 +374,7 @@ impl<N: NonceGenerator> AgentImpl<N> {
     /// you are prone to man-in-the-middle attacks! Do not call this function by default.*
     pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
         let mut waiter = Delay::builder()
-            .exponential_backoff(std::time::Duration::from_secs(1), 1.1)
+            .exponential_backoff(std::time::Duration::from_secs(1), 2.0)
             .timeout(std::time::Duration::from_secs(60 * 5))
             .build();
         waiter.start();
