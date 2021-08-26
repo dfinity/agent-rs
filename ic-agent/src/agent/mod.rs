@@ -29,7 +29,7 @@ use crate::{
     identity::Identity,
     to_request_id, RequestId,
 };
-use garcon::Waiter;
+use garcon::{Delay, Waiter};
 use serde::Serialize;
 use status::Status;
 
@@ -373,12 +373,29 @@ impl<N: NonceGenerator> AgentImpl<N> {
     /// *Only use this when you are  _not_ talking to the main Internet Computer, otherwise
     /// you are prone to man-in-the-middle attacks! Do not call this function by default.*
     pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
-        let status = self.status().await?;
-        let root_key = status
-            .root_key
-            .clone()
-            .ok_or(AgentError::NoRootKeyInStatus(status))?;
-        self.set_root_key(root_key)
+        let mut waiter = Delay::builder()
+            .exponential_backoff(std::time::Duration::from_secs(1), 1.1)
+            .timeout(std::time::Duration::from_secs(60 * 5))
+            .build();
+        waiter.start();
+
+        loop {
+            let status = self.status().await?;
+
+            let root_key = status.root_key.clone();
+            let replica_health_status = status.replica_health_status.clone();
+            match (root_key, replica_health_status) {
+                (Some(root_key), _) => self.set_root_key(root_key),
+                (None, Some(replica_health_status))
+                    if replica_health_status == "waiting_for_certified_state" =>
+                {
+                    waiter
+                        .wait()
+                        .map_err(|_| AgentError::NoRootKeyInStatus(status))
+                }
+                (None, _) => Err(AgentError::NoRootKeyInStatus(status)),
+            }?;
+        }
     }
 
     /// By default, the agent is configured to talk to the main Internet Computer, and verifies

@@ -54,6 +54,9 @@ pub struct Status {
     /// Optional.  The root (public) key used to verify certificates.
     pub root_key: Option<Vec<u8>>,
 
+    /// Optional.  The health status of the replica.
+    pub replica_health_status: Option<String>,
+
     /// Contains any additional values that the replica gave as status.
     pub values: BTreeMap<String, Box<Value>>,
 }
@@ -145,6 +148,14 @@ impl std::convert::TryFrom<&serde_cbor::Value> for Status {
                         None
                     }
                 });
+                let replica_health_status: Option<String> =
+                    map.get("replica_health_status").and_then(|v| {
+                        if let Value::String(s) = v.as_ref() {
+                            Some(s.to_owned())
+                        } else {
+                            None
+                        }
+                    });
 
                 Ok(Status {
                     ic_api_version,
@@ -152,6 +163,7 @@ impl std::convert::TryFrom<&serde_cbor::Value> for Status {
                     impl_version,
                     impl_revision,
                     root_key,
+                    replica_health_status,
                     values: map,
                 })
             }
