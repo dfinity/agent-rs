@@ -58,7 +58,10 @@ impl AgentBuilder {
 
     /// Same as [with_nonce_generator], but provides a `Arc` boxed implementation instead
     /// of a direct type.
-    pub fn with_arc_nonce_generator(mut self, nonce_factory: Arc<dyn NonceGenerator>) -> AgentBuilder {
+    pub fn with_arc_nonce_generator(
+        mut self,
+        nonce_factory: Arc<dyn NonceGenerator>,
+    ) -> AgentBuilder {
         self.config.nonce_factory = Arc::new(nonce_factory);
         self
     }
@@ -80,7 +83,7 @@ impl AgentBuilder {
     /// Same as [with_identity], but provides a `Arc` boxed implementation instead
     /// of a direct type.
     pub fn with_arc_identity(mut self, identity: Arc<dyn Identity>) -> Self {
-        self.config.identity = Arc::from(identity);
+        self.config.identity = identity;
         self
     }
 
