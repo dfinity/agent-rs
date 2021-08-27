@@ -428,7 +428,8 @@ async fn handle_request(
     logger: slog::Logger,
     debug: bool,
 ) -> Result<Response<Body>, Infallible> {
-    let request_uri_path = request.uri().path();
+    let request_uri = request.uri().clone();
+    let request_uri_path = request_uri.path();
     match if request_uri_path.starts_with("/api/") {
         slog::debug!(
             logger,
@@ -463,7 +464,12 @@ async fn handle_request(
         forward_request(request, agent, dns_canister_config.as_ref(), logger.clone()).await
     } {
         Err(err) => {
-            slog::warn!(logger, "Internal Error during request:\n{:#?}", err);
+            slog::warn!(
+                logger,
+                "Internal Error during request ({}):\n{:#?}",
+                request_uri_path,
+                err
+            );
 
             Ok(Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
