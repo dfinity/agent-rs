@@ -200,6 +200,12 @@ impl Wallet {
 }
 
 impl<'agent> Canister<'agent, Wallet> {
+    pub fn wallet_api_version<'canister: 'agent>(
+        &'canister self,
+    ) -> impl 'agent + SyncCall<(Option<String>,)> {
+        self.query_("wallet_api_version").build()
+    }
+
     pub fn name<'canister: 'agent>(&'canister self) -> impl 'agent + SyncCall<(Option<String>,)> {
         self.query_("name").build()
     }
