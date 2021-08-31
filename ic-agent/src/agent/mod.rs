@@ -244,81 +244,9 @@ pub enum PollResult {
 /// ```
 ///
 /// This agent does not understand Candid, and only acts on byte buffers.
-pub type Agent = AgentImpl<NonceFactory>;
-
-/// A low level Agent to make calls to a Replica endpoint.
-///
-/// ```ignore
-/// # // This test is ignored because it requires an ic to be running. We run these
-/// # // in the ic-ref workflow.
-/// use ic_agent::{Agent, ic_types::Principal};
-/// use candid::{Encode, Decode, CandidType, Nat};
-/// use serde::Deserialize;
-///
-/// #[derive(CandidType)]
-/// struct Argument {
-///   amount: Option<Nat>,
-/// }
-///
-/// #[derive(CandidType, Deserialize)]
-/// struct CreateCanisterResult {
-///   canister_id: candid::Principal,
-/// }
-///
-/// # fn create_identity() -> impl ic_agent::Identity {
-/// #     let rng = ring::rand::SystemRandom::new();
-/// #     let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
-/// #         .expect("Could not generate a key pair.");
-/// #
-/// #     ic_agent::identity::BasicIdentity::from_key_pair(
-/// #         ring::signature::Ed25519KeyPair::from_pkcs8(key_pair.as_ref())
-/// #           .expect("Could not read the key pair."),
-/// #     )
-/// # }
-/// #
-/// # const URL: &'static str = concat!("http://localhost:", env!("IC_REF_PORT"));
-/// #
-/// async fn create_a_canister() -> Result<Principal, Box<dyn std::error::Error>> {
-///   let agent = Agent::builder()
-///     .with_url(URL)
-///     .with_identity(create_identity())
-///     .build()?;
-///
-///   // Only do the following call when not contacting the IC main net (e.g. a local emulator).
-///   // This is important as the main net public key is static and a rogue network could return
-///   // a different key.
-///   // If you know the root key ahead of time, you can use `agent.set_root_key(root_key)?;`.
-///   agent.fetch_root_key().await?;
-///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
-///
-///   let waiter = garcon::Delay::builder()
-///     .throttle(std::time::Duration::from_millis(500))
-///     .timeout(std::time::Duration::from_secs(60 * 5))
-///     .build();
-///
-///   // Create a call to the management canister to create a new canister ID,
-///   // and wait for a result.
-///   let response = agent.update(&management_canister_id, "provisional_create_canister_with_cycles")
-///     .with_arg(&Encode!(&Argument { amount: None })?)
-///     .call_and_wait(waiter)
-///     .await?;
-///
-///   let result = Decode!(response.as_slice(), CreateCanisterResult)?;
-///   let canister_id: Principal = Principal::from_text(&result.canister_id.to_text())?;
-///   Ok(canister_id)
-/// }
-///
-/// # let mut runtime = tokio::runtime::Runtime::new().unwrap();
-/// # runtime.block_on(async {
-/// let canister_id = create_a_canister().await.unwrap();
-/// eprintln!("{}", canister_id);
-/// # });
-/// ```
-///
-/// This agent does not understand Candid, and only acts on byte buffers.
 #[derive(Clone)]
-pub struct AgentImpl<N: NonceGenerator> {
-    nonce_factory: N,
+pub struct Agent {
+    nonce_factory: Arc<dyn NonceGenerator>,
     identity: Arc<dyn Identity>,
     ingress_expiry_duration: Duration,
     root_key: Arc<RwLock<Option<Vec<u8>>>>,
@@ -331,14 +259,12 @@ impl Agent {
     pub fn builder() -> builder::AgentBuilder {
         Default::default()
     }
-}
 
-impl<N: NonceGenerator> AgentImpl<N> {
     /// Create an instance of an [`Agent`].
-    pub fn new(config: agent_config::AgentConfigImpl<N>) -> Result<AgentImpl<N>, AgentError> {
+    pub fn new(config: agent_config::AgentConfig) -> Result<Agent, AgentError> {
         initialize_bls()?;
 
-        Ok(AgentImpl {
+        Ok(Agent {
             nonce_factory: config.nonce_factory,
             identity: config.identity,
             ingress_expiry_duration: config
@@ -354,14 +280,6 @@ impl<N: NonceGenerator> AgentImpl<N> {
     /// Set the transport of the [`Agent`].
     pub fn set_transport<F: 'static + ReplicaV2Transport>(&mut self, transport: F) {
         self.transport = Arc::new(transport);
-    }
-
-    pub fn nonce_factory(&self) -> &N {
-        &self.nonce_factory
-    }
-
-    pub fn nonce_factory_mut(&mut self) -> &mut N {
-        &mut self.nonce_factory
     }
 
     /// By default, the agent is configured to talk to the main Internet Computer, and verifies
@@ -771,7 +689,7 @@ impl<N: NonceGenerator> AgentImpl<N> {
         &self,
         canister_id: &Principal,
         method_name: S,
-    ) -> UpdateBuilder<N> {
+    ) -> UpdateBuilder {
         UpdateBuilder::new(self, *canister_id, method_name.into())
     }
 
@@ -787,11 +705,7 @@ impl<N: NonceGenerator> AgentImpl<N> {
 
     /// Returns a QueryBuilder enabling the construction of a query call without
     /// passing all arguments.
-    pub fn query<S: Into<String>>(
-        &self,
-        canister_id: &Principal,
-        method_name: S,
-    ) -> QueryBuilder<N> {
+    pub fn query<S: Into<String>>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder {
         QueryBuilder::new(self, *canister_id, method_name.into())
     }
 
@@ -1019,8 +933,8 @@ pub fn signed_request_status_inspect(
 /// A Query Request Builder.
 ///
 /// This makes it easier to do query calls without actually passing all arguments.
-pub struct QueryBuilder<'agent, N: NonceGenerator> {
-    agent: &'agent AgentImpl<N>,
+pub struct QueryBuilder<'agent> {
+    agent: &'agent Agent,
     effective_canister_id: Principal,
     canister_id: Principal,
     method_name: String,
@@ -1028,8 +942,8 @@ pub struct QueryBuilder<'agent, N: NonceGenerator> {
     ingress_expiry_datetime: Option<u64>,
 }
 
-impl<'agent, N: NonceGenerator> QueryBuilder<'agent, N> {
-    pub fn new(agent: &'agent AgentImpl<N>, canister_id: Principal, method_name: String) -> Self {
+impl<'agent> QueryBuilder<'agent> {
+    pub fn new(agent: &'agent Agent, canister_id: Principal, method_name: String) -> Self {
         Self {
             agent,
             effective_canister_id: canister_id,
@@ -1126,18 +1040,18 @@ impl<'agent, N: NonceGenerator> QueryBuilder<'agent, N> {
     }
 }
 
-pub struct UpdateCall<'agent, N: NonceGenerator = NonceFactory> {
-    agent: &'agent AgentImpl<N>,
+pub struct UpdateCall<'agent> {
+    agent: &'agent Agent,
     request_id: Pin<Box<dyn Future<Output = Result<RequestId, AgentError>> + Send + 'agent>>,
     effective_canister_id: Principal,
 }
-impl<N: NonceGenerator> Future for UpdateCall<'_, N> {
+impl Future for UpdateCall<'_> {
     type Output = Result<RequestId, AgentError>;
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.request_id.as_mut().poll(cx)
     }
 }
-impl<N: NonceGenerator> UpdateCall<'_, N> {
+impl UpdateCall<'_> {
     fn and_wait<'out, W>(
         self,
         waiter: W,
@@ -1146,10 +1060,7 @@ impl<N: NonceGenerator> UpdateCall<'_, N> {
         Self: 'out,
         W: Waiter + 'out,
     {
-        async fn run<N: NonceGenerator, W>(
-            _self: UpdateCall<'_, N>,
-            waiter: W,
-        ) -> Result<Vec<u8>, AgentError>
+        async fn run<W>(_self: UpdateCall<'_>, waiter: W) -> Result<Vec<u8>, AgentError>
         where
             W: Waiter,
         {
@@ -1166,8 +1077,8 @@ impl<N: NonceGenerator> UpdateCall<'_, N> {
 ///
 /// This makes it easier to do update calls without actually passing all arguments or specifying
 /// if you want to wait or not.
-pub struct UpdateBuilder<'agent, N: NonceGenerator = NonceFactory> {
-    agent: &'agent AgentImpl<N>,
+pub struct UpdateBuilder<'agent> {
+    agent: &'agent Agent,
     pub effective_canister_id: Principal,
     pub canister_id: Principal,
     pub method_name: String,
@@ -1175,8 +1086,8 @@ pub struct UpdateBuilder<'agent, N: NonceGenerator = NonceFactory> {
     pub ingress_expiry_datetime: Option<u64>,
 }
 
-impl<'agent, N: NonceGenerator> UpdateBuilder<'agent, N> {
-    pub fn new(agent: &'agent AgentImpl<N>, canister_id: Principal, method_name: String) -> Self {
+impl<'agent> UpdateBuilder<'agent> {
+    pub fn new(agent: &'agent Agent, canister_id: Principal, method_name: String) -> Self {
         Self {
             agent,
             effective_canister_id: canister_id,
@@ -1237,7 +1148,7 @@ impl<'agent, N: NonceGenerator> UpdateBuilder<'agent, N> {
 
     /// Make an update call. This will return a RequestId.
     /// The RequestId should then be used for request_status (most likely in a loop).
-    pub fn call(&self) -> UpdateCall<N> {
+    pub fn call(&self) -> UpdateCall {
         let request_id_future = self.agent.update_raw(
             &self.canister_id,
             self.effective_canister_id,
