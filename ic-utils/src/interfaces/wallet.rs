@@ -377,7 +377,7 @@ impl<'agent> Canister<'agent, Wallet> {
                 .call_and_wait(waiter)
                 .await?
                 .0
-                .map_err(|s| AgentError::WalletCallFailed(s)),
+                .map_err(AgentError::WalletCallFailed), // todo
             Err(AgentError::ReplicaError {
                 reject_code,
                 reject_message,
@@ -405,7 +405,7 @@ impl<'agent> Canister<'agent, Wallet> {
                 .call_and_wait(waiter)
                 .await?
                 .0
-                .map_err(|s| AgentError::WalletCallFailed(s))
+                .map_err(AgentError::WalletCallFailed) // todo
             }
             Err(other_err) => Err(other_err),
         }
