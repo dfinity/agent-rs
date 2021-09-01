@@ -382,7 +382,8 @@ impl<'agent> Canister<'agent, Wallet> {
                 reject_code,
                 reject_message,
             }) if reject_code == 3
-                && reject_message.contains("has no query method 'wallet_api_version'") =>
+                && (reject_message.contains("has no query method 'wallet_api_version'")
+                    || reject_message.contains("query method does not exist")) => // ic-ref
             {
                 let controller: Option<Principal> = match &controllers {
                     Some(c) if c.len() == 1 => {
