@@ -9,7 +9,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize};
-use garcon::Waiter;
+use garcon::{Delay, Waiter};
 use ic_agent::{agent::UpdateBuilder, export::Principal, Agent, AgentError, RequestId};
 
 pub struct CallForwarder<'agent, 'canister: 'agent, Out>
@@ -296,7 +296,37 @@ impl<'agent> Canister<'agent, Wallet> {
         self.update_("wallet_receive").build()
     }
 
-    pub fn wallet_create_canister<'canister: 'agent>(
+    /// Wallet API version 0.1.0 only accepts a single controller
+    pub fn wallet_create_canister_v1<'canister: 'agent>(
+        &'canister self,
+        cycles: u64,
+        controller: Option<Principal>,
+        compute_allocation: Option<ComputeAllocation>,
+        memory_allocation: Option<MemoryAllocation>,
+        freezing_threshold: Option<FreezingThreshold>,
+    ) -> impl 'agent + AsyncCall<(Result<CreateResult, String>,)> {
+        #[derive(CandidType)]
+        struct In {
+            cycles: u64,
+            settings: CanisterSettings,
+        }
+
+        let settings = CanisterSettings {
+            controller,
+            controllers: None,
+            compute_allocation: compute_allocation.map(u8::from).map(candid::Nat::from),
+            memory_allocation: memory_allocation.map(u64::from).map(candid::Nat::from),
+            freezing_threshold: freezing_threshold.map(u64::from).map(candid::Nat::from),
+        };
+
+        self.update_("wallet_create_canister")
+            .with_arg(In { cycles, settings })
+            .build()
+            .map(|result: (Result<CreateResult, String>,)| (result.0,))
+    }
+
+    /// Wallet API version >= 0.2.0 accepts multiple controllers
+    pub fn wallet_create_canister_v2<'canister: 'agent>(
         &'canister self,
         cycles: u64,
         controllers: Option<Vec<Principal>>,
@@ -310,13 +340,8 @@ impl<'agent> Canister<'agent, Wallet> {
             settings: CanisterSettings,
         }
 
-        let controller = match controllers.as_ref() {
-            Some(v) if !v.is_empty() => Some(v[0]),
-            _ => None,
-        };
-
         let settings = CanisterSettings {
-            controller,
+            controller: None,
             controllers,
             compute_allocation: compute_allocation.map(u8::from).map(candid::Nat::from),
             memory_allocation: memory_allocation.map(u64::from).map(candid::Nat::from),
@@ -327,6 +352,63 @@ impl<'agent> Canister<'agent, Wallet> {
             .with_arg(In { cycles, settings })
             .build()
             .map(|result: (Result<CreateResult, String>,)| (result.0,))
+    }
+
+    /// Call wallet_create_canister_v1 or wallet_create_canister_v2, depending
+    /// on the cycles wallet version.
+    pub async fn wallet_create_canister<'canister: 'agent>(
+        &'canister self,
+        cycles: u64,
+        controllers: Option<Vec<Principal>>,
+        compute_allocation: Option<ComputeAllocation>,
+        memory_allocation: Option<MemoryAllocation>,
+        freezing_threshold: Option<FreezingThreshold>,
+        waiter: Delay,
+    ) -> Result<CreateResult, AgentError> {
+        match self.wallet_api_version().call().await {
+            Ok(_) => self
+                .wallet_create_canister_v2(
+                    cycles,
+                    controllers,
+                    compute_allocation,
+                    memory_allocation,
+                    freezing_threshold,
+                )
+                .call_and_wait(waiter)
+                .await?
+                .0
+                .map_err(|s| AgentError::WalletCallFailed(s)),
+            Err(AgentError::ReplicaError {
+                reject_code,
+                reject_message,
+            }) if reject_code == 3
+                && reject_message.contains("has no query method 'wallet_api_version'") =>
+            {
+                let controller: Option<Principal> = match &controllers {
+                    Some(c) if c.len() == 1 => {
+                        let first: Option<&Principal> = c.first();
+                        let first: Principal = *first.unwrap();
+                        Ok(Some(first))
+                    }
+                    Some(_) => Err(AgentError::WalletUpgradeRequired(
+                        "The installed wallet does not support multiple controllers.".to_string(),
+                    )),
+                    None => Ok(None),
+                }?;
+                self.wallet_create_canister_v1(
+                    cycles,
+                    controller,
+                    compute_allocation,
+                    memory_allocation,
+                    freezing_threshold,
+                )
+                .call_and_wait(waiter)
+                .await?
+                .0
+                .map_err(|s| AgentError::WalletCallFailed(s))
+            }
+            Err(other_err) => Err(other_err),
+        }
     }
 
     /// Create a wallet canister
