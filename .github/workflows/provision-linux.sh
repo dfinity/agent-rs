@@ -24,7 +24,7 @@ rm v$version.tar.gz
 # Install DFINITY SDK.
 version=0.7.2
 wget --output-document install-dfx.sh "https://sdk.dfinity.org/install.sh"
-DFX_VERSION=$version bash install-dfx.sh < <(yes Y)
+DFX_VERSION=$version bash -x install-dfx.sh < <(yes Y)
 rm install-dfx.sh
 
 # Set environment variables.
