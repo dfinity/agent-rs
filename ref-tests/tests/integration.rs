@@ -206,18 +206,16 @@ fn wallet_create_and_set_controller() {
 
         eprintln!("Agent id: {:?}", other_agent_principal.to_text());
 
-        let (create_result,) = wallet
+        let create_result = wallet
             .wallet_create_wallet(
                 1_000_000_000_000_u64,
                 Some(vec![other_agent_principal]),
                 None,
                 None,
                 None,
+                create_waiter(),
             )
-            .call_and_wait(create_waiter())
             .await?;
-
-        let create_result = create_result?;
 
         eprintln!(
             "Child wallet canister id: {:?}",
@@ -265,12 +263,16 @@ fn wallet_create_wallet() {
             .await?;
 
         // create a child wallet
-        let (child_create_res,) = wallet
-            .wallet_create_wallet(1_000_000_000_000_u64, None, None, None, None)
-            .call_and_wait(create_waiter())
+        let child_create_res = wallet
+            .wallet_create_wallet(
+                1_000_000_000_000_u64,
+                None,
+                None,
+                None,
+                None,
+                create_waiter(),
+            )
             .await?;
-
-        let child_create_res = child_create_res?;
 
         eprintln!(
             "Created child wallet one.\nChild wallet one canister id: {:?}",
@@ -296,12 +298,16 @@ fn wallet_create_wallet() {
         //
         // create a second child wallet
         //
-        let (child_two_create_res,) = wallet
-            .wallet_create_wallet(2_100_000_000_000_u64, None, None, None, None)
-            .call_and_wait(create_waiter())
+        let child_two_create_res = wallet
+            .wallet_create_wallet(
+                2_100_000_000_000_u64,
+                None,
+                None,
+                None,
+                None,
+                create_waiter(),
+            )
             .await?;
-
-        let child_two_create_res = child_two_create_res?;
 
         let child_wallet_two = Canister::builder()
             .with_agent(&agent)
@@ -341,7 +347,6 @@ fn wallet_create_wallet() {
         let create_args = In {
             cycles: 1_000_000_000_000_u64,
             settings: CanisterSettings {
-                controller: None,
                 controllers: None,
                 compute_allocation: None,
                 memory_allocation: None,
