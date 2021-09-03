@@ -12,6 +12,9 @@ use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize};
 use garcon::{Delay, Waiter};
 use ic_agent::{agent::UpdateBuilder, export::Principal, Agent, AgentError, RequestId};
 
+const REPLICA_ERROR_NO_SUCH_QUERY_METHOD: &str = "has no query method 'wallet_api_version'";
+const IC_REF_ERROR_NO_SUCH_QUERY_METHOD: &str = "query method does not exist";
+
 pub struct CallForwarder<'agent, 'canister: 'agent, Out>
 where
     Self: 'canister,
@@ -383,14 +386,13 @@ impl<'agent> Canister<'agent, Wallet> {
                 .call_and_wait(waiter)
                 .await?
                 .0
-                .map_err(AgentError::WalletCallFailed), // todo
+                .map_err(AgentError::WalletError),
             Err(AgentError::ReplicaError {
                 reject_code,
                 reject_message,
             }) if reject_code == 3
-                && (reject_message.contains("has no query method 'wallet_api_version'")
-                    || reject_message.contains("query method does not exist")) =>
-            // ic-ref
+                && (reject_message.contains(REPLICA_ERROR_NO_SUCH_QUERY_METHOD)
+                    || reject_message.contains(IC_REF_ERROR_NO_SUCH_QUERY_METHOD)) =>
             {
                 let controller: Option<Principal> = match &controllers {
                     Some(c) if c.len() == 1 => {
@@ -413,7 +415,7 @@ impl<'agent> Canister<'agent, Wallet> {
                 .call_and_wait(waiter)
                 .await?
                 .0
-                .map_err(AgentError::WalletCallFailed) // todo
+                .map_err(AgentError::WalletError)
             }
             Err(other_err) => Err(other_err),
         }
@@ -498,7 +500,7 @@ impl<'agent> Canister<'agent, Wallet> {
                 .call_and_wait(waiter)
                 .await?
                 .0
-                .map_err(AgentError::WalletCallFailed), // todo
+                .map_err(AgentError::WalletError),
             Err(AgentError::ReplicaError {
                 reject_code,
                 reject_message,
@@ -528,7 +530,7 @@ impl<'agent> Canister<'agent, Wallet> {
                 .call_and_wait(waiter)
                 .await?
                 .0
-                .map_err(AgentError::WalletCallFailed) // todo
+                .map_err(AgentError::WalletError)
             }
             Err(other_err) => Err(other_err),
         }
