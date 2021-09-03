@@ -32,8 +32,7 @@ jobs:
         with:
           repository: 'dfinity/wallet-rs'
           path: wallet-rs
-          ref: ericswanson/SDK-90-multiple-controllers
-          # ref: c714cbf2dfb42fe6242ee20854b7267270d67834
+          ref: 9ef38bb7cd0fe17cda749bf8e9bbec5723da0e95
 
       - name: Cache ~/.cabal/store
         uses: actions/cache@v2
