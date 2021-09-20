@@ -27,13 +27,13 @@ openssl = "0.10.36"
 rand = "0.8.4"
 rustls = "0.19.0"
 ring = { version = "0.16.11", features = ["std"] }
-serde = { version = "1.0.127", features = ["derive"] }
+serde = { version = "1.0.130", features = ["derive"] }
 serde_bytes = "0.11.2"
 serde_cbor = "0.11.2"
 simple_asn1 = "0.5.4"
-thiserror = "1.0.26"
+thiserror = "1.0.28"
 url = "2.1.0"
-webpki-roots = "0.20.0"
+webpki-roots = "0.21.1"
 
 [dependencies.reqwest]
 version = "0.11"
@@ -48,8 +48,8 @@ optional = true
 candid = "0.7.6"
 mockito = "0.30.0"
 proptest = "1.0.0"
-serde_json = "1.0.66"
-tokio = { version = "1.10.0", features = ["full"] }
+serde_json = "1.0.67"
+tokio = { version = "1.11.0", features = ["full"] }
 
 [features]
 default = ["pem", "reqwest"]
