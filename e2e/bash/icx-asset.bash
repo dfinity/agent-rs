@@ -29,7 +29,7 @@ icx_asset_list() {
 }
 
 @test "lists assets" {
-    for i in $(seq 1 400); do
+    for i in $(seq 1 450); do
       echo "some easily duplicate text $i" >>src/e2e_project_assets/assets/notreally.js
     done
     icx_asset_sync
