@@ -63,9 +63,7 @@ jobs:
 
       - name: Build ic-hs
         run: |
-          # the next step is failing now, do not know why:
-          ls -l /opt/ghc/
-          export PATH=/opt/ghc/bin:$PATH
+          ghc --version
           cabal --version
           ghc-${{ matrix.ghc }} --version
           mkdir -p $HOME/bin
