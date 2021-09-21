@@ -27,7 +27,7 @@ ic-agent = { path = "../ic-agent", version = "0.8" }
 ic-asset = { path = "../ic-asset", version = "0.3" }
 ic-types = "0.2.2"
 ic-utils = { path = "../ic-utils", version = "0.6" }
-libflate = "1.1.0"
+libflate = "1.1.1"
 num-traits = "0.2"
 pem = "0.8.1"
 serde = "1.0.115"
