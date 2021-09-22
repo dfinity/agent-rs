@@ -1,6 +1,6 @@
 [package]
 name = "ic-utils"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
 description = "Collection of utilities for Rust, on top of ic-agent, to communicate with the Internet Computer, following the Public Specification."
@@ -16,14 +16,14 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
 async-trait = "0.1.40"
-candid = "0.7.4"
+candid = "0.7.7"
 garcon = { version = "0.2", features = ["async"] }
-ic-agent = { path = "../ic-agent", version = "0.7" }
+ic-agent = { path = "../ic-agent", version = "0.8" }
 serde = "1.0.115"
 serde_bytes = "0.11"
-strum = "0.20"
-strum_macros = "0.20"
-thiserror = "1.0.20"
+strum = "0.21"
+strum_macros = "0.21"
+thiserror = "1.0.29"
 
 [dev-dependencies]
 ring = "0.16.11"

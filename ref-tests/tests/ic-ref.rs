@@ -4,6 +4,7 @@
 //! as the IC Ref repo itself.
 //!
 //! The tests can be found in the Spec.hs file in the IC Ref repo.
+//!   https://github.com/dfinity/ic-hs/blob/master/src/IC/Test/Spec.hs
 //!
 //! Try to keep these tests as close to 1-to-1 to the IC Ref test use cases. For
 //! every spec in the IC Ref tests, there should be a matching spec here. Some
@@ -12,7 +13,7 @@
 //! use case being tested).
 use ref_tests::{universal_canister, with_agent};
 
-const EXPECTED_IC_API_VERSION: &str = "0.17.0";
+const EXPECTED_IC_API_VERSION: &str = "0.18.0";
 
 #[ignore]
 #[test]
@@ -51,8 +52,10 @@ mod management_canister {
     };
     use openssl::sha::Sha256;
     use ref_tests::{
-        create_agent, create_basic_identity, create_waiter, with_agent, with_wallet_canister,
+        create_agent, create_basic_identity, create_secp256k1_identity, create_waiter, with_agent,
+        with_wallet_canister,
     };
+    use std::collections::HashSet;
 
     mod create_canister {
         use super::{create_waiter, with_agent};
@@ -216,7 +219,8 @@ mod management_canister {
                 .call_and_wait(create_waiter())
                 .await?;
             assert_eq!(result.0.status, CanisterStatus::Running);
-            assert_eq!(result.0.settings.controller, other_agent_principal);
+            assert_eq!(result.0.settings.controllers.len(), 1);
+            assert_eq!(result.0.settings.controllers[0], other_agent_principal);
             assert_eq!(result.0.module_hash, None);
 
             // Install wasm.
@@ -238,6 +242,118 @@ mod management_canister {
 
             Ok(())
         })
+    }
+
+    #[ignore]
+    #[test]
+    fn multiple_canisters_aaaaa_aa_but_really_provisional() {
+        with_agent(|agent| async move {
+            let agent_principal = agent.get_principal()?;
+            // Each agent has their own identity.
+            let other_agent_identity = create_basic_identity().await?;
+            let other_agent_principal = other_agent_identity.sender()?;
+            let other_agent = create_agent(other_agent_identity).await?;
+            other_agent.fetch_root_key().await?;
+            let other_ic00 = ManagementCanister::create(&other_agent);
+
+            let secp256k1_identity = create_secp256k1_identity()?;
+            let secp256k1_principal = secp256k1_identity.sender()?;
+            let secp256k1_agent = create_agent(secp256k1_identity).await?;
+            secp256k1_agent.fetch_root_key().await?;
+            let secp256k1_ic00 = ManagementCanister::create(&secp256k1_agent);
+
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None) // ok
+                //.with_canister_id("aaaaa-aa")
+                .with_controller(agent_principal)
+                .with_controller(other_agent_principal)
+                .call_and_wait(create_waiter())
+                .await?;
+
+            // Controllers should be able to fetch the canister status.
+            let result = ic00
+                .canister_status(&canister_id)
+                .call_and_wait(create_waiter())
+                .await?;
+            assert_eq!(result.0.settings.controllers.len(), 2);
+            let actual = result
+                .0
+                .settings
+                .controllers
+                .iter()
+                .cloned()
+                .collect::<HashSet<_>>();
+            let expected = vec![agent_principal, other_agent_principal]
+                .iter()
+                .cloned()
+                .collect::<HashSet<_>>();
+            assert_eq!(actual, expected);
+
+            let result = other_ic00
+                .canister_status(&canister_id)
+                .call_and_wait(create_waiter())
+                .await?;
+            assert_eq!(result.0.settings.controllers.len(), 2);
+            let actual = result
+                .0
+                .settings
+                .controllers
+                .iter()
+                .cloned()
+                .collect::<HashSet<_>>();
+            let expected = vec![agent_principal, other_agent_principal]
+                .iter()
+                .cloned()
+                .collect::<HashSet<_>>();
+            assert_eq!(actual, expected);
+
+            // Set new controller
+            ic00.update_settings(&canister_id)
+                .with_controller(secp256k1_principal)
+                .call_and_wait(create_waiter())
+                .await?;
+
+            // Only that controller can get canister status
+            let result = ic00
+                .canister_status(&canister_id)
+                .call_and_wait(create_waiter())
+                .await;
+            assert_err_or_reject(result, vec![3, 5]);
+            let result = other_ic00
+                .canister_status(&canister_id)
+                .call_and_wait(create_waiter())
+                .await;
+            assert_err_or_reject(result, vec![3, 5]);
+
+            let result = secp256k1_ic00
+                .canister_status(&canister_id)
+                .call_and_wait(create_waiter())
+                .await?;
+            assert_eq!(result.0.settings.controllers.len(), 1);
+            assert_eq!(result.0.settings.controllers[0], secp256k1_principal);
+
+            Ok(())
+        })
+    }
+
+    fn assert_err_or_reject<S>(result: Result<S, AgentError>, allowed_reject_codes: Vec<u64>) {
+        for expected_rc in &allowed_reject_codes {
+            if matches!(result, Err(AgentError::ReplicaError {
+                    reject_code: actual_rc,
+                    reject_message: _,
+                }) if actual_rc == *expected_rc)
+            {
+                return;
+            }
+        }
+        assert!(
+            matches!(result, Err(AgentError::HttpError(_))),
+            "expect an HttpError, or a ReplicaError with reject_code in {:?}",
+            allowed_reject_codes
+        );
     }
 
     #[ignore]
@@ -494,7 +610,7 @@ mod management_canister {
             let create_args = InCreate {
                 cycles: 0_u64,
                 settings: CanisterSettings {
-                    controller: None,
+                    controllers: None,
                     compute_allocation: None,
                     memory_allocation: None,
                     freezing_threshold: None,

@@ -32,6 +32,9 @@ pub enum AgentError {
     #[error(r#"Cannot parse url: "{0}""#)]
     UrlParseError(#[from] url::ParseError),
 
+    #[error(r#"Invalid method: "{0}""#)]
+    InvalidMethodError(#[from] http::method::InvalidMethod),
+
     #[error("Cannot parse Principal: {0}")]
     PrincipalError(#[from] crate::export::PrincipalError),
 
@@ -102,6 +105,12 @@ pub enum AgentError {
 
     #[error("The invocation to the wallet call forward method failed with the error: {0}")]
     WalletCallFailed(String),
+
+    #[error("The  wallet operation failed: {0}")]
+    WalletError(String),
+
+    #[error("The wallet canister must be upgraded: {0}")]
+    WalletUpgradeRequired(String),
 
     #[error("Missing replica transport in the Agent Builder.")]
     MissingReplicaTransport(),

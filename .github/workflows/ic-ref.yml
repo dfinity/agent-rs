@@ -15,9 +15,9 @@ jobs:
         include:
           - build: linux-stable
             ghc: '8.8.4'
-            spec: '0.17.0'
+            spec: '0.18.0'
             os: ubuntu-latest
-            rust: 1.47.0
+            rust: 1.52.1
 
     steps:
       - uses: actions/checkout@v2
@@ -32,7 +32,7 @@ jobs:
         with:
           repository: 'dfinity/wallet-rs'
           path: wallet-rs
-          ref: b5e38e1f1e3f414f15c139a49eee269769928ee2
+          ref: 9ef38bb7cd0fe17cda749bf8e9bbec5723da0e95
 
       - name: Cache ~/.cabal/store
         uses: actions/cache@v2
@@ -63,8 +63,7 @@ jobs:
 
       - name: Build ic-hs
         run: |
-          ls -l /opt/ghc/
-          export PATH=/opt/ghc/bin:$PATH
+          ghc --version
           cabal --version
           ghc-${{ matrix.ghc }} --version
           mkdir -p $HOME/bin

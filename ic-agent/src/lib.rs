@@ -115,7 +115,7 @@ pub mod export;
 pub mod identity;
 pub mod request_id;
 
-pub use agent::{agent_error, agent_error::AgentError, nonce::NonceFactory, Agent};
+pub use agent::{agent_error, agent_error::AgentError, Agent, NonceFactory, NonceGenerator};
 pub use identity::{Identity, Signature};
 pub use request_id::{to_request_id, RequestId, RequestIdError};
 

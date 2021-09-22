@@ -13,7 +13,7 @@ pub mod status;
 pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
 pub use builder::AgentBuilder;
-pub use nonce::NonceFactory;
+pub use nonce::{NonceFactory, NonceGenerator};
 pub use response::{Replied, RequestStatusResponse};
 
 #[cfg(test)]
@@ -62,7 +62,7 @@ const IC_ROOT_KEY: &[u8; 133] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x
 /// feature flag `reqwest`. This might be deprecated in the future.
 ///
 /// Any error returned by these methods will bubble up to the code that called the [Agent].
-pub trait ReplicaV2Transport {
+pub trait ReplicaV2Transport: Send + Sync {
     /// Sends an asynchronous request to a Replica. The Request ID is non-mutable and
     /// depends on the content of the envelope.
     ///
@@ -100,6 +100,65 @@ pub trait ReplicaV2Transport {
     fn status<'a>(
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
+}
+
+impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Box<I> {
+    fn call<'a>(
+        &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+        request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
+        (**self).call(effective_canister_id, envelope, request_id)
+    }
+    fn read_state<'a>(
+        &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        (**self).read_state(effective_canister_id, envelope)
+    }
+    fn query<'a>(
+        &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        (**self).query(effective_canister_id, envelope)
+    }
+    fn status<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        (**self).status()
+    }
+}
+impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Arc<I> {
+    fn call<'a>(
+        &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+        request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
+        (**self).call(effective_canister_id, envelope, request_id)
+    }
+    fn read_state<'a>(
+        &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        (**self).read_state(effective_canister_id, envelope)
+    }
+    fn query<'a>(
+        &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        (**self).query(effective_canister_id, envelope)
+    }
+    fn status<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        (**self).status()
+    }
 }
 
 /// Classification of the result of a request_status_raw (poll) call.
@@ -187,11 +246,11 @@ pub enum PollResult {
 /// This agent does not understand Candid, and only acts on byte buffers.
 #[derive(Clone)]
 pub struct Agent {
-    nonce_factory: NonceFactory,
-    identity: Arc<dyn Identity + Send + Sync>,
+    nonce_factory: Arc<dyn NonceGenerator>,
+    identity: Arc<dyn Identity>,
     ingress_expiry_duration: Duration,
     root_key: Arc<RwLock<Option<Vec<u8>>>>,
-    transport: Arc<dyn ReplicaV2Transport + Send + Sync>,
+    transport: Arc<dyn ReplicaV2Transport>,
 }
 
 impl Agent {
@@ -202,7 +261,7 @@ impl Agent {
     }
 
     /// Create an instance of an [`Agent`].
-    pub fn new(config: AgentConfig) -> Result<Agent, AgentError> {
+    pub fn new(config: agent_config::AgentConfig) -> Result<Agent, AgentError> {
         initialize_bls()?;
 
         Ok(Agent {
@@ -219,7 +278,7 @@ impl Agent {
     }
 
     /// Set the transport of the [`Agent`].
-    pub fn set_transport<F: 'static + ReplicaV2Transport + Send + Sync>(&mut self, transport: F) {
+    pub fn set_transport<F: 'static + ReplicaV2Transport>(&mut self, transport: F) {
         self.transport = Arc::new(transport);
     }
 
@@ -276,6 +335,11 @@ impl Agent {
                     .as_nanos(),
             )
             .saturating_sub(permitted_drift.as_nanos())) as u64
+    }
+
+    /// Return the principal of the identity.
+    pub fn get_principal(&self) -> Result<Principal, String> {
+        self.identity.sender()
     }
 
     async fn query_endpoint<A>(
@@ -679,10 +743,7 @@ fn construct_message(request_id: &RequestId) -> Vec<u8> {
     buf
 }
 
-fn sign_request<'a, V>(
-    request: &V,
-    identity: Arc<dyn Identity + Send + Sync>,
-) -> Result<Vec<u8>, AgentError>
+fn sign_request<'a, V>(request: &V, identity: Arc<dyn Identity>) -> Result<Vec<u8>, AgentError>
 where
     V: 'a + Serialize,
 {

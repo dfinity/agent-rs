@@ -427,14 +427,16 @@ fn main() -> Result<()> {
 
     let mut version_map = VersionMap::new();
     for (name, package) in packages_minor.iter() {
-        let mut v = package.version.clone();
-        v.increment_minor();
-        version_map.insert(name.clone(), (package.clone(), v));
+        let incremented = Version::new(package.version.major, package.version.minor + 1, 0);
+        version_map.insert(name.clone(), (package.clone(), incremented));
     }
     for (name, package) in packages_patch.iter() {
-        let mut v = package.version.clone();
-        v.increment_patch();
-        version_map.insert(name.clone(), (package.clone(), v));
+        let incremented = Version::new(
+            package.version.major,
+            package.version.minor,
+            package.version.patch + 1,
+        );
+        version_map.insert(name.clone(), (package.clone(), incremented));
     }
 
     for patch in opts.package {
@@ -462,7 +464,7 @@ fn main() -> Result<()> {
         ch(opts.dry_run)?;
     }
 
-    eprintln!("");
+    eprintln!();
 
     let commit_message = format!(
         "chore: release of ic-agent\n\n{}",

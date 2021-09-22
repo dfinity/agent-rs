@@ -1,5 +1,6 @@
 use garcon::Delay;
 use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
+use ic_agent::identity::Secp256k1Identity;
 use ic_agent::{export::Principal, identity::BasicIdentity, Agent, Identity};
 use ic_identity_hsm::HardwareIdentity;
 use ic_utils::interfaces::{management_canister::builders::MemoryAllocation, ManagementCanister};
@@ -17,7 +18,7 @@ pub fn create_waiter() -> Delay {
         .build()
 }
 
-pub async fn create_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
+pub async fn create_identity() -> Result<Box<dyn Identity>, String> {
     if std::env::var(HSM_PKCS11_LIBRARY_PATH).is_ok() {
         create_hsm_identity().await
     } else {
@@ -29,7 +30,7 @@ fn expect_env_var(name: &str) -> Result<String, String> {
     std::env::var(name).map_err(|_| format!("Need to specify the {} environment variable", name))
 }
 
-pub async fn create_hsm_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
+pub async fn create_hsm_identity() -> Result<Box<dyn Identity>, String> {
     let path = expect_env_var(HSM_PKCS11_LIBRARY_PATH)?;
     let slot_index = expect_env_var(HSM_SLOT_INDEX)?
         .parse::<usize>()
@@ -51,7 +52,7 @@ fn get_hsm_pin() -> Result<String, String> {
 // To avoid this, we use a basic identity for any second identity in tests.
 //
 // A shared container of Ctx objects might be possible instead, but my rust-fu is inadequate.
-pub async fn create_basic_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
+pub async fn create_basic_identity() -> Result<Box<dyn Identity>, String> {
     let rng = ring::rand::SystemRandom::new();
     let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
         .expect("Could not generate a key pair.");
@@ -61,7 +62,25 @@ pub async fn create_basic_identity() -> Result<Box<dyn Identity + Send + Sync>, 
     )))
 }
 
-pub async fn create_agent(identity: Box<dyn Identity + Send + Sync>) -> Result<Agent, String> {
+/// Create a secp256k1identity, which unfortunately will always be the same one
+/// (So can only use one per test)
+pub fn create_secp256k1_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
+    // generated from the the following commands:
+    // $ openssl ecparam -name secp256k1 -genkey -noout -out identity.pem
+    // $ cat identity.pem
+    let identity_file = "
+-----BEGIN EC PRIVATE KEY-----
+MHQCAQEEIJb2C89BvmJERgnT/vJLKpdHZb/hqTiC8EY2QtBRWZScoAcGBSuBBAAK
+oUQDQgAEDMl7g3vGKLsiLDA3fBRxDE9ZkM3GezZFa5HlKM/gYzNZfU3w8Tijjd73
+yeMC60IsMNxDjLqElV7+T7dkb5Ki7Q==
+-----END EC PRIVATE KEY-----";
+
+    let identity = Secp256k1Identity::from_pem(identity_file.as_bytes())
+        .expect("Cannot create secp256k1 identity from PEM file.");
+    Ok(Box::new(identity))
+}
+
+pub async fn create_agent(identity: Box<dyn Identity>) -> Result<Agent, String> {
     let port_env = std::env::var("IC_REF_PORT")
         .expect("Need to specify the IC_REF_PORT environment variable.");
     let port = port_env
@@ -96,7 +115,7 @@ where
             .expect("could not fetch root key");
         match f(agent).await {
             Ok(_) => {}
-            Err(e) => assert!(false, "{:?}", e),
+            Err(e) => panic!("{:?}", e),
         };
     })
 }
