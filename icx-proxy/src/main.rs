@@ -220,7 +220,7 @@ async fn forward_request(
         );
     }
 
-    let canister = HttpRequestCanister::create(agent.as_ref(), canister_id.clone());
+    let canister = HttpRequestCanister::create(agent.as_ref(), canister_id);
     let query_result = canister
         .http_request(method.clone(), uri.to_string(), headers.clone(), &entire_body)
         .call()
@@ -533,7 +533,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let ip_addr = ip_addr.ip();
         let dns_canister_config = dns_canister_config.clone();
         let logger = logger.clone();
-        let fetch_root_key = opts.fetch_root_key.clone();
+        let fetch_root_key = opts.fetch_root_key;
 
         // Select an agent.
         let replica_url_array = replicas.lock().unwrap();
