@@ -14,7 +14,8 @@ use ic_utils::{
     call::AsyncCall,
     call::SyncCall,
     interfaces::http_request::{
-        HeaderField, HttpRequestCanister, HttpResponse, StreamingCallbackHttpResponse, StreamingStrategy,
+        HeaderField, HttpRequestCanister, HttpResponse, StreamingCallbackHttpResponse,
+        StreamingStrategy,
     },
 };
 use slog::Drain;
@@ -222,11 +223,18 @@ async fn forward_request(
 
     let canister = HttpRequestCanister::create(agent.as_ref(), canister_id);
     let query_result = canister
-        .http_request(method.clone(), uri.to_string(), headers.clone(), &entire_body)
+        .http_request(
+            method.clone(),
+            uri.to_string(),
+            headers.clone(),
+            &entire_body,
+        )
         .call()
         .await;
 
-    fn handle_result(result: Result<(HttpResponse,), AgentError>) -> Result<HttpResponse, Result<Response<Body>, Box<dyn Error>>> {
+    fn handle_result(
+        result: Result<(HttpResponse,), AgentError>,
+    ) -> Result<HttpResponse, Result<Response<Body>, Box<dyn Error>>> {
         // If the result is a Replica error, returns the 500 code and message. There is no information
         // leak here because a user could use `dfx` to get the same reply.
         match result {
@@ -234,12 +242,10 @@ async fn forward_request(
             Err(AgentError::ReplicaError {
                 reject_code,
                 reject_message,
-            }) => {
-                Err(Ok(Response::builder()
-                          .status(StatusCode::INTERNAL_SERVER_ERROR)
-                          .body(format!(r#"Replica Error ({}): "{}""#, reject_code, reject_message).into())
-                          .unwrap()))
-            }
+            }) => Err(Ok(Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(format!(r#"Replica Error ({}): "{}""#, reject_code, reject_message).into())
+                .unwrap())),
             Err(e) => Err(Err(e.into())),
         }
     }

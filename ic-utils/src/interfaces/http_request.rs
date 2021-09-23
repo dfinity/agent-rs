@@ -96,7 +96,12 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
             .build()
     }
 
-    pub fn http_request_update<'canister: 'agent, M: Into<String>, U: Into<String>, B: AsRef<[u8]>>(
+    pub fn http_request_update<
+        'canister: 'agent,
+        M: Into<String>,
+        U: Into<String>,
+        B: AsRef<[u8]>,
+    >(
         &'canister self,
         method: M,
         url: U,
