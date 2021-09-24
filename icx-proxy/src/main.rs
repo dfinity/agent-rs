@@ -430,6 +430,7 @@ fn unable_to_fetch_root_key() -> Result<Response<Body>, Box<dyn Error>> {
         .body("Unable to fetch root key".into())?)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_request(
     ip_addr: IpAddr,
     request: Request<Body>,
