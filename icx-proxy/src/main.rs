@@ -455,6 +455,7 @@ fn not_found() -> Result<Response<Body>, Box<dyn Error>> {
         .body("Not found".into())?)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_request(
     ip_addr: IpAddr,
     request: Request<Body>,
