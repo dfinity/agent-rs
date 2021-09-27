@@ -258,7 +258,7 @@ async fn forward_request(
     let http_response = if http_response.upgrade {
         let waiter = garcon::Delay::builder()
             .throttle(std::time::Duration::from_millis(500))
-            .timeout(std::time::Duration::from_secs(60 * 5))
+            .timeout(std::time::Duration::from_secs(15))
             .build();
         let update_result = canister
             .http_request_update(method, uri.to_string(), headers, &entire_body)
