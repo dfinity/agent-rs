@@ -1,5 +1,6 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use candid::CandidType;
 use sha2::{Digest, Sha224};
 use std::convert::TryFrom;
 use std::fmt::Write;
@@ -121,7 +122,7 @@ impl TryFrom<u8> for PrincipalClass {
 ///     &[161, 98, 105, 100, 73, 239, 205, 171, 0, 0, 0, 0, 0, 1],
 /// );
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, CandidType)]
 pub struct Principal(PrincipalInner);
 
 impl Principal {
@@ -386,13 +387,14 @@ impl<'de> serde::Deserialize<'de> for Principal {
 
 mod inner {
     use sha2::{digest::generic_array::typenum::Unsigned, Digest, Sha224};
+    use candid::CandidType;
 
     /// Inner structure of a Principal. This is not meant to be public as the different classes
     /// of principals are not public.
     ///
     /// This is a length (1 byte) and 29 bytes. The length can be 0, but won't ever be longer
     /// than 29. The current interface spec says that principals cannot be longer than 29 bytes.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, CandidType)]
     #[repr(packed)]
     pub struct PrincipalInner {
         /// Length.

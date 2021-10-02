@@ -18,6 +18,7 @@ crc32fast = "1.2.0"
 hex = "0.4.3"
 sha2 = "0.9.1"
 thiserror = "1.0.20"
+candid = "0.6.21"
 
 [dev-dependencies]
 serde = { version = "1.0.115", features = ["derive"] }
