@@ -1,6 +1,6 @@
 [package]
 name = "ic-asset"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
 description = "Library for storing files in an asset canister."
@@ -20,9 +20,9 @@ futures = "0.3.17"
 futures-intrusive = "0.4.0"
 garcon = { version = "0.2", features = ["async"] }
 hex = {version = "0.4.2", features = ["serde"] }
-ic-agent = { path = "../ic-agent", version = "0.8", features = [ "pem" ] }
+ic-agent = { path = "../ic-agent", version = "0.9", features = [ "pem" ] }
 ic-types = { version = "0.2.2", features = [ "serde" ] }
-ic-utils = { path = "../ic-utils", version = "0.6" }
+ic-utils = { path = "../ic-utils", version = "0.7" }
 mime = "0.3.16"
 mime_guess = "2.0.3"
 openssl = "0.10.32"
