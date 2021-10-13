@@ -21,56 +21,14 @@ pub trait PasswordManager: Send + Sync {
     fn required(&self, url: &str) -> Result<(String, String), String>;
 }
 
-/// A type which can never be created used indicate no password manager.
-///
-/// This type is a stable equivalent to the `!` type from `std`.
-///
-/// This is currently an alias for [`std::convert::Infallible`], but in
-/// the future it may be an alias for [`!`][never].
-/// See ["Future compatibility" section of `std::convert::Infallible`][infallible] for more.
-///
-/// [never]: https://doc.rust-lang.org/nightly/std/primitive.never.html
-/// [infallible]: https://doc.rust-lang.org/nightly/std/convert/enum.Infallible.html#future-compatibility
-pub type NoPasswordManager = std::convert::Infallible;
-
-impl<P: PasswordManager + ?Sized> PasswordManager for Box<P> {
-    fn cached(&self, url: &str) -> Result<Option<(String, String)>, String> {
-        (**self).cached(url)
-    }
-    fn required(&self, url: &str) -> Result<(String, String), String> {
-        (**self).required(url)
-    }
-}
-impl<P: PasswordManager + ?Sized> PasswordManager for Arc<P> {
-    fn cached(&self, url: &str) -> Result<Option<(String, String)>, String> {
-        (**self).cached(url)
-    }
-    fn required(&self, url: &str) -> Result<(String, String), String> {
-        (**self).required(url)
-    }
-}
-
-impl PasswordManager for NoPasswordManager {
-    fn cached(&self, _: &str) -> Result<Option<(String, String)>, String> {
-        unreachable!()
-    }
-    fn required(&self, _: &str) -> Result<(String, String), String> {
-        unreachable!()
-    }
-}
-
 /// A [ReplicaV2Transport] using Reqwest to make HTTP calls to the internet computer.
-pub type ReqwestHttpReplicaV2Transport =
-    ReqwestHttpReplicaV2TransportImpl<Box<dyn PasswordManager>>;
-
-/// A [ReplicaV2Transport] using Reqwest to make HTTP calls to the internet computer.
-pub struct ReqwestHttpReplicaV2TransportImpl<P: PasswordManager> {
+pub struct ReqwestHttpReplicaV2Transport {
     url: reqwest::Url,
     client: reqwest::Client,
-    password_manager: Option<P>,
+    password_manager: Option<Arc<dyn PasswordManager>>,
 }
 
-impl<P: PasswordManager> ReqwestHttpReplicaV2TransportImpl<P> {
+impl ReqwestHttpReplicaV2Transport {
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
         let mut tls_config = rustls::ClientConfig::new();
 
@@ -95,23 +53,24 @@ impl<P: PasswordManager> ReqwestHttpReplicaV2TransportImpl<P> {
         })
     }
 
-    pub fn with_password_manager<P1: PasswordManager>(
-        self,
-        password_manager: P1,
-    ) -> ReqwestHttpReplicaV2TransportImpl<P1> {
-        ReqwestHttpReplicaV2TransportImpl {
+    pub fn with_password_manager<P: 'static + PasswordManager>(self, password_manager: P) -> Self {
+        ReqwestHttpReplicaV2Transport {
+            password_manager: Some(Arc::new(password_manager)),
+            url: self.url,
+            client: self.client,
+        }
+    }
+
+    pub fn with_arc_password_manager(self, password_manager: Arc<dyn PasswordManager>) -> Self {
+        ReqwestHttpReplicaV2Transport {
             password_manager: Some(password_manager),
             url: self.url,
             client: self.client,
         }
     }
 
-    pub fn password_manager(&self) -> &Option<P> {
-        &self.password_manager
-    }
-
-    pub fn password_manager_mut(&mut self) -> &mut Option<P> {
-        &mut self.password_manager
+    pub fn password_manager(&self) -> Option<&dyn PasswordManager> {
+        self.password_manager.as_deref()
     }
 
     fn maybe_add_authorization(
@@ -217,15 +176,15 @@ impl<P: PasswordManager> ReqwestHttpReplicaV2TransportImpl<P> {
     }
 }
 
-impl<P: PasswordManager> super::ReplicaV2Transport for ReqwestHttpReplicaV2TransportImpl<P> {
+impl super::ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
     fn call<'a>(
         &'a self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
         _request_id: RequestId,
     ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
-        async fn run<P: PasswordManager>(
-            s: &ReqwestHttpReplicaV2TransportImpl<P>,
+        async fn run(
+            s: &ReqwestHttpReplicaV2Transport,
             effective_canister_id: Principal,
             envelope: Vec<u8>,
         ) -> Result<(), AgentError> {
@@ -242,8 +201,8 @@ impl<P: PasswordManager> super::ReplicaV2Transport for ReqwestHttpReplicaV2Trans
         effective_canister_id: Principal,
         envelope: Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run<P: PasswordManager>(
-            s: &ReqwestHttpReplicaV2TransportImpl<P>,
+        async fn run(
+            s: &ReqwestHttpReplicaV2Transport,
             effective_canister_id: Principal,
             envelope: Vec<u8>,
         ) -> Result<Vec<u8>, AgentError> {
@@ -259,8 +218,8 @@ impl<P: PasswordManager> super::ReplicaV2Transport for ReqwestHttpReplicaV2Trans
         effective_canister_id: Principal,
         envelope: Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run<P: PasswordManager>(
-            s: &ReqwestHttpReplicaV2TransportImpl<P>,
+        async fn run(
+            s: &ReqwestHttpReplicaV2Transport,
             effective_canister_id: Principal,
             envelope: Vec<u8>,
         ) -> Result<Vec<u8>, AgentError> {
@@ -274,9 +233,7 @@ impl<P: PasswordManager> super::ReplicaV2Transport for ReqwestHttpReplicaV2Trans
     fn status<'a>(
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run<P: PasswordManager>(
-            s: &ReqwestHttpReplicaV2TransportImpl<P>,
-        ) -> Result<Vec<u8>, AgentError> {
+        async fn run(s: &ReqwestHttpReplicaV2Transport) -> Result<Vec<u8>, AgentError> {
             s.execute(Method::GET, "status", None).await
         }
 

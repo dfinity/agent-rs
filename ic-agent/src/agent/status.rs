@@ -51,6 +51,9 @@ pub struct Status {
     /// Optional. The precise git revision of the Internet Computer implementation.
     pub impl_revision: Option<String>,
 
+    /// Optional.  The health status of the replica.  One hopes it's "healthy".
+    pub replica_health_status: Option<String>,
+
     /// Optional.  The root (public) key used to verify certificates.
     pub root_key: Option<Vec<u8>>,
 
@@ -138,6 +141,14 @@ impl std::convert::TryFrom<&serde_cbor::Value> for Status {
                         None
                     }
                 });
+                let replica_health_status: Option<String> =
+                    map.get("replica_health_status").and_then(|v| {
+                        if let Value::String(s) = v.as_ref() {
+                            Some(s.to_owned())
+                        } else {
+                            None
+                        }
+                    });
                 let root_key: Option<Vec<u8>> = map.get("root_key").and_then(|v| {
                     if let Value::Bytes(bytes) = v.as_ref() {
                         Some(bytes.to_owned())
@@ -151,6 +162,7 @@ impl std::convert::TryFrom<&serde_cbor::Value> for Status {
                     impl_source,
                     impl_version,
                     impl_revision,
+                    replica_health_status,
                     root_key,
                     values: map,
                 })
