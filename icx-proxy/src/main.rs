@@ -84,6 +84,11 @@ pub(crate) struct Opts {
     #[clap(long)]
     debug: bool,
 
+    /// Whether or not to fetch the root key from the replica back end. Do not use this when
+    /// talking to the Internet Computer blockchain mainnet as it is unsecure.
+    #[clap(long)]
+    fetch_root_key: bool,
+
     /// A map of domain names to canister IDs.
     /// Format: domain.name:canister-id
     #[clap(long)]
@@ -419,6 +424,13 @@ fn not_found() -> Result<Response<Body>, Box<dyn Error>> {
         .body("Not found".into())?)
 }
 
+fn unable_to_fetch_root_key() -> Result<Response<Body>, Box<dyn Error>> {
+    Ok(Response::builder()
+        .status(StatusCode::INTERNAL_SERVER_ERROR)
+        .body("Unable to fetch root key".into())?)
+}
+
+#[allow(clippy::too_many_arguments)]
 async fn handle_request(
     ip_addr: IpAddr,
     request: Request<Body>,
@@ -426,6 +438,7 @@ async fn handle_request(
     proxy_url: Option<String>,
     dns_canister_config: Arc<DnsCanisterConfig>,
     logger: slog::Logger,
+    fetch_root_key: bool,
     debug: bool,
 ) -> Result<Response<Body>, Infallible> {
     let request_uri_path = request.uri().path();
@@ -459,8 +472,11 @@ async fn handle_request(
                 .build()
                 .expect("Could not create agent..."),
         );
-
-        forward_request(request, agent, dns_canister_config.as_ref(), logger.clone()).await
+        if fetch_root_key && agent.fetch_root_key().await.is_err() {
+            unable_to_fetch_root_key()
+        } else {
+            forward_request(request, agent, dns_canister_config.as_ref(), logger.clone()).await
+        }
     } {
         Err(err) => {
             slog::warn!(logger, "Internal Error during request:\n{:#?}", err);
@@ -491,6 +507,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let counter = AtomicUsize::new(0);
     let debug = opts.debug;
     let proxy_url = opts.proxy.clone();
+    let fetch_root_key = opts.fetch_root_key;
 
     let service = make_service_fn(|socket: &hyper::server::conn::AddrStream| {
         let ip_addr = socket.remote_addr();
@@ -520,6 +537,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     proxy_url.clone(),
                     dns_canister_config,
                     logger,
+                    fetch_root_key,
                     debug,
                 )
             }))
