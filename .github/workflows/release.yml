@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux
+            binary_path: target/x86_64-unknown-linux-musl/release
+            binary_files: icx icx-proxy
+            rust: 1.50.0 # gmiam/rust-musl-action@master is only at 1.50.0 now
+          - os: macos-latest
+            name: macos
+            binary_path: target/release
+            binary_files: icx icx-proxy
+            rust: 1.52.1
+    steps:
+    - uses: actions/checkout@master
+
+    - name: Setup environment variables
+      run: |
+        echo "SHA_SHORT=${GITHUB_SHA::7}" >> $GITHUB_ENV
+        echo "OPENSSL_STATIC=yes" >> $GITHUB_ENV
+        binaries=$(echo ${{ matrix.binary_files }} | xargs -n1 echo "--bin"|xargs)
+        echo "cargo_build_ARGS<<END" >> $GITHUB_ENV
+        echo "--locked --release $binaries" >> $GITHUB_ENV
+        echo "END" >> $GITHUB_ENV
+
+    - name: Static build
+      uses: gmiam/rust-musl-action@master
+      with:
+        args: cargo build --target x86_64-unknown-linux-musl ${{ env.cargo_build_ARGS }}
+      if: contains(matrix.os, 'ubuntu')
+
+    - name: Strip binaries
+      run: |
+        cd ${{ matrix.binary_path }}
+        sudo chown -R $(whoami) .
+        strip ${{ matrix.binary_files }}
+      if: contains(matrix.os, 'ubuntu')
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: ${{ matrix.rust }}
+        override: true
+      if: contains(matrix.os, 'macos')
+
+    - name: Dynamic build
+      run: |
+        cargo build ${{ env.cargo_build_ARGS }}
+        cd ${{ matrix.binary_path }}
+        otool -L ${{ matrix.binary_files }}
+      if: contains(matrix.os, 'macos')
+
+    - name: Create tarball of binaries
+      run: tar -zcC ${{ matrix.binary_path }} -f binaries.tar.gz ${{ matrix.binary_files }}
+
+    - name: Upload tarball
+      uses: svenstaro/upload-release-action@v2
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: binaries.tar.gz
+        asset_name: binaries-${{ matrix.name }}.tar.gz
+        tag: ${{ env.SHA_SHORT }}
