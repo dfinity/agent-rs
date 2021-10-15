@@ -16,10 +16,12 @@ jobs:
             name: linux
             binary_path: target/x86_64-unknown-linux-musl/release
             binary_files: icx icx-proxy
+            rust: 1.50.0 # gmiam/rust-musl-action@master is only at 1.50.0 now
           - os: macos-latest
+            name: macos
             binary_path: target/release
             binary_files: icx icx-proxy
-            name: macos
+            rust: 1.52.1
     steps:
     - uses: actions/checkout@master
 
@@ -49,7 +51,7 @@ jobs:
       uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-        toolchain: stable
+        toolchain: ${{ matrix.rust }}
         override: true
       if: contains(matrix.os, 'macos')
 
