@@ -18,6 +18,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.34"
+base64 = "0.13"
 clap = "=3.0.0-beta.2"
 clap_derive = "=3.0.0-beta.2"
 garcon = { version = "0.2.3", features = ["async"] }
@@ -28,6 +29,7 @@ ic-agent = { path = "../ic-agent", version = "0.9" }
 ic-utils = { path = "../ic-utils", version = "0.7" }
 tokio = { version = "1.8.1", features = ["full"] }
 serde = "1.0.115"
+serde_cbor = "0.11"
 serde_json = "1.0.57"
 slog = { version = "2.7.0", features = ["max_level_trace"] }
 slog-async = "2.7.0"

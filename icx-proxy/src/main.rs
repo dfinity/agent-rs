@@ -7,9 +7,7 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Body, Client, Request, Response, Server, StatusCode, Uri,
 };
-use ic_agent::{
-    agent::http_transport::ReqwestHttpReplicaV2Transport, export::Principal, Agent, AgentError,
-};
+use ic_agent::{agent::http_transport::ReqwestHttpReplicaV2Transport, export::Principal, Agent, AgentError, Certificate};
 use ic_utils::{
     call::SyncCall,
     interfaces::http_request::{
@@ -28,7 +26,6 @@ use std::{
         Arc, Mutex,
     },
 };
-use ic_agent::agent::replica_api::Certificate;
 
 mod config;
 mod logging;

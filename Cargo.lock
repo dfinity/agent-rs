@@ -1027,6 +1027,7 @@ name = "icx-proxy"
 version = "0.7.0"
 dependencies = [
  "anyhow",
+ "base64",
  "clap",
  "clap_derive",
  "garcon",
@@ -1036,6 +1037,7 @@ dependencies = [
  "ic-agent",
  "ic-utils",
  "serde",
+ "serde_cbor",
  "serde_json",
  "slog",
  "slog-async",

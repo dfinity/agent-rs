@@ -597,7 +597,8 @@ impl Agent {
         })
     }
 
-    fn verify(&self, cert: &Certificate) -> Result<(), AgentError> {
+    /// Verify a certificate, checking delegation if present.
+    pub fn verify(&self, cert: &Certificate) -> Result<(), AgentError> {
         let sig = &cert.signature;
 
         let root_hash = cert.tree.digest();
