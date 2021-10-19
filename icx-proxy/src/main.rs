@@ -1,4 +1,5 @@
 use crate::config::dns_canister_config::DnsCanisterConfig;
+use anyhow::bail;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use hyper::{
     body,
@@ -7,13 +8,14 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Body, Client, Request, Response, Server, StatusCode, Uri,
 };
-use ic_agent::{agent::http_transport::ReqwestHttpReplicaV2Transport, export::Principal, Agent, AgentError, Certificate};
+use ic_agent::{agent::http_transport::ReqwestHttpReplicaV2Transport, export::Principal, Agent, AgentError, Certificate, lookup_value};
 use ic_utils::{
     call::SyncCall,
     interfaces::http_request::{
         HeaderField, HttpRequestCanister, StreamingCallbackHttpResponse, StreamingStrategy,
     },
 };
+use openssl::sha::Sha256;
 use slog::Drain;
 use std::{
     convert::Infallible,
@@ -26,6 +28,8 @@ use std::{
         Arc, Mutex,
     },
 };
+use ic_agent::ic_types::HashTree;
+use ic_agent::ic_types::hash_tree::LookupResult;
 
 mod config;
 mod logging;
@@ -335,15 +339,26 @@ async fn forward_request(
 
         builder.body(body)?
     } else {
-        match (certificate, tree) {
-            (Some(certificate), Some(tree)) => {
-                let cert: Certificate = serde_cbor::from_slice(&certificate)
-                    .map_err(AgentError::InvalidCborData)?;
-                agent.verify(&cert)?;
+        let body_valid = match (certificate, tree) {
+            (Some(certificate), Some(tree)) =>
+                match validate_body(&certificate, &tree, &canister_id, &agent, &uri, &http_response.body, logger.clone()) {
+                    Ok(valid) => valid,
+                    Err(e) =>{
+                        return Ok(Response::builder()
+                            .status(StatusCode::INTERNAL_SERVER_ERROR)
+                            .body(format!("Certificate validation failed: {}", e).into())
+                            .unwrap());
 
-            }
-            _ => {}
+                    }
+                }
+            _ => true,
         };
+        if !body_valid {
+            return Ok(Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body("Body does not pass verification".into())
+                .unwrap());
+        }
         builder.body(http_response.body.into())?
     };
 
@@ -385,6 +400,72 @@ async fn forward_request(
     }
 
     Ok(response)
+}
+
+fn validate_body(
+    certificate: &[u8],
+    tree: &[u8],
+    canister_id: &Principal,
+    agent: &Agent,
+    uri: &Uri,
+    response_body: &[u8],
+    logger: slog::Logger,
+) -> anyhow::Result<bool> {
+    let cert: Certificate = serde_cbor::from_slice(&certificate)
+        .map_err(AgentError::InvalidCborData)?;
+    let tree: HashTree = serde_cbor::from_slice(&tree)
+        .map_err(AgentError::InvalidCborData)?;
+
+    agent.verify(&cert)?;
+
+    let digest = tree.digest();
+    eprintln!("digest={:?}", hex::encode(digest));
+
+    /*
+      const witness = cert.lookup(['canister', canisterId.toUint8Array(), 'certified_data']);
+
+if (!witness) {
+throw new Error('Could not find certified data for this canister in the certificate.');
+}
+
+// First validate that the Tree is as good as the certification.
+if (!equal(witness, reconstructed)) {
+console.error('Witness != Tree passed in ic-certification');
+return false;
+}
+     */
+    let certified_data_path = vec!["canister".into(), canister_id.into(), "certified_data".into() ];
+    let witness = lookup_value(&cert, certified_data_path).map(<[u8]>::to_vec);
+    let witness = witness?;
+    eprintln!("witness={}", hex::encode(witness));
+
+    let path: &str = uri.path();
+    //let x = lookup_value(&cert, path)?;
+    let path = vec!["http_assets".into(), path.into()];
+    let tree_sha: Vec<u8> = match tree.lookup_path(&path) {
+        LookupResult::Found(v) => v,
+        _ => {
+            let fallback_path = vec!["http_assets".into(), "/index.html".into()];
+            match tree.lookup_path(&fallback_path) {
+                LookupResult::Found(v) => v,
+                _ => {
+                    //slog::trace!(logger, ">> Invalid Tree in the header. Does not contain path {:?}", path).into();
+                    bail!("Invalid tree in the header.  Does not contain path {:?}", path);
+                }
+            }
+        },
+    }.to_vec();//.map(<[u8]>::to_vec);
+    // let v = lookup_value(&cert, path).map(<[u8]>::to_vec);
+    // let v = v?;
+    eprintln!("tree_sha={}", hex::encode(&tree_sha));
+
+    let mut sha256 = Sha256::new();
+    sha256.update(response_body);
+    let body_sha = sha256.finish().to_vec();
+
+    eprintln!("body_sha={}", hex::encode(&body_sha));
+    Ok(body_sha == tree_sha)
+
 }
 
 fn is_hop_header(name: &str) -> bool {

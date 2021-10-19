@@ -1036,6 +1036,7 @@ dependencies = [
  "hyper-tls",
  "ic-agent",
  "ic-utils",
+ "openssl",
  "serde",
  "serde_cbor",
  "serde_json",

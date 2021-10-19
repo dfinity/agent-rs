@@ -27,6 +27,7 @@ hyper = { version = "0.14.13", features = ["full"] }
 hyper-tls = "0.5.0"
 ic-agent = { path = "../ic-agent", version = "0.9" }
 ic-utils = { path = "../ic-utils", version = "0.7" }
+openssl = "0.10.32"
 tokio = { version = "1.8.1", features = ["full"] }
 serde = "1.0.115"
 serde_cbor = "0.11"
