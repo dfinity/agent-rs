@@ -28,6 +28,7 @@ use std::{
         Arc, Mutex,
     },
 };
+use ic_agent::agent::replica_api::Certificate;
 
 mod config;
 mod logging;
@@ -242,9 +243,42 @@ async fn forward_request(
         Err(e) => return Err(e.into()),
     };
 
+    let mut certificate: Option<Vec<u8>> = None;
+    let mut tree: Option<Vec<u8>> = None;
+
     let mut builder = Response::builder().status(StatusCode::from_u16(http_response.status_code)?);
     for HeaderField(name, value) in http_response.headers {
+        if name.to_uppercase() == "IC-CERTIFICATE" {
+            eprintln!("ic cert!");
+            for s in value.split(|c| c == ',' || c == ' ') {
+                eprintln!("s={}", s);
+                if let Some(first_equal) = s.find('=') {
+                    let n = &s[..first_equal];
+                    // remove leading =:, trailing :
+                    let v = &s[(first_equal+2)..(s.len()-1)];
+                    eprintln!("n='{}' v='{}'", n, v);
+                    slog::trace!(logger, ">> certificate {}: {}", n, v);
+                    let bytes = match base64::decode(v) {
+                        Ok(d) => d,
+                        Err(e) => {
+                            return Ok(Response::builder()
+                                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                                .body(format!("Unable to decode {} in ic-certificate from base64: {}", n, e).into())
+                                .unwrap());
+
+                        }
+                    };
+                    if n == "certificate" {
+                        certificate = Some(bytes);
+                    } else if n == "tree" {
+                        tree = Some(bytes);
+                    }
+                }
+            }
+        }
+
         builder = builder.header(&name, value);
+
     }
 
     let body = if logger.is_trace_enabled() {
@@ -304,6 +338,15 @@ async fn forward_request(
 
         builder.body(body)?
     } else {
+        match (certificate, tree) {
+            (Some(certificate), Some(tree)) => {
+                let cert: Certificate = serde_cbor::from_slice(&certificate)
+                    .map_err(AgentError::InvalidCborData)?;
+                agent.verify(&cert)?;
+
+            }
+            _ => {}
+        };
         builder.body(http_response.body.into())?
     };
 
