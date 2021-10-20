@@ -2,8 +2,8 @@
 #![cfg(feature = "reqwest")]
 
 use crate::{agent::agent_error::HttpErrorPayload, ic_types::Principal, AgentError, RequestId};
-use reqwest::Method;
-use std::{future::Future, pin::Pin, sync::Arc};
+use reqwest::{ClientBuilder, Method};
+use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 
 /// Implemented by the Agent environment to cache and update an HTTP Auth password.
 /// It returns a tuple of `(username, password)`.
@@ -30,6 +30,25 @@ pub struct ReqwestHttpReplicaV2Transport {
 
 impl ReqwestHttpReplicaV2Transport {
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
+        Self::create_with_modified_http_options(url, |cb| cb)
+    }
+
+    pub fn create_with_timeout<U: Into<String>>(
+        url: U,
+        http_timeout: Duration,
+    ) -> Result<Self, AgentError> {
+        Self::create_with_modified_http_options(url, |cb| cb.timeout(http_timeout))
+    }
+
+    /// This method allows you to create a `ReqwestHttpReplicaV2Transport`
+    /// with arbitrary http options by using `Reqwest::ClientBuilder`.
+    pub fn create_with_modified_http_options<
+        U: Into<String>,
+        F: FnOnce(ClientBuilder) -> ClientBuilder,
+    >(
+        url: U,
+        modify_http_options: F,
+    ) -> Result<Self, AgentError> {
         let mut tls_config = rustls::ClientConfig::new();
 
         // Advertise support for HTTP/2
@@ -45,10 +64,11 @@ impl ReqwestHttpReplicaV2Transport {
             url: reqwest::Url::parse(&url)
                 .and_then(|url| url.join("api/v2/"))
                 .map_err(|_| AgentError::InvalidReplicaUrl(url.clone()))?,
-            client: reqwest::Client::builder()
-                .use_preconfigured_tls(tls_config)
-                .build()
-                .expect("Could not create HTTP client."),
+            client: modify_http_options(
+                reqwest::Client::builder().use_preconfigured_tls(tls_config),
+            )
+            .build()
+            .expect("Could not create HTTP client."),
             password_manager: None,
         })
     }
