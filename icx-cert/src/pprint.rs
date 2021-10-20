@@ -4,6 +4,7 @@ use ic_agent::ic_types::{
     hash_tree::{Label, LookupResult},
     HashTree,
 };
+use reqwest::header;
 use serde::{de::DeserializeOwned, Deserialize};
 use sha2::Digest;
 
@@ -64,14 +65,37 @@ fn parse_base64_cbor<T: DeserializeOwned>(s: &str) -> Result<T> {
 }
 
 /// Downloads the asset with the specified URL and pretty-print certificate contents.
-pub fn pprint(url: String) -> Result<()> {
-    let response = reqwest::blocking::get(url).with_context(|| "failed to fetch the document")?;
+pub fn pprint(url: String, accept_encodings: Option<Vec<String>>) -> Result<()> {
+    let response = {
+        let client = reqwest::blocking::Client::builder();
+        let client = if let Some(accept_encodings) = accept_encodings {
+            let mut headers = header::HeaderMap::new();
+            let accept_encodings: String = accept_encodings.join(", ");
+            headers.insert(
+                "Accept-Encoding",
+                header::HeaderValue::from_str(&accept_encodings).unwrap(),
+            );
+            client.default_headers(headers)
+        } else {
+            client
+        };
+        client
+            .build()?
+            .get(url)
+            .send()
+            .with_context(|| "failed to fetch the document")?
+    };
+
     let status = response.status().as_u16();
     let certificate_header = response
         .headers()
         .get("IC-Certificate")
         .ok_or_else(|| anyhow!("IC-Certificate header not found: {:?}", response.headers()))?
         .to_owned();
+    let content_encoding = response
+        .headers()
+        .get("Content-Encoding")
+        .map(|x| x.to_owned());
     let data = response
         .bytes()
         .with_context(|| "failed to get response body")?;
@@ -87,6 +111,9 @@ pub fn pprint(url: String) -> Result<()> {
 
     println!("STATUS: {}", status);
     println!("ROOT HASH: {}", hex::encode(&cert.tree.digest()));
+    if let Some(content_encoding) = content_encoding {
+        println!("CONTENT-ENCODING: {}", content_encoding.to_str().unwrap());
+    }
     println!(
         "DATA HASH: {}",
         hex::encode(&sha2::Sha256::digest(data.as_ref()))
