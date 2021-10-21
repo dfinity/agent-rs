@@ -1,5 +1,4 @@
 use crate::config::dns_canister_config::DnsCanisterConfig;
-use anyhow::bail;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use hyper::{
     body,
@@ -364,7 +363,8 @@ async fn forward_request(
                         .unwrap());
                 }
             },
-            _ => true,
+            (Some(_), None) | (None, Some(_)) => false,
+            _ => true, // canisters don't have to provide certified variables
         };
         if !body_valid {
             return Ok(Response::builder()
@@ -428,39 +428,41 @@ fn validate_body(
         serde_cbor::from_slice(&certificate).map_err(AgentError::InvalidCborData)?;
     let tree: HashTree = serde_cbor::from_slice(&tree).map_err(AgentError::InvalidCborData)?;
 
-    agent.verify(&cert)?;
-
-    let digest = tree.digest();
-    eprintln!("digest={:?}", hex::encode(digest));
-
-    /*
-          const witness = cert.lookup(['canister', canisterId.toUint8Array(), 'certified_data']);
-
-    if (!witness) {
-    throw new Error('Could not find certified data for this canister in the certificate.');
+    if let Err(e) = agent.verify(&cert) {
+        slog::trace!(
+            logger,
+            ">> certificate failed verification: {}", e );
+        return Ok(false);
     }
 
-    // First validate that the Tree is as good as the certification.
-    if (!equal(witness, reconstructed)) {
-    console.error('Witness != Tree passed in ic-certification');
-    return false;
-    }
-         */
     let certified_data_path = vec![
         "canister".into(),
         canister_id.into(),
         "certified_data".into(),
     ];
-    let witness = lookup_value(&cert, certified_data_path).map(<[u8]>::to_vec);
-    let witness = witness?;
-    eprintln!("witness={}", hex::encode(&witness));
+    let witness = match lookup_value(&cert, certified_data_path).map(<[u8]>::to_vec) {
+        Ok(witness) => witness,
+        Err(e) => {
+            slog::trace!(
+            logger,
+            ">> Could not find certified data for this canister in the certificate: {}", e );
+            return Ok(false);
+        }
+    };
+    let digest = tree.digest();
+
     if witness != digest {
+        slog::trace!(
+            logger,
+            ">> witness ({}) did not match digest ({})",
+            hex::encode(witness),
+            hex::encode(digest)
+       );
+
         return Ok(false);
     }
 
-    let path: &str = uri.path();
-    //let x = lookup_value(&cert, path)?;
-    let path = vec!["http_assets".into(), path.into()];
+    let path = vec!["http_assets".into(), uri.path().into()];
     let tree_sha: Vec<u8> = match tree.lookup_path(&path) {
         LookupResult::Found(v) => v,
         _ => {
@@ -468,25 +470,18 @@ fn validate_body(
             match tree.lookup_path(&fallback_path) {
                 LookupResult::Found(v) => v,
                 _ => {
-                    //slog::trace!(logger, ">> Invalid Tree in the header. Does not contain path {:?}", path).into();
-                    bail!(
-                        "Invalid tree in the header.  Does not contain path {:?}",
-                        path
-                    );
+                    slog::trace!(logger, ">> Invalid Tree in the header. Does not contain path {:?}", path);
+                    return Ok(false);
                 }
             }
         }
     }
-    .to_vec(); //.map(<[u8]>::to_vec);
-               // let v = lookup_value(&cert, path).map(<[u8]>::to_vec);
-               // let v = v?;
-    eprintln!("tree_sha={}", hex::encode(&tree_sha));
+    .to_vec();
 
     let mut sha256 = Sha256::new();
     sha256.update(response_body);
     let body_sha = sha256.finish().to_vec();
 
-    eprintln!("body_sha={}", hex::encode(&body_sha));
     Ok(body_sha == tree_sha)
 }
 
