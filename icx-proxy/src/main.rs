@@ -252,14 +252,11 @@ async fn forward_request(
     let mut builder = Response::builder().status(StatusCode::from_u16(http_response.status_code)?);
     for HeaderField(name, value) in http_response.headers {
         if name.to_uppercase() == "IC-CERTIFICATE" {
-            eprintln!("ic cert!");
             for s in value.split(|c| c == ',' || c == ' ') {
-                eprintln!("s={}", s);
                 if let Some(first_equal) = s.find('=') {
                     let n = &s[..first_equal];
                     // remove leading =:, trailing :
                     let v = &s[(first_equal + 2)..(s.len() - 1)];
-                    eprintln!("n='{}' v='{}'", n, v);
                     slog::trace!(logger, ">> certificate {}: {}", n, v);
                     let bytes = match base64::decode(v) {
                         Ok(d) => d,
