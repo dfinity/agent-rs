@@ -429,9 +429,7 @@ fn validate_body(
     let tree: HashTree = serde_cbor::from_slice(&tree).map_err(AgentError::InvalidCborData)?;
 
     if let Err(e) = agent.verify(&cert) {
-        slog::trace!(
-            logger,
-            ">> certificate failed verification: {}", e );
+        slog::trace!(logger, ">> certificate failed verification: {}", e);
         return Ok(false);
     }
 
@@ -444,8 +442,10 @@ fn validate_body(
         Ok(witness) => witness,
         Err(e) => {
             slog::trace!(
-            logger,
-            ">> Could not find certified data for this canister in the certificate: {}", e );
+                logger,
+                ">> Could not find certified data for this canister in the certificate: {}",
+                e
+            );
             return Ok(false);
         }
     };
@@ -457,7 +457,7 @@ fn validate_body(
             ">> witness ({}) did not match digest ({})",
             hex::encode(witness),
             hex::encode(digest)
-       );
+        );
 
         return Ok(false);
     }
@@ -470,7 +470,11 @@ fn validate_body(
             match tree.lookup_path(&fallback_path) {
                 LookupResult::Found(v) => v,
                 _ => {
-                    slog::trace!(logger, ">> Invalid Tree in the header. Does not contain path {:?}", path);
+                    slog::trace!(
+                        logger,
+                        ">> Invalid Tree in the header. Does not contain path {:?}",
+                        path
+                    );
                     return Ok(false);
                 }
             }
