@@ -1,0 +1,1 @@
+`ic-agent-ifaces` defines interfaces implemented in ic-agent or related crates.

@@ -20,6 +20,7 @@ byteorder = "1.3.2"
 garcon = { version = "0.2", features = ["async"] }
 hex = "0.4.0"
 http = "0.2.3"
+ic-agent-ifaces = { path = "../ic-agent-ifaces", version = "0.1" }
 ic-types = "0.2.2"
 leb128 = "0.2.4"
 mime = "0.3.16"

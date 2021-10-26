@@ -864,6 +864,7 @@ dependencies = [
  "garcon",
  "hex",
  "http",
+ "ic-agent-ifaces",
  "ic-types",
  "leb128",
  "mime",
@@ -884,6 +885,13 @@ dependencies = [
  "tokio",
  "url",
  "webpki-roots",
+]
+
+[[package]]
+name = "ic-agent-ifaces"
+version = "0.1.0"
+dependencies = [
+ "ic-types",
 ]
 
 [[package]]
@@ -915,7 +923,7 @@ name = "ic-identity-hsm"
 version = "0.3.6"
 dependencies = [
  "hex",
- "ic-agent",
+ "ic-agent-ifaces",
  "num-bigint 0.4.2",
  "openssl",
  "pkcs11",

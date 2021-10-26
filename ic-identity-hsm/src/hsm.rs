@@ -1,4 +1,4 @@
-use ic_agent::{ic_types::Principal, Identity, Signature};
+use ic_agent_ifaces::{Identity, Principal, Signature};
 
 use openssl::sha::Sha256;
 use pkcs11::{

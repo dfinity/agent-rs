@@ -26,7 +26,6 @@ use crate::{
     },
     export::Principal,
     hash_tree::Label,
-    identity::Identity,
     to_request_id, RequestId,
 };
 use garcon::Waiter;
@@ -39,6 +38,7 @@ use crate::{
     },
     bls::bls12381::bls,
 };
+use ic_agent_ifaces::Identity;
 use std::{
     convert::TryFrom,
     future::Future,
