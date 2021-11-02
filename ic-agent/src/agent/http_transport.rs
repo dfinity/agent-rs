@@ -48,9 +48,9 @@ impl ReqwestHttpReplicaV2Transport {
                 .and_then(|mut url| {
                     // rewrite *.ic0.app to ic0.app
                     if let Some(domain) = url.domain() {
-                         if domain.ends_with(IC0_DOMAIN) && domain != IC0_DOMAIN {
+                        if domain.ends_with(IC0_DOMAIN) && domain != IC0_DOMAIN {
                             url.set_host(Some(IC0_DOMAIN))?;
-                         }
+                        }
                     }
                     url.join("api/v2/")
                 })
