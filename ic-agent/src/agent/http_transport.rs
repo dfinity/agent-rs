@@ -28,7 +28,7 @@ pub struct ReqwestHttpReplicaV2Transport {
     password_manager: Option<Arc<dyn PasswordManager>>,
 }
 
-const IC0_DOMAIN: &'static str = "ic0.app";
+const IC0_DOMAIN: &str = "ic0.app";
 
 impl ReqwestHttpReplicaV2Transport {
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
