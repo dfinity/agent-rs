@@ -18,5 +18,5 @@ ic-agent = { path = "../ic-agent", version = "0.9", features = [ "pem" ] }
 num-bigint = "0.4.1"
 openssl = "0.10.30"
 pkcs11 = "0.5.0"
-simple_asn1 = "0.5.4"
+simple_asn1 = "0.6.0"
 thiserror = "1.0.20"
