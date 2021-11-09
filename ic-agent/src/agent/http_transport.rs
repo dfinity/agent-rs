@@ -268,6 +268,9 @@ mod test {
         test("https://foo.IC0.app", "https://ic0.app/api/v2/");
         test("https://foo.Ic0.app", "https://ic0.app/api/v2/");
         test("https://foo.iC0.app", "https://ic0.app/api/v2/");
+        test("https://foo.bar.ic0.app", "https://ic0.app/api/v2/");
+        test("https://ic0.app/foo/", "https://ic0.app/foo/api/v2/");
+        test("https://foo.ic0.app/foo/", "https://ic0.app/foo/api/v2/");
 
         test("https://ic1.app", "https://ic1.app/api/v2/");
         test("https://foo.ic1.app", "https://foo.ic1.app/api/v2/");
