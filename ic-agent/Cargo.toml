@@ -30,7 +30,7 @@ ring = { version = "0.16.11", features = ["std"] }
 serde = { version = "1.0.130", features = ["derive"] }
 serde_bytes = "0.11.2"
 serde_cbor = "0.11.2"
-simple_asn1 = "0.5.4"
+simple_asn1 = "0.6.0"
 thiserror = "1.0.28"
 url = "2.1.0"
 webpki-roots = "0.21.1"
