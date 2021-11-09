@@ -39,7 +39,7 @@ jobs:
         with:
           path: |
             ~/.cabal/store
-          key: cabal-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('ic-ref/impl/cabal.project', 'ic-ref/impl/cabal.project.freeze') }}
+          key: cabal-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('ic-hs/cabal.project', 'ic-hs/cabal.project.freeze') }}
           restore-keys: cabal-${{ runner.os }}-${{ matrix.ghc }}-
 
 
