@@ -19,9 +19,7 @@
 
 /* NewHope Simple API high-level functions  */
 
-use crate::bls::rand::RAND;
-use crate::bls::sha3;
-use crate::bls::sha3::SHA3;
+use crate::bls::{rand::RAND, sha3, sha3::SHA3};
 
 const PRIME: i32 = 0x3001; // q in Hex
 const LGN: usize = 10; // Degree n=2^LGN

@@ -17,12 +17,11 @@
  * limitations under the License.
  */
 
-use crate::bls::arch;
-use crate::bls::arch::Chunk;
-use crate::bls::bls12381::big;
-use crate::bls::bls12381::big::BIG;
-use crate::bls::bls12381::dbig::DBIG;
-use crate::bls::bls12381::rom;
+use crate::bls::{
+    arch,
+    arch::Chunk,
+    bls12381::{big, big::BIG, dbig::DBIG, rom},
+};
 
 use crate::bls::rand::RAND;
 

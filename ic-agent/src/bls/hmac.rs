@@ -17,11 +17,7 @@
  * limitations under the License.
  */
 
-use crate::bls::hash256::HASH256;
-use crate::bls::hash384::HASH384;
-use crate::bls::hash512::HASH512;
-use crate::bls::rand::RAND;
-use crate::bls::sha3::SHA3;
+use crate::bls::{hash256::HASH256, hash384::HASH384, hash512::HASH512, rand::RAND, sha3::SHA3};
 
 pub const MC_SHA2: usize = 2;
 pub const MC_SHA3: usize = 3;

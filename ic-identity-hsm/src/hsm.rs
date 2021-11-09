@@ -1,19 +1,21 @@
-use ic_agent::{Identity, Signature};
-use ic_types::Principal;
+use ic_agent::{ic_types::Principal, Identity, Signature};
 
-use num_bigint::BigUint;
 use openssl::sha::Sha256;
-use pkcs11::types::{
-    CKA_CLASS, CKA_EC_PARAMS, CKA_EC_POINT, CKA_ID, CKA_KEY_TYPE, CKF_LOGIN_REQUIRED,
-    CKF_SERIAL_SESSION, CKK_ECDSA, CKM_ECDSA, CKO_PRIVATE_KEY, CKO_PUBLIC_KEY, CKU_USER,
-    CK_ATTRIBUTE, CK_ATTRIBUTE_TYPE, CK_KEY_TYPE, CK_MECHANISM, CK_OBJECT_CLASS, CK_OBJECT_HANDLE,
-    CK_SESSION_HANDLE, CK_SLOT_ID,
+use pkcs11::{
+    types::{
+        CKA_CLASS, CKA_EC_PARAMS, CKA_EC_POINT, CKA_ID, CKA_KEY_TYPE, CKF_LOGIN_REQUIRED,
+        CKF_SERIAL_SESSION, CKK_ECDSA, CKM_ECDSA, CKO_PRIVATE_KEY, CKO_PUBLIC_KEY, CKU_USER,
+        CK_ATTRIBUTE, CK_ATTRIBUTE_TYPE, CK_KEY_TYPE, CK_MECHANISM, CK_OBJECT_CLASS,
+        CK_OBJECT_HANDLE, CK_SESSION_HANDLE, CK_SLOT_ID,
+    },
+    Ctx,
 };
-use pkcs11::Ctx;
-use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, OctetString, Sequence};
-use simple_asn1::{from_der, oid, to_der, ASN1DecodeErr, ASN1EncodeErr, OID};
-use std::path::Path;
-use std::ptr;
+use simple_asn1::{
+    from_der, oid, to_der,
+    ASN1Block::{BitString, ObjectIdentifier, OctetString, Sequence},
+    ASN1DecodeErr, ASN1EncodeErr,
+};
+use std::{path::Path, ptr};
 use thiserror::Error;
 
 type KeyIdVec = Vec<u8>;

@@ -1,6 +1,6 @@
 [package]
 name = "ic-agent"
-version = "0.2.0"
+version = "0.9.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
 description = "Agent library to communicate with the Internet Computer, following the Public Specification."
@@ -13,28 +13,27 @@ keywords = ["internet-computer", "agent", "icp", "dfinity"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
-async-trait = "0.1.35"
+async-trait = "0.1.51"
 base32 = "0.4.0"
-base64 = "0.12.3"
+base64 = "0.13.0"
 byteorder = "1.3.2"
-delay = "0.3.1"
+garcon = { version = "0.2", features = ["async"] }
 hex = "0.4.0"
 http = "0.2.3"
-ic-types = { path = "../ic-types", version = "0.1", features = [ "serde" ] }
+ic-types = "0.2.2"
 leb128 = "0.2.4"
 mime = "0.3.16"
-num-bigint = "0.3.1"
-openssl = "0.10.32"
-rand = "0.7.2"
+openssl = "0.10.36"
+rand = "0.8.4"
 rustls = "0.19.0"
 ring = { version = "0.16.11", features = ["std"] }
-serde = { version = "1.0.101", features = ["derive"] }
+serde = { version = "1.0.130", features = ["derive"] }
 serde_bytes = "0.11.2"
-serde_cbor = "0.11.1"
-simple_asn1 = "0.5.0"
-thiserror = "1.0.20"
+serde_cbor = "0.11.2"
+simple_asn1 = "0.6.0"
+thiserror = "1.0.28"
 url = "2.1.0"
-webpki-roots = "0.20.0"
+webpki-roots = "0.21.1"
 
 [dependencies.reqwest]
 version = "0.11"
@@ -46,12 +45,12 @@ version = "0.8.1"
 optional = true
 
 [dev-dependencies]
-candid = "0.6.17"
-mockito = "0.27.0"
-proptest = "0.9.5"
-tokio = { version = "1.2.0", features = ["full"] }
+candid = "0.7.7"
+mockito = "0.30.0"
+proptest = "1.0.0"
+serde_json = "1.0.68"
+tokio = { version = "1.11.0", features = ["full"] }
 
 [features]
 default = ["pem", "reqwest"]
-
-ic_ref_tests = ['default'] # Used to separate integration tests for ic-ref which need a server running.
+ic_ref_tests = ["default"] # Used to separate integration tests for ic-ref which need a server running.

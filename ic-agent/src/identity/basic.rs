@@ -1,13 +1,13 @@
-use crate::export::Principal;
-use crate::{Identity, Signature};
+use crate::{export::Principal, Identity, Signature};
 
 #[cfg(feature = "pem")]
 use crate::identity::error::PemError;
 
-use num_bigint::BigUint;
 use ring::signature::{Ed25519KeyPair, KeyPair};
-use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, Sequence};
-use simple_asn1::{oid, to_der, OID};
+use simple_asn1::{
+    oid, to_der,
+    ASN1Block::{BitString, ObjectIdentifier, Sequence},
+};
 
 /// A Basic Identity which sign using an ED25519 key pair.
 pub struct BasicIdentity {

@@ -1,16 +1,11 @@
-use delay::Delay;
-use ic_agent::export::Principal;
-use ic_agent::identity::BasicIdentity;
-use ic_agent::{Agent, Identity};
+use garcon::Delay;
+use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
+use ic_agent::identity::Secp256k1Identity;
+use ic_agent::{export::Principal, identity::BasicIdentity, Agent, Identity};
 use ic_identity_hsm::HardwareIdentity;
-use ic_utils::call::AsyncCall;
-use ic_utils::interfaces::management_canister::MemoryAllocation;
-use ic_utils::interfaces::ManagementCanister;
+use ic_utils::interfaces::{management_canister::builders::MemoryAllocation, ManagementCanister};
 use ring::signature::Ed25519KeyPair;
-use std::convert::TryFrom;
-use std::error::Error;
-use std::future::Future;
-use std::path::Path;
+use std::{convert::TryFrom, error::Error, future::Future, path::Path};
 
 const HSM_PKCS11_LIBRARY_PATH: &str = "HSM_PKCS11_LIBRARY_PATH";
 const HSM_SLOT_INDEX: &str = "HSM_SLOT_INDEX";
@@ -23,7 +18,7 @@ pub fn create_waiter() -> Delay {
         .build()
 }
 
-pub async fn create_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
+pub async fn create_identity() -> Result<Box<dyn Identity>, String> {
     if std::env::var(HSM_PKCS11_LIBRARY_PATH).is_ok() {
         create_hsm_identity().await
     } else {
@@ -35,7 +30,7 @@ fn expect_env_var(name: &str) -> Result<String, String> {
     std::env::var(name).map_err(|_| format!("Need to specify the {} environment variable", name))
 }
 
-pub async fn create_hsm_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
+pub async fn create_hsm_identity() -> Result<Box<dyn Identity>, String> {
     let path = expect_env_var(HSM_PKCS11_LIBRARY_PATH)?;
     let slot_index = expect_env_var(HSM_SLOT_INDEX)?
         .parse::<usize>()
@@ -57,7 +52,7 @@ fn get_hsm_pin() -> Result<String, String> {
 // To avoid this, we use a basic identity for any second identity in tests.
 //
 // A shared container of Ctx objects might be possible instead, but my rust-fu is inadequate.
-pub async fn create_basic_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
+pub async fn create_basic_identity() -> Result<Box<dyn Identity>, String> {
     let rng = ring::rand::SystemRandom::new();
     let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
         .expect("Could not generate a key pair.");
@@ -67,7 +62,25 @@ pub async fn create_basic_identity() -> Result<Box<dyn Identity + Send + Sync>, 
     )))
 }
 
-pub async fn create_agent(identity: Box<dyn Identity + Send + Sync>) -> Result<Agent, String> {
+/// Create a secp256k1identity, which unfortunately will always be the same one
+/// (So can only use one per test)
+pub fn create_secp256k1_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
+    // generated from the the following commands:
+    // $ openssl ecparam -name secp256k1 -genkey -noout -out identity.pem
+    // $ cat identity.pem
+    let identity_file = "
+-----BEGIN EC PRIVATE KEY-----
+MHQCAQEEIJb2C89BvmJERgnT/vJLKpdHZb/hqTiC8EY2QtBRWZScoAcGBSuBBAAK
+oUQDQgAEDMl7g3vGKLsiLDA3fBRxDE9ZkM3GezZFa5HlKM/gYzNZfU3w8Tijjd73
+yeMC60IsMNxDjLqElV7+T7dkb5Ki7Q==
+-----END EC PRIVATE KEY-----";
+
+    let identity = Secp256k1Identity::from_pem(identity_file.as_bytes())
+        .expect("Cannot create secp256k1 identity from PEM file.");
+    Ok(Box::new(identity))
+}
+
+pub async fn create_agent(identity: Box<dyn Identity>) -> Result<Agent, String> {
     let port_env = std::env::var("IC_REF_PORT")
         .expect("Need to specify the IC_REF_PORT environment variable.");
     let port = port_env
@@ -75,7 +88,9 @@ pub async fn create_agent(identity: Box<dyn Identity + Send + Sync>) -> Result<A
         .expect("Could not parse the IC_REF_PORT environment variable as an integer.");
 
     Agent::builder()
-        .with_url(format!("http://127.0.0.1:{}", port))
+        .with_transport(
+            ReqwestHttpReplicaV2Transport::create(format!("http://127.0.0.1:{}", port)).unwrap(),
+        )
         .with_boxed_identity(identity)
         .build()
         .map_err(|e| format!("{:?}", e))
@@ -100,7 +115,7 @@ where
             .expect("could not fetch root key");
         match f(agent).await {
             Ok(_) => {}
-            Err(e) => assert!(false, "{:?}", e),
+            Err(e) => panic!("{:?}", e),
         };
     })
 }
@@ -120,7 +135,8 @@ pub async fn create_universal_canister(agent: &Agent) -> Result<Principal, Box<d
     let ic00 = ManagementCanister::create(&agent);
 
     let (canister_id,) = ic00
-        .provisional_create_canister_with_cycles(None)
+        .create_canister()
+        .as_provisional_create_with_amount(None)
         .call_and_wait(create_waiter())
         .await?;
 
@@ -154,16 +170,17 @@ pub async fn create_wallet_canister(
     let ic00 = ManagementCanister::create(&agent);
 
     let (canister_id,) = ic00
-        .provisional_create_canister_with_cycles(cycles)
+        .create_canister()
+        .as_provisional_create_with_amount(cycles)
+        .with_memory_allocation(
+            MemoryAllocation::try_from(8000000000_u64)
+                .expect("Memory allocation must be between 0 and 2^48 (i.e 256TB), inclusively."),
+        )
         .call_and_wait(create_waiter())
         .await?;
 
     ic00.install_code(&canister_id, &canister_wasm)
         .with_raw_arg(vec![])
-        .with_memory_allocation(
-            MemoryAllocation::try_from(8000000000_u64)
-                .expect("Memory allocation must be between 0 and 2^48 (i.e 256TB), inclusively."),
-        )
         .call_and_wait(create_waiter())
         .await?;
 

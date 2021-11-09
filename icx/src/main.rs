@@ -1,24 +1,32 @@
-use candid::parser::value::IDLValue;
-use candid::types::{Function, Type};
-use candid::{check_prog, IDLArgs, IDLProg, TypeEnv};
-use candid::{CandidType, Decode, Deserialize};
+use anyhow::{bail, Context, Result};
+use candid::{
+    check_prog,
+    parser::value::IDLValue,
+    types::{Function, Type},
+    CandidType, Decode, Deserialize, IDLArgs, IDLProg, TypeEnv,
+};
 use clap::{crate_authors, crate_version, AppSettings, Clap};
-use ic_agent::agent::agent_error::HttpErrorPayload;
-use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
-use ic_agent::agent::ReplicaV2Transport;
-use ic_agent::export::Principal;
-use ic_agent::identity::BasicIdentity;
-use ic_agent::{agent, Agent, AgentError, Identity, RequestId};
-use ic_utils::interfaces::management_canister::{CanisterInstall, MgmtMethod};
+use ic_agent::{
+    agent::{self, signed::SignedUpdate, Replied},
+    agent::{
+        agent_error::HttpErrorPayload,
+        signed::{SignedQuery, SignedRequestStatus},
+    },
+    export::Principal,
+    identity::BasicIdentity,
+    Agent, AgentError, Identity,
+};
+use ic_utils::interfaces::management_canister::{
+    builders::{CanisterInstall, CanisterSettings},
+    MgmtMethod,
+};
 use ring::signature::Ed25519KeyPair;
-use std::collections::VecDeque;
-use std::convert::TryFrom;
-use std::future::Future;
-use std::io::BufRead;
-use std::path::PathBuf;
-use std::pin::Pin;
-use std::str::FromStr;
-use thiserror::Error;
+use std::{
+    collections::VecDeque, convert::TryFrom, io::BufRead, path::PathBuf, process::exit,
+    str::FromStr,
+};
+
+const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
 
 #[derive(Clap)]
 #[clap(
@@ -130,20 +138,41 @@ struct PrincipalConvertOpts {
 pub fn get_candid_type(
     idl_path: &std::path::Path,
     method_name: &str,
-) -> Option<(TypeEnv, Function)> {
-    let (env, ty) = check_candid_file(idl_path).ok()?;
-    let actor = ty?;
-    let method = env.get_method(&actor, method_name).ok()?.clone();
-    Some((env, method))
+) -> Result<Option<(TypeEnv, Function)>> {
+    let (env, ty) = check_candid_file(idl_path).with_context(|| {
+        format!(
+            "Failed when checking candid file: {}",
+            idl_path.to_string_lossy()
+        )
+    })?;
+    match ty {
+        None => Ok(None),
+        Some(actor) => {
+            let method = env
+                .get_method(&actor, method_name)
+                .with_context(|| format!("Failed to get method: {}", method_name))?
+                .clone();
+            Ok(Some((env, method)))
+        }
+    }
 }
 
-pub fn check_candid_file(idl_path: &std::path::Path) -> Result<(TypeEnv, Option<Type>), String> {
-    let idl_file = std::fs::read_to_string(idl_path).map_err(|e| format!("{:?}", e))?;
-    let ast = idl_file
-        .parse::<IDLProg>()
-        .map_err(|e| format!("{:?}", e))?;
+pub fn check_candid_file(idl_path: &std::path::Path) -> Result<(TypeEnv, Option<Type>)> {
+    let idl_file = std::fs::read_to_string(idl_path)
+        .with_context(|| format!("Failed to read Candid file: {}", idl_path.to_string_lossy()))?;
+    let ast = idl_file.parse::<IDLProg>().with_context(|| {
+        format!(
+            "Failed to parse the Candid file: {}",
+            idl_path.to_string_lossy()
+        )
+    })?;
     let mut env = TypeEnv::new();
-    let actor = check_prog(&mut env, &ast).map_err(|e| format!("{:?}", e))?;
+    let actor = check_prog(&mut env, &ast).with_context(|| {
+        format!(
+            "Failed to type check the Candid file: {}",
+            idl_path.to_string_lossy()
+        )
+    })?;
     Ok((env, actor))
 }
 
@@ -151,20 +180,29 @@ fn blob_from_arguments(
     arguments: Option<&str>,
     arg_type: &ArgType,
     method_type: &Option<(candid::parser::typing::TypeEnv, candid::types::Function)>,
-) -> Result<Vec<u8>, String> {
+) -> Result<Vec<u8>> {
+    let mut buffer = Vec::new();
+    let arguments = if arguments == Some("-") {
+        use std::io::Read;
+        std::io::stdin().read_to_end(&mut buffer).unwrap();
+        std::str::from_utf8(&buffer).ok()
+    } else {
+        arguments
+    };
+
     match arg_type {
         ArgType::Raw => {
             let bytes = hex::decode(&arguments.unwrap_or(""))
-                .map_err(|e| format!("Argument is not a valid hex string: {}", e))?;
+                .context("Argument is not a valid hex string")?;
             Ok(bytes)
         }
         ArgType::Idl => {
             let arguments = arguments.unwrap_or("()");
-            let args: Result<IDLArgs, String> = arguments
-                .parse::<IDLArgs>()
-                .map_err(|e: candid::Error| format!("Invalid Candid values: {}", e));
+            let args = arguments.parse::<IDLArgs>();
             let typed_args = match method_type {
-                None => args?.to_bytes(),
+                None => args
+                    .context("Failed to parse arguments with no method type info")?
+                    .to_bytes(),
                 Some((env, func)) => {
                     let first_char = arguments.chars().next();
                     let is_candid_format = first_char.map_or(false, |c| c == '(');
@@ -176,19 +214,18 @@ fn blob_from_arguments(
                             if candid::types::Type::Text == func.args[0] && !is_quote {
                                 Ok(IDLValue::Text(arguments.to_string()))
                             } else {
-                                arguments
-                                    .parse::<IDLValue>()
-                                    .map_err(|e| format!("Invalid Candid values: {}", e))
+                                arguments.parse::<IDLValue>()
                             }
                             .map(|v| IDLArgs::new(&[v]))
                         } else {
                             Err(e)
                         }
                     });
-                    args?.to_bytes_with_types(&env, &func.args)
+                    args.context("Failed to parse arguments with method type info")?
+                        .to_bytes_with_types(&env, &func.args)
                 }
             }
-            .map_err(|e| format!("Unable to serialize Candid values: {}", e))?;
+            .context("Failed to serialize Candid values")?;
             Ok(typed_args)
         }
     }
@@ -198,10 +235,10 @@ fn print_idl_blob(
     blob: &[u8],
     output_type: &ArgType,
     method_type: &Option<(TypeEnv, Function)>,
-) -> Result<(), String> {
+) -> Result<()> {
+    let hex_string = hex::encode(blob);
     match output_type {
         ArgType::Raw => {
-            let hex_string = hex::encode(blob);
             println!("{}", hex_string);
         }
         ArgType::Idl => {
@@ -209,64 +246,74 @@ fn print_idl_blob(
                 None => candid::IDLArgs::from_bytes(blob),
                 Some((env, func)) => candid::IDLArgs::from_bytes_with_types(blob, &env, &func.rets),
             };
-            if result.is_err() {
-                let hex_string = hex::encode(blob);
-                eprintln!("Error deserializing blob 0x{}", hex_string);
-            }
-            println!("{}", result.map_err(|e| format!("{:?}", e))?);
+            println!(
+                "{}",
+                result.with_context(|| format!("Failed to deserialize blob 0x{}", hex_string))?
+            );
         }
     }
     Ok(())
 }
 
+async fn fetch_root_key_from_non_ic(agent: &Agent, replica: &str) -> Result<()> {
+    let normalized_replica = replica.strip_suffix("/").unwrap_or(replica);
+    if normalized_replica != DEFAULT_IC_GATEWAY {
+        agent
+            .fetch_root_key()
+            .await
+            .context("Failed to fetch root key from replica")?;
+    }
+    Ok(())
+}
 pub fn get_effective_canister_id(
     is_management_canister: bool,
     method_name: &str,
     arg_value: &[u8],
     canister_id: Principal,
-) -> Result<Principal, String> {
+) -> Result<Principal> {
     if is_management_canister {
-        let method_name = MgmtMethod::from_str(method_name).map_err(|_| {
+        let method_name = MgmtMethod::from_str(method_name).with_context(|| {
             format!(
                 "Attempted to call an unsupported management canister method: {}",
                 method_name
             )
         })?;
         match method_name {
-            MgmtMethod::CreateCanister | MgmtMethod::RawRand => Err(format!(
+            MgmtMethod::CreateCanister | MgmtMethod::RawRand => bail!(
                 "{} can only be called via an inter-canister call.",
                 method_name.as_ref()
-            )),
+            ),
             MgmtMethod::InstallCode => {
                 let install_args = candid::Decode!(arg_value, CanisterInstall)
-                    .map_err(|err| format!("Candid decode err: {}", err))?;
+                    .context("Argument is not valid for CanisterInstall")?;
                 Ok(install_args.canister_id)
-            }
-            MgmtMethod::SetController => {
-                #[derive(CandidType, Deserialize)]
-                struct In {
-                    canister_id: Principal,
-                    new_controller: Principal,
-                }
-                let in_args = candid::Decode!(arg_value, In)
-                    .map_err(|err| format!("Candid decode err: {}", err))?;
-                Ok(in_args.canister_id)
             }
             MgmtMethod::StartCanister
             | MgmtMethod::StopCanister
             | MgmtMethod::CanisterStatus
             | MgmtMethod::DeleteCanister
             | MgmtMethod::DepositCycles
+            | MgmtMethod::UninstallCode
             | MgmtMethod::ProvisionalTopUpCanister => {
                 #[derive(CandidType, Deserialize)]
                 struct In {
                     canister_id: Principal,
                 }
-                let in_args = candid::Decode!(arg_value, In)
-                    .map_err(|err| format!("Candid decode err: {}", err))?;
+                let in_args =
+                    candid::Decode!(arg_value, In).context("Argument is not a valid Principal")?;
                 Ok(in_args.canister_id)
             }
             MgmtMethod::ProvisionalCreateCanisterWithCycles => Ok(Principal::management_canister()),
+            MgmtMethod::UpdateSettings => {
+                #[derive(CandidType, Deserialize)]
+                struct In {
+                    canister_id: Principal,
+                    settings: CanisterSettings,
+                }
+                let in_args = candid::Decode!(arg_value, In)
+                    .context("Argument is not valid for UpdateSettings")?;
+                Ok(in_args.canister_id)
+            }
         }
     } else {
         Ok(canister_id)
@@ -289,111 +336,18 @@ fn create_identity(maybe_pem: Option<PathBuf>) -> impl Identity {
     }
 }
 
-#[derive(Error, Debug)]
-enum SerializeError {
-    #[error("")]
-    Success,
-}
-
-struct SerializingTransport;
-
-impl agent::ReplicaV2Transport for SerializingTransport {
-    fn query<'a>(
-        &'a self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(
-            _: &SerializingTransport,
-            effective_canister_id: Principal,
-            envelope: Vec<u8>,
-        ) -> Result<Vec<u8>, AgentError> {
-            print!(
-                "query\n\n{}\n\n{}",
-                hex::encode(envelope),
-                hex::encode(effective_canister_id)
-            );
-            Err(AgentError::TransportError(SerializeError::Success.into()))
-        }
-
-        Box::pin(run(self, effective_canister_id, envelope))
-    }
-
-    fn read_state<'a>(
-        &'a self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(
-            _: &SerializingTransport,
-            effective_canister_id: Principal,
-            envelope: Vec<u8>,
-        ) -> Result<Vec<u8>, AgentError> {
-            print!(
-                "read_state\n\n{}\n\n{}",
-                hex::encode(envelope),
-                hex::encode(effective_canister_id)
-            );
-            Err(AgentError::TransportError(SerializeError::Success.into()))
-        }
-
-        Box::pin(run(self, effective_canister_id, envelope))
-    }
-
-    fn call<'a>(
-        &'a self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-        request_id: RequestId,
-    ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
-        async fn run(
-            _: &SerializingTransport,
-            effective_canister_id: Principal,
-            envelope: Vec<u8>,
-            request_id: RequestId,
-        ) -> Result<(), AgentError> {
-            print!(
-                "call\n{}\n\n{}\n\n{}",
-                hex::encode(request_id.as_slice()),
-                hex::encode(envelope),
-                hex::encode(effective_canister_id)
-            );
-            Err(AgentError::MessageError(String::new()))
-        }
-
-        Box::pin(run(self, effective_canister_id, envelope, request_id))
-    }
-
-    fn status<'a>(
-        &'a self,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(_: &SerializingTransport) -> Result<Vec<u8>, AgentError> {
-            Err(AgentError::MessageError(
-                "status calls not supported".to_string(),
-            ))
-        }
-
-        Box::pin(run(self))
-    }
-}
-
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
 
-    let agent = match &opts.subcommand {
-        SubCommand::Query(CallOpts {
-            serialize: true, ..
-        })
-        | SubCommand::Update(CallOpts {
-            serialize: true, ..
-        }) => Agent::builder().with_transport(SerializingTransport),
-        _ => Agent::builder().with_transport(
-            agent::http_transport::ReqwestHttpReplicaV2Transport::create(opts.replica.clone())?,
-        ),
-    }
-    .with_boxed_identity(Box::new(create_identity(opts.pem)))
-    .build()?;
+    let agent = Agent::builder()
+        .with_transport(
+            agent::http_transport::ReqwestHttpReplicaV2Transport::create(opts.replica.clone())
+                .context("Failed to create Transport for Agent")?,
+        )
+        .with_boxed_identity(Box::new(create_identity(opts.pem)))
+        .build()
+        .context("Failed to build the Agent")?;
 
     // You can handle information about subcommands by requesting their matches by name
     // (as below), requesting just the name used, or both at the same time
@@ -402,90 +356,156 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let maybe_candid_path = t.candid.as_ref();
             let expire_after: Option<std::time::Duration> = opts.ttl.map(|ht| ht.into());
 
-            let method_type =
-                maybe_candid_path.and_then(|path| get_candid_type(&path, &t.method_name));
+            let method_type = match maybe_candid_path {
+                None => None,
+                Some(path) => get_candid_type(&path, &t.method_name)
+                    .context("Failed to get method type from candid file")?,
+            };
 
-            let arg = blob_from_arguments(t.arg_value.as_deref(), &t.arg, &method_type)?;
+            let arg = blob_from_arguments(t.arg_value.as_deref(), &t.arg, &method_type)
+                .context("Invalid arguments")?;
             let is_management_canister = t.canister_id == Principal::management_canister();
             let effective_canister_id = get_effective_canister_id(
                 is_management_canister,
                 &t.method_name,
                 &arg,
-                t.canister_id.clone(),
-            )?;
+                t.canister_id,
+            )
+            .context("Failed to get effective_canister_id for this call")?;
 
-            let result = match &opts.subcommand {
-                SubCommand::Update(_) => {
-                    // We need to fetch the root key for updates.
-                    agent.fetch_root_key().await?;
+            if !t.serialize {
+                let result = match &opts.subcommand {
+                    SubCommand::Update(_) => {
+                        // We need to fetch the root key for updates.
+                        fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
 
-                    let mut builder = agent.update(&t.canister_id, &t.method_name);
+                        let mut builder = agent.update(&t.canister_id, &t.method_name);
 
-                    if let Some(d) = expire_after {
-                        builder.expire_after(d);
-                    }
-
-                    eprint!(".");
-                    let result = builder
-                        .with_arg(arg)
-                        .with_effective_canister_id(effective_canister_id)
-                        .call_and_wait(
-                            delay::Delay::builder()
-                                .exponential_backoff(std::time::Duration::from_secs(1), 1.1)
-                                .side_effect(|| {
-                                    eprint!(".");
-                                    Ok(())
-                                })
-                                .timeout(std::time::Duration::from_secs(60 * 5))
-                                .build(),
-                        )
-                        .await;
-                    eprintln!();
-                    result
-                }
-                SubCommand::Query(_) => {
-                    let mut builder = agent.query(&t.canister_id, &t.method_name);
-                    if let Some(d) = expire_after {
-                        builder.expire_after(d);
-                    }
-
-                    builder
-                        .with_arg(&arg)
-                        .with_effective_canister_id(effective_canister_id)
-                        .call()
-                        .await
-                }
-                _ => unreachable!(),
-            };
-
-            match result {
-                Ok(blob) => {
-                    print_idl_blob(&blob, &t.output, &method_type)
-                        .map_err(|e| format!("Invalid IDL blob: {}", e))?;
-                }
-                Err(AgentError::TransportError(_)) => return Ok(()),
-                Err(AgentError::HttpError(HttpErrorPayload {
-                    status,
-                    content_type,
-                    content,
-                })) => {
-                    eprintln!("Server returned an HTTP Error:\n  Code: {}", status);
-                    match content_type.as_deref() {
-                        None => eprintln!("  Content: {}", hex::encode(content)),
-                        Some("text/plain; charset=UTF-8") | Some("text/plain") => {
-                            eprintln!("  ContentType: text/plain");
-                            eprintln!("  Content:     {}", String::from_utf8_lossy(&content));
+                        if let Some(d) = expire_after {
+                            builder.expire_after(d);
                         }
-                        Some(x) => {
-                            eprintln!("  ContentType: {}", x);
-                            eprintln!("  Content:     {}", hex::encode(&content));
-                        }
+
+                        eprint!(".");
+                        let result = builder
+                            .with_arg(arg)
+                            .with_effective_canister_id(effective_canister_id)
+                            .call_and_wait(
+                                garcon::Delay::builder()
+                                    .exponential_backoff(std::time::Duration::from_secs(1), 1.1)
+                                    .side_effect(|| {
+                                        eprint!(".");
+                                        Ok(())
+                                    })
+                                    .timeout(std::time::Duration::from_secs(60 * 5))
+                                    .build(),
+                            )
+                            .await;
+                        eprintln!();
+                        result
                     }
+                    SubCommand::Query(_) => {
+                        let mut builder = agent.query(&t.canister_id, &t.method_name);
+                        if let Some(d) = expire_after {
+                            builder.expire_after(d);
+                        }
+
+                        builder
+                            .with_arg(&arg)
+                            .with_effective_canister_id(effective_canister_id)
+                            .call()
+                            .await
+                    }
+                    _ => unreachable!(),
+                };
+
+                match result {
+                    Ok(blob) => {
+                        print_idl_blob(&blob, &t.output, &method_type)
+                            .context("Failed to print result blob")?;
+                    }
+                    Err(AgentError::TransportError(_)) => return Ok(()),
+                    Err(AgentError::HttpError(HttpErrorPayload {
+                        status,
+                        content_type,
+                        content,
+                    })) => {
+                        let mut error_message =
+                            format!("Server returned an HTTP Error:\n  Code: {}\n", status);
+                        match content_type.as_deref() {
+                            None => error_message
+                                .push_str(&format!("  Content: {}\n", hex::encode(content))),
+                            Some("text/plain; charset=UTF-8") | Some("text/plain") => {
+                                error_message.push_str("  ContentType: text/plain\n");
+                                error_message.push_str(&format!(
+                                    "  Content:     {}\n",
+                                    String::from_utf8_lossy(&content)
+                                ));
+                            }
+                            Some(x) => {
+                                error_message.push_str(&format!("  ContentType: {}\n", x));
+                                error_message.push_str(&format!(
+                                    "  Content:     {}\n",
+                                    hex::encode(&content)
+                                ));
+                            }
+                        }
+                        bail!(error_message);
+                    }
+                    Err(s) => Err(s).context("Got an error when make the canister call")?,
                 }
-                Err(s) => eprintln!("Error: {:?}", s),
+            } else {
+                match &opts.subcommand {
+                    SubCommand::Update(_) => {
+                        // For local emulator, we need to fetch the root key for updates.
+                        // So on an air-gapped machine, we can only generate message for the IC main net
+                        // which agent hard-coded its root key
+                        fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
+
+                        let mut builder = agent.update(&t.canister_id, &t.method_name);
+                        if let Some(d) = expire_after {
+                            builder.expire_after(d);
+                        }
+                        let signed_update = builder
+                            .with_arg(arg)
+                            .with_effective_canister_id(effective_canister_id)
+                            .sign()
+                            .context("Failed to sign the update call")?;
+                        let serialized = serde_json::to_string(&signed_update).unwrap();
+                        println!("{}", serialized);
+
+                        let signed_request_status = agent
+                            .sign_request_status(effective_canister_id, signed_update.request_id)
+                            .context(
+                                "Failed to sign the request_status call accompany with the update",
+                            )?;
+                        let serialized = serde_json::to_string(&signed_request_status).unwrap();
+                        println!("{}", serialized);
+                    }
+                    &SubCommand::Query(_) => {
+                        let mut builder = agent.query(&t.canister_id, &t.method_name);
+                        if let Some(d) = expire_after {
+                            builder.expire_after(d);
+                        }
+                        let signed_query = builder
+                            .with_arg(arg)
+                            .with_effective_canister_id(effective_canister_id)
+                            .sign()
+                            .context("Failed to sign the query call")?;
+                        let serialized = serde_json::to_string(&signed_query).unwrap();
+                        println!("{}", serialized);
+                    }
+                    _ => unreachable!(),
+                }
             }
+            exit(1)
         }
-        SubCommand::Status => println!("{:#}", agent.status().await?),
+        SubCommand::Status => {
+            let status = agent
+                .status()
+                .await
+                .context("Failed to get network status")?;
+            println!("{:#}", status);
+        }
         SubCommand::PrincipalConvert(t) => {
             if let Some(hex) = &t.from_hex {
                 let p = Principal::try_from(hex::decode(hex).expect("Could not decode hex: {}"))
@@ -498,62 +518,72 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         SubCommand::Send => {
-            let mut input: VecDeque<String> = std::io::stdin()
+            let input: VecDeque<String> = std::io::stdin()
                 .lock()
                 .lines()
-                .collect::<Result<VecDeque<String>, std::io::Error>>()?;
-            let mut line = input.pop_front().unwrap();
-            while line == "" {
-                line = input.pop_front().unwrap();
+                .collect::<Result<VecDeque<String>, std::io::Error>>()
+                .context("Failed to read from stdin")?;
+            let mut buffer = String::new();
+            for line in input {
+                buffer.push_str(&line);
             }
 
-            let transport = ReqwestHttpReplicaV2Transport::create(opts.replica)?;
-            match line.as_str() {
-                "call" => {
-                    line = input.pop_front().unwrap(); // request id.
-                    let request_id = RequestId::from_str(&line)?;
-                    input.pop_front().unwrap(); // empty line.
-                    line = input.pop_front().unwrap(); // envelope
-                    let envelope = hex::decode(line)?;
-                    input.pop_front().unwrap(); // empty line.
-                    line = input.pop_front().unwrap(); // effective_canister_id
-                    let effective_canister_id = Principal::try_from(hex::decode(line)?)?;
-                    transport
-                        .call(effective_canister_id, envelope, request_id)
-                        .await?;
-                    eprint!("Request ID: ");
-                    println!("0x{}", hex::encode(request_id.as_slice()));
+            println!("{}", buffer);
+
+            if let Ok(signed_update) = serde_json::from_str::<SignedUpdate>(&buffer) {
+                fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
+                let request_id = agent
+                    .update_signed(
+                        signed_update.effective_canister_id,
+                        signed_update.signed_update,
+                    )
+                    .await
+                    .context("Got an AgentError when send the signed update call")?;
+                eprintln!("RequestID: 0x{}", String::from(request_id));
+            } else if let Ok(signed_query) = serde_json::from_str::<SignedQuery>(&buffer) {
+                let blob = agent
+                    .query_signed(
+                        signed_query.effective_canister_id,
+                        signed_query.signed_query,
+                    )
+                    .await
+                    .context("Got an error when send the signed query call")?;
+                print_idl_blob(&blob, &ArgType::Idl, &None)
+                    .context("Failed to print query result")?;
+            } else if let Ok(signed_request_status) =
+                serde_json::from_str::<SignedRequestStatus>(&buffer)
+            {
+                fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
+                let response = agent
+                    .request_status_signed(
+                        &signed_request_status.request_id,
+                        signed_request_status.effective_canister_id,
+                        signed_request_status.signed_request_status,
+                    )
+                    .await
+                    .context("Got an error when send the signed request_status call")?;
+
+                match response {
+                    agent::RequestStatusResponse::Replied {
+                        reply: Replied::CallReplied(blob),
+                    } => {
+                        print_idl_blob(&blob, &ArgType::Idl, &None)
+                            .context("Failed to print request_status result")?;
+                    }
+                    agent::RequestStatusResponse::Rejected {
+                        reject_code,
+                        reject_message,
+                    } => {
+                        bail!(
+                            r#"The Replica returned an error: code {}, message: "{}""#,
+                            reject_code,
+                            reject_message
+                        );
+                    }
+                    _ => bail!("Can't get valid status of the request.",),
                 }
-                "read_state" => {
-                    input.pop_front().unwrap(); // empty line.
-                    line = input.pop_front().unwrap(); // envelope
-                    let envelope = hex::decode(line)?;
-                    input.pop_front().unwrap(); // empty line.
-                    line = input.pop_front().unwrap(); // effective_canister_id
-                    let effective_canister_id = Principal::try_from(hex::decode(line)?)?;
-                    let result = transport
-                        .read_state(effective_canister_id, envelope)
-                        .await?;
-                    eprint!("Result: ");
-                    println!("{}", hex::encode(result));
-                }
-                "query" => {
-                    input.pop_front().unwrap(); // empty line.
-                    line = input.pop_front().unwrap(); // envelope
-                    let envelope = hex::decode(line)?;
-                    input.pop_front().unwrap(); // empty line.
-                    line = input.pop_front().unwrap(); // effective_canister_id
-                    let effective_canister_id = Principal::try_from(hex::decode(line)?)?;
-                    let result = transport.query(effective_canister_id, envelope).await?;
-                    eprint!("Result: ");
-                    println!("{}", hex::encode(result));
-                }
-                other => {
-                    eprintln!(
-                        r#"Error: Invalid STDIN format. Unexpected line: "{}""#,
-                        other
-                    );
-                }
+            } else {
+                bail!("Invalid input.");
             }
         }
     }

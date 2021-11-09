@@ -1,19 +1,20 @@
-use crate::export::Principal;
-use crate::{Identity, Signature};
+use crate::{export::Principal, Identity, Signature};
 
 #[cfg(feature = "pem")]
 use crate::identity::error::PemError;
 
-use num_bigint::BigUint;
-use openssl::bn::BigNumContext;
-use openssl::ec::{EcKey, PointConversionForm};
-use openssl::ecdsa::EcdsaSig;
-use openssl::error::ErrorStack;
-use openssl::pkey::{Private, Public};
-use openssl::sha::sha256;
-use simple_asn1::ASN1Block;
-use simple_asn1::ASN1Block::{BitString, ObjectIdentifier, Sequence};
-use simple_asn1::{oid, to_der, OID};
+use openssl::{
+    bn::BigNumContext,
+    ec::{EcKey, PointConversionForm},
+    ecdsa::EcdsaSig,
+    error::ErrorStack,
+    pkey::{Private, Public},
+    sha::sha256,
+};
+use simple_asn1::{
+    oid, to_der, ASN1Block,
+    ASN1Block::{BitString, ObjectIdentifier, Sequence},
+};
 
 #[derive(Clone, Debug)]
 pub struct Secp256k1Identity {
@@ -70,8 +71,8 @@ impl Identity for Secp256k1Identity {
         let signature = Some(bytes.to_vec());
         let public_key = Some(self.der_encoded_public_key.clone());
         Ok(Signature {
-            signature,
             public_key,
+            signature,
         })
     }
 }

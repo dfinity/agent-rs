@@ -1,17 +1,13 @@
 //! A [ReplicaV2Transport] that connects using a reqwest client.
 #![cfg(feature = "reqwest")]
 
-use crate::agent::agent_error::HttpErrorPayload;
-use crate::AgentError;
-use crate::RequestId;
-use ic_types::Principal;
+use crate::{agent::agent_error::HttpErrorPayload, ic_types::Principal, AgentError, RequestId};
 use reqwest::Method;
-use std::future::Future;
-use std::pin::Pin;
+use std::{future::Future, pin::Pin, sync::Arc};
 
 /// Implemented by the Agent environment to cache and update an HTTP Auth password.
 /// It returns a tuple of `(username, password)`.
-pub trait PasswordManager {
+pub trait PasswordManager: Send + Sync {
     /// Retrieve the cached value for a user. If no cache value exists for this URL,
     /// the manager can return [`None`].
     fn cached(&self, url: &str) -> Result<Option<(String, String)>, String>;
@@ -29,7 +25,7 @@ pub trait PasswordManager {
 pub struct ReqwestHttpReplicaV2Transport {
     url: reqwest::Url,
     client: reqwest::Client,
-    password_manager: Option<Box<dyn PasswordManager + Send + Sync>>,
+    password_manager: Option<Arc<dyn PasswordManager>>,
 }
 
 impl ReqwestHttpReplicaV2Transport {
@@ -57,14 +53,24 @@ impl ReqwestHttpReplicaV2Transport {
         })
     }
 
-    pub fn with_password_manager<P: 'static + PasswordManager + Send + Sync>(
-        self,
-        password_manager: P,
-    ) -> Self {
-        Self {
-            password_manager: Some(Box::new(password_manager)),
-            ..self
+    pub fn with_password_manager<P: 'static + PasswordManager>(self, password_manager: P) -> Self {
+        ReqwestHttpReplicaV2Transport {
+            password_manager: Some(Arc::new(password_manager)),
+            url: self.url,
+            client: self.client,
         }
+    }
+
+    pub fn with_arc_password_manager(self, password_manager: Arc<dyn PasswordManager>) -> Self {
+        ReqwestHttpReplicaV2Transport {
+            password_manager: Some(password_manager),
+            url: self.url,
+            client: self.client,
+        }
+    }
+
+    pub fn password_manager(&self) -> Option<&dyn PasswordManager> {
+        self.password_manager.as_deref()
     }
 
     fn maybe_add_authorization(

@@ -1,10 +1,7 @@
 use crate::call::{AsyncCaller, SyncCaller};
-use candid::de::ArgumentDecoder;
-use candid::parser::value::IDLValue;
-use candid::ser::IDLBuilder;
-use candid::CandidType;
-use ic_agent::{Agent, AgentError};
-use ic_types::{Principal, PrincipalError};
+use candid::{parser::value::IDLValue, ser::IDLBuilder, utils::ArgumentDecoder, CandidType};
+use garcon::Waiter;
+use ic_agent::{ic_types::Principal, Agent, AgentError, RequestId};
 use std::convert::TryInto;
 use thiserror::Error;
 
@@ -12,7 +9,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum CanisterBuilderError {
     #[error("Getting the Canister ID returned an error: {0}")]
-    PrincipalError(#[from] PrincipalError),
+    PrincipalError(#[from] Box<dyn std::error::Error + std::marker::Send + std::marker::Sync>),
 
     #[error("Must specify an Agent")]
     MustSpecifyAnAgent(),
@@ -24,7 +21,7 @@ pub enum CanisterBuilderError {
 /// A canister builder, which can be used to create a canister abstraction.
 pub struct CanisterBuilder<'agent, T = ()> {
     agent: Option<&'agent Agent>,
-    canister_id: Option<Result<Principal, PrincipalError>>,
+    canister_id: Option<Result<Principal, CanisterBuilderError>>,
     interface: T,
 }
 
@@ -32,14 +29,14 @@ impl<'agent, T> CanisterBuilder<'agent, T> {
     /// Attach a canister ID to this canister.
     pub fn with_canister_id<E, P>(self, canister_id: P) -> Self
     where
-        E: std::error::Error,
+        E: 'static + std::error::Error + std::marker::Send + std::marker::Sync,
         P: TryInto<Principal, Error = E>,
     {
         Self {
             canister_id: Some(
                 canister_id
                     .try_into()
-                    .map_err(|e| PrincipalError::ExternalError(format!("{}", e))),
+                    .map_err(|e| CanisterBuilderError::PrincipalError(Box::new(e))),
             ),
             ..self
         }
@@ -137,6 +134,18 @@ impl<'agent, T> Canister<'agent, T> {
         method_name: &str,
     ) -> SyncCallBuilder<'agent, 'canister, T> {
         SyncCallBuilder::new(self, method_name)
+    }
+
+    /// Call request_status on the RequestId in a loop and return the response as a byte vector.
+    pub async fn wait<'canister: 'agent, W>(
+        &'canister self,
+        request_id: RequestId,
+        waiter: W,
+    ) -> Result<Vec<u8>, AgentError>
+    where
+        W: Waiter,
+    {
+        self.agent.wait(request_id, &self.canister_id, waiter).await
     }
 }
 
@@ -315,7 +324,7 @@ impl<'agent, 'canister: 'agent, Interface> SyncCallBuilder<'agent, 'canister, In
         SyncCaller {
             agent: c.agent,
             effective_canister_id: self.effective_canister_id,
-            canister_id: c.canister_id.clone(),
+            canister_id: c.canister_id,
             method_name: self.method_name.clone(),
             arg: self.arg.serialize(),
             expiry: Default::default(),
@@ -387,7 +396,7 @@ impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, I
         AsyncCaller {
             agent: c.agent,
             effective_canister_id: self.effective_canister_id,
-            canister_id: c.canister_id.clone(),
+            canister_id: c.canister_id,
             method_name: self.method_name.clone(),
             arg: self.arg.serialize(),
             expiry: Default::default(),
@@ -400,13 +409,14 @@ impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, I
 mod tests {
     use super::super::interfaces::ManagementCanister;
     use crate::call::AsyncCall;
+    use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
     use ic_agent::identity::BasicIdentity;
 
     #[ignore]
     #[tokio::test]
     async fn simple() {
         use super::Canister;
-        use delay::Delay;
+        use garcon::Delay;
 
         let rng = ring::rand::SystemRandom::new();
         let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
@@ -418,7 +428,7 @@ mod tests {
         );
 
         let agent = ic_agent::Agent::builder()
-            .with_url("http://localhost:8001")
+            .with_transport(ReqwestHttpReplicaV2Transport::create("http://localhost:8001").unwrap())
             .with_identity(identity)
             .build()
             .unwrap();

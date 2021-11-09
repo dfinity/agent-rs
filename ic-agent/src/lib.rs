@@ -29,8 +29,7 @@
 //! ```ignore
 //! # // This test is ignored because it requires an ic to be running. We run these
 //! # // in the ic-ref workflow.
-//! use ic_agent::Agent;
-//! use ic_types::Principal;
+//! use ic_agent::{Agent, ic_types::Principal};
 //! use candid::{Encode, Decode, CandidType, Nat};
 //! use serde::Deserialize;
 //!
@@ -62,10 +61,14 @@
 //!     .with_url(URL)
 //!     .with_identity(create_identity())
 //!     .build()?;
+//!   // Only do the following call when not contacting the IC main net (e.g. a local emulator).
+//!   // This is important as the main net public key is static and a rogue network could return
+//!   // a different key.
+//!   // If you know the root key ahead of time, you can use `agent.set_root_key(root_key)?;`.
 //!   agent.fetch_root_key().await?;
 //!   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 //!
-//!   let waiter = delay::Delay::builder()
+//!   let waiter = garcon::Delay::builder()
 //!     .throttle(std::time::Duration::from_millis(500))
 //!     .timeout(std::time::Duration::from_secs(60 * 5))
 //!     .build();
@@ -112,8 +115,9 @@ pub mod export;
 pub mod identity;
 pub mod request_id;
 
-pub use agent::{agent_error, agent_error::AgentError, nonce::NonceFactory, Agent};
+pub use agent::{agent_error, agent_error::AgentError, Agent, NonceFactory, NonceGenerator};
 pub use identity::{Identity, Signature};
 pub use request_id::{to_request_id, RequestId, RequestIdError};
 
-pub(crate) mod hash_tree;
+pub(crate) use crate::ic_types::hash_tree;
+pub use ic_types;

@@ -8,10 +8,8 @@
 //! (a 256 bits slice) or an error.
 use error::RequestIdFromStringError;
 use openssl::sha::Sha256;
-use serde::{ser, Serialize, Serializer};
-use std::collections::BTreeMap;
-use std::iter::Extend;
-use std::str::FromStr;
+use serde::{ser, Deserialize, Serialize};
+use std::{collections::BTreeMap, iter::Extend, str::FromStr};
 
 pub mod error;
 pub use error::RequestIdError;
@@ -20,7 +18,7 @@ pub use error::RequestIdError;
 type Sha256Hash = [u8; 32];
 
 /// A Request ID.
-#[derive(Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq, Deserialize, Serialize)]
 pub struct RequestId(Sha256Hash);
 
 impl RequestId {
@@ -55,16 +53,6 @@ impl FromStr for RequestId {
 impl From<RequestId> for String {
     fn from(id: RequestId) -> String {
         hex::encode(id.0)
-    }
-}
-
-/// We only allow to serialize a Request ID.
-impl Serialize for RequestId {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_bytes(&self.to_vec())
     }
 }
 
@@ -707,7 +695,7 @@ mod tests {
             method_name: &'static str,
             #[serde(with = "serde_bytes")]
             arg: Vec<u8>,
-        };
+        }
         let data = PublicSpecExampleStruct {
             request_type: "call",
             canister_id: Principal::try_from(&vec![0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
@@ -759,7 +747,7 @@ mod tests {
         struct NestedArraysExample {
             sender: Principal,
             paths: Vec<Vec<serde_bytes::ByteBuf>>,
-        };
+        }
         let data = NestedArraysExample {
             sender: Principal::try_from(&vec![0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
             paths: vec![
@@ -798,7 +786,7 @@ mod tests {
         #[derive(Serialize)]
         struct NestedArraysExample {
             paths: Vec<Vec<serde_bytes::ByteBuf>>,
-        };
+        }
         let data = NestedArraysExample { paths: vec![] };
 
         let request_id = to_request_id(&data).unwrap();
@@ -827,7 +815,7 @@ mod tests {
         #[derive(Serialize)]
         struct NestedArraysExample {
             paths: Vec<Vec<serde_bytes::ByteBuf>>,
-        };
+        }
         let data = NestedArraysExample {
             paths: vec![vec![]],
         };

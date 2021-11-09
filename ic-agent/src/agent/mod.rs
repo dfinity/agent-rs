@@ -8,40 +8,50 @@ pub(crate) mod replica_api;
 pub(crate) mod response;
 mod response_authentication;
 
+pub mod signed;
 pub mod status;
 pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
 pub use builder::AgentBuilder;
-pub use nonce::NonceFactory;
+pub use nonce::{NonceFactory, NonceGenerator};
 pub use response::{Replied, RequestStatusResponse};
 
 #[cfg(test)]
 mod agent_test;
 
-use crate::agent::replica_api::{
-    CallRequestContent, Certificate, Delegation, Envelope, QueryContent, ReadStateContent,
-    ReadStateResponse,
+use crate::{
+    agent::replica_api::{
+        CallRequestContent, Certificate, Delegation, Envelope, QueryContent, ReadStateContent,
+        ReadStateResponse,
+    },
+    export::Principal,
+    hash_tree::Label,
+    identity::Identity,
+    to_request_id, RequestId,
 };
-use crate::export::Principal;
-use crate::hash_tree::Label;
-use crate::identity::Identity;
-use crate::{to_request_id, RequestId};
-use delay::Waiter;
+use garcon::Waiter;
 use serde::Serialize;
 use status::Status;
 
-use crate::agent::response_authentication::{
-    extract_der, initialize_bls, lookup_canister_info, lookup_request_status, lookup_value,
+use crate::{
+    agent::response_authentication::{
+        extract_der, initialize_bls, lookup_canister_info, lookup_request_status, lookup_value,
+    },
+    bls::bls12381::bls,
 };
-use crate::bls::bls12381::bls;
-use std::convert::TryFrom;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::{
+    convert::TryFrom,
+    future::Future,
+    pin::Pin,
+    sync::{Arc, RwLock},
+    task::{Context, Poll},
+    time::Duration,
+};
 
 const IC_REQUEST_DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
+
+const IC_ROOT_KEY: &[u8; 133] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00\x81\x4c\x0e\x6e\xc7\x1f\xab\x58\x3b\x08\xbd\x81\x37\x3c\x25\x5c\x3c\x37\x1b\x2e\x84\x86\x3c\x98\xa4\xf1\xe0\x8b\x74\x23\x5d\x14\xfb\x5d\x9c\x0c\xd5\x46\xd9\x68\x5f\x91\x3a\x0c\x0b\x2c\xc5\x34\x15\x83\xbf\x4b\x43\x92\xe4\x67\xdb\x96\xd6\x5b\x9b\xb4\xcb\x71\x71\x12\xf8\x47\x2e\x0d\x5a\x4d\x14\x50\x5f\xfd\x74\x84\xb0\x12\x91\x09\x1c\x5f\x87\xb9\x88\x83\x46\x3f\x98\x09\x1a\x0b\xaa\xae";
 
 /// A facade that connects to a Replica and does requests. These requests can be of any type
 /// (does not have to be HTTP). This trait is to inverse the control from the Agent over its
@@ -52,7 +62,7 @@ const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 /// feature flag `reqwest`. This might be deprecated in the future.
 ///
 /// Any error returned by these methods will bubble up to the code that called the [Agent].
-pub trait ReplicaV2Transport {
+pub trait ReplicaV2Transport: Send + Sync {
     /// Sends an asynchronous request to a Replica. The Request ID is non-mutable and
     /// depends on the content of the envelope.
     ///
@@ -92,13 +102,84 @@ pub trait ReplicaV2Transport {
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
 }
 
+impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Box<I> {
+    fn call<'a>(
+        &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+        request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
+        (**self).call(effective_canister_id, envelope, request_id)
+    }
+    fn read_state<'a>(
+        &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        (**self).read_state(effective_canister_id, envelope)
+    }
+    fn query<'a>(
+        &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        (**self).query(effective_canister_id, envelope)
+    }
+    fn status<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        (**self).status()
+    }
+}
+impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Arc<I> {
+    fn call<'a>(
+        &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+        request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
+        (**self).call(effective_canister_id, envelope, request_id)
+    }
+    fn read_state<'a>(
+        &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        (**self).read_state(effective_canister_id, envelope)
+    }
+    fn query<'a>(
+        &'a self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        (**self).query(effective_canister_id, envelope)
+    }
+    fn status<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+        (**self).status()
+    }
+}
+
+/// Classification of the result of a request_status_raw (poll) call.
+pub enum PollResult {
+    /// The request has been submitted, but we do not know yet if it
+    /// has been accepted or not.
+    Submitted,
+
+    /// The request has been received and may be processing.
+    Accepted,
+
+    /// The request completed and returned some data.
+    Completed(Vec<u8>),
+}
+
 /// A low level Agent to make calls to a Replica endpoint.
 ///
 /// ```ignore
 /// # // This test is ignored because it requires an ic to be running. We run these
 /// # // in the ic-ref workflow.
-/// use ic_agent::Agent;
-/// use ic_types::Principal;
+/// use ic_agent::{Agent, ic_types::Principal};
 /// use candid::{Encode, Decode, CandidType, Nat};
 /// use serde::Deserialize;
 ///
@@ -130,10 +211,15 @@ pub trait ReplicaV2Transport {
 ///     .with_url(URL)
 ///     .with_identity(create_identity())
 ///     .build()?;
+///
+///   // Only do the following call when not contacting the IC main net (e.g. a local emulator).
+///   // This is important as the main net public key is static and a rogue network could return
+///   // a different key.
+///   // If you know the root key ahead of time, you can use `agent.set_root_key(root_key)?;`.
 ///   agent.fetch_root_key().await?;
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 ///
-///   let waiter = delay::Delay::builder()
+///   let waiter = garcon::Delay::builder()
 ///     .throttle(std::time::Duration::from_millis(500))
 ///     .timeout(std::time::Duration::from_secs(60 * 5))
 ///     .build();
@@ -160,11 +246,11 @@ pub trait ReplicaV2Transport {
 /// This agent does not understand Candid, and only acts on byte buffers.
 #[derive(Clone)]
 pub struct Agent {
-    nonce_factory: NonceFactory,
-    identity: Arc<dyn Identity + Send + Sync>,
+    nonce_factory: Arc<dyn NonceGenerator>,
+    identity: Arc<dyn Identity>,
     ingress_expiry_duration: Duration,
     root_key: Arc<RwLock<Option<Vec<u8>>>>,
-    transport: Arc<dyn ReplicaV2Transport + Send + Sync>,
+    transport: Arc<dyn ReplicaV2Transport>,
 }
 
 impl Agent {
@@ -175,7 +261,7 @@ impl Agent {
     }
 
     /// Create an instance of an [`Agent`].
-    pub fn new(config: AgentConfig) -> Result<Agent, AgentError> {
+    pub fn new(config: agent_config::AgentConfig) -> Result<Agent, AgentError> {
         initialize_bls()?;
 
         Ok(Agent {
@@ -184,7 +270,7 @@ impl Agent {
             ingress_expiry_duration: config
                 .ingress_expiry_duration
                 .unwrap_or_else(|| Duration::from_secs(300)),
-            root_key: Arc::new(RwLock::new(None)),
+            root_key: Arc::new(RwLock::new(Some(IC_ROOT_KEY.to_vec()))),
             transport: config
                 .transport
                 .ok_or_else(AgentError::MissingReplicaTransport)?,
@@ -192,23 +278,32 @@ impl Agent {
     }
 
     /// Set the transport of the [`Agent`].
-    pub fn set_transport<F: 'static + ReplicaV2Transport + Send + Sync>(&mut self, transport: F) {
+    pub fn set_transport<F: 'static + ReplicaV2Transport>(&mut self, transport: F) {
         self.transport = Arc::new(transport);
     }
 
-    /// Fetch the root key of the replica using its status end point, and update the agent's
-    /// root key. This only uses the agent's specific upstream replica, and does not ensure
-    /// the root key validity. In order to prevent any MITM attack, developers should try
-    /// to contact multiple replicas.
+    /// By default, the agent is configured to talk to the main Internet Computer, and verifies
+    /// responses using a hard-coded public key.
     ///
-    /// The root key is necessary for validating state and certificates sent by the replica.
-    /// By default, it is set to [None] and validating methods will return an error.
+    /// This function will instruct the agent to ask the endpoint for its public key, and use
+    /// that instead. This is required when talking to a local test instance, for example.
+    ///
+    /// *Only use this when you are  _not_ talking to the main Internet Computer, otherwise
+    /// you are prone to man-in-the-middle attacks! Do not call this function by default.*
     pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
         let status = self.status().await?;
         let root_key = status
             .root_key
             .clone()
             .ok_or(AgentError::NoRootKeyInStatus(status))?;
+        self.set_root_key(root_key)
+    }
+
+    /// By default, the agent is configured to talk to the main Internet Computer, and verifies
+    /// responses using a hard-coded public key.
+    ///
+    /// Using this function you can set the root key to a known one if you know if beforehand.
+    pub fn set_root_key(&self, root_key: Vec<u8>) -> Result<(), AgentError> {
         if let Ok(mut write_guard) = self.root_key.write() {
             *write_guard = Some(root_key);
         }
@@ -230,44 +325,31 @@ impl Agent {
     fn get_expiry_date(&self) -> u64 {
         // TODO(hansl): evaluate if we need this on the agent side (my hunch is we don't).
         let permitted_drift = Duration::from_secs(60);
-        (self.ingress_expiry_duration
-            + std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("Time wrapped around.")
-            - permitted_drift)
-            .as_nanos() as u64
+        (self
+            .ingress_expiry_duration
+            .as_nanos()
+            .saturating_add(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("Time wrapped around.")
+                    .as_nanos(),
+            )
+            .saturating_sub(permitted_drift.as_nanos())) as u64
     }
 
-    fn construct_message(&self, request_id: &RequestId) -> Vec<u8> {
-        let mut buf = vec![];
-        buf.extend_from_slice(IC_REQUEST_DOMAIN_SEPARATOR);
-        buf.extend_from_slice(request_id.as_slice());
-        buf
+    /// Return the principal of the identity.
+    pub fn get_principal(&self) -> Result<Principal, String> {
+        self.identity.sender()
     }
 
     async fn query_endpoint<A>(
         &self,
         effective_canister_id: Principal,
-        request: QueryContent,
+        serialized_bytes: Vec<u8>,
     ) -> Result<A, AgentError>
     where
         A: serde::de::DeserializeOwned,
     {
-        let request_id = to_request_id(&request)?;
-        let msg = self.construct_message(&request_id);
-        let signature = self.identity.sign(&msg).map_err(AgentError::SigningError)?;
-
-        let envelope = Envelope {
-            content: request,
-            sender_pubkey: signature.public_key,
-            sender_sig: signature.signature,
-        };
-
-        let mut serialized_bytes = Vec::new();
-        let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
-        serializer.self_describe()?;
-        envelope.serialize(&mut serializer)?;
-
         let bytes = self
             .transport
             .query(effective_canister_id, serialized_bytes)
@@ -278,26 +360,11 @@ impl Agent {
     async fn read_state_endpoint<A>(
         &self,
         effective_canister_id: Principal,
-        request: ReadStateContent,
+        serialized_bytes: Vec<u8>,
     ) -> Result<A, AgentError>
     where
         A: serde::de::DeserializeOwned,
     {
-        let request_id = to_request_id(&request)?;
-        let msg = self.construct_message(&request_id);
-        let signature = self.identity.sign(&msg).map_err(AgentError::SigningError)?;
-
-        let envelope = Envelope {
-            content: request,
-            sender_pubkey: signature.public_key,
-            sender_sig: signature.signature,
-        };
-
-        let mut serialized_bytes = Vec::new();
-        let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
-        serializer.self_describe()?;
-        envelope.serialize(&mut serializer)?;
-
         let bytes = self
             .transport
             .read_state(effective_canister_id, serialized_bytes)
@@ -308,23 +375,9 @@ impl Agent {
     async fn call_endpoint(
         &self,
         effective_canister_id: Principal,
-        request: CallRequestContent,
+        request_id: RequestId,
+        serialized_bytes: Vec<u8>,
     ) -> Result<RequestId, AgentError> {
-        let request_id = to_request_id(&request)?;
-        let msg = self.construct_message(&request_id);
-        let signature = self.identity.sign(&msg).map_err(AgentError::SigningError)?;
-
-        let envelope = Envelope {
-            content: request,
-            sender_pubkey: signature.public_key,
-            sender_sig: signature.signature,
-        };
-
-        let mut serialized_bytes = Vec::new();
-        let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
-        serializer.self_describe()?;
-        envelope.serialize(&mut serializer)?;
-
         self.transport
             .call(effective_canister_id, serialized_bytes, request_id)
             .await?;
@@ -341,26 +394,59 @@ impl Agent {
         arg: &[u8],
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<Vec<u8>, AgentError> {
-        self.query_endpoint::<replica_api::QueryResponse>(
-            effective_canister_id,
-            QueryContent::QueryRequest {
-                sender: self.identity.sender().map_err(AgentError::SigningError)?,
-                canister_id: canister_id.clone(),
-                method_name: method_name.to_string(),
-                arg: arg.to_vec(),
-                ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
-            },
-        )
-        .await
-        .and_then(|response| match response {
-            replica_api::QueryResponse::Replied { reply } => Ok(reply.arg),
-            replica_api::QueryResponse::Rejected {
-                reject_code,
-                reject_message,
-            } => Err(AgentError::ReplicaError {
-                reject_code,
-                reject_message,
-            }),
+        let request = self.query_content(canister_id, method_name, arg, ingress_expiry_datetime)?;
+        let serialized_bytes = sign_request(&request, self.identity.clone())?;
+        self.query_endpoint::<replica_api::QueryResponse>(effective_canister_id, serialized_bytes)
+            .await
+            .and_then(|response| match response {
+                replica_api::QueryResponse::Replied { reply } => Ok(reply.arg),
+                replica_api::QueryResponse::Rejected {
+                    reject_code,
+                    reject_message,
+                } => Err(AgentError::ReplicaError {
+                    reject_code,
+                    reject_message,
+                }),
+            })
+    }
+
+    /// Send the signed query to the network. Will return a byte vector.
+    /// The bytes will be checked if it is a valid query.
+    /// If you want to inspect the fields of the query call, use [`signed_query_inspect`] before calling this method.
+    pub async fn query_signed(
+        &self,
+        effective_canister_id: Principal,
+        signed_query: Vec<u8>,
+    ) -> Result<Vec<u8>, AgentError> {
+        let _envelope: Envelope<QueryContent> =
+            serde_cbor::from_slice(&signed_query).map_err(AgentError::InvalidCborData)?;
+        self.query_endpoint::<replica_api::QueryResponse>(effective_canister_id, signed_query)
+            .await
+            .and_then(|response| match response {
+                replica_api::QueryResponse::Replied { reply } => Ok(reply.arg),
+                replica_api::QueryResponse::Rejected {
+                    reject_code,
+                    reject_message,
+                } => Err(AgentError::ReplicaError {
+                    reject_code,
+                    reject_message,
+                }),
+            })
+    }
+
+    fn query_content(
+        &self,
+        canister_id: &Principal,
+        method_name: &str,
+        arg: &[u8],
+        ingress_expiry_datetime: Option<u64>,
+    ) -> Result<QueryContent, AgentError> {
+        Ok(QueryContent::QueryRequest {
+            sender: self.identity.sender().map_err(AgentError::SigningError)?,
+            canister_id: *canister_id,
+            method_name: method_name.to_string(),
+            arg: arg.to_vec(),
+            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
         })
     }
 
@@ -374,40 +460,141 @@ impl Agent {
         arg: &[u8],
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<RequestId, AgentError> {
-        self.call_endpoint(
-            effective_canister_id,
-            CallRequestContent::CallRequest {
-                canister_id: canister_id.clone(),
-                method_name: method_name.into(),
-                arg: arg.to_vec(),
-                nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
-                sender: self.identity.sender().map_err(AgentError::SigningError)?,
-                ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
-            },
-        )
-        .await
+        let request =
+            self.update_content(canister_id, method_name, arg, ingress_expiry_datetime)?;
+        let request_id = to_request_id(&request)?;
+        let serialized_bytes = sign_request(&request, self.identity.clone())?;
+
+        self.call_endpoint(effective_canister_id, request_id, serialized_bytes)
+            .await
+    }
+
+    /// Send the signed update to the network. Will return a [`RequestId`].
+    /// The bytes will be checked to verify that it is a valid update.
+    /// If you want to inspect the fields of the update, use [`signed_update_inspect`] before calling this method.
+    pub async fn update_signed(
+        &self,
+        effective_canister_id: Principal,
+        signed_update: Vec<u8>,
+    ) -> Result<RequestId, AgentError> {
+        let envelope: Envelope<CallRequestContent> =
+            serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
+        let request_id = to_request_id(&envelope.content)?;
+        self.call_endpoint(effective_canister_id, request_id, signed_update)
+            .await
+    }
+
+    fn update_content(
+        &self,
+        canister_id: &Principal,
+        method_name: &str,
+        arg: &[u8],
+        ingress_expiry_datetime: Option<u64>,
+    ) -> Result<CallRequestContent, AgentError> {
+        Ok(CallRequestContent::CallRequest {
+            canister_id: *canister_id,
+            method_name: method_name.into(),
+            arg: arg.to_vec(),
+            nonce: self.nonce_factory.generate().map(|b| b.as_slice().into()),
+            sender: self.identity.sender().map_err(AgentError::SigningError)?,
+            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
+        })
+    }
+
+    // Call request_status on the RequestId once and classify the result
+    pub async fn poll(
+        &self,
+        request_id: &RequestId,
+        effective_canister_id: &Principal,
+    ) -> Result<PollResult, AgentError> {
+        match self
+            .request_status_raw(&request_id, *effective_canister_id)
+            .await?
+        {
+            RequestStatusResponse::Unknown => Ok(PollResult::Submitted),
+
+            RequestStatusResponse::Received | RequestStatusResponse::Processing => {
+                Ok(PollResult::Accepted)
+            }
+
+            RequestStatusResponse::Replied {
+                reply: Replied::CallReplied(arg),
+            } => Ok(PollResult::Completed(arg)),
+
+            RequestStatusResponse::Rejected {
+                reject_code,
+                reject_message,
+            } => Err(AgentError::ReplicaError {
+                reject_code,
+                reject_message,
+            }),
+            RequestStatusResponse::Done => Err(AgentError::RequestStatusDoneNoReply(String::from(
+                *request_id,
+            ))),
+        }
+    }
+
+    // Call request_status on the RequestId in a loop and return the response as a byte vector.
+    pub async fn wait<W: Waiter>(
+        &self,
+        request_id: RequestId,
+        effective_canister_id: &Principal,
+        mut waiter: W,
+    ) -> Result<Vec<u8>, AgentError> {
+        waiter.start();
+        let mut request_accepted = false;
+        loop {
+            match self.poll(&request_id, effective_canister_id).await? {
+                PollResult::Submitted => {}
+                PollResult::Accepted => {
+                    if !request_accepted {
+                        // The system will return RequestStatusResponse::Unknown
+                        // (PollResult::Submitted) until the request is accepted
+                        // and we generally cannot know how long that will take.
+                        // State transitions between Received and Processing may be
+                        // instantaneous. Therefore, once we know the request is accepted,
+                        // we should restart the waiter so the request does not time out.
+
+                        waiter
+                            .restart()
+                            .map_err(|_| AgentError::WaiterRestartError())?;
+                        request_accepted = true;
+                    }
+                }
+                PollResult::Completed(result) => return Ok(result),
+            };
+
+            waiter
+                .async_wait()
+                .await
+                .map_err(|_| AgentError::TimeoutWaitingForResponse())?;
+        }
     }
 
     async fn read_state_raw(
         &self,
         paths: Vec<Vec<Label>>,
         effective_canister_id: Principal,
-    ) -> Result<Certificate, AgentError> {
+    ) -> Result<Certificate<'_>, AgentError> {
+        let request = self.read_state_content(paths)?;
+        let serialized_bytes = sign_request(&request, self.identity.clone())?;
+
         let read_state_response: ReadStateResponse = self
-            .read_state_endpoint(
-                effective_canister_id,
-                ReadStateContent::ReadStateRequest {
-                    sender: self.identity.sender().map_err(AgentError::SigningError)?,
-                    paths,
-                    ingress_expiry: self.get_expiry_date(),
-                },
-            )
+            .read_state_endpoint(effective_canister_id, serialized_bytes)
             .await?;
 
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
         self.verify(&cert)?;
         Ok(cert)
+    }
+
+    fn read_state_content(&self, paths: Vec<Vec<Label>>) -> Result<ReadStateContent, AgentError> {
+        Ok(ReadStateContent::ReadStateRequest {
+            sender: self.identity.sender().map_err(AgentError::SigningError)?,
+            paths,
+            ingress_expiry: self.get_expiry_date(),
+        })
     }
 
     fn verify(&self, cert: &Certificate) -> Result<(), AgentError> {
@@ -457,7 +644,7 @@ impl Agent {
             path.into(),
         ]];
 
-        let cert = self.read_state_raw(paths, canister_id.clone()).await?;
+        let cert = self.read_state_raw(paths, canister_id).await?;
 
         lookup_canister_info(cert, canister_id, path)
     }
@@ -475,6 +662,27 @@ impl Agent {
         lookup_request_status(cert, request_id)
     }
 
+    /// Send the signed request_status to the network. Will return [`RequestStatusResponse`].
+    /// The bytes will be checked to verify that it is a valid request_status.
+    /// If you want to inspect the fields of the request_status, use [`signed_request_status_inspect`] before calling this method.
+    pub async fn request_status_signed(
+        &self,
+        request_id: &RequestId,
+        effective_canister_id: Principal,
+        signed_request_status: Vec<u8>,
+    ) -> Result<RequestStatusResponse, AgentError> {
+        let _envelope: Envelope<ReadStateContent> =
+            serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
+        let read_state_response: ReadStateResponse = self
+            .read_state_endpoint(effective_canister_id, signed_request_status)
+            .await?;
+
+        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
+            .map_err(AgentError::InvalidCborData)?;
+        self.verify(&cert)?;
+        lookup_request_status(cert, request_id)
+    }
+
     /// Returns an UpdateBuilder enabling the construction of an update call without
     /// passing all arguments.
     pub fn update<S: Into<String>>(
@@ -482,7 +690,7 @@ impl Agent {
         canister_id: &Principal,
         method_name: S,
     ) -> UpdateBuilder {
-        UpdateBuilder::new(self, canister_id.clone(), method_name.into())
+        UpdateBuilder::new(self, *canister_id, method_name.into())
     }
 
     /// Calls and returns the information returned by the status endpoint of a replica.
@@ -498,8 +706,228 @@ impl Agent {
     /// Returns a QueryBuilder enabling the construction of a query call without
     /// passing all arguments.
     pub fn query<S: Into<String>>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder {
-        QueryBuilder::new(self, canister_id.clone(), method_name.into())
+        QueryBuilder::new(self, *canister_id, method_name.into())
     }
+
+    /// Sign a request_status call. This will return a [`signed::SignedRequestStatus`]
+    /// which contains all fields of the request_status and the signed request_status in CBOR encoding
+    pub fn sign_request_status(
+        &self,
+        effective_canister_id: Principal,
+        request_id: RequestId,
+    ) -> Result<signed::SignedRequestStatus, AgentError> {
+        let paths: Vec<Vec<Label>> =
+            vec![vec!["request_status".into(), request_id.to_vec().into()]];
+        let read_state_content = self.read_state_content(paths)?;
+        let signed_request_status = sign_request(&read_state_content, self.identity.clone())?;
+        match read_state_content {
+            ReadStateContent::ReadStateRequest {
+                ingress_expiry,
+                sender,
+                paths: _path,
+            } => Ok(signed::SignedRequestStatus {
+                ingress_expiry,
+                sender,
+                effective_canister_id,
+                request_id,
+                signed_request_status,
+            }),
+        }
+    }
+}
+
+fn construct_message(request_id: &RequestId) -> Vec<u8> {
+    let mut buf = vec![];
+    buf.extend_from_slice(IC_REQUEST_DOMAIN_SEPARATOR);
+    buf.extend_from_slice(request_id.as_slice());
+    buf
+}
+
+fn sign_request<'a, V>(request: &V, identity: Arc<dyn Identity>) -> Result<Vec<u8>, AgentError>
+where
+    V: 'a + Serialize,
+{
+    let request_id = to_request_id(&request)?;
+    let msg = construct_message(&request_id);
+    let signature = identity.sign(&msg).map_err(AgentError::SigningError)?;
+
+    let envelope = Envelope {
+        content: request,
+        sender_pubkey: signature.public_key,
+        sender_sig: signature.signature,
+    };
+
+    let mut serialized_bytes = Vec::new();
+    let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
+    serializer.self_describe()?;
+    envelope.serialize(&mut serializer)?;
+
+    Ok(serialized_bytes)
+}
+
+/// Inspect the bytes to be sent as a query
+/// Return Ok only when the bytes can be deserialized as a query and all fields match with the arguments
+pub fn signed_query_inspect(
+    sender: Principal,
+    canister_id: Principal,
+    method_name: &str,
+    arg: &[u8],
+    ingress_expiry: u64,
+    signed_query: Vec<u8>,
+) -> Result<(), AgentError> {
+    let envelope: Envelope<QueryContent> =
+        serde_cbor::from_slice(&signed_query).map_err(AgentError::InvalidCborData)?;
+    match envelope.content {
+        QueryContent::QueryRequest {
+            ingress_expiry: ingress_expiry_cbor,
+            sender: sender_cbor,
+            canister_id: canister_id_cbor,
+            method_name: method_name_cbor,
+            arg: arg_cbor,
+        } => {
+            if ingress_expiry != ingress_expiry_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "ingress_expiry".to_string(),
+                    value_arg: ingress_expiry.to_string(),
+                    value_cbor: ingress_expiry_cbor.to_string(),
+                });
+            }
+            if sender != sender_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "sender".to_string(),
+                    value_arg: sender.to_string(),
+                    value_cbor: sender_cbor.to_string(),
+                });
+            }
+            if canister_id != canister_id_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "canister_id".to_string(),
+                    value_arg: canister_id.to_string(),
+                    value_cbor: canister_id_cbor.to_string(),
+                });
+            }
+            if method_name != method_name_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "method_name".to_string(),
+                    value_arg: method_name.to_string(),
+                    value_cbor: method_name_cbor,
+                });
+            }
+            if arg != arg_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "arg".to_string(),
+                    value_arg: format!("{:?}", arg),
+                    value_cbor: format!("{:?}", arg_cbor),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Inspect the bytes to be sent as an update
+/// Return Ok only when the bytes can be deserialized as an update and all fields match with the arguments
+pub fn signed_update_inspect(
+    sender: Principal,
+    canister_id: Principal,
+    method_name: &str,
+    arg: &[u8],
+    ingress_expiry: u64,
+    signed_update: Vec<u8>,
+) -> Result<(), AgentError> {
+    let envelope: Envelope<CallRequestContent> =
+        serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
+    match envelope.content {
+        CallRequestContent::CallRequest {
+            nonce: _nonce,
+            ingress_expiry: ingress_expiry_cbor,
+            sender: sender_cbor,
+            canister_id: canister_id_cbor,
+            method_name: method_name_cbor,
+            arg: arg_cbor,
+        } => {
+            if ingress_expiry != ingress_expiry_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "ingress_expiry".to_string(),
+                    value_arg: ingress_expiry.to_string(),
+                    value_cbor: ingress_expiry_cbor.to_string(),
+                });
+            }
+            if sender != sender_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "sender".to_string(),
+                    value_arg: sender.to_string(),
+                    value_cbor: sender_cbor.to_string(),
+                });
+            }
+            if canister_id != canister_id_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "canister_id".to_string(),
+                    value_arg: canister_id.to_string(),
+                    value_cbor: canister_id_cbor.to_string(),
+                });
+            }
+            if method_name != method_name_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "method_name".to_string(),
+                    value_arg: method_name.to_string(),
+                    value_cbor: method_name_cbor,
+                });
+            }
+            if arg != arg_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "arg".to_string(),
+                    value_arg: format!("{:?}", arg),
+                    value_cbor: format!("{:?}", arg_cbor),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Inspect the bytes to be sent as a request_status
+/// Return Ok only when the bytes can be deserialized as a request_status and all fields match with the arguments
+pub fn signed_request_status_inspect(
+    sender: Principal,
+    request_id: &RequestId,
+    ingress_expiry: u64,
+    signed_request_status: Vec<u8>,
+) -> Result<(), AgentError> {
+    let paths: Vec<Vec<Label>> = vec![vec!["request_status".into(), request_id.to_vec().into()]];
+    let envelope: Envelope<ReadStateContent> =
+        serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
+    match envelope.content {
+        ReadStateContent::ReadStateRequest {
+            ingress_expiry: ingress_expiry_cbor,
+            sender: sender_cbor,
+            paths: paths_cbor,
+        } => {
+            if ingress_expiry != ingress_expiry_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "ingress_expiry".to_string(),
+                    value_arg: ingress_expiry.to_string(),
+                    value_cbor: ingress_expiry_cbor.to_string(),
+                });
+            }
+            if sender != sender_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "sender".to_string(),
+                    value_arg: sender.to_string(),
+                    value_cbor: sender_cbor.to_string(),
+                });
+            }
+
+            if paths != paths_cbor {
+                return Err(AgentError::CallDataMismatch {
+                    field: "paths".to_string(),
+                    value_arg: format!("{:?}", paths),
+                    value_cbor: format!("{:?}", paths_cbor),
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 /// A Query Request Builder.
@@ -518,7 +946,7 @@ impl<'agent> QueryBuilder<'agent> {
     pub fn new(agent: &'agent Agent, canister_id: Principal, method_name: String) -> Self {
         Self {
             agent,
-            effective_canister_id: canister_id.clone(),
+            effective_canister_id: canister_id,
             canister_id,
             method_name,
             arg: vec![],
@@ -556,11 +984,14 @@ impl<'agent> QueryBuilder<'agent> {
         let permitted_drift = Duration::from_secs(60);
         self.ingress_expiry_datetime = Some(
             (duration
-                + std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("Time wrapped around")
-                - permitted_drift)
-                .as_nanos() as u64,
+                .as_nanos()
+                .saturating_add(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .expect("Time wrapped around")
+                        .as_nanos(),
+                )
+                .saturating_sub(permitted_drift.as_nanos())) as u64,
         );
         self
     }
@@ -570,15 +1001,78 @@ impl<'agent> QueryBuilder<'agent> {
         self.agent
             .query_raw(
                 &self.canister_id,
-                self.effective_canister_id.clone(),
+                self.effective_canister_id,
                 self.method_name.as_str(),
                 self.arg.as_slice(),
                 self.ingress_expiry_datetime,
             )
             .await
     }
+
+    /// Sign a query call. This will return a [`signed::SignedQuery`]
+    /// which contains all fields of the query and the signed query in CBOR encoding
+    pub fn sign(&self) -> Result<signed::SignedQuery, AgentError> {
+        let request = self.agent.query_content(
+            &self.canister_id,
+            &self.method_name,
+            &self.arg,
+            self.ingress_expiry_datetime,
+        )?;
+
+        let signed_query = sign_request(&request, self.agent.identity.clone())?;
+        match request {
+            QueryContent::QueryRequest {
+                ingress_expiry,
+                sender,
+                canister_id,
+                method_name,
+                arg,
+            } => Ok(signed::SignedQuery {
+                ingress_expiry,
+                sender,
+                canister_id,
+                method_name,
+                arg,
+                effective_canister_id: self.effective_canister_id,
+                signed_query,
+            }),
+        }
+    }
 }
 
+pub struct UpdateCall<'agent> {
+    agent: &'agent Agent,
+    request_id: Pin<Box<dyn Future<Output = Result<RequestId, AgentError>> + Send + 'agent>>,
+    effective_canister_id: Principal,
+}
+impl Future for UpdateCall<'_> {
+    type Output = Result<RequestId, AgentError>;
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        self.request_id.as_mut().poll(cx)
+    }
+}
+impl UpdateCall<'_> {
+    fn and_wait<'out, W>(
+        self,
+        waiter: W,
+    ) -> Pin<Box<dyn core::future::Future<Output = Result<Vec<u8>, AgentError>> + Send + 'out>>
+    where
+        Self: 'out,
+        W: Waiter + 'out,
+    {
+        async fn run<W>(_self: UpdateCall<'_>, waiter: W) -> Result<Vec<u8>, AgentError>
+        where
+            W: Waiter,
+        {
+            let request_id = _self.request_id.await?;
+            _self
+                .agent
+                .wait(request_id, &_self.effective_canister_id, waiter)
+                .await
+        }
+        Box::pin(run(self, waiter))
+    }
+}
 /// An Update Request Builder.
 ///
 /// This makes it easier to do update calls without actually passing all arguments or specifying
@@ -596,7 +1090,7 @@ impl<'agent> UpdateBuilder<'agent> {
     pub fn new(agent: &'agent Agent, canister_id: Principal, method_name: String) -> Self {
         Self {
             agent,
-            effective_canister_id: canister_id.clone(),
+            effective_canister_id: canister_id,
             canister_id,
             method_name,
             arg: vec![],
@@ -634,86 +1128,71 @@ impl<'agent> UpdateBuilder<'agent> {
         let permitted_drift = Duration::from_secs(60);
         self.ingress_expiry_datetime = Some(
             (duration
-                + std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("Time wrapped around")
-                - permitted_drift)
-                .as_nanos() as u64,
+                .as_nanos()
+                .saturating_add(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .expect("Time wrapped around")
+                        .as_nanos(),
+                )
+                .saturating_sub(permitted_drift.as_nanos())) as u64,
         );
         self
     }
 
     /// Make an update call. This will call request_status on the RequestId in a loop and return
     /// the response as a byte vector.
-    pub async fn call_and_wait<W: Waiter>(&self, mut waiter: W) -> Result<Vec<u8>, AgentError> {
-        let request_id = self
-            .agent
-            .update_raw(
-                &self.canister_id,
-                self.effective_canister_id.clone(),
-                self.method_name.as_str(),
-                self.arg.as_slice(),
-                self.ingress_expiry_datetime,
-            )
-            .await?;
-        waiter.start();
-        let mut request_accepted = false;
-        loop {
-            match self
-                .agent
-                .request_status_raw(&request_id, self.effective_canister_id.clone())
-                .await?
-            {
-                RequestStatusResponse::Replied {
-                    reply: Replied::CallReplied(arg),
-                } => return Ok(arg),
-                RequestStatusResponse::Rejected {
-                    reject_code,
-                    reject_message,
-                } => {
-                    return Err(AgentError::ReplicaError {
-                        reject_code,
-                        reject_message,
-                    })
-                }
-                RequestStatusResponse::Unknown => (),
-                RequestStatusResponse::Received | RequestStatusResponse::Processing => {
-                    // The system will return Unknown until the request is accepted
-                    // and we generally cannot know how long that will take.
-                    // State transitions between Received and Processing may be
-                    // instantaneous. Therefore, once we know the request is accepted,
-                    // we restart the waiter so the request does not time out.
-                    if !request_accepted {
-                        waiter
-                            .restart()
-                            .map_err(|_| AgentError::WaiterRestartError())?;
-                        request_accepted = true;
-                    }
-                }
-                RequestStatusResponse::Done => {
-                    return Err(AgentError::RequestStatusDoneNoReply(String::from(
-                        request_id,
-                    )))
-                }
-            };
-
-            waiter
-                .wait()
-                .map_err(|_| AgentError::TimeoutWaitingForResponse())?;
-        }
+    pub async fn call_and_wait<W: Waiter>(&self, waiter: W) -> Result<Vec<u8>, AgentError> {
+        self.call().and_wait(waiter).await
     }
 
     /// Make an update call. This will return a RequestId.
     /// The RequestId should then be used for request_status (most likely in a loop).
-    pub async fn call(&self) -> Result<RequestId, AgentError> {
-        self.agent
-            .update_raw(
-                &self.canister_id,
-                self.effective_canister_id.clone(),
-                self.method_name.as_str(),
-                self.arg.as_slice(),
-                self.ingress_expiry_datetime,
-            )
-            .await
+    pub fn call(&self) -> UpdateCall {
+        let request_id_future = self.agent.update_raw(
+            &self.canister_id,
+            self.effective_canister_id,
+            self.method_name.as_str(),
+            self.arg.as_slice(),
+            self.ingress_expiry_datetime,
+        );
+        UpdateCall {
+            agent: &self.agent,
+            request_id: Box::pin(request_id_future),
+            effective_canister_id: self.effective_canister_id,
+        }
+    }
+
+    /// Sign a update call. This will return a [`signed::SignedUpdate`]
+    /// which contains all fields of the update and the signed update in CBOR encoding
+    pub fn sign(&self) -> Result<signed::SignedUpdate, AgentError> {
+        let request = self.agent.update_content(
+            &self.canister_id,
+            &self.method_name,
+            &self.arg,
+            self.ingress_expiry_datetime,
+        )?;
+        let signed_update = sign_request(&request, self.agent.identity.clone())?;
+        let request_id = to_request_id(&request)?;
+        match request {
+            CallRequestContent::CallRequest {
+                nonce,
+                ingress_expiry,
+                sender,
+                canister_id,
+                method_name,
+                arg,
+            } => Ok(signed::SignedUpdate {
+                nonce,
+                ingress_expiry,
+                sender,
+                canister_id,
+                method_name,
+                arg,
+                effective_canister_id: self.effective_canister_id,
+                signed_update,
+                request_id,
+            }),
+        }
     }
 }

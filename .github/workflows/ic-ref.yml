@@ -3,12 +3,8 @@ name: ic-ref
 on:
   push:
     branches:
-      - next
-  pull_request_target:
-  # Also run on every pull_request that changes the workflow, as the repo.
+      - main
   pull_request:
-    paths:
-      - '.github/**'
 
 jobs:
   test:
@@ -19,9 +15,9 @@ jobs:
         include:
           - build: linux-stable
             ghc: '8.8.4'
-            spec: '0.16.0'
+            spec: '0.18.0'
             os: ubuntu-latest
-            rust: 1.47.0
+            rust: 1.52.1
 
     steps:
       - uses: actions/checkout@v2
@@ -29,18 +25,14 @@ jobs:
           path: main
       - uses: actions/checkout@v2
         with:
-          repository: 'dfinity-lab/ic-ref'
-          # Personal Read-only Access Token created by hans.larsen@dfinity.org
-          token: ${{ secrets.IC_REF_TOKEN }}
-          path: ic-ref
+          repository: 'dfinity/ic-hs'
+          path: ic-hs
           ref: ${{ matrix.spec }}
       - uses: actions/checkout@v2
         with:
           repository: 'dfinity/wallet-rs'
-          # Personal Read-only Access Token created by hans.larsen@dfinity.org
-          token: ${{ secrets.IC_REF_TOKEN }}
           path: wallet-rs
-          ref: f41159994be17c2832a3f4b55b6aa38bef506156
+          ref: 9ef38bb7cd0fe17cda749bf8e9bbec5723da0e95
 
       - name: Cache ~/.cabal/store
         uses: actions/cache@v2
@@ -71,20 +63,19 @@ jobs:
           rustup default ${{ matrix.rust }}
           rustup target add wasm32-unknown-unknown
 
-      - name: Build ic-ref
+      - name: Build ic-hs
         run: |
-          ls -l /opt/ghc/
-          export PATH=/opt/ghc/bin:$PATH
+          ghc --version
           cabal --version
           ghc-${{ matrix.ghc }} --version
           mkdir -p $HOME/bin
-          cd ic-ref/impl
+          cd ic-hs
           cabal update
           cabal install exe:ic-ref -w ghc-${{ matrix.ghc }} --overwrite-policy=always  --installdir=$HOME/bin
 
       - name: Build universal-canister
         run: |
-          cd ic-ref/universal-canister
+          cd ic-hs/universal-canister
           cargo build --target wasm32-unknown-unknown --release
           cp target/wasm32-unknown-unknown/release/universal_canister.wasm $HOME/canister.wasm
 
