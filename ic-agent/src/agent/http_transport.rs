@@ -28,6 +28,9 @@ pub struct ReqwestHttpReplicaV2Transport {
     password_manager: Option<Arc<dyn PasswordManager>>,
 }
 
+const IC0_DOMAIN: &str = "ic0.app";
+const IC0_SUB_DOMAIN: &str = ".ic0.app";
+
 impl ReqwestHttpReplicaV2Transport {
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
         let mut tls_config = rustls::ClientConfig::new();
@@ -43,7 +46,15 @@ impl ReqwestHttpReplicaV2Transport {
 
         Ok(Self {
             url: reqwest::Url::parse(&url)
-                .and_then(|url| url.join("api/v2/"))
+                .and_then(|mut url| {
+                    // rewrite *.ic0.app to ic0.app
+                    if let Some(domain) = url.domain() {
+                        if domain.ends_with(IC0_SUB_DOMAIN) {
+                            url.set_host(Some(IC0_DOMAIN))?;
+                        }
+                    }
+                    url.join("api/v2/")
+                })
                 .map_err(|_| AgentError::InvalidReplicaUrl(url.clone()))?,
             client: reqwest::Client::builder()
                 .use_preconfigured_tls(tls_config)
@@ -238,5 +249,35 @@ impl super::ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
         }
 
         Box::pin(run(self))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::ReqwestHttpReplicaV2Transport;
+
+    #[test]
+    fn redirect() {
+        fn test(base: &str, result: &str) {
+            let t = ReqwestHttpReplicaV2Transport::create(base).unwrap();
+            assert_eq!(t.url.as_str(), result, "{}", base);
+        }
+
+        test("https://ic0.app", "https://ic0.app/api/v2/");
+        test("https://IC0.app", "https://ic0.app/api/v2/");
+        test("https://foo.ic0.app", "https://ic0.app/api/v2/");
+        test("https://foo.IC0.app", "https://ic0.app/api/v2/");
+        test("https://foo.Ic0.app", "https://ic0.app/api/v2/");
+        test("https://foo.iC0.app", "https://ic0.app/api/v2/");
+        test("https://foo.bar.ic0.app", "https://ic0.app/api/v2/");
+        test("https://ic0.app/foo/", "https://ic0.app/foo/api/v2/");
+        test("https://foo.ic0.app/foo/", "https://ic0.app/foo/api/v2/");
+
+        test("https://ic1.app", "https://ic1.app/api/v2/");
+        test("https://foo.ic1.app", "https://foo.ic1.app/api/v2/");
+        test("https://ic0.app.ic1.app", "https://ic0.app.ic1.app/api/v2/");
+
+        test("https://fooic0.app", "https://fooic0.app/api/v2/");
+        test("https://fooic0.app.ic0.app", "https://ic0.app/api/v2/");
     }
 }
