@@ -649,6 +649,23 @@ impl Agent {
         lookup_canister_info(cert, canister_id, path)
     }
 
+    pub async fn read_state_canister_metadata(
+        &self,
+        canister_id: Principal,
+        path: &str,
+    ) -> Result<Vec<u8>, AgentError> {
+        let paths: Vec<Vec<Label>> = vec![vec![
+            "canister".into(),
+            canister_id.clone().into(),
+            "metadata".into(),
+            path.into(),
+        ]];
+
+        let cert = self.read_state_raw(paths, canister_id).await?;
+
+        lookup_canister_info(cert, canister_id, path)
+    }
+
     pub async fn request_status_raw(
         &self,
         request_id: &RequestId,
