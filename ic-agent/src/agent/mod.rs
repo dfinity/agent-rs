@@ -35,7 +35,8 @@ use status::Status;
 
 use crate::{
     agent::response_authentication::{
-        extract_der, initialize_bls, lookup_canister_info, lookup_request_status, lookup_value,
+        extract_der, initialize_bls, lookup_canister_info, lookup_canister_metadata,
+        lookup_request_status, lookup_value,
     },
     bls::bls12381::bls,
 };
@@ -663,7 +664,7 @@ impl Agent {
 
         let cert = self.read_state_raw(paths, canister_id).await?;
 
-        lookup_canister_info(cert, canister_id, path)
+        lookup_canister_metadata(cert, canister_id, path)
     }
 
     pub async fn request_status_raw(
