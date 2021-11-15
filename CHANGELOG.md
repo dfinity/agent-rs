@@ -7,9 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2021-11-15
+
+Unified all version numbers and removed the zzz-release tool.
+
 ## [0.9.0] - 2021-10-06
 
-### Added
+### ic-agent
+
+#### Added
 
 - Added field `replica_health_status` to `Status`.
     - typical values

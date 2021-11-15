@@ -7,6 +7,5 @@ members = [
     "ic-utils",
     "icx",
     "icx-asset",
-    "ref-tests",
-    "zzz-release",
+    "ref-tests"
 ]
