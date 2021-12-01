@@ -459,7 +459,8 @@ impl Agent {
         method_name: &str,
         arg: &[u8],
         ingress_expiry_datetime: Option<u64>,
-    ) -> Result<RequestId, AgentError> {
+    ) -> Result<RequestId, AgentError>
+    {
         let request =
             self.update_content(canister_id, method_name, arg, ingress_expiry_datetime)?;
         let request_id = to_request_id(&request)?;
@@ -467,6 +468,60 @@ impl Agent {
 
         self.call_endpoint(effective_canister_id, request_id, serialized_bytes)
             .await
+    }
+
+    /// The simplest way to do an update call; sends a byte array and will return a RequestId.
+/// The RequestId should then be used for request_status (most likely in a loop).
+    fn update_raw_with_retry<'out, W>(
+        &self,
+        canister_id: &Principal,
+        effective_canister_id: Principal,
+        method_name: &str,
+        arg: &[u8],
+        ingress_expiry_datetime: Option<u64>,
+        waiter: W
+    ) -> Pin<Box<dyn core::future::Future<Output = Result<RequestId, AgentError>> + Send + 'out>>
+        where
+            Self: 'out,
+            W: Waiter + 'out,
+    {
+        async fn run<W>(_self: &Agent,
+                        canister_id: &Principal,
+                        effective_canister_id: Principal,
+                        method_name: &str,
+                        arg: &[u8],
+                        ingress_expiry_datetime: Option<u64>,
+                        waiter: W) -> Result<RequestId, AgentError>
+        where
+            W: Waiter,
+        {
+            let request =
+                _self.update_content(canister_id, method_name, arg, ingress_expiry_datetime)?;
+            let request_id = to_request_id(&request)?;
+            let serialized_bytes = sign_request(&request, _self.identity.clone())?;
+
+            loop {
+                let x = _self.call_endpoint(effective_canister_id, request_id, serialized_bytes.clone())
+                    .await;
+            }
+        }
+        Box::pin(run(self, canister_id, effective_canister_id, method_name, arg, ingress_expiry_datetime, waiter))
+        /*
+        async fn run<W>(_self: UpdateCall<'_>, waiter: W) -> Result<Vec<u8>, AgentError>
+        where
+            W: Waiter,
+        {
+            let request_id = _self.request_id.await?;
+            _self
+                .agent
+                .wait(request_id, &_self.effective_canister_id, waiter)
+                .await
+        }
+        Box::pin(run(self, waiter))
+
+         */
+
+
     }
 
     /// Send the signed update to the network. Will return a [`RequestId`].
@@ -1155,6 +1210,24 @@ impl<'agent> UpdateBuilder<'agent> {
             self.method_name.as_str(),
             self.arg.as_slice(),
             self.ingress_expiry_datetime,
+        );
+        UpdateCall {
+            agent: &self.agent,
+            request_id: Box::pin(request_id_future),
+            effective_canister_id: self.effective_canister_id,
+        }
+    }
+
+    /// Make an update call. This will return a RequestId.
+/// The RequestId should then be used for request_status (most likely in a loop).
+    pub fn call_with_retry<W: Waiter>(&self, waiter: W) -> UpdateCall {
+        let request_id_future = self.agent.update_raw_with_retry(
+            &self.canister_id,
+            self.effective_canister_id,
+            self.method_name.as_str(),
+            self.arg.as_slice(),
+            self.ingress_expiry_datetime,
+            waiter
         );
         UpdateCall {
             agent: &self.agent,
