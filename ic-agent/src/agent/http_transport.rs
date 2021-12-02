@@ -2,9 +2,9 @@
 #![cfg(feature = "reqwest")]
 
 use crate::{agent::agent_error::HttpErrorPayload, ic_types::Principal, AgentError, RequestId};
+use hyper_rustls::ConfigBuilderExt;
 use reqwest::Method;
 use std::{future::Future, pin::Pin, sync::Arc};
-use hyper_rustls::ConfigBuilderExt;
 
 /// Implemented by the Agent environment to cache and update an HTTP Auth password.
 /// It returns a tuple of `(username, password)`.
