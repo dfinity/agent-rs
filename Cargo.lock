@@ -810,7 +810,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "url",
- "webpki-roots 0.21.1",
 ]
 
 [[package]]
