@@ -494,7 +494,7 @@ impl Agent {
             {
                 Ok(result) => return Ok(result),
                 Err(agent_err) => {
-                    if let Err(wait_err) = waiter.wait() {
+                    if let Err(_) = waiter.wait() {
                         return Err(agent_err);
                     }
                 }
@@ -525,20 +525,6 @@ impl Agent {
             ingress_expiry_datetime,
             waiter,
         ))
-        /*
-        async fn run<W>(_self: UpdateCall<'_>, waiter: W) -> Result<Vec<u8>, AgentError>
-        where
-            W: Waiter,
-        {
-            let request_id = _self.request_id.await?;
-            _self
-                .agent
-                .wait(request_id, &_self.effective_canister_id, waiter)
-                .await
-        }
-        Box::pin(run(self, waiter))
-
-         */
     }
 
     /// Send the signed update to the network. Will return a [`RequestId`].
