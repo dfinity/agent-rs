@@ -4,6 +4,7 @@
 use crate::{agent::agent_error::HttpErrorPayload, ic_types::Principal, AgentError, RequestId};
 use reqwest::Method;
 use std::{future::Future, pin::Pin, sync::Arc};
+use hyper_rustls::ConfigBuilderExt;
 
 /// Implemented by the Agent environment to cache and update an HTTP Auth password.
 /// It returns a tuple of `(username, password)`.
@@ -33,14 +34,13 @@ const IC0_SUB_DOMAIN: &str = ".ic0.app";
 
 impl ReqwestHttpReplicaV2Transport {
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
-        let mut tls_config = rustls::ClientConfig::new();
+        let mut tls_config = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_webpki_roots()
+            .with_no_client_auth();
 
         // Advertise support for HTTP/2
         tls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-        // Mozilla CA root store
-        tls_config
-            .root_store
-            .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
 
         let url = url.into();
 
