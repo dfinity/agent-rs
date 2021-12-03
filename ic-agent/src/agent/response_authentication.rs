@@ -52,6 +52,20 @@ pub(crate) fn lookup_canister_info(
     lookup_value(&certificate, path_canister).map(<[u8]>::to_vec)
 }
 
+pub(crate) fn lookup_canister_metadata(
+    certificate: Certificate,
+    canister_id: Principal,
+    path: &str,
+) -> Result<Vec<u8>, AgentError> {
+    let path_canister = vec![
+        "canister".into(),
+        canister_id.into(),
+        "metadata".into(),
+        path.into(),
+    ];
+    lookup_value(&certificate, path_canister).map(<[u8]>::to_vec)
+}
+
 pub(crate) fn lookup_request_status(
     certificate: Certificate,
     request_id: &RequestId,
