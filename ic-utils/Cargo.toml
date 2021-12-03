@@ -21,13 +21,13 @@ garcon = { version = "0.2", features = ["async"] }
 ic-agent = { path = "../ic-agent", version = "0.10" }
 serde = "1.0.115"
 serde_bytes = "0.11"
-strum = "0.21"
-strum_macros = "0.21"
+strum = "0.23"
+strum_macros = "0.23"
 thiserror = "1.0.29"
 
 [dev-dependencies]
 ring = "0.16.11"
-tokio = { version = "1.8.1", features = ["full"] }
+tokio = { version = "1.14.0", features = ["full"] }
 
 [features]
 raw = []
