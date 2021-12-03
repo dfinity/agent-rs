@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Updated crate dependencies, most notably updating rustls,
+removing the direct dependency on webpki-roots, and allowing
+consumers of ic-agent to update to reqwest 0.11.7.
+
 ## [0.10.0] - 2021-11-15
 
 Unified all version numbers and removed the zzz-release tool.
