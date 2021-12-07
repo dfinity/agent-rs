@@ -5,7 +5,7 @@ use crate::commands::list::list;
 use crate::commands::sync::sync;
 use candid::Principal;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
-use ic_agent::identity::{AnonymousIdentity, BasicIdentity};
+use ic_agent::identity::{AnonymousIdentity, BasicIdentity, Secp256k1Identity};
 use ic_agent::{agent, Agent, Identity};
 
 use crate::commands::upload::upload;
@@ -84,7 +84,11 @@ struct UploadOpts {
 
 fn create_identity(maybe_pem: Option<PathBuf>) -> Box<dyn Identity + Sync + Send> {
     if let Some(pem_path) = maybe_pem {
-        Box::new(BasicIdentity::from_pem_file(pem_path).expect("Could not read the key pair."))
+        if let Ok(secp256k_identity) = Secp256k1Identity::from_pem_file(&pem_path) {
+            Box::new(secp256k_identity)
+        } else {
+            Box::new(BasicIdentity::from_pem_file(pem_path).expect("Could not read the key pair."))
+        }
     } else {
         Box::new(AnonymousIdentity)
     }

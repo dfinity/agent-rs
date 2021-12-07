@@ -1,7 +1,7 @@
 use ic_utils::Canister;
 
 use crate::{support, SyncOpts};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub(crate) async fn sync(
     canister: &Canister<'_>,

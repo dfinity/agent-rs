@@ -2,23 +2,28 @@ use crate::asset_canister::method_names::CREATE_CHUNK;
 use crate::asset_canister::protocol::{CreateChunkRequest, CreateChunkResponse};
 use crate::convenience::waiter_with_timeout;
 use crate::params::CanisterCallParams;
+use crate::retryable::retryable;
+use crate::semaphores::Semaphores;
 use candid::{Decode, Nat};
-use futures_intrusive::sync::SharedSemaphore;
 use garcon::{Delay, Waiter};
 
 pub(crate) async fn create_chunk(
     canister_call_params: &CanisterCallParams<'_>,
     batch_id: &Nat,
     content: &[u8],
-    create_chunk_call_semaphore: &SharedSemaphore,
-    create_chunk_wait_semaphore: &SharedSemaphore,
+    semaphores: &Semaphores,
 ) -> anyhow::Result<Nat> {
+    let _chunk_releaser = semaphores.create_chunk.acquire(1).await;
     let batch_id = batch_id.clone();
     let args = CreateChunkRequest { batch_id, content };
 
     let mut waiter = Delay::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .throttle(std::time::Duration::from_secs(1))
+        .with(Delay::count_timeout(30))
+        .exponential_backoff_capped(
+            std::time::Duration::from_secs(1),
+            2.0,
+            std::time::Duration::from_secs(16),
+        )
         .build();
     waiter.start();
 
@@ -26,7 +31,7 @@ pub(crate) async fn create_chunk(
         let builder = canister_call_params.canister.update_(CREATE_CHUNK);
         let builder = builder.with_arg(&args);
         let request_id_result = {
-            let _releaser = create_chunk_call_semaphore.acquire(1).await;
+            let _releaser = semaphores.create_chunk_call.acquire(1).await;
             builder
                 .build()
                 .map(|result: (CreateChunkResponse,)| (result.0.chunk_id,))
@@ -35,7 +40,7 @@ pub(crate) async fn create_chunk(
         };
         let wait_result = match request_id_result {
             Ok(request_id) => {
-                let _releaser = create_chunk_wait_semaphore.acquire(1).await;
+                let _releaser = semaphores.create_chunk_wait.acquire(1).await;
                 canister_call_params
                     .canister
                     .wait(
@@ -46,20 +51,21 @@ pub(crate) async fn create_chunk(
             }
             Err(err) => Err(err),
         };
-        match wait_result
-            .map_err(|e| anyhow::anyhow!("{}", e))
-            .and_then(|response| {
-                candid::Decode!(&response, CreateChunkResponse)
+        match wait_result {
+            Ok(response) => {
+                // failure to decode the response is not retryable
+                break candid::Decode!(&response, CreateChunkResponse)
                     .map_err(|e| anyhow::anyhow!("{}", e))
-                    .map(|x| x.chunk_id)
-            }) {
-            Ok(chunk_id) => {
-                break Ok(chunk_id);
+                    .map(|x| x.chunk_id);
             }
-            Err(agent_err) => match waiter.wait() {
-                Ok(()) => {}
-                Err(_) => break Err(agent_err),
-            },
+            Err(agent_err) if !retryable(&agent_err) => {
+                break Err(anyhow::anyhow!("{}", agent_err));
+            }
+            Err(agent_err) => {
+                if let Err(_waiter_err) = waiter.async_wait().await {
+                    break Err(anyhow::anyhow!("{}", agent_err));
+                }
+            }
         }
     }
 }
