@@ -17,7 +17,9 @@ sudo installer -pkg node.pkg -store -target /
 rm node.pkg
 
 # Install Bats.
-brew unlink bats
+if [ "$(uname -r)" = "19.6.0" ]; then
+    brew unlink bats
+fi
 brew install bats-core
 
 # Install Bats support.
