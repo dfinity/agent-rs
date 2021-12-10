@@ -11,6 +11,16 @@ Updated crate dependencies, most notably updating rustls,
 removing the direct dependency on webpki-roots, and allowing
 consumers of ic-agent to update to reqwest 0.11.7.
 
+### ic-asset
+
+#### Fixed: sync and upload will now attempt retries as expected
+
+Fixed a defect in asset synchronization where no retries would be attempted after the first 30 seconds overall.
+
+### icx-asset
+
+#### Fixed: now works with secp256k1 .pem files.
+
 ## [0.10.0] - 2021-11-15
 
 Unified all version numbers and removed the zzz-release tool.
