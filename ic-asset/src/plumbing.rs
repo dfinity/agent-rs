@@ -4,10 +4,10 @@ use crate::content_encoder::ContentEncoder;
 use crate::params::CanisterCallParams;
 
 use crate::asset_canister::chunk::create_chunk;
+use crate::semaphores::Semaphores;
 use candid::Nat;
 use futures::future::try_join_all;
 use futures::TryFutureExt;
-use futures_intrusive::sync::SharedSemaphore;
 use mime::Mime;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -17,15 +17,6 @@ const CONTENT_ENCODING_IDENTITY: &str = "identity";
 // The most mb any one file is considered to have for purposes of limiting data loaded at once.
 // Any file counts as at least 1 mb.
 const MAX_COST_SINGLE_FILE_MB: usize = 45;
-
-// Maximum MB of file data to load at once.  More memory may be used, due to encodings.
-const MAX_SIMULTANEOUS_LOADED_MB: usize = 50;
-
-// How many simultaneous Agent.call() to create_chunk
-const MAX_SIMULTANEOUS_CREATE_CHUNK_CALLS: usize = 1;
-
-// How many simultaneous Agent.wait() on create_chunk result
-const MAX_SIMULTANEOUS_CREATE_CHUNK_WAITS: usize = 1;
 
 const MAX_CHUNK_SIZE: usize = 1_900_000;
 
@@ -55,8 +46,7 @@ async fn make_project_asset_encoding(
     container_assets: &HashMap<String, AssetDetails>,
     content: &Content,
     content_encoding: &str,
-    create_chunk_call_semaphore: &SharedSemaphore,
-    create_chunk_wait_semaphore: &SharedSemaphore,
+    semaphores: &Semaphores,
 ) -> anyhow::Result<ProjectAssetEncoding> {
     let sha256 = content.sha256();
 
@@ -94,8 +84,7 @@ async fn make_project_asset_encoding(
             &asset_location,
             content,
             content_encoding,
-            create_chunk_call_semaphore,
-            create_chunk_wait_semaphore,
+            semaphores,
         )
         .await?
     };
@@ -115,8 +104,7 @@ async fn make_encoding(
     container_assets: &HashMap<String, AssetDetails>,
     content: &Content,
     encoder: &Option<ContentEncoder>,
-    create_chunk_call_semaphore: &SharedSemaphore,
-    create_chunk_wait_semaphore: &SharedSemaphore,
+    semaphores: &Semaphores,
 ) -> anyhow::Result<Option<(String, ProjectAssetEncoding)>> {
     match encoder {
         None => {
@@ -127,8 +115,7 @@ async fn make_encoding(
                 container_assets,
                 &content,
                 CONTENT_ENCODING_IDENTITY,
-                create_chunk_call_semaphore,
-                create_chunk_wait_semaphore,
+                semaphores,
             )
             .await?;
             Ok(Some((
@@ -147,8 +134,7 @@ async fn make_encoding(
                     container_assets,
                     &encoded,
                     &content_encoding,
-                    create_chunk_call_semaphore,
-                    create_chunk_wait_semaphore,
+                    semaphores,
                 )
                 .await?;
                 Ok(Some((content_encoding, project_asset_encoding)))
@@ -165,8 +151,7 @@ async fn make_encodings(
     asset_location: &AssetLocation,
     container_assets: &HashMap<String, AssetDetails>,
     content: &Content,
-    create_chunk_call_semaphore: &SharedSemaphore,
-    create_chunk_wait_semaphore: &SharedSemaphore,
+    semaphores: &Semaphores,
 ) -> anyhow::Result<HashMap<String, ProjectAssetEncoding>> {
     let mut encoders = vec![None];
     for encoder in applicable_encoders(&content.media_type) {
@@ -183,8 +168,7 @@ async fn make_encodings(
                 container_assets,
                 content,
                 maybe_encoder,
-                create_chunk_call_semaphore,
-                create_chunk_wait_semaphore,
+                semaphores,
             )
         })
         .collect();
@@ -204,9 +188,7 @@ async fn make_project_asset(
     batch_id: &Nat,
     asset_location: AssetLocation,
     container_assets: &HashMap<String, AssetDetails>,
-    file_semaphore: &SharedSemaphore,
-    create_chunk_call_semaphore: &SharedSemaphore,
-    create_chunk_wait_semaphore: &SharedSemaphore,
+    semaphores: &Semaphores,
 ) -> anyhow::Result<ProjectAsset> {
     let file_size = std::fs::metadata(&asset_location.source)?.len();
     let permits = std::cmp::max(
@@ -216,7 +198,7 @@ async fn make_project_asset(
             MAX_COST_SINGLE_FILE_MB,
         ),
     );
-    let _releaser = file_semaphore.acquire(permits).await;
+    let _releaser = semaphores.file.acquire(permits).await;
     let content = Content::load(&asset_location.source)?;
 
     let encodings = make_encodings(
@@ -225,8 +207,7 @@ async fn make_project_asset(
         &asset_location,
         container_assets,
         &content,
-        create_chunk_call_semaphore,
-        create_chunk_wait_semaphore,
+        semaphores,
     )
     .await?;
 
@@ -243,19 +224,7 @@ pub(crate) async fn make_project_assets(
     locs: Vec<AssetLocation>,
     container_assets: &HashMap<String, AssetDetails>,
 ) -> anyhow::Result<HashMap<String, ProjectAsset>> {
-    // The "file" semaphore limits how much file data to load at once.  A given loaded file's data
-    // may be simultaneously encoded (gzip and so forth).
-    let file_semaphore = SharedSemaphore::new(true, MAX_SIMULTANEOUS_LOADED_MB);
-
-    // The create_chunk call semaphore limits the number of simultaneous
-    // agent.call()s to create_chunk.
-    let create_chunk_call_semaphore =
-        SharedSemaphore::new(true, MAX_SIMULTANEOUS_CREATE_CHUNK_CALLS);
-
-    // The create_chunk wait semaphore limits the number of simultaneous
-    // agent.wait() calls for outstanding create_chunk requests.
-    let create_chunk_wait_semaphore =
-        SharedSemaphore::new(true, MAX_SIMULTANEOUS_CREATE_CHUNK_WAITS);
+    let semaphores = Semaphores::new();
 
     let project_asset_futures: Vec<_> = locs
         .iter()
@@ -265,9 +234,7 @@ pub(crate) async fn make_project_assets(
                 batch_id,
                 loc.clone(),
                 &container_assets,
-                &file_semaphore,
-                &create_chunk_call_semaphore,
-                &create_chunk_wait_semaphore,
+                &semaphores,
             )
         })
         .collect();
@@ -286,19 +253,11 @@ async fn upload_content_chunks(
     asset_location: &AssetLocation,
     content: &Content,
     content_encoding: &str,
-    create_chunk_call_semaphore: &SharedSemaphore,
-    create_chunk_wait_semaphore: &SharedSemaphore,
+    semaphores: &Semaphores,
 ) -> anyhow::Result<Vec<Nat>> {
     if content.data.is_empty() {
         let empty = vec![];
-        let chunk_id = create_chunk(
-            canister_call_params,
-            batch_id,
-            &empty,
-            create_chunk_call_semaphore,
-            create_chunk_wait_semaphore,
-        )
-        .await?;
+        let chunk_id = create_chunk(canister_call_params, batch_id, &empty, semaphores).await?;
         println!(
             "  {}{} 1/1 (0 bytes)",
             &asset_location.key,
@@ -313,24 +272,19 @@ async fn upload_content_chunks(
         .chunks(MAX_CHUNK_SIZE)
         .enumerate()
         .map(|(i, data_chunk)| {
-            create_chunk(
-                canister_call_params,
-                batch_id,
-                data_chunk,
-                create_chunk_call_semaphore,
-                create_chunk_wait_semaphore,
+            create_chunk(canister_call_params, batch_id, data_chunk, semaphores).map_ok(
+                move |chunk_id| {
+                    println!(
+                        "  {}{} {}/{} ({} bytes)",
+                        &asset_location.key,
+                        content_encoding_descriptive_suffix(content_encoding),
+                        i + 1,
+                        count,
+                        data_chunk.len(),
+                    );
+                    chunk_id
+                },
             )
-            .map_ok(move |chunk_id| {
-                println!(
-                    "  {}{} {}/{} ({} bytes)",
-                    &asset_location.key,
-                    content_encoding_descriptive_suffix(content_encoding),
-                    i + 1,
-                    count,
-                    data_chunk.len(),
-                );
-                chunk_id
-            })
         })
         .collect();
     try_join_all(chunks_futures).await
