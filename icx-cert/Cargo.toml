@@ -1,6 +1,6 @@
 [package]
 name = "icx-cert"
-version = "0.10.0"
+version = "0.10.1"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
 description = "CLI tool to download a document from the Internet Computer and pretty-print the contents of its IC-Certificate header."
