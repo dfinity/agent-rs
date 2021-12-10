@@ -147,7 +147,7 @@ pub(crate) fn lookup_reply(
     Ok(RequestStatusResponse::Replied { reply })
 }
 
-pub(crate) fn lookup_value<'a>(
+pub fn lookup_value<'a>(
     certificate: &'a Certificate<'a>,
     path: Vec<Label>,
 ) -> Result<&'a [u8], AgentError> {

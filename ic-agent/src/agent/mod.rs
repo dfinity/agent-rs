@@ -6,7 +6,7 @@ pub mod http_transport;
 pub(crate) mod nonce;
 pub(crate) mod replica_api;
 pub(crate) mod response;
-mod response_authentication;
+pub(crate) mod response_authentication;
 
 pub mod signed;
 pub mod status;
@@ -598,7 +598,8 @@ impl Agent {
         })
     }
 
-    fn verify(&self, cert: &Certificate) -> Result<(), AgentError> {
+    /// Verify a certificate, checking delegation if present.
+    pub fn verify(&self, cert: &Certificate) -> Result<(), AgentError> {
         let sig = &cert.signature;
 
         let root_hash = cert.tree.digest();
