@@ -502,8 +502,6 @@ impl Agent {
         }
     }
 
-    /// The simplest way to do an update call; sends a byte array and will return a RequestId.
-    /// The RequestId should then be used for request_status (most likely in a loop).
     fn update_raw_with_retry<'out, W>(
         &self,
         canister_id: &Principal,
