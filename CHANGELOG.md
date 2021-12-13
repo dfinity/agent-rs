@@ -7,9 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2021-12-10
+
 Updated crate dependencies, most notably updating rustls,
 removing the direct dependency on webpki-roots, and allowing
 consumers of ic-agent to update to reqwest 0.11.7.
+
+### ic-agent
+
+#### Added: read_state_canister_metadata
+
+Implements https://github.com/dfinity-lab/ic-ref/pull/371
 
 ### ic-asset
 
