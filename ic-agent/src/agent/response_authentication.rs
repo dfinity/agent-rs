@@ -129,7 +129,7 @@ pub(crate) fn lookup_reject_message(
         request_id.to_vec().into(),
         "reject_message".into(),
     ];
-    let msg = lookup_value(&certificate, path)?;
+    let msg = lookup_value(certificate, path)?;
     Ok(from_utf8(msg)?.to_string())
 }
 
@@ -142,7 +142,7 @@ pub(crate) fn lookup_reply(
         request_id.to_vec().into(),
         "reply".into(),
     ];
-    let reply_data = lookup_value(&certificate, path)?;
+    let reply_data = lookup_value(certificate, path)?;
     let reply = Replied::CallReplied(Vec::from(reply_data));
     Ok(RequestStatusResponse::Replied { reply })
 }

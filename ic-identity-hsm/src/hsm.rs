@@ -172,12 +172,12 @@ fn get_der_encoded_public_key(
     session_handle: CK_SESSION_HANDLE,
     key_id: &KeyId,
 ) -> Result<DerPublicKeyVec, HardwareIdentityError> {
-    let object_handle = get_public_key_handle(&ctx, session_handle, key_id)?;
+    let object_handle = get_public_key_handle(ctx, session_handle, key_id)?;
 
     validate_key_type(ctx, session_handle, object_handle)?;
     validate_ec_params(ctx, session_handle, object_handle)?;
 
-    let ec_point = get_ec_point(&ctx, session_handle, object_handle)?;
+    let ec_point = get_ec_point(ctx, session_handle, object_handle)?;
 
     let oid_ecdsa = oid!(1, 2, 840, 10045, 2, 1);
     let oid_curve_secp256r1 = oid!(1, 2, 840, 10045, 3, 1, 7);
@@ -222,7 +222,7 @@ fn validate_ec_params(
     session_handle: CK_SESSION_HANDLE,
     object_handle: CK_OBJECT_HANDLE,
 ) -> Result<(), HardwareIdentityError> {
-    let ec_params = get_ec_params(&ctx, session_handle, object_handle)?;
+    let ec_params = get_ec_params(ctx, session_handle, object_handle)?;
     if ec_params != EXPECTED_EC_PARAMS {
         Err(HardwareIdentityError::InvalidEcParams {
             expected: EXPECTED_EC_PARAMS.to_vec(),
@@ -317,7 +317,7 @@ fn get_object_handle_for_key(
     object_class: CK_OBJECT_CLASS,
 ) -> Result<CK_OBJECT_HANDLE, HardwareIdentityError> {
     let attributes = [
-        CK_ATTRIBUTE::new(CKA_ID).with_bytes(&key_id),
+        CK_ATTRIBUTE::new(CKA_ID).with_bytes(key_id),
         CK_ATTRIBUTE::new(CKA_CLASS).with_ck_ulong(&object_class),
     ];
     ctx.find_objects_init(session_handle, &attributes)?;

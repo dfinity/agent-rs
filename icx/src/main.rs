@@ -221,7 +221,7 @@ fn blob_from_arguments(
                         }
                     });
                     args.context("Failed to parse arguments with method type info")?
-                        .to_bytes_with_types(&env, &func.args)
+                        .to_bytes_with_types(env, &func.args)
                 }
             }
             .context("Failed to serialize Candid values")?;
@@ -243,7 +243,7 @@ fn print_idl_blob(
         ArgType::Idl => {
             let result = match method_type {
                 None => candid::IDLArgs::from_bytes(blob),
-                Some((env, func)) => candid::IDLArgs::from_bytes_with_types(blob, &env, &func.rets),
+                Some((env, func)) => candid::IDLArgs::from_bytes_with_types(blob, env, &func.rets),
             };
             println!(
                 "{}",
@@ -255,7 +255,7 @@ fn print_idl_blob(
 }
 
 async fn fetch_root_key_from_non_ic(agent: &Agent, replica: &str) -> Result<()> {
-    let normalized_replica = replica.strip_suffix("/").unwrap_or(replica);
+    let normalized_replica = replica.strip_suffix('/').unwrap_or(replica);
     if normalized_replica != DEFAULT_IC_GATEWAY {
         agent
             .fetch_root_key()
@@ -357,7 +357,7 @@ async fn main() -> Result<()> {
 
             let method_type = match maybe_candid_path {
                 None => None,
-                Some(path) => get_candid_type(&path, &t.method_name)
+                Some(path) => get_candid_type(path, &t.method_name)
                     .context("Failed to get method type from candid file")?,
             };
 

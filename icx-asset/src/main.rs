@@ -109,7 +109,7 @@ async fn main() -> support::Result {
         .with_boxed_identity(create_identity(opts.pem))
         .build()?;
 
-    let normalized_replica = opts.replica.strip_suffix("/").unwrap_or(&opts.replica);
+    let normalized_replica = opts.replica.strip_suffix('/').unwrap_or(&opts.replica);
     if normalized_replica != DEFAULT_IC_GATEWAY {
         agent.fetch_root_key().await?;
     }

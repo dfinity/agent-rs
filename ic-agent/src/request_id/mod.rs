@@ -30,7 +30,7 @@ impl RequestId {
         &self.0
     }
 
-    pub(crate) fn to_vec(&self) -> Vec<u8> {
+    pub(crate) fn to_vec(self) -> Vec<u8> {
         self.0.to_vec()
     }
 }

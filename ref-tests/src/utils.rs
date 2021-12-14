@@ -132,7 +132,7 @@ pub async fn create_universal_canister(agent: &Agent) -> Result<Principal, Box<d
         std::fs::read(&canister_path).expect("Could not read file.")
     };
 
-    let ic00 = ManagementCanister::create(&agent);
+    let ic00 = ManagementCanister::create(agent);
 
     let (canister_id,) = ic00
         .create_canister()
@@ -167,7 +167,7 @@ pub async fn create_wallet_canister(
 ) -> Result<Principal, Box<dyn Error>> {
     let canister_wasm = get_wallet_wasm_from_env();
 
-    let ic00 = ManagementCanister::create(&agent);
+    let ic00 = ManagementCanister::create(agent);
 
     let (canister_id,) = ic00
         .create_canister()

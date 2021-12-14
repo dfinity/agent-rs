@@ -81,7 +81,7 @@ async fn make_project_asset_encoding(
         upload_content_chunks(
             canister_call_params,
             batch_id,
-            &asset_location,
+            asset_location,
             content,
             content_encoding,
             semaphores,
@@ -111,9 +111,9 @@ async fn make_encoding(
             let identity_asset_encoding = make_project_asset_encoding(
                 canister_call_params,
                 batch_id,
-                &asset_location,
+                asset_location,
                 container_assets,
-                &content,
+                content,
                 CONTENT_ENCODING_IDENTITY,
                 semaphores,
             )
@@ -124,13 +124,13 @@ async fn make_encoding(
             )))
         }
         Some(encoder) => {
-            let encoded = content.encode(&encoder)?;
+            let encoded = content.encode(encoder)?;
             if encoded.data.len() < content.data.len() {
                 let content_encoding = format!("{}", encoder);
                 let project_asset_encoding = make_project_asset_encoding(
                     canister_call_params,
                     batch_id,
-                    &asset_location,
+                    asset_location,
                     container_assets,
                     &encoded,
                     &content_encoding,
@@ -233,7 +233,7 @@ pub(crate) async fn make_project_assets(
                 canister_call_params,
                 batch_id,
                 loc.clone(),
-                &container_assets,
+                container_assets,
                 &semaphores,
             )
         })
