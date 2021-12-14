@@ -4,7 +4,7 @@ mod support;
 use crate::commands::list::list;
 use crate::commands::sync::sync;
 use candid::Principal;
-use clap::{crate_authors, crate_version, AppSettings, Clap};
+use clap::{crate_authors, crate_version, AppSettings, Parser};
 use ic_agent::identity::{AnonymousIdentity, BasicIdentity, Secp256k1Identity};
 use ic_agent::{agent, Agent, Identity};
 
@@ -14,12 +14,11 @@ use std::time::Duration;
 
 const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
 
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(
 version = crate_version!(),
 author = crate_authors!(),
-global_setting = AppSettings::GlobalVersion,
-global_setting = AppSettings::ColoredHelp
+global_setting = AppSettings::PropagateVersion,
 )]
 struct Opts {
     /// Some input. Because this isn't an Option<T> it's required to be used
@@ -40,7 +39,7 @@ struct Opts {
     subcommand: SubCommand,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 enum SubCommand {
     /// List keys from the asset canister.
     #[clap(name = "ls")]
@@ -53,14 +52,14 @@ enum SubCommand {
     Upload(UploadOpts),
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct ListOpts {
     /// The canister ID.
     #[clap()]
     canister_id: String,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct SyncOpts {
     /// The canister ID.
     #[clap()]
@@ -71,7 +70,7 @@ struct SyncOpts {
     directory: PathBuf,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct UploadOpts {
     /// The asset canister ID to manage.
     #[clap()]

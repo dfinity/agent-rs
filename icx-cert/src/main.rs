@@ -1,9 +1,9 @@
 use anyhow::Result;
-use clap::{crate_authors, crate_version, Clap};
+use clap::{crate_authors, crate_version, Parser};
 
 mod pprint;
 
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(
     version = crate_version!(),
     author = crate_authors!(),
@@ -15,7 +15,7 @@ enum Command {
         url: String,
 
         /// Specifies one or more encodings to accept.
-        #[clap(long, multiple(true), number_of_values(1))]
+        #[clap(long, multiple_occurrences(true), multiple_values(true), number_of_values(1))]
         accept_encoding: Option<Vec<String>>,
     },
 }

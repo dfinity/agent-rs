@@ -5,7 +5,7 @@ use candid::{
     types::{Function, Type},
     CandidType, Decode, Deserialize, IDLArgs, IDLProg, TypeEnv,
 };
-use clap::{crate_authors, crate_version, AppSettings, Clap};
+use clap::{crate_authors, crate_version, AppSettings, Parser};
 use ic_agent::{
     agent::{self, signed::SignedUpdate, Replied},
     agent::{
@@ -28,12 +28,11 @@ use std::{
 
 const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
 
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(
     version = crate_version!(),
     author = crate_authors!(),
-    global_setting = AppSettings::GlobalVersion,
-    global_setting = AppSettings::ColoredHelp
+    global_setting = AppSettings::PropagateVersion,
 )]
 struct Opts {
     /// Some input. Because this isn't an Option<T> it's required to be used
@@ -54,7 +53,7 @@ struct Opts {
     subcommand: SubCommand,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 enum SubCommand {
     /// Sends an update call to the replica.
     Update(CallOpts),
@@ -73,7 +72,7 @@ enum SubCommand {
 }
 
 /// A subcommand for controlling testing
-#[derive(Clap)]
+#[derive(Parser)]
 struct CallOpts {
     /// The Canister ID to call.
     #[clap(parse(try_from_str), required = true)]
@@ -104,7 +103,7 @@ struct CallOpts {
     arg_value: Option<String>,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 enum ArgType {
     Idl,
     Raw,
@@ -122,7 +121,7 @@ impl std::str::FromStr for ArgType {
     }
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct PrincipalConvertOpts {
     /// Convert from hexadecimal to the new group-based Principal text.
     #[clap(long)]
