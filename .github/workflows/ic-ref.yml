@@ -17,7 +17,7 @@ jobs:
             ghc: '8.8.4'
             spec: '0.18.0'
             os: ubuntu-latest
-            rust: 1.52.1
+            rust: 1.55.0
 
     steps:
       - uses: actions/checkout@v2

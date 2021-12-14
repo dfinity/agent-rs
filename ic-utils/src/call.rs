@@ -183,7 +183,7 @@ where
     }
 
     async fn call(self) -> Result<Out, AgentError> {
-        let result = unsafe { self.call_raw().await }?;
+        let result = self.call_raw().await?;
 
         decode_args(&result).map_err(|e| AgentError::CandidError(Box::new(e)))
     }

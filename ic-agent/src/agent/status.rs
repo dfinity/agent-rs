@@ -108,7 +108,7 @@ impl std::convert::TryFrom<&serde_cbor::Value> for Status {
     type Error = ();
 
     fn try_from(value: &serde_cbor::Value) -> Result<Self, ()> {
-        let v = cbor_value_to_value(&value)?;
+        let v = cbor_value_to_value(value)?;
 
         match v {
             Value::Map(map) => {

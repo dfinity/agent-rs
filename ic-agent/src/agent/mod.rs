@@ -509,7 +509,7 @@ impl Agent {
         effective_canister_id: &Principal,
     ) -> Result<PollResult, AgentError> {
         match self
-            .request_status_raw(&request_id, *effective_canister_id)
+            .request_status_raw(request_id, *effective_canister_id)
             .await?
         {
             RequestStatusResponse::Unknown => Ok(PollResult::Submitted),
@@ -640,11 +640,7 @@ impl Agent {
         canister_id: Principal,
         path: &str,
     ) -> Result<Vec<u8>, AgentError> {
-        let paths: Vec<Vec<Label>> = vec![vec![
-            "canister".into(),
-            canister_id.clone().into(),
-            path.into(),
-        ]];
+        let paths: Vec<Vec<Label>> = vec![vec!["canister".into(), canister_id.into(), path.into()]];
 
         let cert = self.read_state_raw(paths, canister_id).await?;
 
@@ -658,7 +654,7 @@ impl Agent {
     ) -> Result<Vec<u8>, AgentError> {
         let paths: Vec<Vec<Label>> = vec![vec![
             "canister".into(),
-            canister_id.clone().into(),
+            canister_id.into(),
             "metadata".into(),
             path.into(),
         ]];
@@ -1176,7 +1172,7 @@ impl<'agent> UpdateBuilder<'agent> {
             self.ingress_expiry_datetime,
         );
         UpdateCall {
-            agent: &self.agent,
+            agent: self.agent,
             request_id: Box::pin(request_id_future),
             effective_canister_id: self.effective_canister_id,
         }
