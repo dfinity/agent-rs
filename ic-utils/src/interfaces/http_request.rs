@@ -1,4 +1,4 @@
-use crate::{call::SyncCall, canister::CanisterBuilder, Canister};
+use crate::{call::AsyncCall, call::SyncCall, canister::CanisterBuilder, Canister};
 use candid::{CandidType, Deserialize, Func, Nat};
 use ic_agent::{export::Principal, Agent};
 use serde_bytes::ByteBuf;
@@ -47,6 +47,7 @@ pub struct HttpResponse {
     #[serde(with = "serde_bytes")]
     pub body: Vec<u8>,
     pub streaming_strategy: Option<StreamingStrategy>,
+    pub upgrade: bool,
 }
 
 #[derive(CandidType, Deserialize)]
@@ -86,6 +87,28 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
         body: B,
     ) -> impl 'agent + SyncCall<(HttpResponse,)> {
         self.query_("http_request")
+            .with_arg(HttpRequest {
+                method: method.into(),
+                url: url.into(),
+                headers,
+                body: body.as_ref(),
+            })
+            .build()
+    }
+
+    pub fn http_request_update<
+        'canister: 'agent,
+        M: Into<String>,
+        U: Into<String>,
+        B: AsRef<[u8]>,
+    >(
+        &'canister self,
+        method: M,
+        url: U,
+        headers: Vec<HeaderField>,
+        body: B,
+    ) -> impl 'agent + AsyncCall<(HttpResponse,)> {
+        self.update_("http_request_update")
             .with_arg(HttpRequest {
                 method: method.into(),
                 url: url.into(),
