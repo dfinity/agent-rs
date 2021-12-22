@@ -780,7 +780,7 @@ dependencies = [
 
 [[package]]
 name = "ic-agent"
-version = "0.10.1"
+version = "0.10.2"
 dependencies = [
  "async-trait",
  "base32",
@@ -814,7 +814,7 @@ dependencies = [
 
 [[package]]
 name = "ic-asset"
-version = "0.10.1"
+version = "0.10.2"
 dependencies = [
  "anyhow",
  "candid",
@@ -838,7 +838,7 @@ dependencies = [
 
 [[package]]
 name = "ic-identity-hsm"
-version = "0.10.1"
+version = "0.10.2"
 dependencies = [
  "hex",
  "ic-agent",
@@ -866,7 +866,7 @@ dependencies = [
 
 [[package]]
 name = "ic-utils"
-version = "0.10.1"
+version = "0.10.2"
 dependencies = [
  "async-trait",
  "candid",
@@ -883,7 +883,7 @@ dependencies = [
 
 [[package]]
 name = "icx"
-version = "0.10.1"
+version = "0.10.2"
 dependencies = [
  "anyhow",
  "candid",
@@ -904,7 +904,7 @@ dependencies = [
 
 [[package]]
 name = "icx-asset"
-version = "0.10.1"
+version = "0.10.2"
 dependencies = [
  "anyhow",
  "candid",
@@ -931,7 +931,7 @@ dependencies = [
 
 [[package]]
 name = "icx-cert"
-version = "0.10.1"
+version = "0.10.2"
 dependencies = [
  "anyhow",
  "base64",

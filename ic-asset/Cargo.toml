@@ -1,6 +1,6 @@
 [package]
 name = "ic-asset"
-version = "0.10.1"
+version = "0.10.2"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
 description = "Library for storing files in an asset canister."
