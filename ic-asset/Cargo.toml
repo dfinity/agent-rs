@@ -16,7 +16,7 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 anyhow = "1.0"
 candid = "0.7.7"
 flate2 = "1.0.22"
-futures = "0.3.17" # .18 was yanked
+futures = "0.3.19"
 futures-intrusive = "0.4.0"
 garcon = { version = "0.2", features = ["async"] }
 hex = {version = "0.4.2", features = ["serde"] }
