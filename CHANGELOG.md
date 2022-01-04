@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 2021-12-22
+
+### ic-agent
+
+Added support for upgrading HTTP requests (http_request_update method)
+
 ## [0.10.1] - 2021-12-10
 
 Updated crate dependencies, most notably updating rustls,

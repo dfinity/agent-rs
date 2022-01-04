@@ -1,6 +1,6 @@
 [package]
 name = "ic-identity-hsm"
-version = "0.10.1"
+version = "0.10.2"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 description = "Identity implementation for HSM for the ic-agent package."
 homepage = "https://docs.rs/ic-identity-hsm"
