@@ -1,6 +1,6 @@
 [package]
 name = "icx-asset"
-version = "0.10.2"
+version = "0.11.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
 description = "CLI tool to manage assets on an asset canister on the Internet Computer."
@@ -16,17 +16,17 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
 anyhow = "1.0.34"
-candid = "0.7.4"
+candid = "0.7.10"
 chrono = "0.4.19"
 clap = "=3.0.0-beta.5"
 clap_derive = "=3.0.0-beta.5"
 delay = "0.3.1"
 garcon = "0.2.2"
 humantime = "2.0.1"
-ic-agent = { path = "../ic-agent", version = "0.10" }
-ic-asset = { path = "../ic-asset", version = "0.10" }
-ic-types = "0.2.2"
-ic-utils = { path = "../ic-utils", version = "0.10" }
+ic-agent = { path = "../ic-agent", version = "0.11" }
+ic-asset = { path = "../ic-asset", version = "0.11" }
+ic-types = "0.3.0"
+ic-utils = { path = "../ic-utils", version = "0.11" }
 libflate = "1.1.1"
 num-traits = "0.2"
 pem = "1.0.1"
