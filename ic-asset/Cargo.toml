@@ -14,14 +14,14 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
 anyhow = "1.0"
-candid = "0.7.7"
+candid = "0.7.10"
 flate2 = "1.0.22"
 futures = "0.3.19"
 futures-intrusive = "0.4.0"
 garcon = { version = "0.2", features = ["async"] }
 hex = {version = "0.4.2", features = ["serde"] }
 ic-agent = { path = "../ic-agent", version = "0.10", features = [ "pem" ] }
-ic-types = { version = "0.2.2", features = [ "serde" ] }
+ic-types = { version = "0.3.0", features = [ "serde" ] }
 ic-utils = { path = "../ic-utils", version = "0.10" }
 mime = "0.3.16"
 mime_guess = "2.0.3"
