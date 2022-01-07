@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.10.3] - 2022-01-06
+## [0.11.0] - 2022-01-07
 
-Updated dependencies
+### Breaking change: Updated to ic-types 0.3.0
+
+The `lookup_path` method now takes an `Iterator<Label>` rather than an `AsRef<[Label]>`
 
 ## [0.10.2] - 2021-12-22
 
