@@ -150,8 +150,7 @@ pub fn lookup_value<'a, P>(
     path: P,
 ) -> Result<&'a [u8], AgentError>
 where
-    //for<'p> &'p P: IntoIterator<Item = &'p Label>, // Blocked on dfinity/ic-types#8
-    for<'p> &'p P: AsRef<[Label]>, // Remove after dfinity/ic-types#8
+    for<'p> &'p P: IntoIterator<Item = &'p Label>,
     P: Into<Vec<Label>>,
 {
     use AgentError::*;
