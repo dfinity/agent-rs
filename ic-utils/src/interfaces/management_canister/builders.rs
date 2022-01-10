@@ -2,7 +2,7 @@ use crate::{
     call::AsyncCall, canister::Argument, interfaces::management_canister::MgmtMethod, Canister,
 };
 use async_trait::async_trait;
-use candid::{CandidType, Deserialize};
+use candid::{CandidType, Deserialize, Nat};
 use garcon::Waiter;
 use ic_agent::{export::Principal, AgentError, RequestId};
 use std::str::FromStr;
@@ -13,9 +13,9 @@ use std::convert::{From, TryInto};
 #[derive(CandidType, Deserialize)]
 pub struct CanisterSettings {
     pub controllers: Option<Vec<Principal>>,
-    pub compute_allocation: Option<candid::Nat>,
-    pub memory_allocation: Option<candid::Nat>,
-    pub freezing_threshold: Option<candid::Nat>,
+    pub compute_allocation: Option<Nat>,
+    pub memory_allocation: Option<Nat>,
+    pub freezing_threshold: Option<Nat>,
 }
 
 pub struct CreateCanisterBuilder<'agent, 'canister: 'agent, T> {
@@ -180,17 +180,17 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
         };
         let compute_allocation = match self.compute_allocation {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
-            Some(Ok(x)) => Some(candid::Nat::from(u8::from(x))),
+            Some(Ok(x)) => Some(Nat::from(u8::from(x))),
             None => None,
         };
         let memory_allocation = match self.memory_allocation {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
-            Some(Ok(x)) => Some(candid::Nat::from(u64::from(x))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
         let freezing_threshold = match self.freezing_threshold {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
-            Some(Ok(x)) => Some(candid::Nat::from(u64::from(x))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
 
@@ -202,11 +202,11 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
         let async_builder = if self.is_provisional_create {
             #[derive(CandidType)]
             struct In {
-                amount: Option<candid::Nat>,
+                amount: Option<Nat>,
                 settings: CanisterSettings,
             }
             let in_arg = In {
-                amount: self.amount.map(candid::Nat::from),
+                amount: self.amount.map(Nat::from),
                 settings: CanisterSettings {
                     controllers,
                     compute_allocation,
@@ -276,7 +276,7 @@ pub enum InstallMode {
     Upgrade,
 }
 
-#[derive(candid::CandidType, Deserialize)]
+#[derive(CandidType, Deserialize)]
 pub struct CanisterInstall {
     pub mode: InstallMode,
     pub canister_id: Principal,
@@ -532,7 +532,7 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
     /// Create an [AsyncCall] implementation that, when called, will update a
     /// canisters settings.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
-        #[derive(candid::CandidType)]
+        #[derive(CandidType)]
         struct In {
             canister_id: Principal,
             settings: CanisterSettings,
@@ -545,17 +545,17 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
         };
         let compute_allocation = match self.compute_allocation {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
-            Some(Ok(x)) => Some(candid::Nat::from(u8::from(x))),
+            Some(Ok(x)) => Some(Nat::from(u8::from(x))),
             None => None,
         };
         let memory_allocation = match self.memory_allocation {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
-            Some(Ok(x)) => Some(candid::Nat::from(u64::from(x))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
         let freezing_threshold = match self.freezing_threshold {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
-            Some(Ok(x)) => Some(candid::Nat::from(u64::from(x))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
 

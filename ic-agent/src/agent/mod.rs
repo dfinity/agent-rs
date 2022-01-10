@@ -191,7 +191,7 @@ pub enum PollResult {
 ///
 /// #[derive(CandidType, Deserialize)]
 /// struct CreateCanisterResult {
-///   canister_id: candid::Principal,
+///   canister_id: Principal,
 /// }
 ///
 /// # fn create_identity() -> impl ic_agent::Identity {

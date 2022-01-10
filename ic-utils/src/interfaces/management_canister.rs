@@ -1,5 +1,5 @@
 use crate::{call::AsyncCall, canister::CanisterBuilder, Canister};
-use candid::{CandidType, Deserialize};
+use candid::{CandidType, Deserialize, Nat};
 use ic_agent::{export::Principal, Agent};
 use std::{convert::AsRef, fmt::Debug};
 use strum_macros::{AsRefStr, EnumString};
@@ -58,16 +58,16 @@ pub struct StatusCallResult {
     pub status: CanisterStatus,
     pub settings: DefiniteCanisterSettings,
     pub module_hash: Option<Vec<u8>>,
-    pub memory_size: candid::Nat,
-    pub cycles: candid::Nat,
+    pub memory_size: Nat,
+    pub cycles: Nat,
 }
 
 #[derive(Clone, Debug, Deserialize, CandidType)]
 pub struct DefiniteCanisterSettings {
     pub controllers: Vec<Principal>,
-    pub compute_allocation: candid::Nat,
-    pub memory_allocation: candid::Nat,
-    pub freezing_threshold: candid::Nat,
+    pub compute_allocation: Nat,
+    pub memory_allocation: Nat,
+    pub freezing_threshold: Nat,
 }
 
 impl std::fmt::Display for StatusCallResult {

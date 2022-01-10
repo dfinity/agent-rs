@@ -37,6 +37,7 @@ fn spec_compliance_claimed() {
 }
 
 mod management_canister {
+    use candid::CandidType;
     use ic_agent::{export::Principal, AgentError};
     use ic_utils::{
         call::AsyncCall,
@@ -602,7 +603,7 @@ mod management_canister {
                 .with_canister_id(Principal::management_canister())
                 .build()?;
 
-            #[derive(candid::CandidType)]
+            #[derive(CandidType)]
             struct InCreate {
                 cycles: u64,
                 settings: CanisterSettings,
@@ -626,7 +627,7 @@ mod management_canister {
                 .await?;
             let canister_id = create_result.canister_id;
 
-            #[derive(candid::CandidType)]
+            #[derive(CandidType)]
             struct In {
                 canister_id: Principal,
             }
@@ -785,6 +786,7 @@ mod simple_calls {
 }
 
 mod extras {
+    use candid::Nat;
     use ic_utils::{
         call::AsyncCall,
         interfaces::{management_canister::builders::ComputeAllocation, ManagementCanister},
@@ -810,17 +812,14 @@ mod extras {
                 .canister_status(&canister_id)
                 .call_and_wait(create_waiter())
                 .await?;
-            assert_eq!(
-                result.0.settings.compute_allocation,
-                candid::Nat::from(1_u64)
-            );
+            assert_eq!(result.0.settings.compute_allocation, Nat::from(1_u64));
             assert_eq!(
                 result.0.settings.memory_allocation,
-                candid::Nat::from(1024 * 1024_u64)
+                Nat::from(1024 * 1024_u64)
             );
             assert_eq!(
                 result.0.settings.freezing_threshold,
-                candid::Nat::from(1_000_000_u64)
+                Nat::from(1_000_000_u64)
             );
 
             Ok(())

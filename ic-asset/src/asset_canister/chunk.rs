@@ -54,7 +54,7 @@ pub(crate) async fn create_chunk(
         match wait_result {
             Ok(response) => {
                 // failure to decode the response is not retryable
-                break candid::Decode!(&response, CreateChunkResponse)
+                break Decode!(&response, CreateChunkResponse)
                     .map_err(|e| anyhow::anyhow!("{}", e))
                     .map(|x| x.chunk_id);
             }
