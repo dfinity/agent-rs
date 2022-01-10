@@ -21,7 +21,7 @@ futures-intrusive = "0.4.0"
 garcon = { version = "0.2", features = ["async"] }
 hex = {version = "0.4.2", features = ["serde"] }
 ic-agent = { path = "../ic-agent", version = "0.11", features = [ "pem" ] }
-ic-types = { version = "0.3.0", features = [ "serde" ] }
+ic-types = "0.3.0"
 ic-utils = { path = "../ic-utils", version = "0.11" }
 mime = "0.3.16"
 mime_guess = "2.0.3"

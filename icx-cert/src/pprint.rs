@@ -1,9 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use chrono::TimeZone;
-use ic_agent::ic_types::{
-    hash_tree::{Label, LookupResult},
-    HashTree,
-};
+use ic_agent::ic_types::{hash_tree::LookupResult, HashTree};
 use reqwest::header;
 use serde::{de::DeserializeOwned, Deserialize};
 use sha2::Digest;
@@ -120,7 +117,7 @@ pub fn pprint(url: String, accept_encodings: Option<Vec<String>>) -> Result<()> 
     );
     println!("TREE HASH: {}", hex::encode(&tree.digest()));
     println!("SIGNATURE: {}", hex::encode(cert.signature.as_ref()));
-    if let LookupResult::Found(mut date_bytes) = cert.tree.lookup_path(&[Label::from("time")]) {
+    if let LookupResult::Found(mut date_bytes) = cert.tree.lookup_path(&["time".into()]) {
         let timestamp_nanos = leb128::read::unsigned(&mut date_bytes)
             .with_context(|| "failed to decode certificate time as LEB128")?;
         const NANOS_PER_SEC: u64 = 1_000_000_000;
