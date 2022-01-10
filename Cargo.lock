@@ -34,9 +34,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.51"
+version = "1.0.52"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b26702f315f53b6071259e15dd9d64528213b44d61de1ec926eca7715d62203"
+checksum = "84450d0b4a8bd1ba4144ce8ce718fbc5d071358b1e5384bace6536b3d1f2d5b3"
 dependencies = [
  "backtrace",
 ]
@@ -711,13 +711,13 @@ dependencies = [
 
 [[package]]
 name = "http"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1323096b05d41827dadeaee54c9981958c0f94e670bc94ed80037d1a7b8b186b"
+checksum = "31f4c6746584866f0feabcc69893c5b51beef3831656a968ed7ae254cdc4fd03"
 dependencies = [
  "bytes",
  "fnv",
- "itoa 0.4.8",
+ "itoa 1.0.1",
 ]
 
 [[package]]
@@ -804,7 +804,7 @@ dependencies = [
 
 [[package]]
 name = "ic-agent"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "base32",
@@ -838,7 +838,7 @@ dependencies = [
 
 [[package]]
 name = "ic-asset"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "candid",
@@ -862,7 +862,7 @@ dependencies = [
 
 [[package]]
 name = "ic-identity-hsm"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "hex",
  "ic-agent",
@@ -890,7 +890,7 @@ dependencies = [
 
 [[package]]
 name = "ic-utils"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "candid",
@@ -907,7 +907,7 @@ dependencies = [
 
 [[package]]
 name = "icx"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "candid",
@@ -928,7 +928,7 @@ dependencies = [
 
 [[package]]
 name = "icx-asset"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "candid",
@@ -955,7 +955,7 @@ dependencies = [
 
 [[package]]
 name = "icx-cert"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "base64",
@@ -969,7 +969,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_cbor",
- "sha2 0.10.0",
+ "sha2 0.10.1",
 ]
 
 [[package]]
@@ -1440,13 +1440,11 @@ checksum = "0744126afe1a6dd7f394cb50a716dbe086cb06e255e53d8d0185d82828358fb5"
 
 [[package]]
 name = "pem"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06673860db84d02a63942fa69cd9543f2624a5df3aea7f33173048fa7ad5cf1a"
+checksum = "e9a3b09a20e374558580a4914d3b7d89bd61b954a5a5e1dcbea98753addb1947"
 dependencies = [
  "base64",
- "once_cell",
- "regex",
 ]
 
 [[package]]
@@ -1917,9 +1915,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.132"
+version = "1.0.133"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b9875c23cf305cd1fd7eb77234cbb705f21ea6a72c637a5c6db5fe4b8e7f008"
+checksum = "97565067517b60e2d1ea8b268e59ce036de907ac523ad83a0475da04e818989a"
 dependencies = [
  "serde_derive",
 ]
@@ -1945,9 +1943,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.132"
+version = "1.0.133"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecc0db5cb2556c0e558887d9bbdcf6ac4471e83ff66cf696e5419024d1606276"
+checksum = "ed201699328568d8d08208fdd080e3ff594e6c422e438b6705905da01005d537"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1956,9 +1954,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.73"
+version = "1.0.74"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bcbd0344bc6533bc7ec56df11d42fb70f1b912351c0825ccb7211b59d8af7cf5"
+checksum = "ee2bb9cd061c5865d345bb02ca49fcef1391741b672b54a0bf7b679badec3142"
 dependencies = [
  "itoa 1.0.1",
  "ryu",
@@ -1992,9 +1990,9 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "900d964dd36bb15bcf2f2b35694c072feab74969a54f2bbeec7a2d725d2bdcb6"
+checksum = "99c3bd8169c58782adad9290a9af5939994036b76187f7b4f0e6de91dbbfc0ec"
 dependencies = [
  "cfg-if",
  "cpufeatures",
