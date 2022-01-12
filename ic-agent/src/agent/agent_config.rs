@@ -1,3 +1,5 @@
+#[allow(unused_imports)]
+
 use crate::{
     agent::{NonceFactory, NonceGenerator, ReplicaV2Transport},
     identity::{anonymous::AnonymousIdentity, Identity},
@@ -13,6 +15,7 @@ pub struct AgentConfig {
     pub transport: Option<Arc<dyn ReplicaV2Transport>>,
 }
 
+#[cfg(feature = "std")]
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {

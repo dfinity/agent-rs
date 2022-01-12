@@ -1,6 +1,6 @@
 use crate::{export::Principal, Identity, Signature};
 
-#[cfg(feature = "pem")]
+#[cfg(all(feature = "pem", feature = "std"))]
 use crate::identity::error::PemError;
 
 use ring::signature::{Ed25519KeyPair, KeyPair};
@@ -17,13 +17,13 @@ pub struct BasicIdentity {
 
 impl BasicIdentity {
     /// Create a BasicIdentity from reading a PEM file at the path.
-    #[cfg(feature = "pem")]
+    #[cfg(all(feature = "pem", feature = "std"))]
     pub fn from_pem_file<P: AsRef<std::path::Path>>(file_path: P) -> Result<Self, PemError> {
         Self::from_pem(std::fs::File::open(file_path)?)
     }
 
     /// Create a BasicIdentity from reading a PEM File from a Reader.
-    #[cfg(feature = "pem")]
+    #[cfg(all(feature = "pem", feature = "std"))]
     pub fn from_pem<R: std::io::Read>(pem_reader: R) -> Result<Self, PemError> {
         let bytes: Vec<u8> = pem_reader
             .bytes()
@@ -61,7 +61,7 @@ impl Identity for BasicIdentity {
     }
 }
 
-fn der_encode_public_key(public_key: Vec<u8>) -> Vec<u8> {
+pub fn der_encode_public_key(public_key: Vec<u8>) -> Vec<u8> {
     // see Section 4 "SubjectPublicKeyInfo" in https://tools.ietf.org/html/rfc8410
 
     let id_ed25519 = oid!(1, 3, 101, 112);

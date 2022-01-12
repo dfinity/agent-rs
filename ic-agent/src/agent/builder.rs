@@ -8,6 +8,7 @@ pub struct AgentBuilder {
     config: AgentConfig,
 }
 
+#[cfg(feature = "std")]
 impl Default for AgentBuilder {
     fn default() -> Self {
         Self {

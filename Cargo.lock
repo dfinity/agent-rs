@@ -830,7 +830,8 @@ dependencies = [
  "serde_bytes",
  "serde_cbor",
  "serde_json",
- "simple_asn1",
+ "sha2 0.10.1",
+ "simple_asn1 0.5.4",
  "thiserror",
  "tokio",
  "url",
@@ -869,7 +870,7 @@ dependencies = [
  "num-bigint 0.4.3",
  "openssl",
  "pkcs11",
- "simple_asn1",
+ "simple_asn1 0.6.1",
  "thiserror",
 ]
 
@@ -2006,6 +2007,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e51e73328dc4ac0c7ccbda3a494dfa03df1de2f46018127f60c693f2648455b0"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "simple_asn1"
+version = "0.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8eb4ea60fb301dc81dfc113df680571045d375ab7345d171c5dc7d7e13107a80"
+dependencies = [
+ "chrono",
+ "num-bigint 0.4.3",
+ "num-traits",
+ "thiserror",
 ]
 
 [[package]]

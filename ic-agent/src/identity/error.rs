@@ -12,9 +12,11 @@ pub enum PemError {
     #[error("An error occurred while reading the file: {0}")]
     PemError(#[from] pem::PemError),
 
+    #[cfg(feature = "std")]
     #[error("A key was rejected by Ring: {0}")]
     KeyRejected(#[from] ring::error::KeyRejected),
 
+    #[cfg(feature = "std")]
     #[error("A key was rejected by OpenSSL: {0}")]
     ErrorStack(#[from] openssl::error::ErrorStack),
 }

@@ -1,4 +1,6 @@
+#[cfg(feature = "std")]
 use rand::{rngs::OsRng, Rng};
+
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc, Mutex,
@@ -17,6 +19,7 @@ impl NonceFactory {
         }
     }
 
+    #[cfg(feature = "std")]
     pub fn random() -> NonceFactory {
         Self {
             inner: Arc::new(RandomBlob {}),
@@ -72,6 +75,7 @@ impl<T: Send + Iterator<Item = Vec<u8>>> NonceGenerator for Iter<T> {
 
 #[derive(Default)]
 pub struct RandomBlob {}
+#[cfg(feature = "std")]
 impl NonceGenerator for RandomBlob {
     fn generate(&self) -> Option<Vec<u8>> {
         Some(OsRng.gen::<[u8; 16]>().to_vec())

@@ -4,7 +4,7 @@ pub mod agent_error;
 pub(crate) mod builder;
 pub mod http_transport;
 pub(crate) mod nonce;
-pub(crate) mod replica_api;
+pub mod replica_api;
 pub(crate) mod response;
 pub(crate) mod response_authentication;
 
@@ -257,6 +257,7 @@ pub struct Agent {
 impl Agent {
     /// Create an instance of an [`AgentBuilder`] for building an [`Agent`]. This is simpler than
     /// using the [`AgentConfig`] and [`Agent::new()`].
+    #[cfg(feature = "std")]
     pub fn builder() -> builder::AgentBuilder {
         Default::default()
     }
