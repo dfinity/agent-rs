@@ -6,12 +6,12 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-candid = "0.7.4"
+candid = "0.7.10"
 garcon = { version = "0.2.3", features = ["async"] }
 ic-agent = { path = "../ic-agent" }
 ic-identity-hsm = { path = "../ic-identity-hsm" }
 ic-utils = { path = "../ic-utils", features = ["raw"] }
-openssl = "0.10.24"
+openssl = "0.10.38"
 ring = "0.16.11"
 serde = { version = "1.0.101", features = ["derive"] }
 tokio = { version = "1.8.1", features = ["full"] }

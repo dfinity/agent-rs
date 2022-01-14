@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1] - 2022-01-10
+
+The `lookup_value` function now takes generics which can be iterated over (`IntoIterator<Item = &'p Label>`)  and transformed into a `Vec<Label>`, rather than just a `Vec<Label>`.
+
+## [0.11.0] - 2022-01-07
+
+### Breaking change: Updated to ic-types 0.3.0
+
+The `lookup_path` method now takes an `Iterator<Label>` rather than an `AsRef<[Label]>`
+
+## [0.10.2] - 2021-12-22
+
+### ic-agent
+
+Added support for upgrading HTTP requests (http_request_update method)
+
 ## [0.10.1] - 2021-12-10
 
 Updated crate dependencies, most notably updating rustls,
