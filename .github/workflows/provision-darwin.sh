@@ -10,6 +10,8 @@ curl --location --output install-brew.sh "https://raw.githubusercontent.com/Home
 bash install-brew.sh
 rm install-brew.sh
 
+brew install openssl
+
 # Install Node.
 version=14.15.4
 curl --location --output node.pkg "https://nodejs.org/dist/v$version/node-v$version.pkg"
@@ -41,6 +43,8 @@ echo "BATS_SUPPORT=${BATS_SUPPORT}" >> "$GITHUB_ENV"
 
 # Exit temporary directory.
 popd
+
+ls -l /usr/local/opt
 
 # Build icx-asset
 cargo build -p icx-asset
