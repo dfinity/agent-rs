@@ -5,11 +5,7 @@ set -ex
 # Enter temporary directory.
 pushd /tmp
 
-# Install Homebrew
-curl --location --output install-brew.sh "https://raw.githubusercontent.com/Homebrew/install/master/install.sh"
-bash install-brew.sh
-rm install-brew.sh
-
+# Install brew dependencies
 brew install openssl
 
 # Install Node.
@@ -43,8 +39,6 @@ echo "BATS_SUPPORT=${BATS_SUPPORT}" >> "$GITHUB_ENV"
 
 # Exit temporary directory.
 popd
-
-ls -l /usr/local/opt
 
 # Build icx-asset
 cargo build -p icx-asset
