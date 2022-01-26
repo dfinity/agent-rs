@@ -1,6 +1,5 @@
 use ic_agent::{ic_types::Principal, Identity, Signature};
 
-use openssl::sha::Sha256;
 use pkcs11::{
     types::{
         CKA_CLASS, CKA_EC_PARAMS, CKA_EC_POINT, CKA_ID, CKA_KEY_TYPE, CKF_LOGIN_REQUIRED,
@@ -9,6 +8,10 @@ use pkcs11::{
         CK_OBJECT_HANDLE, CK_SESSION_HANDLE, CK_SLOT_ID,
     },
     Ctx,
+};
+use sha2::{
+    digest::{generic_array::GenericArray, OutputSizeUser},
+    Digest, Sha256,
 };
 use simple_asn1::{
     from_der, oid, to_der,
@@ -23,7 +26,7 @@ type KeyId = [u8];
 type DerPublicKeyVec = Vec<u8>;
 
 /// Type alias for a sha256 result (ie. a u256).
-type Sha256Hash = [u8; 32];
+type Sha256Hash = GenericArray<u8, <Sha256 as OutputSizeUser>::OutputSize>;
 
 // We expect the parameters to be curve secp256r1.  This is the base127 encoded form:
 const EXPECTED_EC_PARAMS: &[u8; 10] = b"\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07";
@@ -116,7 +119,7 @@ impl Identity for HardwareIdentity {
         Ok(Principal::self_authenticating(&self.public_key))
     }
     fn sign(&self, msg: &[u8]) -> Result<Signature, String> {
-        let hash = hash_message(msg);
+        let hash = Sha256::digest(msg);
         let signature = self.sign_hash(&hash)?;
 
         Ok(Signature {
@@ -333,12 +336,6 @@ fn get_object_handle_for_key(
 fn str_to_key_id(s: &str) -> Result<KeyIdVec, HardwareIdentityError> {
     let bytes = hex::decode(s)?;
     Ok(bytes)
-}
-
-fn hash_message(msg: &[u8]) -> Sha256Hash {
-    let mut sha256 = Sha256::new();
-    sha256.update(msg);
-    sha256.finish()
 }
 
 impl HardwareIdentity {

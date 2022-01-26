@@ -22,21 +22,25 @@ hex = "0.4.0"
 http = "0.2.6"
 hyper-rustls = { version = "0.23.0", features = [ "webpki-roots" ] }
 ic-types = "0.3.0"
+k256 = "0.10"
 leb128 = "0.2.5"
 mime = "0.3.16"
-openssl = "0.10.38"
 rand = "0.8.4"
 rustls = "0.20.2"
 ring = { version = "0.16.11", features = ["std"] }
 serde = { version = "1.0.133", features = ["derive"] }
 serde_bytes = "0.11.2"
 serde_cbor = "0.11.2"
+sha2 = "0.10"
 simple_asn1 = "0.6.1"
 thiserror = "1.0.30"
 url = "2.1.0"
+pkcs8 = { version = "0.8", features = ["std"] }
+sec1 = { version = "0.2", features = ["pem"]}
 
 [dependencies.reqwest]
 version = "0.11"
+default-features = false
 features = [ "blocking", "json", "rustls-tls" ]
 optional = true
 

@@ -15,6 +15,6 @@ pub enum PemError {
     #[error("A key was rejected by Ring: {0}")]
     KeyRejected(#[from] ring::error::KeyRejected),
 
-    #[error("A key was rejected by OpenSSL: {0}")]
-    ErrorStack(#[from] openssl::error::ErrorStack),
+    #[error("A key was rejected by k256: {0}")]
+    ErrorStack(#[from] k256::pkcs8::Error),
 }

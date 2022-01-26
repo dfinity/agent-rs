@@ -30,21 +30,6 @@ jobs:
           rustup update ${{ matrix.rust }} --no-self-update
           rustup default ${{ matrix.rust }}
 
-      - name: Install dependencies (macos only)
-        if: matrix.os == 'macos-latest'
-        run: brew install openssl
-
-      - name: Install dependencies (windows only)
-        if: matrix.os == 'windows-latest'
-        shell: bash
-        run: |
-          vcpkg integrate install
-          vcpkg install openssl:x64-windows-static-md
-          echo "::set-env OPENSSL_DIR 'C:\Tools\vcpkg\installed\x64-windows-static-md'"
-          echo "::set-env OPENSSL_STATIC Yes"
-        env:
-          VCPKG_ROOT: 'C:\vcpkg'
-
       - name: Run Tests
         shell: bash
         run: |

@@ -25,9 +25,9 @@ ic-types = "0.3.0"
 ic-utils = { path = "../ic-utils", version = "0.11" }
 mime = "0.3.16"
 mime_guess = "2.0.3"
-openssl = "0.10.38"
 serde = "1.0"
 serde_bytes = "0.11.2"
+sha2 = "0.10"
 walkdir = "2.2.9"
 
 [dev-dependencies]

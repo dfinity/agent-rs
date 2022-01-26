@@ -5,9 +5,6 @@ set -ex
 # Enter temporary directory.
 pushd /tmp
 
-# Install brew dependencies
-brew install openssl
-
 # Install Node.
 version=14.15.4
 curl --location --output node.pkg "https://nodejs.org/dist/v$version/node-v$version.pkg"
