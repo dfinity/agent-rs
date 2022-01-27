@@ -4,16 +4,9 @@ use crate::{
 };
 use std::sync::Arc;
 
+#[derive(Default)]
 pub struct AgentBuilder {
     config: AgentConfig,
-}
-
-impl Default for AgentBuilder {
-    fn default() -> Self {
-        Self {
-            config: Default::default(),
-        }
-    }
 }
 
 impl AgentBuilder {

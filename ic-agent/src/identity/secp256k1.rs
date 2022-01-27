@@ -6,16 +6,17 @@ use crate::identity::error::PemError;
 use k256::{
     ecdsa::{self, signature::Signer, SigningKey, VerifyingKey},
     elliptic_curve::{sec1::ToEncodedPoint, AlgorithmParameters},
-    pkcs8::{self, PublicKeyDocument, SubjectPublicKeyInfo},
+    pkcs8::{PublicKeyDocument, SubjectPublicKeyInfo},
     Secp256k1, SecretKey,
 };
+use std::convert::TryInto;
 #[cfg(feature = "pem")]
-use std::{convert::TryInto, fs::File, io, path::Path};
+use std::{fs::File, io, path::Path};
 
 #[derive(Clone, Debug)]
 pub struct Secp256k1Identity {
     private_key: SigningKey,
-    public_key: VerifyingKey,
+    _public_key: VerifyingKey,
     der_encoded_public_key: PublicKeyDocument,
 }
 
@@ -39,7 +40,7 @@ impl Secp256k1Identity {
                 SecretKey::from_sec1_der(&pem.contents).map_err(|_| pkcs8::Error::KeyMalformed)?;
             return Ok(Self::from_private_key(private_key));
         }
-        return Err(pem::PemError::MissingData.into());
+        Err(pem::PemError::MissingData.into())
     }
 
     pub fn from_private_key(private_key: SecretKey) -> Self {
@@ -53,7 +54,7 @@ impl Secp256k1Identity {
         .expect("Cannot DER encode secp256k1 public key.");
         Self {
             private_key: private_key.into(),
-            public_key: public_key.into(),
+            _public_key: public_key.into(),
             der_encoded_public_key,
         }
     }
@@ -70,7 +71,7 @@ impl Identity for Secp256k1Identity {
         let ecdsa_sig: ecdsa::Signature = self
             .private_key
             .try_sign(msg)
-            .map_err(|err| format!("Cannot create secp256k1 signature: {}", err.to_string(),))?;
+            .map_err(|err| format!("Cannot create secp256k1 signature: {}", err))?;
         let r = ecdsa_sig.r().as_ref().to_bytes();
         let s = ecdsa_sig.s().as_ref().to_bytes();
         let mut bytes = [0; 64];
@@ -149,7 +150,7 @@ N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
 
         // Assert the secp256k1 signature is valid.
         identity
-            .public_key
+            ._public_key
             .verify(message, &ecdsa_sig)
             .expect("Cannot verify secp256k1 signature.");
     }
