@@ -572,7 +572,7 @@ impl Agent {
         }
     }
 
-    async fn read_state_raw(
+    pub async fn read_state_raw(
         &self,
         paths: Vec<Vec<Label>>,
         effective_canister_id: Principal,
