@@ -177,7 +177,7 @@ impl<'agent> Canister<'agent, ()> {
 /// argument values.
 enum ArgumentType {
     Raw(Vec<u8>),
-    Idl(candid::ser::IDLBuilder),
+    Idl(IDLBuilder),
 }
 
 pub struct Argument(Result<ArgumentType, AgentError>);

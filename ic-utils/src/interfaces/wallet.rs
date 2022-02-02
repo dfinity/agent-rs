@@ -8,7 +8,7 @@ use crate::{
     Canister,
 };
 use async_trait::async_trait;
-use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize};
+use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize, Nat};
 use garcon::{Delay, Waiter};
 use ic_agent::{agent::UpdateBuilder, export::Principal, Agent, AgentError, RequestId};
 
@@ -31,9 +31,9 @@ where
 #[derive(CandidType, Deserialize)]
 pub struct CanisterSettingsV1 {
     pub controller: Option<Principal>,
-    pub compute_allocation: Option<candid::Nat>,
-    pub memory_allocation: Option<candid::Nat>,
-    pub freezing_threshold: Option<candid::Nat>,
+    pub compute_allocation: Option<Nat>,
+    pub memory_allocation: Option<Nat>,
+    pub freezing_threshold: Option<Nat>,
 }
 
 impl<'agent, 'canister: 'agent, Out> CallForwarder<'agent, 'canister, Out>
@@ -324,9 +324,9 @@ impl<'agent> Canister<'agent, Wallet> {
 
         let settings = CanisterSettingsV1 {
             controller,
-            compute_allocation: compute_allocation.map(u8::from).map(candid::Nat::from),
-            memory_allocation: memory_allocation.map(u64::from).map(candid::Nat::from),
-            freezing_threshold: freezing_threshold.map(u64::from).map(candid::Nat::from),
+            compute_allocation: compute_allocation.map(u8::from).map(Nat::from),
+            memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
+            freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
         };
 
         self.update_("wallet_create_canister")
@@ -352,9 +352,9 @@ impl<'agent> Canister<'agent, Wallet> {
 
         let settings = CanisterSettings {
             controllers,
-            compute_allocation: compute_allocation.map(u8::from).map(candid::Nat::from),
-            memory_allocation: memory_allocation.map(u64::from).map(candid::Nat::from),
-            freezing_threshold: freezing_threshold.map(u64::from).map(candid::Nat::from),
+            compute_allocation: compute_allocation.map(u8::from).map(Nat::from),
+            memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
+            freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
         };
 
         self.update_("wallet_create_canister")
@@ -438,9 +438,9 @@ impl<'agent> Canister<'agent, Wallet> {
 
         let settings = CanisterSettingsV1 {
             controller,
-            compute_allocation: compute_allocation.map(u8::from).map(candid::Nat::from),
-            memory_allocation: memory_allocation.map(u64::from).map(candid::Nat::from),
-            freezing_threshold: freezing_threshold.map(u64::from).map(candid::Nat::from),
+            compute_allocation: compute_allocation.map(u8::from).map(Nat::from),
+            memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
+            freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
         };
 
         self.update_("wallet_create_wallet")
@@ -466,9 +466,9 @@ impl<'agent> Canister<'agent, Wallet> {
 
         let settings = CanisterSettings {
             controllers,
-            compute_allocation: compute_allocation.map(u8::from).map(candid::Nat::from),
-            memory_allocation: memory_allocation.map(u64::from).map(candid::Nat::from),
-            freezing_threshold: freezing_threshold.map(u64::from).map(candid::Nat::from),
+            compute_allocation: compute_allocation.map(u8::from).map(Nat::from),
+            memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
+            freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
         };
 
         self.update_("wallet_create_wallet")
