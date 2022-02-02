@@ -48,7 +48,7 @@ pub(crate) fn lookup_canister_info(
     canister_id: Principal,
     path: &str,
 ) -> Result<Vec<u8>, AgentError> {
-    let path_canister = vec!["canister".into(), canister_id.into(), path.into()];
+    let path_canister = ["canister".into(), canister_id.into(), path.into()];
     lookup_value(&certificate, path_canister).map(<[u8]>::to_vec)
 }
 
@@ -57,7 +57,7 @@ pub(crate) fn lookup_canister_metadata(
     canister_id: Principal,
     path: &str,
 ) -> Result<Vec<u8>, AgentError> {
-    let path_canister = vec![
+    let path_canister = [
         "canister".into(),
         canister_id.into(),
         "metadata".into(),
@@ -70,13 +70,14 @@ pub(crate) fn lookup_request_status(
     certificate: Certificate,
     request_id: &RequestId,
 ) -> Result<RequestStatusResponse, AgentError> {
-    let path_status = vec![
+    use AgentError::*;
+    let path_status = [
         "request_status".into(),
         request_id.to_vec().into(),
         "status".into(),
     ];
     match certificate.tree.lookup_path(&path_status) {
-        LookupResult::Absent => Err(AgentError::LookupPathAbsent(path_status)),
+        LookupResult::Absent => Err(LookupPathAbsent(path_status.into())),
         LookupResult::Unknown => Ok(RequestStatusResponse::Unknown),
         LookupResult::Found(status) => match from_utf8(status)? {
             "done" => Ok(RequestStatusResponse::Done),
@@ -84,12 +85,9 @@ pub(crate) fn lookup_request_status(
             "received" => Ok(RequestStatusResponse::Received),
             "rejected" => lookup_rejection(&certificate, request_id),
             "replied" => lookup_reply(&certificate, request_id),
-            other => Err(AgentError::InvalidRequestStatus(
-                path_status,
-                other.to_string(),
-            )),
+            other => Err(InvalidRequestStatus(path_status.into(), other.to_string())),
         },
-        LookupResult::Error => Err(AgentError::LookupPathError(path_status)),
+        LookupResult::Error => Err(LookupPathError(path_status.into())),
     }
 }
 
@@ -110,7 +108,7 @@ pub(crate) fn lookup_reject_code(
     certificate: &Certificate,
     request_id: &RequestId,
 ) -> Result<u64, AgentError> {
-    let path = vec![
+    let path = [
         "request_status".into(),
         request_id.to_vec().into(),
         "reject_code".into(),
@@ -124,7 +122,7 @@ pub(crate) fn lookup_reject_message(
     certificate: &Certificate,
     request_id: &RequestId,
 ) -> Result<String, AgentError> {
-    let path = vec![
+    let path = [
         "request_status".into(),
         request_id.to_vec().into(),
         "reject_message".into(),
@@ -137,7 +135,7 @@ pub(crate) fn lookup_reply(
     certificate: &Certificate,
     request_id: &RequestId,
 ) -> Result<RequestStatusResponse, AgentError> {
-    let path = vec![
+    let path = [
         "request_status".into(),
         request_id.to_vec().into(),
         "reply".into(),
@@ -147,14 +145,19 @@ pub(crate) fn lookup_reply(
     Ok(RequestStatusResponse::Replied { reply })
 }
 
-pub fn lookup_value<'a>(
+pub fn lookup_value<'a, P>(
     certificate: &'a Certificate<'a>,
-    path: Vec<Label>,
-) -> Result<&'a [u8], AgentError> {
+    path: P,
+) -> Result<&'a [u8], AgentError>
+where
+    for<'p> &'p P: IntoIterator<Item = &'p Label>,
+    P: Into<Vec<Label>>,
+{
+    use AgentError::*;
     match certificate.tree.lookup_path(&path) {
-        LookupResult::Absent => Err(AgentError::LookupPathAbsent(path)),
-        LookupResult::Unknown => Err(AgentError::LookupPathUnknown(path)),
+        LookupResult::Absent => Err(LookupPathAbsent(path.into())),
+        LookupResult::Unknown => Err(LookupPathUnknown(path.into())),
         LookupResult::Found(value) => Ok(value),
-        LookupResult::Error => Err(AgentError::LookupPathError(path)),
+        LookupResult::Error => Err(LookupPathError(path.into())),
     }
 }

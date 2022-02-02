@@ -5,10 +5,8 @@ set -ex
 # Enter temporary directory.
 pushd /tmp
 
-# Install Homebrew
-curl --location --output install-brew.sh "https://raw.githubusercontent.com/Homebrew/install/master/install.sh"
-bash install-brew.sh
-rm install-brew.sh
+# Install brew dependencies
+brew install openssl
 
 # Install Node.
 version=14.15.4

@@ -108,7 +108,7 @@ pub struct ReadStateResponse {
     pub certificate: Vec<u8>,
 }
 
-/// A `Certificate` as defined in https://docs.dfinity.systems/public/#_certificate
+/// A `Certificate` as defined in https://smartcontracts.org/docs/interface-spec/index.html#_certificate
 #[derive(Deserialize)]
 pub struct Certificate<'a> {
     pub tree: HashTree<'a>,

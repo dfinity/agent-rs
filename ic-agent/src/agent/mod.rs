@@ -625,7 +625,7 @@ impl Agent {
                 let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;
                 self.verify(&cert)?;
-                let public_key_path = vec![
+                let public_key_path = [
                     "subnet".into(),
                     delegation.subnet_id.clone().into(),
                     "public_key".into(),
