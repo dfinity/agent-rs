@@ -129,8 +129,8 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
 
 #[cfg(test)]
 mod test {
-    use candid::{Encode, Decode};
     use super::HttpResponse;
+    use candid::{Decode, Encode};
 
     mod pre_update_legacy {
         use candid::{CandidType, Deserialize, Func, Nat};
@@ -143,21 +143,21 @@ mod test {
             index: Nat,
             sha256: Option<ByteBuf>,
         }
-    
+
         #[derive(CandidType, Deserialize)]
         pub struct CallbackStrategy {
             pub callback: Func,
             pub token: Token,
         }
-    
+
         #[derive(CandidType, Clone, Deserialize)]
         pub struct HeaderField(pub String, pub String);
-    
+
         #[derive(CandidType, Deserialize)]
         pub enum StreamingStrategy {
             Callback(CallbackStrategy),
         }
-    
+
         #[derive(CandidType, Deserialize)]
         pub struct HttpResponse {
             pub status_code: u16,
@@ -170,12 +170,13 @@ mod test {
 
     #[test]
     fn deserialize_legacy_http_response() {
-        let bytes: Vec<u8> = Encode!(&pre_update_legacy::HttpResponse{
+        let bytes: Vec<u8> = Encode!(&pre_update_legacy::HttpResponse {
             status_code: 100,
             headers: Vec::new(),
             body: Vec::new(),
             streaming_strategy: None,
-        }).unwrap();
+        })
+        .unwrap();
 
         let _response = Decode!(&bytes, HttpResponse).unwrap();
     }
