@@ -126,3 +126,57 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
         self.query_(&method.into()).with_arg(token).build()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use candid::{Encode, Decode};
+    use super::HttpResponse;
+
+    mod pre_update_legacy {
+        use candid::{CandidType, Deserialize, Func, Nat};
+        use serde_bytes::ByteBuf;
+
+        #[derive(CandidType, Deserialize)]
+        pub struct Token {
+            key: String,
+            content_encoding: String,
+            index: Nat,
+            sha256: Option<ByteBuf>,
+        }
+    
+        #[derive(CandidType, Deserialize)]
+        pub struct CallbackStrategy {
+            pub callback: Func,
+            pub token: Token,
+        }
+    
+        #[derive(CandidType, Clone, Deserialize)]
+        pub struct HeaderField(pub String, pub String);
+    
+        #[derive(CandidType, Deserialize)]
+        pub enum StreamingStrategy {
+            Callback(CallbackStrategy),
+        }
+    
+        #[derive(CandidType, Deserialize)]
+        pub struct HttpResponse {
+            pub status_code: u16,
+            pub headers: Vec<HeaderField>,
+            #[serde(with = "serde_bytes")]
+            pub body: Vec<u8>,
+            pub streaming_strategy: Option<StreamingStrategy>,
+        }
+    }
+
+    #[test]
+    fn deserialize_legacy_http_response() {
+        let bytes: Vec<u8> = Encode!(&pre_update_legacy::HttpResponse{
+            status_code: 100,
+            headers: Vec::new(),
+            body: Vec::new(),
+            streaming_strategy: None,
+        }).unwrap();
+
+        let _response = Decode!(&bytes, HttpResponse).unwrap();
+    }
+}
