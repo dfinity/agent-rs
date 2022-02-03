@@ -47,7 +47,7 @@ pub struct HttpResponse {
     #[serde(with = "serde_bytes")]
     pub body: Vec<u8>,
     pub streaming_strategy: Option<StreamingStrategy>,
-    pub upgrade: bool,
+    pub upgrade: Option<bool>,
 }
 
 #[derive(CandidType, Deserialize)]
