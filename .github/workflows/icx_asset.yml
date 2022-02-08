@@ -31,12 +31,12 @@ jobs:
 
       - name: Provision Darwin
         if: contains(matrix.os, 'macos')
-        run: bash scripts/workflows/provision-darwin.sh
+        run: bash .github/workflows/provision-darwin.sh
         env:
           DFX_VERSION: ${{ matrix.dfx }}
       - name: Provision Linux
         if: contains(matrix.os, 'ubuntu')
-        run: bash scripts/workflows/provision-linux.sh
+        run: bash .github/workflows/provision-linux.sh
         env:
           DFX_VERSION: ${{ matrix.dfx }}
 
