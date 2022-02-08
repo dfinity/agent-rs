@@ -43,3 +43,12 @@ jobs:
       - name: 'Test icx-asset'
         run: bats e2e/bash/icx-asset.bash
 
+  aggregate:
+    name: icx-asset:required
+    if: ${{ always() }}
+    needs: [ icx-asset ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: check e2e test result
+        if: ${{ needs.icx-asset.result != 'success' }}
+        run: exit 1
