@@ -104,6 +104,7 @@ pub struct ClearArguments {}
 
 /// Batch operations that can be applied atomically.
 #[derive(CandidType, Debug)]
+#[allow(dead_code)]
 pub enum BatchOperationKind {
     /// Create a new asset.
     CreateAsset(CreateAssetArguments),
@@ -118,7 +119,7 @@ pub enum BatchOperationKind {
     DeleteAsset(DeleteAssetArguments),
 
     /// Clear all state from the asset canister.
-    _Clear(ClearArguments),
+    Clear(ClearArguments),
 }
 
 /// Apply all of the operations in the batch, and then remove the batch.
