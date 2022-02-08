@@ -22,10 +22,11 @@ sudo tar --directory /usr/local/lib/bats-support --extract --file v$version.tar.
 rm v$version.tar.gz
 
 # Install DFINITY SDK.
-version=0.8.4
 wget --output-document install-dfx.sh "https://sdk.dfinity.org/install.sh"
-DFX_VERSION=$version bash install-dfx.sh < <(yes Y)
+echo "DFX VERSION IS $DFX_VERSION"
+bash install-dfx.sh < <(yes Y)
 rm install-dfx.sh
+dfx --version
 
 # Set environment variables.
 BATS_SUPPORT="/usr/local/lib/bats-support"
