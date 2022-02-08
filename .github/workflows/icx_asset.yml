@@ -33,12 +33,12 @@ jobs:
         if: contains(matrix.os, 'macos')
         run: bash .github/workflows/provision-darwin.sh
         env:
-          DFX_VERSION: ${{ matrix.dfx }}
+          INSTALL_DFX_VERSION: ${{ matrix.dfx }}
       - name: Provision Linux
         if: contains(matrix.os, 'ubuntu')
         run: bash .github/workflows/provision-linux.sh
         env:
-          DFX_VERSION: ${{ matrix.dfx }}
+          INSTALL_DFX_VERSION: ${{ matrix.dfx }}
 
       - name: 'Test icx-asset'
         run: bats e2e/bash/icx-asset.bash
