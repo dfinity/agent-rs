@@ -7,6 +7,14 @@ pub(crate) fn retryable(agent_error: &AgentError) -> bool {
             reject_code,
             reject_message,
         } if *reject_code == 5 && reject_message.contains("is out of cycles") => false,
+        AgentError::ReplicaError {
+            reject_code,
+            reject_message,
+        } if *reject_code == 5 && reject_message.contains("Fail to decode") => false,
+        AgentError::ReplicaError {
+            reject_code,
+            reject_message,
+        } if *reject_code == 4 && reject_message.contains("is not authorized") => false,
         AgentError::HttpError(HttpErrorPayload {
             status,
             content_type: _,
