@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.12.0]
+## [0.12.1] - 2022-02-09
+
+Renamed BatchOperationKind._Clear to Clear for compatibility with the certified assets canister.
+This avoids decode errors, even though the type isn't referenced here.
+
+## [0.12.0] - 2022-02-03
 
 Changed the 'HttpRequest.upgrade' field to 'Option<bool>' from 'bool'.
 
