@@ -18,8 +18,7 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 anyhow = "1.0.34"
 candid = "0.7.10"
 chrono = "0.4.19"
-clap = "=3.0.0-beta.5"
-clap_derive = "=3.0.0-beta.5"
+clap = { version = "3.0.14", features = ["derive", "cargo"] }
 delay = "0.3.1"
 garcon = "0.2.2"
 humantime = "2.0.1"
