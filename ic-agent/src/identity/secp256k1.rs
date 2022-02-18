@@ -8,6 +8,7 @@ use openssl::{
     ec::{EcKey, PointConversionForm},
     ecdsa::EcdsaSig,
     error::ErrorStack,
+    nid::Nid,
     pkey::{Private, Public},
     sha::sha256,
 };
@@ -40,6 +41,9 @@ impl Secp256k1Identity {
 
     pub fn from_private_key(private_key: EcKey<Private>) -> Self {
         let group = private_key.group();
+        if group.curve_name() != Some(Nid::SECP256K1) {
+            panic!("Wrong curve detected when trying to load secp256k1 identity.")
+        }
         let public_key = EcKey::from_public_key(group, private_key.public_key())
             .expect("Cannot derive secp256k1 public key.");
         let asn1_block = public_key_to_asn1_block(public_key.clone())
@@ -91,9 +95,33 @@ fn public_key_to_asn1_block(public_key: EcKey<Public>) -> Result<ASN1Block, Erro
     Ok(Sequence(0, vec![metadata, data]))
 }
 
-#[cfg(feature = "pem")]
 #[cfg(test)]
 mod test {
+    use super::*;
+
+    // WRONG_CURVE_IDENTITY_FILE is generated from the following command:
+    // > openssl ecparam -name secp160r2 -genkey
+    // it uses hte secp160r2 curve instead of secp256k1 and should
+    // therefore be rejected by Secp256k1Identity when loading an identity
+    const WRONG_CURVE_IDENTITY_FILE: &str = "-----BEGIN EC PARAMETERS-----
+BgUrgQQAHg==
+-----END EC PARAMETERS-----
+-----BEGIN EC PRIVATE KEY-----
+MFACAQEEFI9cF6zXxMKhtjn1gBD7AHPbzehfoAcGBSuBBAAeoSwDKgAEh5NXszgR
+oGSXVWaGxcQhQWlFG4pbnOG+93xXzfRD7eKWOdmun2bKxQ==
+-----END EC PRIVATE KEY-----
+";
+
+    #[test]
+    #[should_panic(expected = "Wrong curve detected when trying to load secp256k1 identity.")]
+    fn test_secp256k1_reject_wrong_curve() {
+        let _ = Secp256k1Identity::from_pem(WRONG_CURVE_IDENTITY_FILE.as_bytes());
+    }
+}
+
+#[cfg(feature = "pem")]
+#[cfg(test)]
+mod test_pem {
     use super::*;
     use openssl::bn::BigNum;
 
