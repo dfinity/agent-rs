@@ -115,7 +115,10 @@ oGSXVWaGxcQhQWlFG4pbnOG+93xXzfRD7eKWOdmun2bKxQ==
     #[test]
     #[should_panic(expected = "Wrong curve detected when trying to load secp256k1 identity.")]
     fn test_secp256k1_reject_wrong_curve() {
-        let _ = Secp256k1Identity::from_pem(WRONG_CURVE_IDENTITY_FILE.as_bytes());
+        let private_key =
+            EcKey::private_key_from_pem(WRONG_CURVE_IDENTITY_FILE.as_bytes()).unwrap();
+
+        let _ = Secp256k1Identity::from_private_key(private_key);
     }
 }
 
