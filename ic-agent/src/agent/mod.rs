@@ -586,7 +586,7 @@ impl Agent {
 
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
-        self.verify(&cert)?;
+        self.verify(&cert, &effective_canister_id)?;
         Ok(cert)
     }
 
@@ -599,7 +599,8 @@ impl Agent {
     }
 
     /// Verify a certificate, checking delegation if present.
-    pub fn verify(&self, cert: &Certificate) -> Result<(), AgentError> {
+    /// Only passes if the certificate also has authority over the canister.
+    pub fn verify(&self, cert: &Certificate, canister: &Principal) -> Result<(), AgentError> {
         let sig = &cert.signature;
 
         let root_hash = cert.tree.digest();
@@ -607,9 +608,8 @@ impl Agent {
         msg.extend_from_slice(IC_STATE_ROOT_DOMAIN_SEPARATOR);
         msg.extend_from_slice(&root_hash);
 
-        let der_key = self.check_delegation(&cert.delegation)?;
+        let der_key = self.check_delegation(&cert.delegation, canister)?;
         let key = extract_der(der_key)?;
-
         let result = bls::core_verify(sig, &*msg, &*key);
         if result != bls::BLS_OK {
             Err(AgentError::CertificateVerificationFailed())
@@ -618,13 +618,29 @@ impl Agent {
         }
     }
 
-    fn check_delegation(&self, delegation: &Option<Delegation>) -> Result<Vec<u8>, AgentError> {
+    fn check_delegation(
+        &self,
+        delegation: &Option<Delegation>,
+        canister: &Principal,
+    ) -> Result<Vec<u8>, AgentError> {
         match delegation {
             None => self.read_root_key(),
             Some(delegation) => {
                 let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;
-                self.verify(&cert)?;
+                self.verify(&cert, canister)?;
+                let canister_range_lookup = [
+                    "subnet".into(),
+                    delegation.subnet_id.clone().into(),
+                    "canister_ranges".into(),
+                ];
+                let canister_range = lookup_value(&cert, canister_range_lookup)?;
+                let ranges: Vec<Vec<Principal>> =
+                    serde_cbor::from_slice(&canister_range).map_err(AgentError::InvalidCborData)?;
+                if !principal_is_within_ranges(&canister, &ranges[..]) {
+                    // the certificate is not authorized to answer calls for this canister
+                    return Err(AgentError::CertificateVerificationFailed());
+                }
                 let public_key_path = [
                     "subnet".into(),
                     delegation.subnet_id.clone().into(),
@@ -694,7 +710,7 @@ impl Agent {
 
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
-        self.verify(&cert)?;
+        self.verify(&cert, &effective_canister_id)?;
         lookup_request_status(cert, request_id)
     }
 
@@ -749,6 +765,14 @@ impl Agent {
             }),
         }
     }
+}
+
+// Checks if a principal is contained within a list of principal ranges
+// Assumes a range to be a Vec<Principal> with 2 elements, as described here: https://docs.dfinity.systems/spec/public/#state-tree-subnet
+fn principal_is_within_ranges(principal: &Principal, ranges: &[Vec<Principal>]) -> bool {
+    ranges
+        .into_iter()
+        .any(|r| principal >= r.get(0).unwrap() && principal <= r.get(1).unwrap())
 }
 
 fn construct_message(request_id: &RequestId) -> Vec<u8> {
