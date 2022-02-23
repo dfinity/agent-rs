@@ -86,6 +86,9 @@ pub enum AgentError {
     #[error("Certificate verification failed.")]
     CertificateVerificationFailed(),
 
+    #[error("Certificate is not authorized to respond to queries for this canister")]
+    CertificateNotAuthorized(),
+
     #[error(
         r#"BLS DER-encoded public key must be ${expected} bytes long, but is {actual} bytes long."#
     )]

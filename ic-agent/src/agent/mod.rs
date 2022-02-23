@@ -636,10 +636,10 @@ impl Agent {
                 ];
                 let canister_range = lookup_value(&cert, canister_range_lookup)?;
                 let ranges: Vec<Vec<Principal>> =
-                    serde_cbor::from_slice(&canister_range).map_err(AgentError::InvalidCborData)?;
-                if !principal_is_within_ranges(&canister, &ranges[..]) {
+                    serde_cbor::from_slice(canister_range).map_err(AgentError::InvalidCborData)?;
+                if !principal_is_within_ranges(canister, &ranges[..]) {
                     // the certificate is not authorized to answer calls for this canister
-                    return Err(AgentError::CertificateVerificationFailed());
+                    return Err(AgentError::CertificateNotAuthorized());
                 }
                 let public_key_path = [
                     "subnet".into(),
@@ -771,7 +771,7 @@ impl Agent {
 // Assumes a range to be a Vec<Principal> with 2 elements, as described here: https://docs.dfinity.systems/spec/public/#state-tree-subnet
 fn principal_is_within_ranges(principal: &Principal, ranges: &[Vec<Principal>]) -> bool {
     ranges
-        .into_iter()
+        .iter()
         .any(|r| principal >= r.get(0).unwrap() && principal <= r.get(1).unwrap())
 }
 
