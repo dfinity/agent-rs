@@ -367,4 +367,5 @@ fn check_subnet_range_with_unauthorized_range() -> Result<(), AgentError> {
             .await
     });
     assert_eq!(result, Err(AgentError::CertificateNotAuthorized()));
+    Ok(())
 }

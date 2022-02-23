@@ -635,7 +635,7 @@ impl Agent {
                     "canister_ranges".into(),
                 ];
                 let canister_range = lookup_value(&cert, canister_range_lookup)?;
-                let ranges: Vec<Vec<Principal>> =
+                let ranges: Vec<(Principal, Principal)> =
                     serde_cbor::from_slice(canister_range).map_err(AgentError::InvalidCborData)?;
                 if !principal_is_within_ranges(canister, &ranges[..]) {
                     // the certificate is not authorized to answer calls for this canister
@@ -768,11 +768,11 @@ impl Agent {
 }
 
 // Checks if a principal is contained within a list of principal ranges
-// Assumes a range to be a Vec<Principal> with 2 elements, as described here: https://docs.dfinity.systems/spec/public/#state-tree-subnet
-fn principal_is_within_ranges(principal: &Principal, ranges: &[Vec<Principal>]) -> bool {
+// A range is a tuple: (low: Principal, high: Principal), as described here: https://docs.dfinity.systems/spec/public/#state-tree-subnet
+fn principal_is_within_ranges(principal: &Principal, ranges: &[(Principal, Principal)]) -> bool {
     ranges
         .iter()
-        .any(|r| principal >= r.get(0).unwrap() && principal <= r.get(1).unwrap())
+        .any(|r| principal >= &r.0 && principal <= &r.1)
 }
 
 fn construct_message(request_id: &RequestId) -> Vec<u8> {

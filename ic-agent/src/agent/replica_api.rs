@@ -109,7 +109,7 @@ pub struct ReadStateResponse {
 }
 
 /// A `Certificate` as defined in https://smartcontracts.org/docs/interface-spec/index.html#_certificate
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize, Eq, PartialEq)]
 pub struct Certificate<'a> {
     pub tree: HashTree<'a>,
 
@@ -119,7 +119,7 @@ pub struct Certificate<'a> {
     pub delegation: Option<Delegation>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize, Eq, PartialEq)]
 pub struct Delegation {
     #[serde(with = "serde_bytes")]
     pub subnet_id: Vec<u8>,
