@@ -366,9 +366,5 @@ fn check_subnet_range_with_unauthorized_range() -> Result<(), AgentError> {
             )
             .await
     });
-    match result {
-        Err(AgentError::CertificateNotAuthorized()) => Ok(()),
-        Ok(_) => panic!("cert with bad canister_range considered valid"),
-        Err(other) => panic!("found something unexpected: {:?}", other),
-    }
+    assert_eq!(result, Err(AgentError::CertificateNotAuthorized()));
 }
