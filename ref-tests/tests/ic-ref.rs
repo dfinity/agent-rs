@@ -707,6 +707,18 @@ mod management_canister {
             Ok(())
         })
     }
+
+    #[ignore]
+    #[test]
+    // makes sure that calling fetch_root_key twice by accident does not break
+    fn multi_fetch_root_key() {
+        with_agent(|agent| async move {
+            agent.fetch_root_key().await?;
+            agent.fetch_root_key().await?;
+
+            Ok(())
+        })
+    }
 }
 
 mod simple_calls {
