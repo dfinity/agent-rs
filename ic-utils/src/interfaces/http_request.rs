@@ -23,7 +23,7 @@ pub struct HttpRequest<'body> {
 pub struct Token {
     key: String,
     content_encoding: String,
-    index: Nat,
+    pub index: Nat,
     // The sha ensures that a client doesn't stream part of one version of an asset
     // followed by part of a different asset, even if not checking the certificate.
     sha256: Option<ByteBuf>,
