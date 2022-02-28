@@ -292,6 +292,12 @@ impl Agent {
     /// *Only use this when you are  _not_ talking to the main Internet Computer, otherwise
     /// you are prone to man-in-the-middle attacks! Do not call this function by default.*
     pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
+        if let Ok(key) = self.read_root_key() {
+            if key != IC_ROOT_KEY.to_vec() {
+                // already fetched the root key
+                return Ok(());
+            }
+        }
         let status = self.status().await?;
         let root_key = status
             .root_key
