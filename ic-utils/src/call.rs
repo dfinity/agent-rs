@@ -3,6 +3,7 @@ use candid::{decode_args, decode_one, utils::ArgumentDecoder, CandidType};
 use garcon::Waiter;
 use ic_agent::{agent::UpdateBuilder, export::Principal, Agent, AgentError, RequestId};
 use serde::de::DeserializeOwned;
+use std::fmt;
 use std::future::Future;
 
 mod expiry;
@@ -133,6 +134,7 @@ where
         AndThenAsyncCaller::new(self, and_then)
     }
 
+    /// Apply a transformation function after the call has been successful. Equivalent to `.and_then(|x| async { map(x) })`.
     fn map<Out2, Map>(self, map: Map) -> MappedAsyncCaller<Out, Out2, Self, Map>
     where
         Self: Sized + Send,
@@ -144,6 +146,7 @@ where
 }
 
 /// A synchronous call encapsulation.
+#[derive(Debug)]
 pub struct SyncCaller<'agent, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send,
@@ -190,6 +193,7 @@ where
 }
 
 /// An async caller, encapsulating a call to an update method.
+#[derive(Debug)]
 pub struct AsyncCaller<'agent, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send,
@@ -217,12 +221,12 @@ where
         Ok(builder)
     }
 
-    /// Perform this call and returns .
+    /// See [`AsyncCall::call`].
     pub async fn call(self) -> Result<RequestId, AgentError> {
         self.build_call()?.call().await
     }
 
-    ///
+    /// See [`AsyncCall::call_and_wait`].
     pub async fn call_and_wait<W>(self, waiter: W) -> Result<Out, AgentError>
     where
         W: Waiter,
@@ -233,6 +237,7 @@ where
             .and_then(|r| decode_args(&r).map_err(|e| AgentError::CandidError(Box::new(e))))
     }
 
+    /// Equivalent to calling [`AsyncCall::call_and_wait`] with the expected return type `(T,)`.
     pub async fn call_and_wait_one<W, T>(self, waiter: W) -> Result<T, AgentError>
     where
         W: Waiter,
@@ -244,6 +249,7 @@ where
             .and_then(|r| decode_one(&r).map_err(|e| AgentError::CandidError(Box::new(e))))
     }
 
+    /// See [`AsyncCall::map`].
     pub fn map<Out2, Map>(self, map: Map) -> MappedAsyncCaller<Out, Out2, Self, Map>
     where
         Out2: for<'de> ArgumentDecoder<'de> + Send,
@@ -285,6 +291,24 @@ pub struct AndThenAsyncCaller<
     _out2: std::marker::PhantomData<Out2>,
 }
 
+impl<Out, Out2, Inner, R, AndThen> fmt::Debug for AndThenAsyncCaller<Out, Out2, Inner, R, AndThen>
+where
+    Out: for<'de> ArgumentDecoder<'de> + Send,
+    Out2: for<'de> ArgumentDecoder<'de> + Send,
+    Inner: AsyncCall<Out> + Send + fmt::Debug,
+    R: Future<Output = Result<Out2, AgentError>> + Send,
+    AndThen: Send + Fn(Out) -> R + fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("AndThenAsyncCaller")
+            .field("inner", &self.inner)
+            .field("and_then", &self.and_then)
+            .field("_out", &self._out)
+            .field("_out2", &self._out2)
+            .finish()
+    }
+}
+
 impl<Out, Out2, Inner, R, AndThen> AndThenAsyncCaller<Out, Out2, Inner, R, AndThen>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send,
@@ -293,6 +317,7 @@ where
     R: Future<Output = Result<Out2, AgentError>> + Send,
     AndThen: Send + Fn(Out) -> R,
 {
+    /// Equivalent to `inner.and_then(and_then)`.
     pub fn new(inner: Inner, and_then: AndThen) -> Self {
         Self {
             inner,
@@ -302,9 +327,11 @@ where
         }
     }
 
+    /// See [`AsyncCall::call`].
     pub async fn call(self) -> Result<RequestId, AgentError> {
         self.inner.call().await
     }
+    /// See [`AsyncCall::call_and_wait`].
     pub async fn call_and_wait<W>(self, waiter: W) -> Result<Out2, AgentError>
     where
         W: Waiter,
@@ -316,6 +343,7 @@ where
         f.await
     }
 
+    /// See [`AsyncCall::and_then`].
     pub fn and_then<Out3, R2, AndThen2>(
         self,
         and_then: AndThen2,
@@ -328,6 +356,7 @@ where
         AndThenAsyncCaller::new(self, and_then)
     }
 
+    /// See [`AsyncCall::map`].
     pub fn map<Out3, Map>(self, map: Map) -> MappedAsyncCaller<Out2, Out3, Self, Map>
     where
         Out3: for<'de> ArgumentDecoder<'de> + Send,
@@ -373,6 +402,23 @@ pub struct MappedAsyncCaller<
     _out2: std::marker::PhantomData<Out2>,
 }
 
+impl<Out, Out2, Inner, Map> fmt::Debug for MappedAsyncCaller<Out, Out2, Inner, Map>
+where
+    Out: for<'de> ArgumentDecoder<'de> + Send,
+    Out2: for<'de> ArgumentDecoder<'de> + Send,
+    Inner: AsyncCall<Out> + Send + fmt::Debug,
+    Map: Send + Fn(Out) -> Out2 + fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("MappedAsyncCaller")
+            .field("inner", &self.inner)
+            .field("map", &self.map)
+            .field("_out", &self._out)
+            .field("_out2", &self._out2)
+            .finish()
+    }
+}
+
 impl<Out, Out2, Inner, Map> MappedAsyncCaller<Out, Out2, Inner, Map>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send,
@@ -380,6 +426,7 @@ where
     Inner: AsyncCall<Out> + Send,
     Map: Send + Fn(Out) -> Out2,
 {
+    /// Equivalent to `inner.map(map)`.
     pub fn new(inner: Inner, map: Map) -> Self {
         Self {
             inner,
@@ -389,9 +436,12 @@ where
         }
     }
 
+    /// See [`AsyncCall::call`].
     pub async fn call(self) -> Result<RequestId, AgentError> {
         self.inner.call().await
     }
+
+    /// See [`AsyncCall::call_and_wait`].
     pub async fn call_and_wait<W>(self, waiter: W) -> Result<Out2, AgentError>
     where
         W: Waiter,
@@ -400,6 +450,7 @@ where
         Ok((self.map)(v))
     }
 
+    /// See [`AsyncCall::and_then`].
     pub fn and_then<Out3, R2, AndThen2>(
         self,
         and_then: AndThen2,
@@ -412,6 +463,7 @@ where
         AndThenAsyncCaller::new(self, and_then)
     }
 
+    /// See [`AsyncCall::map`].
     pub fn map<Out3, Map2>(self, map: Map2) -> MappedAsyncCaller<Out2, Out3, Self, Map2>
     where
         Out3: for<'de> ArgumentDecoder<'de> + Send,

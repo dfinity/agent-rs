@@ -145,6 +145,9 @@ pub(crate) fn lookup_reply(
     Ok(RequestStatusResponse::Replied { reply })
 }
 
+/// Looks up a value in the certificate's tree at the specified hash.
+///
+/// Returns the value if it was found; otherwise, errors with `LookupPathAbsent`, `LookupPathUnknown`, or `LookupPathError`.
 pub fn lookup_value<'a, P>(
     certificate: &'a Certificate<'a>,
     path: P,

@@ -42,6 +42,7 @@ use crate::{
 };
 use std::{
     convert::TryFrom,
+    fmt,
     future::Future,
     pin::Pin,
     sync::{Arc, RwLock},
@@ -103,6 +104,8 @@ pub trait ReplicaV2Transport: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
 }
 
+impl_debug_empty!(dyn ReplicaV2Transport);
+
 impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Box<I> {
     fn call<'a>(
         &'a self,
@@ -163,6 +166,7 @@ impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Arc<I> {
 }
 
 /// Classification of the result of a request_status_raw (poll) call.
+#[derive(Debug)]
 pub enum PollResult {
     /// The request has been submitted, but we do not know yet if it
     /// has been accepted or not.
@@ -245,7 +249,7 @@ pub enum PollResult {
 /// ```
 ///
 /// This agent does not understand Candid, and only acts on byte buffers.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Agent {
     nonce_factory: Arc<dyn NonceGenerator>,
     identity: Arc<dyn Identity>,
@@ -502,7 +506,7 @@ impl Agent {
         })
     }
 
-    // Call request_status on the RequestId once and classify the result
+    /// Call request_status on the RequestId once and classify the result
     pub async fn poll(
         &self,
         request_id: &RequestId,
@@ -535,7 +539,7 @@ impl Agent {
         }
     }
 
-    // Call request_status on the RequestId in a loop and return the response as a byte vector.
+    /// Call request_status on the RequestId in a loop and return the response as a byte vector.
     pub async fn wait<W: Waiter>(
         &self,
         request_id: RequestId,
@@ -572,6 +576,7 @@ impl Agent {
         }
     }
 
+    /// Request the raw state tree directly. See [the protocol docs](https://smartcontracts.org/docs/interface-spec/index.html#http-read-state) for more information.
     pub async fn read_state_raw(
         &self,
         paths: Vec<Vec<Label>>,
@@ -635,6 +640,7 @@ impl Agent {
         }
     }
 
+    /// Request information about a particular canister for a single state subkey. See [the protocol docs](https://smartcontracts.org/docs/interface-spec/index.html#state-tree-canister-information) for more information.
     pub async fn read_state_canister_info(
         &self,
         canister_id: Principal,
@@ -647,6 +653,7 @@ impl Agent {
         lookup_canister_info(cert, canister_id, path)
     }
 
+    /// Request the bytes of the canister's custom section `icp:public <path>` or `icp:private <path>`.
     pub async fn read_state_canister_metadata(
         &self,
         canister_id: Principal,
@@ -664,6 +671,7 @@ impl Agent {
         lookup_canister_metadata(cert, canister_id, path)
     }
 
+    /// Fetches the status of a particular request by its ID.
     pub async fn request_status_raw(
         &self,
         request_id: &RequestId,
@@ -948,16 +956,23 @@ pub fn signed_request_status_inspect(
 /// A Query Request Builder.
 ///
 /// This makes it easier to do query calls without actually passing all arguments.
+#[derive(Debug)]
 pub struct QueryBuilder<'agent> {
     agent: &'agent Agent,
-    effective_canister_id: Principal,
-    canister_id: Principal,
-    method_name: String,
-    arg: Vec<u8>,
-    ingress_expiry_datetime: Option<u64>,
+    /// The [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
+    pub effective_canister_id: Principal,
+    /// The principal ID of the canister being called.
+    pub canister_id: Principal,
+    /// The name of the canister method being called.
+    pub method_name: String,
+    /// The argument blob to be passed to the method.
+    pub arg: Vec<u8>,
+    /// The Unix timestamp that the request will expire at.
+    pub ingress_expiry_datetime: Option<u64>,
 }
 
 impl<'agent> QueryBuilder<'agent> {
+    /// Creates a new query builder with an agent for a particular canister method.
     pub fn new(agent: &'agent Agent, canister_id: Principal, method_name: String) -> Self {
         Self {
             agent,
@@ -969,11 +984,13 @@ impl<'agent> QueryBuilder<'agent> {
         }
     }
 
+    /// Sets the [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
     pub fn with_effective_canister_id(&mut self, canister_id: Principal) -> &mut Self {
         self.effective_canister_id = canister_id;
         self
     }
 
+    /// Sets the argument blob to pass to the canister. For most canisters this should be a Candid-serialized tuple.
     pub fn with_arg<A: AsRef<[u8]>>(&mut self, arg: A) -> &mut Self {
         self.arg = arg.as_ref().to_vec();
         self
@@ -1055,11 +1072,22 @@ impl<'agent> QueryBuilder<'agent> {
     }
 }
 
+/// An in-flight canister update call. Useful primarily as a `Future`.
 pub struct UpdateCall<'agent> {
     agent: &'agent Agent,
     request_id: Pin<Box<dyn Future<Output = Result<RequestId, AgentError>> + Send + 'agent>>,
     effective_canister_id: Principal,
 }
+
+impl fmt::Debug for UpdateCall<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("UpdateCall")
+            .field("agent", &self.agent)
+            .field("effective_canister_id", &self.effective_canister_id)
+            .finish_non_exhaustive()
+    }
+}
+
 impl Future for UpdateCall<'_> {
     type Output = Result<RequestId, AgentError>;
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -1092,16 +1120,23 @@ impl UpdateCall<'_> {
 ///
 /// This makes it easier to do update calls without actually passing all arguments or specifying
 /// if you want to wait or not.
+#[derive(Debug)]
 pub struct UpdateBuilder<'agent> {
     agent: &'agent Agent,
+    /// The [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
     pub effective_canister_id: Principal,
+    /// The principal ID of the canister being called.
     pub canister_id: Principal,
+    /// The name of the canister method being called.
     pub method_name: String,
+    /// The argument blob to be passed to the method.
     pub arg: Vec<u8>,
+    /// The Unix timestamp that the request will expire at.
     pub ingress_expiry_datetime: Option<u64>,
 }
 
 impl<'agent> UpdateBuilder<'agent> {
+    /// Creates a new query builder with an agent for a particular canister method.
     pub fn new(agent: &'agent Agent, canister_id: Principal, method_name: String) -> Self {
         Self {
             agent,
@@ -1113,11 +1148,13 @@ impl<'agent> UpdateBuilder<'agent> {
         }
     }
 
+    /// Sets the [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
     pub fn with_effective_canister_id(&mut self, canister_id: Principal) -> &mut Self {
         self.effective_canister_id = canister_id;
         self
     }
 
+    /// Sets the argument blob to pass to the canister. For most canisters this should be a Candid-serialized tuple.
     pub fn with_arg<A: AsRef<[u8]>>(&mut self, arg: A) -> &mut Self {
         self.arg = arg.as_ref().to_vec();
         self
