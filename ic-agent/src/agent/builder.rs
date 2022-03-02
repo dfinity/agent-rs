@@ -4,6 +4,8 @@ use crate::{
 };
 use std::sync::Arc;
 
+/// A builder for an [`Agent`].
+#[derive(Debug)]
 pub struct AgentBuilder {
     config: AgentConfig,
 }

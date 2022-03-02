@@ -1,11 +1,19 @@
+//! Checked wrappers around certain numeric values used in management calls.
+
 use thiserror::Error;
 
+/// An error encountered when attempting to construct a [`ComputeAllocation`].
 #[derive(Error, Debug)]
 pub enum ComputeAllocationError {
+    /// The provided value was not a percentage in the range [0, 100].
     #[error("Must be a percent between 0 and 100.")]
     MustBeAPercentage(),
 }
 
+/// A compute allocation for a canister, represented as a percentage between 0 and 100 inclusive.
+///
+/// This represents the percentage of a canister's maximum compute capacity that the IC should commit to guaranteeing for the canister.
+/// If 0, computation is provided on a best-effort basis.
 #[derive(Copy, Clone, Debug)]
 pub struct ComputeAllocation(u8);
 
@@ -40,12 +48,19 @@ try_from_compute_alloc_decl!(i16);
 try_from_compute_alloc_decl!(i32);
 try_from_compute_alloc_decl!(i64);
 
+/// An error encountered when attempting to construct a [`MemoryAllocation`].
 #[derive(Error, Debug)]
 pub enum MemoryAllocationError {
-    #[error("Memory allocation must be between 0 and 2^48 (i.e 256TB), inclusively. Got {0}.")]
+    /// The provided value was not in the range [0, 2^48] (i.e. 256 TiB).
+    #[error("Memory allocation must be between 0 and 2^48 (i.e 256TiB), inclusively. Got {0}.")]
     InvalidMemorySize(u64),
 }
 
+/// A memory allocation for a canister. Can be anywhere from 0 to 2^48 (i.e. 256 TiB) inclusive.
+///
+/// This represents the size, in bytes, that the IC guarantees to the canister and limits the canister to.
+/// If a canister attempts to exceed this value (and the value is nonzero), the attempt will fail. If 0,
+/// memory allocation is provided on a best-effort basis.
 #[derive(Copy, Clone, Debug)]
 pub struct MemoryAllocation(u64);
 
@@ -80,12 +95,20 @@ try_from_memory_alloc_decl!(i16);
 try_from_memory_alloc_decl!(i32);
 try_from_memory_alloc_decl!(i64);
 
+/// An error encountered when attempting to construct a [`FreezingThreshold`].
 #[derive(Error, Debug)]
 pub enum FreezingThresholdError {
+    /// The provided value was not in the range [0, 2^64-1].
     #[error("Freezing threshold must be between 0 and 2^64-1, inclusively. Got {0}.")]
     InvalidFreezingThreshold(u64),
 }
 
+/// A freezing threshold for a canister. Can be anywhere from 0 to 2^64-1 inclusive.
+///
+/// This represents the time, in seconds, of 'runway' the IC tries to guarantee the canister.
+/// If the canister's persistent costs, like storage, will likely lead it to run out of cycles within this amount of time,
+/// then the IC will 'freeze' the canister. Attempts to call its methods will be rejected unconditionally.
+/// The canister also cannot make any calls that push its cycle count into freezing threshold range.
 #[derive(Copy, Clone, Debug)]
 pub struct FreezingThreshold(u64);
 

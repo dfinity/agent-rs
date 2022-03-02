@@ -109,17 +109,20 @@ pub struct ReadStateResponse {
 }
 
 /// A `Certificate` as defined in https://smartcontracts.org/docs/interface-spec/index.html#_certificate
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Certificate<'a> {
+    /// The hash tree.
     pub tree: HashTree<'a>,
 
+    /// The signature of the root hash in `tree`.
     #[serde(with = "serde_bytes")]
     pub signature: Vec<u8>,
 
+    /// A delegation from the root key to the key used to sign `signature`, if one exists.
     pub delegation: Option<Delegation>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Delegation {
     #[serde(with = "serde_bytes")]
     pub subnet_id: Vec<u8>,
