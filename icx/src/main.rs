@@ -558,6 +558,7 @@ async fn main() -> Result<()> {
                         &signed_request_status.request_id,
                         signed_request_status.effective_canister_id,
                         signed_request_status.signed_request_status,
+                        false,
                     )
                     .await
                     .context("Got an error when send the signed request_status call")?;

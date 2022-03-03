@@ -382,6 +382,7 @@ fn check_subnet_range_with_valid_range() {
                         .map(Label::from)
                         .collect()],
                     Principal::from_text(REQ_WITH_DELEGATED_CERT_CANISTER).unwrap(),
+                    false,
                 )
                 .await
         })
@@ -415,6 +416,7 @@ fn check_subnet_range_with_unauthorized_range() {
                     .map(Label::from)
                     .collect()],
                 wrong_canister,
+                false,
             )
             .await
     });
@@ -447,6 +449,7 @@ fn check_subnet_range_with_pruned_range() {
                     .map(Label::from)
                     .collect()],
                 canister,
+                false,
             )
             .await
     });

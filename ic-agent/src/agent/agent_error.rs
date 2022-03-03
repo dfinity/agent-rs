@@ -86,7 +86,7 @@ pub enum AgentError {
     #[error("Certificate verification failed.")]
     CertificateVerificationFailed(),
 
-    #[error("Certificate is not authorized to respond to queries for this canister")]
+    #[error("Certificate is not authorized to respond to queries for this canister. While developing: Did you forget to set effective_canister_id?")]
     CertificateNotAuthorized(),
 
     #[error(

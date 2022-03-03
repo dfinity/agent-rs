@@ -141,11 +141,14 @@ impl<'agent, T> Canister<'agent, T> {
         &'canister self,
         request_id: RequestId,
         waiter: W,
+        disable_range_check: bool,
     ) -> Result<Vec<u8>, AgentError>
     where
         W: Waiter,
     {
-        self.agent.wait(request_id, &self.canister_id, waiter).await
+        self.agent
+            .wait(request_id, self.canister_id, disable_range_check, waiter)
+            .await
     }
 }
 
