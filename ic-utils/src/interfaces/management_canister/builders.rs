@@ -48,7 +48,7 @@ pub struct CreateCanisterBuilder<'agent, 'canister: 'agent, T> {
     memory_allocation: Option<Result<MemoryAllocation, AgentError>>,
     freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
     is_provisional_create: bool,
-    amount: Option<u64>,
+    amount: Option<u128>,
 }
 
 impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
@@ -72,7 +72,7 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
     /// Cycles added to this call via ic0.call_cycles_add are returned to the caller.
     /// This method is only available in local development instances, and will be removed in the future.
     #[allow(clippy::wrong_self_convention)]
-    pub fn as_provisional_create_with_amount(self, amount: Option<u64>) -> Self {
+    pub fn as_provisional_create_with_amount(self, amount: Option<u128>) -> Self {
         Self {
             is_provisional_create: true,
             amount,

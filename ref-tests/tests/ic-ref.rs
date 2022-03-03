@@ -658,7 +658,7 @@ mod management_canister {
 
             // cycle balance should be amount specified to
             // provisional_create_canister_with_cycles call
-            let amount: u64 = 1 << 40; // 1099511627776
+            let amount: u128 = 1 << 40; // 1099511627776
             let (canister_id_2,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(Some(amount))
@@ -813,7 +813,7 @@ mod extras {
 
             let (canister_id,) = ic00
                 .create_canister()
-                .as_provisional_create_with_amount(Some(20_000_000_000_000_u64))
+                .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
                 .with_compute_allocation(1_u64)
                 .with_memory_allocation(1024 * 1024_u64)
                 .with_freezing_threshold(1_000_000_u64)
