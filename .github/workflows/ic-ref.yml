@@ -15,7 +15,7 @@ jobs:
         include:
           - build: linux-stable
             ghc: '8.8.4'
-            spec: '0.18.0'
+            spec: 'f771c6b3e7cdde413d3b960f63165c6ecf3e0b7c'
             os: ubuntu-latest
             rust: 1.55.0
 
