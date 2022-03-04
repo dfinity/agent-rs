@@ -13,7 +13,7 @@
 //! # let slot_index = 0;
 //! # let key_id = "";
 //! let agent = Agent::builder()
-//!     .with_transport(ReqwestHttpReplicaV2Transport::create(replica_url))
+//!     .with_transport(ReqwestHttpReplicaV2Transport::create(replica_url)?)
 //!     .with_identity(HardwareIdentity::new(lib_path, slot_index, key_id, || Ok("hunter2".to_string()))?)
 //!     .build();
 //! # Ok(())

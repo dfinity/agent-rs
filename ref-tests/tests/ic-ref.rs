@@ -594,7 +594,7 @@ mod management_canister {
     #[test]
     fn provisional_create_canister_with_cycles() {
         with_wallet_canister(None, |agent, wallet_id| async move {
-            let max_canister_balance: u64 = 1152921504606846976;
+            let default_canister_balance: u128 = 100_000_000_000_000;
 
             // empty cycle balance on create
             let wallet = Wallet::create(&agent, wallet_id);
@@ -643,7 +643,7 @@ mod management_canister {
             assert_eq!(result.cycles, 0_u64);
 
             let ic00 = ManagementCanister::create(&agent);
-            // cycle balance is max_canister_balance when creating with
+            // cycle balance is default_canister_balance when creating with
             // provisional_create_canister_with_cycles(None)
             let (canister_id_1,) = ic00
                 .create_canister()
@@ -654,7 +654,7 @@ mod management_canister {
                 .canister_status(&canister_id_1)
                 .call_and_wait(create_waiter())
                 .await?;
-            assert_eq!(result.0.cycles, max_canister_balance);
+            assert_eq!(result.0.cycles, default_canister_balance);
 
             // cycle balance should be amount specified to
             // provisional_create_canister_with_cycles call
