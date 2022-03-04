@@ -20,6 +20,9 @@ jobs:
             rust: 1.55.0
 
     steps:
+      - uses: haskell/actions/setup@v1
+        with:
+          ghc-version: ${{ matrix.ghc }}
       - uses: actions/checkout@v2
         with:
           path: main
