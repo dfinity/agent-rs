@@ -78,7 +78,7 @@ pub struct StreamingCallbackHttpResponse<Token = self::Token> {
 }
 
 /// A token for continuing a callback streaming strategy.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 //#[serde(transparent)]
 pub struct Token(pub IDLValue);
 
@@ -329,7 +329,9 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
 
 #[cfg(test)]
 mod test {
-    use super::{CallbackStrategy, HttpResponse, StreamingStrategy, Token};
+    use super::{
+        CallbackStrategy, HttpResponse, StreamingCallbackHttpResponse, StreamingStrategy, Token,
+    };
     use candid::{
         parser::value::{IDLField, IDLValue},
         Decode, Encode,
@@ -385,7 +387,7 @@ mod test {
     }
 
     #[test]
-    fn deserialize_token() {
+    fn deserialize_response_with_token() {
         use candid::{types::Label, Func, Principal};
 
         let bytes: Vec<u8> = Encode!(&HttpResponse {
@@ -434,5 +436,76 @@ mod test {
             id: Label::Named("sha256".into()),
             val: IDLValue::None
         }));
+    }
+
+    #[test]
+    fn deserialize_streaming_response_with_token() {
+        use candid::types::Label;
+
+        let bytes: Vec<u8> = Encode!(&StreamingCallbackHttpResponse {
+            body: b"this is a body".as_ref().into(),
+            token: Some(pre_update_legacy::Token {
+                key: "foo".into(),
+                content_encoding: "bar".into(),
+                index: 42.into(),
+                sha256: None,
+            }),
+        })
+        .unwrap();
+
+        let response = Decode!(&bytes, StreamingCallbackHttpResponse).unwrap();
+        assert_eq!(response.body, b"this is a body");
+        let fields = match response.token {
+            Some(Token(IDLValue::Record(fields))) => fields,
+            _ => panic!("token type mismatched {:?}", response.token),
+        };
+        assert!(fields.contains(&IDLField {
+            id: Label::Named("key".into()),
+            val: IDLValue::Text("foo".into())
+        }));
+        assert!(fields.contains(&IDLField {
+            id: Label::Named("content_encoding".into()),
+            val: IDLValue::Text("bar".into())
+        }));
+        assert!(fields.contains(&IDLField {
+            id: Label::Named("index".into()),
+            val: IDLValue::Nat(42.into())
+        }));
+        assert!(fields.contains(&IDLField {
+            id: Label::Named("sha256".into()),
+            val: IDLValue::None
+        }));
+    }
+
+    #[test]
+    fn deserialize_streaming_response_without_token() {
+        mod missing_token {
+            use candid::{CandidType, Deserialize};
+            /// The next chunk of a streaming HTTP response.
+            #[derive(Debug, Clone, CandidType, Deserialize)]
+            pub struct StreamingCallbackHttpResponse {
+                /// The body of the stream chunk.
+                #[serde(with = "serde_bytes")]
+                pub body: Vec<u8>,
+            }
+        }
+        let bytes: Vec<u8> = Encode!(&missing_token::StreamingCallbackHttpResponse {
+            body: b"this is a body".as_ref().into(),
+        })
+        .unwrap();
+
+        let response = Decode!(&bytes, StreamingCallbackHttpResponse).unwrap();
+        assert_eq!(response.body, b"this is a body");
+        assert_eq!(response.token, None);
+
+        let bytes: Vec<u8> = Encode!(&StreamingCallbackHttpResponse {
+            body: b"this is a body".as_ref().into(),
+            token: Option::<pre_update_legacy::Token>::None,
+        })
+        .unwrap();
+
+        let response = Decode!(&bytes, StreamingCallbackHttpResponse).unwrap();
+        assert_eq!(response.body, b"this is a body");
+        assert_eq!(response.token, None);
     }
 }
