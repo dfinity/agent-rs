@@ -14,12 +14,15 @@ jobs:
         build: [ linux-stable ]
         include:
           - build: linux-stable
-            ghc: '8.8.4'
+            ghc: '8.10.7'
             spec: 'f771c6b3e7cdde413d3b960f63165c6ecf3e0b7c'
             os: ubuntu-latest
             rust: 1.55.0
 
     steps:
+      - uses: haskell/actions/setup@v1
+        with:
+          ghc-version: ${{ matrix.ghc }}
       - uses: actions/checkout@v2
         with:
           path: main

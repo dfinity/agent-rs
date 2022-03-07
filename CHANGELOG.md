@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Secp256k1 identity now checks if a curve actually uses the secp256k1 parameters. It cannot be used to load non-secp256k1 identities anymore.
 
+Data type of `cycles` changed to `u128` (was `u64`).
+
 ## [0.12.1] - 2022-02-09
 
 Renamed BatchOperationKind._Clear to Clear for compatibility with the certified assets canister.
