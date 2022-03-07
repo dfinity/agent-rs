@@ -79,7 +79,6 @@ pub struct StreamingCallbackHttpResponse<Token = self::Token> {
 
 /// A token for continuing a callback streaming strategy.
 #[derive(Debug, Clone, PartialEq)]
-//#[serde(transparent)]
 pub struct Token(pub IDLValue);
 
 impl CandidType for Token {
