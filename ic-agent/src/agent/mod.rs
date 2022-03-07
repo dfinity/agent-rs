@@ -262,7 +262,7 @@ impl fmt::Debug for Agent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         f.debug_struct("Agent")
             .field("ingress_expiry_duration", &self.ingress_expiry_duration)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
