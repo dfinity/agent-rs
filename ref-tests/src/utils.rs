@@ -163,7 +163,7 @@ pub fn get_wallet_wasm_from_env() -> Vec<u8> {
 
 pub async fn create_wallet_canister(
     agent: &Agent,
-    cycles: Option<u64>,
+    cycles: Option<u128>,
 ) -> Result<Principal, Box<dyn Error>> {
     let canister_wasm = get_wallet_wasm_from_env();
 
@@ -198,7 +198,7 @@ where
     })
 }
 
-pub fn with_wallet_canister<F, R>(cycles: Option<u64>, f: F)
+pub fn with_wallet_canister<F, R>(cycles: Option<u128>, f: F)
 where
     R: Future<Output = Result<(), Box<dyn Error>>>,
     F: FnOnce(Agent, Principal) -> R,
