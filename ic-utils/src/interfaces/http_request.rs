@@ -1,60 +1,104 @@
-use crate::{call::AsyncCall, call::SyncCall, canister::CanisterBuilder, Canister};
-use candid::{CandidType, Deserialize, Func, Nat};
+//! The canister interface for canisters that implement HTTP requests.
+
+use crate::{
+    call::{AsyncCall, SyncCall},
+    canister::CanisterBuilder,
+    Canister,
+};
+use candid::{
+    parser::value::{IDLValue, IDLValueVisitor},
+    types::{Serializer, Type},
+    CandidType, Deserialize, Func,
+};
 use ic_agent::{export::Principal, Agent};
-use serde_bytes::ByteBuf;
 use std::fmt::Debug;
 
+/// A canister that can serve a HTTP request.
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub struct HttpRequestCanister;
 
-#[derive(CandidType, Clone, Deserialize)]
+/// A key-value pair for a HTTP header.
+#[derive(Debug, CandidType, Clone, Deserialize)]
 pub struct HeaderField(pub String, pub String);
 
-#[derive(CandidType, Deserialize)]
+/// The important components of an HTTP request.
+#[derive(Debug, Clone, CandidType, Deserialize)]
 pub struct HttpRequest<'body> {
+    /// The HTTP method string.
     pub method: String,
+    /// The URL that was visited.
     pub url: String,
+    /// The request headers.
     pub headers: Vec<HeaderField>,
+    /// The request body.
     #[serde(with = "serde_bytes")]
     pub body: &'body [u8],
 }
 
-#[derive(CandidType, Deserialize)]
-pub struct Token {
-    key: String,
-    content_encoding: String,
-    index: Nat,
-    // The sha ensures that a client doesn't stream part of one version of an asset
-    // followed by part of a different asset, even if not checking the certificate.
-    sha256: Option<ByteBuf>,
-}
-
-#[derive(CandidType, Deserialize)]
-pub struct CallbackStrategy {
-    pub callback: Func,
-    pub token: Token,
-}
-
-#[derive(CandidType, Deserialize)]
-pub enum StreamingStrategy {
-    Callback(CallbackStrategy),
-}
-
-#[derive(CandidType, Deserialize)]
-pub struct HttpResponse {
+/// A HTTP response.
+#[derive(Debug, Clone, CandidType, Deserialize)]
+pub struct HttpResponse<Token = self::Token> {
+    /// The HTTP status code.
     pub status_code: u16,
+    /// The response header map.
     pub headers: Vec<HeaderField>,
+    /// The response body.
     #[serde(with = "serde_bytes")]
     pub body: Vec<u8>,
-    pub streaming_strategy: Option<StreamingStrategy>,
+    /// The strategy for streaming the rest of the data, if the full response is to be streamed.
+    pub streaming_strategy: Option<StreamingStrategy<Token>>,
+    /// Whether the query call should be upgraded to an update call.
     pub upgrade: Option<bool>,
 }
 
-#[derive(CandidType, Deserialize)]
-pub struct StreamingCallbackHttpResponse {
+/// Possible strategies for a streaming response.
+#[derive(Debug, Clone, CandidType, Deserialize)]
+pub enum StreamingStrategy<Token = self::Token> {
+    /// A callback-based streaming strategy, where a callback function is provided for continuing the stream.
+    Callback(CallbackStrategy<Token>),
+}
+
+/// A callback-token pair for a callback streaming strategy.
+#[derive(Debug, Clone, CandidType, Deserialize)]
+pub struct CallbackStrategy<Token = self::Token> {
+    /// The callback function to be called to continue the stream.
+    pub callback: Func,
+    /// The token to pass to the function.
+    pub token: Token,
+}
+
+/// The next chunk of a streaming HTTP response.
+#[derive(Debug, Clone, CandidType, Deserialize)]
+pub struct StreamingCallbackHttpResponse<Token = self::Token> {
+    /// The body of the stream chunk.
     #[serde(with = "serde_bytes")]
     pub body: Vec<u8>,
+    /// The new stream continuation token.
     pub token: Option<Token>,
+}
+
+/// A token for continuing a callback streaming strategy.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Token(pub IDLValue);
+
+impl CandidType for Token {
+    fn _ty() -> Type {
+        Type::Reserved
+    }
+    fn idl_serialize<S: Serializer>(&self, _serializer: S) -> Result<(), S::Error> {
+        // We cannot implement serialize, since our type must be `Reserved` in order to accept anything.
+        // Attempting to serialize this type is always an error and should be regarded as a compile time error.
+        unimplemented!("Token is not serializable")
+    }
+}
+
+impl<'de> Deserialize<'de> for Token {
+    fn deserialize<D: serde::de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        // Ya know it says `ignored`, but what if we just didn't ignore it.
+        deserializer
+            .deserialize_ignored_any(IDLValueVisitor)
+            .map(Token)
+    }
 }
 
 impl HttpRequestCanister {
@@ -79,6 +123,7 @@ impl HttpRequestCanister {
 }
 
 impl<'agent> Canister<'agent, HttpRequestCanister> {
+    /// Performs a HTTP request, receiving a HTTP response.
     pub fn http_request<'canister: 'agent, M: Into<String>, U: Into<String>, B: AsRef<[u8]>>(
         &'canister self,
         method: M,
@@ -96,6 +141,8 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
             .build()
     }
 
+    /// Performs a HTTP request over an update call. Unlike query calls, update calls must pass consensus
+    /// and therefore cannot be tampered with by a malicious node.
     pub fn http_request_update<
         'canister: 'agent,
         M: Into<String>,
@@ -118,19 +165,25 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
             .build()
     }
 
+    /// Retrieves the next chunk of a stream from a streaming callback, using the method from [`CallbackStrategy`].
     pub fn http_request_stream_callback<'canister: 'agent, M: Into<String>>(
         &'canister self,
         method: M,
         token: Token,
     ) -> impl 'agent + SyncCall<(StreamingCallbackHttpResponse,)> {
-        self.query_(&method.into()).with_arg(token).build()
+        self.query_(&method.into()).with_value_arg(token.0).build()
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::HttpResponse;
-    use candid::{Decode, Encode};
+    use super::{
+        CallbackStrategy, HttpResponse, StreamingCallbackHttpResponse, StreamingStrategy, Token,
+    };
+    use candid::{
+        parser::value::{IDLField, IDLValue},
+        Decode, Encode,
+    };
 
     mod pre_update_legacy {
         use candid::{CandidType, Deserialize, Func, Nat};
@@ -138,10 +191,10 @@ mod test {
 
         #[derive(CandidType, Deserialize)]
         pub struct Token {
-            key: String,
-            content_encoding: String,
-            index: Nat,
-            sha256: Option<ByteBuf>,
+            pub key: String,
+            pub content_encoding: String,
+            pub index: Nat,
+            pub sha256: Option<ByteBuf>,
         }
 
         #[derive(CandidType, Deserialize)]
@@ -179,5 +232,128 @@ mod test {
         .unwrap();
 
         let _response = Decode!(&bytes, HttpResponse).unwrap();
+    }
+
+    #[test]
+    fn deserialize_response_with_token() {
+        use candid::{types::Label, Func, Principal};
+
+        let bytes: Vec<u8> = Encode!(&HttpResponse {
+            status_code: 100,
+            headers: Vec::new(),
+            body: Vec::new(),
+            streaming_strategy: Some(StreamingStrategy::Callback(CallbackStrategy {
+                callback: Func {
+                    principal: Principal::from_text("2chl6-4hpzw-vqaaa-aaaaa-c").unwrap(),
+                    method: "callback".into()
+                },
+                token: pre_update_legacy::Token {
+                    key: "foo".into(),
+                    content_encoding: "bar".into(),
+                    index: 42.into(),
+                    sha256: None,
+                },
+            })),
+            upgrade: None,
+        })
+        .unwrap();
+
+        let response = Decode!(&bytes, HttpResponse).unwrap();
+        assert_eq!(response.status_code, 100);
+        let token = match response.streaming_strategy {
+            Some(StreamingStrategy::Callback(CallbackStrategy { token, .. })) => token,
+            _ => panic!("streaming_strategy was missing"),
+        };
+        let fields = match token {
+            Token(IDLValue::Record(fields)) => fields,
+            _ => panic!("token type mismatched {:?}", token),
+        };
+        assert!(fields.contains(&IDLField {
+            id: Label::Named("key".into()),
+            val: IDLValue::Text("foo".into())
+        }));
+        assert!(fields.contains(&IDLField {
+            id: Label::Named("content_encoding".into()),
+            val: IDLValue::Text("bar".into())
+        }));
+        assert!(fields.contains(&IDLField {
+            id: Label::Named("index".into()),
+            val: IDLValue::Nat(42.into())
+        }));
+        assert!(fields.contains(&IDLField {
+            id: Label::Named("sha256".into()),
+            val: IDLValue::None
+        }));
+    }
+
+    #[test]
+    fn deserialize_streaming_response_with_token() {
+        use candid::types::Label;
+
+        let bytes: Vec<u8> = Encode!(&StreamingCallbackHttpResponse {
+            body: b"this is a body".as_ref().into(),
+            token: Some(pre_update_legacy::Token {
+                key: "foo".into(),
+                content_encoding: "bar".into(),
+                index: 42.into(),
+                sha256: None,
+            }),
+        })
+        .unwrap();
+
+        let response = Decode!(&bytes, StreamingCallbackHttpResponse).unwrap();
+        assert_eq!(response.body, b"this is a body");
+        let fields = match response.token {
+            Some(Token(IDLValue::Record(fields))) => fields,
+            _ => panic!("token type mismatched {:?}", response.token),
+        };
+        assert!(fields.contains(&IDLField {
+            id: Label::Named("key".into()),
+            val: IDLValue::Text("foo".into())
+        }));
+        assert!(fields.contains(&IDLField {
+            id: Label::Named("content_encoding".into()),
+            val: IDLValue::Text("bar".into())
+        }));
+        assert!(fields.contains(&IDLField {
+            id: Label::Named("index".into()),
+            val: IDLValue::Nat(42.into())
+        }));
+        assert!(fields.contains(&IDLField {
+            id: Label::Named("sha256".into()),
+            val: IDLValue::None
+        }));
+    }
+
+    #[test]
+    fn deserialize_streaming_response_without_token() {
+        mod missing_token {
+            use candid::{CandidType, Deserialize};
+            /// The next chunk of a streaming HTTP response.
+            #[derive(Debug, Clone, CandidType, Deserialize)]
+            pub struct StreamingCallbackHttpResponse {
+                /// The body of the stream chunk.
+                #[serde(with = "serde_bytes")]
+                pub body: Vec<u8>,
+            }
+        }
+        let bytes: Vec<u8> = Encode!(&missing_token::StreamingCallbackHttpResponse {
+            body: b"this is a body".as_ref().into(),
+        })
+        .unwrap();
+
+        let response = Decode!(&bytes, StreamingCallbackHttpResponse).unwrap();
+        assert_eq!(response.body, b"this is a body");
+        assert_eq!(response.token, None);
+
+        let bytes: Vec<u8> = Encode!(&StreamingCallbackHttpResponse {
+            body: b"this is a body".as_ref().into(),
+            token: Option::<pre_update_legacy::Token>::None,
+        })
+        .unwrap();
+
+        let response = Decode!(&bytes, StreamingCallbackHttpResponse).unwrap();
+        assert_eq!(response.body, b"this is a body");
+        assert_eq!(response.token, None);
     }
 }

@@ -1,3 +1,7 @@
+//! The canister interface for the IC management canister. See the [specification][spec] for full documentation of the interface.
+//!
+//! [spec]: https://smartcontracts.org/docs/interface-spec/index.html#ic-management-canister
+
 use crate::{call::AsyncCall, canister::CanisterBuilder, Canister};
 use candid::{CandidType, Deserialize, Nat};
 use ic_agent::{export::Principal, Agent};
@@ -8,23 +12,38 @@ pub mod attributes;
 pub mod builders;
 pub use builders::{CreateCanisterBuilder, InstallCodeBuilder, UpdateCanisterBuilder};
 
+/// The IC management canister.
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub struct ManagementCanister;
 
+/// All the known methods of the management canister.
 #[derive(AsRefStr, Debug, EnumString)]
 #[strum(serialize_all = "snake_case")]
 pub enum MgmtMethod {
+    // FIXME when rust-lang/rust#85960 is resolved, update these to links.
+    /// See `Canister::<ManagementCanister>::create_canister`.
     CreateCanister,
+    /// See `Canister::<ManagementCanister>::install_code`.
     InstallCode,
+    /// See `Canister::<ManagementCanister>::start_canister`.
     StartCanister,
+    /// See `Canister::<ManagementCanister>::stop_canister`.
     StopCanister,
+    /// See `Canister::<ManagementCanister>::canister_status`.
     CanisterStatus,
+    /// See `Canister::<ManagementCanister>::delete_canister`.
     DeleteCanister,
+    /// See `Canister::<ManagementCanister>::deposit_cycles`.
     DepositCycles,
+    /// See `Canister::<ManagementCanister>::raw_rand`.
     RawRand,
+    /// See `Canister::<ManagementCanister>::provisional_create_canister_with_cycles`.
     ProvisionalCreateCanisterWithCycles,
+    /// See `Canister::<ManagementCanister>::provisional_top_up_canister`.
     ProvisionalTopUpCanister,
+    /// See `Canister::<ManagementCanister>::uninstall_code`.
     UninstallCode,
+    /// See `Canister::<ManagementCanister>::update_settings`.
     UpdateSettings,
 }
 
@@ -55,18 +74,28 @@ impl ManagementCanister {
 /// the contoller of the canister, the canisters memory size, and its balance in cycles.
 #[derive(Clone, Debug, Deserialize, CandidType)]
 pub struct StatusCallResult {
+    /// The status of the canister.
     pub status: CanisterStatus,
+    /// The canister's settings.
     pub settings: DefiniteCanisterSettings,
+    /// The SHA-256 hash of the canister's installed code, if any.
     pub module_hash: Option<Vec<u8>>,
+    /// The total size, in bytes, of the memory the canister is using.
     pub memory_size: Nat,
+    /// The canister's cycle balance.
     pub cycles: Nat,
 }
 
+/// The concrete settings of a canister.
 #[derive(Clone, Debug, Deserialize, CandidType)]
 pub struct DefiniteCanisterSettings {
+    /// The set of canister controllers. Controllers can update the canister via the management canister.
     pub controllers: Vec<Principal>,
+    /// The allocation percentage (between 0 and 100 inclusive) for *guaranteed* compute capacity.
     pub compute_allocation: Nat,
+    /// The allocation, in bytes (up to 256 TiB) that the canister is allowed to use for storage.
     pub memory_allocation: Nat,
+    /// The IC will freeze a canister protectively if it will likely run out of cycles before this amount of time, in seconds (up to `u64::MAX`), has passed.
     pub freezing_threshold: Nat,
 }
 
@@ -80,10 +109,13 @@ impl std::fmt::Display for StatusCallResult {
 /// stopped.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, CandidType)]
 pub enum CanisterStatus {
+    /// The canister is currently running.
     #[serde(rename = "running")]
     Running,
+    /// The canister is in the process of stopping.
     #[serde(rename = "stopping")]
     Stopping,
+    /// The canister is stopped.
     #[serde(rename = "stopped")]
     Stopped,
 }

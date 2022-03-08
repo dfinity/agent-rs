@@ -15,10 +15,12 @@ pub use secp256k1::Secp256k1Identity;
 #[cfg(feature = "pem")]
 pub use error::PemError;
 
+/// A cryptographic signature, signed by an [Identity].
 #[derive(Clone, Debug)]
 pub struct Signature {
     /// This is the DER-encoded public key.
     pub public_key: Option<Vec<u8>>,
+    /// The signature bytes.
     pub signature: Option<Vec<u8>>,
 }
 
@@ -36,3 +38,5 @@ pub trait Identity: Send + Sync {
     /// creating the sender signature.
     fn sign(&self, blob: &[u8]) -> Result<Signature, String>;
 }
+
+impl_debug_empty!(dyn Identity);

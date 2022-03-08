@@ -1,3 +1,5 @@
+//! Types for interacting with the status endpoint of a replica. See [`Status`] for details.
+
 use std::{collections::BTreeMap, fmt::Debug};
 
 /// Value returned by the status endpoint of a replica. This is a loose mapping to CBOR values.
@@ -5,12 +7,19 @@ use std::{collections::BTreeMap, fmt::Debug};
 /// we reimplement it as [`Value`] here.
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Clone, Hash)]
 pub enum Value {
+    /// See [`Null`](serde_cbor::Value::Null).
     Null,
+    /// See [`String`](serde_cbor::Value::String).
     String(String),
+    /// See [`Integer`](serde_cbor::Value::Integer).
     Integer(i64),
+    /// See [`Bool`](serde_cbor::Value::Bool).
     Bool(bool),
+    /// See [`Bytes`](serde_cbor::Value::Bytes).
     Bytes(Vec<u8>),
+    /// See [`Vec`](serde_cbor::Value::Vec).
     Vec(Vec<Value>),
+    /// See [`Map`](serde_cbor::Value::Map).
     Map(BTreeMap<String, Box<Value>>),
 }
 

@@ -22,7 +22,10 @@ pub trait PasswordManager: Send + Sync {
     fn required(&self, url: &str) -> Result<(String, String), String>;
 }
 
+impl_debug_empty!(dyn PasswordManager);
+
 /// A [ReplicaV2Transport] using Reqwest to make HTTP calls to the internet computer.
+#[derive(Debug)]
 pub struct ReqwestHttpReplicaV2Transport {
     url: reqwest::Url,
     client: reqwest::Client,
@@ -33,6 +36,7 @@ const IC0_DOMAIN: &str = "ic0.app";
 const IC0_SUB_DOMAIN: &str = ".ic0.app";
 
 impl ReqwestHttpReplicaV2Transport {
+    /// Creates a replica transport from a HTTP URL.
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
         let mut tls_config = rustls::ClientConfig::builder()
             .with_safe_defaults()
@@ -64,6 +68,7 @@ impl ReqwestHttpReplicaV2Transport {
         })
     }
 
+    /// Sets a password manager to use with HTTP authentication.
     pub fn with_password_manager<P: 'static + PasswordManager>(self, password_manager: P) -> Self {
         ReqwestHttpReplicaV2Transport {
             password_manager: Some(Arc::new(password_manager)),
@@ -72,6 +77,7 @@ impl ReqwestHttpReplicaV2Transport {
         }
     }
 
+    /// Same as [`with_password_manager`], but providing the Arc so one does not have to be created.
     pub fn with_arc_password_manager(self, password_manager: Arc<dyn PasswordManager>) -> Self {
         ReqwestHttpReplicaV2Transport {
             password_manager: Some(password_manager),
@@ -80,6 +86,7 @@ impl ReqwestHttpReplicaV2Transport {
         }
     }
 
+    /// Gets the set password manager, if one exists. Otherwise returns None.
     pub fn password_manager(&self) -> Option<&dyn PasswordManager> {
         self.password_manager.as_deref()
     }
