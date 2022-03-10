@@ -13,6 +13,7 @@ use std::path::Path;
 use std::time::Duration;
 use walkdir::WalkDir;
 
+/// Sets the contents of the asset canister to the contents of a directory, including deleting old assets.
 pub async fn sync(canister: &Canister<'_>, dir: &Path, timeout: Duration) -> anyhow::Result<()> {
     let asset_locations = gather_asset_locations(dir);
 

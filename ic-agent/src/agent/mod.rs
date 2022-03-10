@@ -42,6 +42,7 @@ use crate::{
 };
 use std::{
     convert::TryFrom,
+    fmt,
     future::Future,
     pin::Pin,
     sync::{Arc, RwLock},
@@ -103,6 +104,8 @@ pub trait ReplicaV2Transport: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
 }
 
+impl_debug_empty!(dyn ReplicaV2Transport);
+
 impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Box<I> {
     fn call<'a>(
         &'a self,
@@ -163,6 +166,7 @@ impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Arc<I> {
 }
 
 /// Classification of the result of a request_status_raw (poll) call.
+#[derive(Debug)]
 pub enum PollResult {
     /// The request has been submitted, but we do not know yet if it
     /// has been accepted or not.
@@ -254,6 +258,14 @@ pub struct Agent {
     transport: Arc<dyn ReplicaV2Transport>,
 }
 
+impl fmt::Debug for Agent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        f.debug_struct("Agent")
+            .field("ingress_expiry_duration", &self.ingress_expiry_duration)
+            .finish_non_exhaustive()
+    }
+}
+
 impl Agent {
     /// Create an instance of an [`AgentBuilder`] for building an [`Agent`]. This is simpler than
     /// using the [`AgentConfig`] and [`Agent::new()`].
@@ -292,6 +304,12 @@ impl Agent {
     /// *Only use this when you are  _not_ talking to the main Internet Computer, otherwise
     /// you are prone to man-in-the-middle attacks! Do not call this function by default.*
     pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
+        if let Ok(key) = self.read_root_key() {
+            if key != IC_ROOT_KEY.to_vec() {
+                // already fetched the root key
+                return Ok(());
+            }
+        }
         let status = self.status().await?;
         let root_key = status
             .root_key
@@ -502,14 +520,15 @@ impl Agent {
         })
     }
 
-    // Call request_status on the RequestId once and classify the result
+    /// Call request_status on the RequestId once and classify the result
     pub async fn poll(
         &self,
         request_id: &RequestId,
-        effective_canister_id: &Principal,
+        effective_canister_id: Principal,
+        disable_range_check: bool,
     ) -> Result<PollResult, AgentError> {
         match self
-            .request_status_raw(request_id, *effective_canister_id)
+            .request_status_raw(request_id, effective_canister_id, disable_range_check)
             .await?
         {
             RequestStatusResponse::Unknown => Ok(PollResult::Submitted),
@@ -535,17 +554,21 @@ impl Agent {
         }
     }
 
-    // Call request_status on the RequestId in a loop and return the response as a byte vector.
+    /// Call request_status on the RequestId in a loop and return the response as a byte vector.
     pub async fn wait<W: Waiter>(
         &self,
         request_id: RequestId,
-        effective_canister_id: &Principal,
+        effective_canister_id: Principal,
+        disable_range_check: bool,
         mut waiter: W,
     ) -> Result<Vec<u8>, AgentError> {
         waiter.start();
         let mut request_accepted = false;
         loop {
-            match self.poll(&request_id, effective_canister_id).await? {
+            match self
+                .poll(&request_id, effective_canister_id, disable_range_check)
+                .await?
+            {
                 PollResult::Submitted => {}
                 PollResult::Accepted => {
                     if !request_accepted {
@@ -572,10 +595,12 @@ impl Agent {
         }
     }
 
+    /// Request the raw state tree directly. See [the protocol docs](https://smartcontracts.org/docs/interface-spec/index.html#http-read-state) for more information.
     pub async fn read_state_raw(
         &self,
         paths: Vec<Vec<Label>>,
         effective_canister_id: Principal,
+        disable_range_check: bool,
     ) -> Result<Certificate<'_>, AgentError> {
         let request = self.read_state_content(paths)?;
         let serialized_bytes = sign_request(&request, self.identity.clone())?;
@@ -583,10 +608,9 @@ impl Agent {
         let read_state_response: ReadStateResponse = self
             .read_state_endpoint(effective_canister_id, serialized_bytes)
             .await?;
-
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
-        self.verify(&cert)?;
+        self.verify(&cert, effective_canister_id, disable_range_check)?;
         Ok(cert)
     }
 
@@ -599,7 +623,13 @@ impl Agent {
     }
 
     /// Verify a certificate, checking delegation if present.
-    pub fn verify(&self, cert: &Certificate) -> Result<(), AgentError> {
+    /// Only passes if the certificate also has authority over the canister.
+    pub fn verify(
+        &self,
+        cert: &Certificate,
+        effective_canister_id: Principal,
+        disable_range_check: bool,
+    ) -> Result<(), AgentError> {
         let sig = &cert.signature;
 
         let root_hash = cert.tree.digest();
@@ -607,9 +637,9 @@ impl Agent {
         msg.extend_from_slice(IC_STATE_ROOT_DOMAIN_SEPARATOR);
         msg.extend_from_slice(&root_hash);
 
-        let der_key = self.check_delegation(&cert.delegation)?;
+        let der_key =
+            self.check_delegation(&cert.delegation, effective_canister_id, disable_range_check)?;
         let key = extract_der(der_key)?;
-
         let result = bls::core_verify(sig, &*msg, &*key);
         if result != bls::BLS_OK {
             Err(AgentError::CertificateVerificationFailed())
@@ -618,13 +648,33 @@ impl Agent {
         }
     }
 
-    fn check_delegation(&self, delegation: &Option<Delegation>) -> Result<Vec<u8>, AgentError> {
+    fn check_delegation(
+        &self,
+        delegation: &Option<Delegation>,
+        effective_canister_id: Principal,
+        disable_range_check: bool,
+    ) -> Result<Vec<u8>, AgentError> {
         match delegation {
             None => self.read_root_key(),
             Some(delegation) => {
                 let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;
-                self.verify(&cert)?;
+                self.verify(&cert, effective_canister_id, disable_range_check)?;
+                let canister_range_lookup = [
+                    "subnet".into(),
+                    delegation.subnet_id.clone().into(),
+                    "canister_ranges".into(),
+                ];
+                let canister_range = lookup_value(&cert, canister_range_lookup)?;
+                let ranges: Vec<(Principal, Principal)> =
+                    serde_cbor::from_slice(canister_range).map_err(AgentError::InvalidCborData)?;
+                if !disable_range_check
+                    && !principal_is_within_ranges(&effective_canister_id, &ranges[..])
+                {
+                    // the certificate is not authorized to answer calls for this canister
+                    return Err(AgentError::CertificateNotAuthorized());
+                }
+
                 let public_key_path = [
                     "subnet".into(),
                     delegation.subnet_id.clone().into(),
@@ -635,22 +685,28 @@ impl Agent {
         }
     }
 
+    /// Request information about a particular canister for a single state subkey. See [the protocol docs](https://smartcontracts.org/docs/interface-spec/index.html#state-tree-canister-information) for more information.
     pub async fn read_state_canister_info(
         &self,
         canister_id: Principal,
         path: &str,
+        disable_range_check: bool,
     ) -> Result<Vec<u8>, AgentError> {
         let paths: Vec<Vec<Label>> = vec![vec!["canister".into(), canister_id.into(), path.into()]];
 
-        let cert = self.read_state_raw(paths, canister_id).await?;
+        let cert = self
+            .read_state_raw(paths, canister_id, disable_range_check)
+            .await?;
 
         lookup_canister_info(cert, canister_id, path)
     }
 
+    /// Request the bytes of the canister's custom section `icp:public <path>` or `icp:private <path>`.
     pub async fn read_state_canister_metadata(
         &self,
         canister_id: Principal,
         path: &str,
+        disable_range_check: bool,
     ) -> Result<Vec<u8>, AgentError> {
         let paths: Vec<Vec<Label>> = vec![vec![
             "canister".into(),
@@ -659,20 +715,26 @@ impl Agent {
             path.into(),
         ]];
 
-        let cert = self.read_state_raw(paths, canister_id).await?;
+        let cert = self
+            .read_state_raw(paths, canister_id, disable_range_check)
+            .await?;
 
         lookup_canister_metadata(cert, canister_id, path)
     }
 
+    /// Fetches the status of a particular request by its ID.
     pub async fn request_status_raw(
         &self,
         request_id: &RequestId,
         effective_canister_id: Principal,
+        disable_range_check: bool,
     ) -> Result<RequestStatusResponse, AgentError> {
         let paths: Vec<Vec<Label>> =
             vec![vec!["request_status".into(), request_id.to_vec().into()]];
 
-        let cert = self.read_state_raw(paths, effective_canister_id).await?;
+        let cert = self
+            .read_state_raw(paths, effective_canister_id, disable_range_check)
+            .await?;
 
         lookup_request_status(cert, request_id)
     }
@@ -685,6 +747,7 @@ impl Agent {
         request_id: &RequestId,
         effective_canister_id: Principal,
         signed_request_status: Vec<u8>,
+        disable_range_check: bool,
     ) -> Result<RequestStatusResponse, AgentError> {
         let _envelope: Envelope<ReadStateContent> =
             serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
@@ -694,7 +757,7 @@ impl Agent {
 
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
-        self.verify(&cert)?;
+        self.verify(&cert, effective_canister_id, disable_range_check)?;
         lookup_request_status(cert, request_id)
     }
 
@@ -749,6 +812,14 @@ impl Agent {
             }),
         }
     }
+}
+
+// Checks if a principal is contained within a list of principal ranges
+// A range is a tuple: (low: Principal, high: Principal), as described here: https://docs.dfinity.systems/spec/public/#state-tree-subnet
+fn principal_is_within_ranges(principal: &Principal, ranges: &[(Principal, Principal)]) -> bool {
+    ranges
+        .iter()
+        .any(|r| principal >= &r.0 && principal <= &r.1)
 }
 
 fn construct_message(request_id: &RequestId) -> Vec<u8> {
@@ -948,16 +1019,23 @@ pub fn signed_request_status_inspect(
 /// A Query Request Builder.
 ///
 /// This makes it easier to do query calls without actually passing all arguments.
+#[derive(Debug)]
 pub struct QueryBuilder<'agent> {
     agent: &'agent Agent,
-    effective_canister_id: Principal,
-    canister_id: Principal,
-    method_name: String,
-    arg: Vec<u8>,
-    ingress_expiry_datetime: Option<u64>,
+    /// The [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
+    pub effective_canister_id: Principal,
+    /// The principal ID of the canister being called.
+    pub canister_id: Principal,
+    /// The name of the canister method being called.
+    pub method_name: String,
+    /// The argument blob to be passed to the method.
+    pub arg: Vec<u8>,
+    /// The Unix timestamp that the request will expire at.
+    pub ingress_expiry_datetime: Option<u64>,
 }
 
 impl<'agent> QueryBuilder<'agent> {
+    /// Creates a new query builder with an agent for a particular canister method.
     pub fn new(agent: &'agent Agent, canister_id: Principal, method_name: String) -> Self {
         Self {
             agent,
@@ -969,11 +1047,13 @@ impl<'agent> QueryBuilder<'agent> {
         }
     }
 
+    /// Sets the [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
     pub fn with_effective_canister_id(&mut self, canister_id: Principal) -> &mut Self {
         self.effective_canister_id = canister_id;
         self
     }
 
+    /// Sets the argument blob to pass to the canister. For most canisters this should be a Candid-serialized tuple.
     pub fn with_arg<A: AsRef<[u8]>>(&mut self, arg: A) -> &mut Self {
         self.arg = arg.as_ref().to_vec();
         self
@@ -1055,11 +1135,23 @@ impl<'agent> QueryBuilder<'agent> {
     }
 }
 
+/// An in-flight canister update call. Useful primarily as a `Future`.
 pub struct UpdateCall<'agent> {
     agent: &'agent Agent,
     request_id: Pin<Box<dyn Future<Output = Result<RequestId, AgentError>> + Send + 'agent>>,
     effective_canister_id: Principal,
+    disable_range_check: bool,
 }
+
+impl fmt::Debug for UpdateCall<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("UpdateCall")
+            .field("agent", &self.agent)
+            .field("effective_canister_id", &self.effective_canister_id)
+            .finish_non_exhaustive()
+    }
+}
+
 impl Future for UpdateCall<'_> {
     type Output = Result<RequestId, AgentError>;
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -1082,7 +1174,12 @@ impl UpdateCall<'_> {
             let request_id = _self.request_id.await?;
             _self
                 .agent
-                .wait(request_id, &_self.effective_canister_id, waiter)
+                .wait(
+                    request_id,
+                    _self.effective_canister_id,
+                    _self.disable_range_check,
+                    waiter,
+                )
                 .await
         }
         Box::pin(run(self, waiter))
@@ -1092,17 +1189,29 @@ impl UpdateCall<'_> {
 ///
 /// This makes it easier to do update calls without actually passing all arguments or specifying
 /// if you want to wait or not.
+#[derive(Debug)]
 pub struct UpdateBuilder<'agent> {
     agent: &'agent Agent,
+    /// The [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
     pub effective_canister_id: Principal,
+    /// The principal ID of the canister being called.
     pub canister_id: Principal,
+    /// The name of the canister method being called.
     pub method_name: String,
+    /// The argument blob to be passed to the method.
     pub arg: Vec<u8>,
+    /// The Unix timestamp that the request will expire at.
     pub ingress_expiry_datetime: Option<u64>,
+    disable_range_check: bool,
 }
 
 impl<'agent> UpdateBuilder<'agent> {
+    /// Creates a new query builder with an agent for a particular canister method.
     pub fn new(agent: &'agent Agent, canister_id: Principal, method_name: String) -> Self {
+        // When calling provisional_create_canister_with_cycles, every effective_canister_id is valid.
+        // Therefore we need to disable the check for valid canister_ranges in the certificate validation.
+        // More info: https://docs.dfinity.systems/spec/public/#http-effective-canister-id
+        let disable_range_check = method_name == "provisional_create_canister_with_cycles";
         Self {
             agent,
             effective_canister_id: canister_id,
@@ -1110,14 +1219,17 @@ impl<'agent> UpdateBuilder<'agent> {
             method_name,
             arg: vec![],
             ingress_expiry_datetime: None,
+            disable_range_check,
         }
     }
 
+    /// Sets the [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
     pub fn with_effective_canister_id(&mut self, canister_id: Principal) -> &mut Self {
         self.effective_canister_id = canister_id;
         self
     }
 
+    /// Sets the argument blob to pass to the canister. For most canisters this should be a Candid-serialized tuple.
     pub fn with_arg<A: AsRef<[u8]>>(&mut self, arg: A) -> &mut Self {
         self.arg = arg.as_ref().to_vec();
         self
@@ -1175,6 +1287,7 @@ impl<'agent> UpdateBuilder<'agent> {
             agent: self.agent,
             request_id: Box::pin(request_id_future),
             effective_canister_id: self.effective_canister_id,
+            disable_range_check: self.disable_range_check,
         }
     }
 

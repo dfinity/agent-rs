@@ -594,7 +594,7 @@ mod management_canister {
     #[test]
     fn provisional_create_canister_with_cycles() {
         with_wallet_canister(None, |agent, wallet_id| async move {
-            let max_canister_balance: u64 = 1152921504606846976;
+            let default_canister_balance: u128 = 100_000_000_000_000;
 
             // empty cycle balance on create
             let wallet = Wallet::create(&agent, wallet_id);
@@ -643,7 +643,7 @@ mod management_canister {
             assert_eq!(result.cycles, 0_u64);
 
             let ic00 = ManagementCanister::create(&agent);
-            // cycle balance is max_canister_balance when creating with
+            // cycle balance is default_canister_balance when creating with
             // provisional_create_canister_with_cycles(None)
             let (canister_id_1,) = ic00
                 .create_canister()
@@ -654,11 +654,11 @@ mod management_canister {
                 .canister_status(&canister_id_1)
                 .call_and_wait(create_waiter())
                 .await?;
-            assert_eq!(result.0.cycles, max_canister_balance);
+            assert_eq!(result.0.cycles, default_canister_balance);
 
             // cycle balance should be amount specified to
             // provisional_create_canister_with_cycles call
-            let amount: u64 = 1 << 40; // 1099511627776
+            let amount: u128 = 1 << 40; // 1099511627776
             let (canister_id_2,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(Some(amount))
@@ -703,6 +703,18 @@ mod management_canister {
             assert_ne!(rand_1, rand_2);
             assert_ne!(rand_1, rand_3);
             assert_ne!(rand_2, rand_3);
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    // makes sure that calling fetch_root_key twice by accident does not break
+    fn multi_fetch_root_key() {
+        with_agent(|agent| async move {
+            agent.fetch_root_key().await?;
+            agent.fetch_root_key().await?;
 
             Ok(())
         })
@@ -801,7 +813,7 @@ mod extras {
 
             let (canister_id,) = ic00
                 .create_canister()
-                .as_provisional_create_with_amount(Some(20_000_000_000_000_u64))
+                .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
                 .with_compute_allocation(1_u64)
                 .with_memory_allocation(1024 * 1024_u64)
                 .with_freezing_threshold(1_000_000_u64)

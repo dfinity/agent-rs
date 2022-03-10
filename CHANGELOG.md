@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2022-03-07
 Secp256k1 identity now checks if a curve actually uses the secp256k1 parameters. It cannot be used to load non-secp256k1 identities anymore.
+
+Data type of `cycles` changed to `u128` (was `u64`).
+
+fetch_root_key() only fetches on the first call.
+
+Re-genericized Token to allow use of an arbitrary Token type with StreamingStrategy.
 
 ## [0.12.1] - 2022-02-09
 

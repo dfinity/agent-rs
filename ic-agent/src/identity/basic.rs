@@ -9,10 +9,20 @@ use simple_asn1::{
     ASN1Block::{BitString, ObjectIdentifier, Sequence},
 };
 
+use std::fmt;
+
 /// A Basic Identity which sign using an ED25519 key pair.
 pub struct BasicIdentity {
     key_pair: Ed25519KeyPair,
     der_encoded_public_key: Vec<u8>,
+}
+
+impl fmt::Debug for BasicIdentity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BasicIdentity")
+            .field("der_encoded_public_key", &self.der_encoded_public_key)
+            .finish_non_exhaustive()
+    }
 }
 
 impl BasicIdentity {

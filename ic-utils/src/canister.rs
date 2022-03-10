@@ -3,22 +3,27 @@ use candid::{parser::value::IDLValue, ser::IDLBuilder, utils::ArgumentDecoder, C
 use garcon::Waiter;
 use ic_agent::{ic_types::Principal, Agent, AgentError, RequestId};
 use std::convert::TryInto;
+use std::fmt;
 use thiserror::Error;
 
 /// An error happened while building a canister.
 #[derive(Debug, Error)]
 pub enum CanisterBuilderError {
+    /// There was an error parsing the canister ID.
     #[error("Getting the Canister ID returned an error: {0}")]
     PrincipalError(#[from] Box<dyn std::error::Error + std::marker::Send + std::marker::Sync>),
 
+    /// The agent was not provided.
     #[error("Must specify an Agent")]
     MustSpecifyAnAgent(),
 
+    /// The canister ID was not provided.
     #[error("Must specify a Canister ID")]
     MustSpecifyCanisterId(),
 }
 
 /// A canister builder, which can be used to create a canister abstraction.
+#[derive(Debug)]
 pub struct CanisterBuilder<'agent, T = ()> {
     agent: Option<&'agent Agent>,
     canister_id: Option<Result<Principal, CanisterBuilderError>>,
@@ -102,6 +107,7 @@ impl<'agent> CanisterBuilder<'agent, ()> {
 ///
 /// This is the higher level construct for talking to a canister on the Internet
 /// Computer.
+#[derive(Debug)]
 pub struct Canister<'agent, T = ()> {
     pub(super) agent: &'agent Agent,
     pub(super) canister_id: Principal,
@@ -141,11 +147,14 @@ impl<'agent, T> Canister<'agent, T> {
         &'canister self,
         request_id: RequestId,
         waiter: W,
+        disable_range_check: bool,
     ) -> Result<Vec<u8>, AgentError>
     where
         W: Waiter,
     {
-        self.agent.wait(request_id, &self.canister_id, waiter).await
+        self.agent
+            .wait(request_id, self.canister_id, disable_range_check, waiter)
+            .await
     }
 }
 
@@ -153,6 +162,7 @@ impl<'agent, T> Canister<'agent, T>
 where
     T: Clone,
 {
+    /// Creates a copy of this canister, changing the canister ID to the provided principal.
     pub fn clone_with_(&self, id: Principal) -> Self {
         Self {
             agent: self.agent,
@@ -180,6 +190,17 @@ enum ArgumentType {
     Idl(IDLBuilder),
 }
 
+impl fmt::Debug for ArgumentType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Raw(v) => f.debug_tuple("ArgumentType::Raw").field(v).finish(),
+            Self::Idl(_) => f.debug_struct("ArgumentType::Idl").finish_non_exhaustive(),
+        }
+    }
+}
+
+/// A builder for a canister argument, allowing you to append elements to [`ArgumentType`] with chaining syntax.
+#[derive(Debug)]
 pub struct Argument(Result<ArgumentType, AgentError>);
 
 impl Argument {
@@ -229,6 +250,7 @@ impl Argument {
         }
     }
 
+    /// Encodes the completed argument into an IDL blob.
     pub fn serialize(self) -> Result<Vec<u8>, AgentError> {
         match self.0 {
             Ok(ArgumentType::Idl(mut idl_builder)) => idl_builder
@@ -239,6 +261,7 @@ impl Argument {
         }
     }
 
+    /// Resets the argument to an empty builder.
     pub fn reset(&mut self) {
         *self = Default::default();
     }
@@ -253,6 +276,7 @@ impl Default for Argument {
 /// A builder for a synchronous call (ie. query) to the Internet Computer.
 ///
 /// See [SyncCaller] for a description of this structure once built.
+#[derive(Debug)]
 pub struct SyncCallBuilder<'agent, 'canister: 'agent, T> {
     canister: &'canister Canister<'agent, T>,
     method_name: String,
@@ -307,6 +331,7 @@ impl<'agent, 'canister: 'agent, Interface> SyncCallBuilder<'agent, 'canister, In
         self
     }
 
+    /// Sets the [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
     pub fn with_effective_canister_id(
         mut self,
         canister_id: Principal,
@@ -336,6 +361,7 @@ impl<'agent, 'canister: 'agent, Interface> SyncCallBuilder<'agent, 'canister, In
 /// A builder for an asynchronous call (ie. update) to the Internet Computer.
 ///
 /// See [AsyncCaller] for a description of this structure.
+#[derive(Debug)]
 pub struct AsyncCallBuilder<'agent, 'canister: 'agent, T> {
     canister: &'canister Canister<'agent, T>,
     method_name: String,
@@ -379,6 +405,7 @@ impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, I
         self
     }
 
+    /// Sets the [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
     pub fn with_effective_canister_id(
         mut self,
         canister_id: Principal,

@@ -46,6 +46,7 @@ pub(crate) async fn create_chunk(
                     .wait(
                         request_id,
                         waiter_with_timeout(canister_call_params.timeout),
+                        false,
                     )
                     .await
             }
