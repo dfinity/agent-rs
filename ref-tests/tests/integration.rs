@@ -560,6 +560,7 @@ mod sign_send {
                     &signed_request_status.request_id,
                     signed_request_status.effective_canister_id,
                     signed_request_status.signed_request_status.clone(),
+                    false,
                 )
                 .await?;
 
