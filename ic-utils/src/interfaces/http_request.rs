@@ -76,7 +76,7 @@ pub struct StreamingCallbackHttpResponse<Token = self::Token> {
     /// The new stream continuation token.
     pub token: Option<Token>,
     /// chunk witness tree.
-    pub chunk_tree: Option<String>,
+    pub chunk_tree: Option<Vec<u8>>,
 }
 
 /// A token for continuing a callback streaming strategy.
