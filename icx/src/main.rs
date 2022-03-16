@@ -178,7 +178,7 @@ pub fn check_candid_file(idl_path: &std::path::Path) -> Result<(TypeEnv, Option<
 fn blob_from_arguments(
     arguments: Option<&str>,
     arg_type: &ArgType,
-    method_type: &Option<(candid::parser::typing::TypeEnv, candid::types::Function)>,
+    method_type: &Option<(TypeEnv, Function)>,
 ) -> Result<Vec<u8>> {
     let mut buffer = Vec::new();
     let arguments = if arguments == Some("-") {
@@ -210,7 +210,7 @@ fn blob_from_arguments(
                     let args = args.or_else(|e| {
                         if func.args.len() == 1 && !is_candid_format {
                             let is_quote = first_char.map_or(false, |c| c == '"');
-                            if candid::types::Type::Text == func.args[0] && !is_quote {
+                            if Type::Text == func.args[0] && !is_quote {
                                 Ok(IDLValue::Text(arguments.to_string()))
                             } else {
                                 arguments.parse::<IDLValue>()
@@ -242,8 +242,8 @@ fn print_idl_blob(
         }
         ArgType::Idl => {
             let result = match method_type {
-                None => candid::IDLArgs::from_bytes(blob),
-                Some((env, func)) => candid::IDLArgs::from_bytes_with_types(blob, env, &func.rets),
+                None => IDLArgs::from_bytes(blob),
+                Some((env, func)) => IDLArgs::from_bytes_with_types(blob, env, &func.rets),
             };
             println!(
                 "{}",
@@ -283,7 +283,7 @@ pub fn get_effective_canister_id(
                 method_name.as_ref()
             ),
             MgmtMethod::InstallCode => {
-                let install_args = candid::Decode!(arg_value, CanisterInstall)
+                let install_args = Decode!(arg_value, CanisterInstall)
                     .context("Argument is not valid for CanisterInstall")?;
                 Ok(install_args.canister_id)
             }
@@ -299,7 +299,7 @@ pub fn get_effective_canister_id(
                     canister_id: Principal,
                 }
                 let in_args =
-                    candid::Decode!(arg_value, In).context("Argument is not a valid Principal")?;
+                    Decode!(arg_value, In).context("Argument is not a valid Principal")?;
                 Ok(in_args.canister_id)
             }
             MgmtMethod::ProvisionalCreateCanisterWithCycles => Ok(Principal::management_canister()),
@@ -309,8 +309,8 @@ pub fn get_effective_canister_id(
                     canister_id: Principal,
                     settings: CanisterSettings,
                 }
-                let in_args = candid::Decode!(arg_value, In)
-                    .context("Argument is not valid for UpdateSettings")?;
+                let in_args =
+                    Decode!(arg_value, In).context("Argument is not valid for UpdateSettings")?;
                 Ok(in_args.canister_id)
             }
         }
@@ -558,6 +558,7 @@ async fn main() -> Result<()> {
                         &signed_request_status.request_id,
                         signed_request_status.effective_canister_id,
                         signed_request_status.signed_request_status,
+                        false,
                     )
                     .await
                     .context("Got an error when send the signed request_status call")?;

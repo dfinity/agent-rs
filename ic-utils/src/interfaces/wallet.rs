@@ -1,3 +1,7 @@
+//! The canister interface for the [cycles wallet] canister.
+//!
+//! [cycles wallet]: https://github.com/dfinity/cycles-wallet
+
 use crate::{
     call::{AsyncCall, AsyncCaller, SyncCall},
     canister::{Argument, CanisterBuilder},
@@ -8,13 +12,15 @@ use crate::{
     Canister,
 };
 use async_trait::async_trait;
-use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize};
+use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize, Nat};
 use garcon::{Delay, Waiter};
 use ic_agent::{agent::UpdateBuilder, export::Principal, Agent, AgentError, RequestId};
 
 const REPLICA_ERROR_NO_SUCH_QUERY_METHOD: &str = "has no query method 'wallet_api_version'";
 const IC_REF_ERROR_NO_SUCH_QUERY_METHOD: &str = "query method does not exist";
 
+/// An interface for forwarding a canister method call through the wallet canister via `wallet_canister_call`.
+#[derive(Debug)]
 pub struct CallForwarder<'agent, 'canister: 'agent, Out>
 where
     Self: 'canister,
@@ -28,12 +34,18 @@ where
     phantom_out: std::marker::PhantomData<Out>,
 }
 
-#[derive(CandidType, Deserialize)]
+/// A canister's settings. Similar to the canister settings struct from [`management_canister`](super::management_canister),
+/// but the management canister may evolve to have more settings without the wallet canister evolving to recognize them.
+#[derive(Debug, Clone, CandidType, Deserialize)]
 pub struct CanisterSettingsV1 {
+    /// The set of canister controllers. Controllers can update the canister via the management canister.
     pub controller: Option<Principal>,
-    pub compute_allocation: Option<candid::Nat>,
-    pub memory_allocation: Option<candid::Nat>,
-    pub freezing_threshold: Option<candid::Nat>,
+    /// The allocation percentage (between 0 and 100 inclusive) for *guaranteed* compute capacity.
+    pub compute_allocation: Option<Nat>,
+    /// The allocation, in bytes (up to 256 TiB) that the canister is allowed to use for storage.
+    pub memory_allocation: Option<Nat>,
+    /// The IC will freeze a canister protectively if it will likely run out of cycles before this amount of time, in seconds (up to `u64::MAX`), has passed.
+    pub freezing_threshold: Option<Nat>,
 }
 
 impl<'agent, 'canister: 'agent, Out> CallForwarder<'agent, 'canister, Out>
@@ -57,6 +69,7 @@ where
         self
     }
 
+    /// Creates an [`AsyncCall`] implementation that, when called, will forward the specified canister call.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<Out>, AgentError> {
         #[derive(CandidType, Deserialize)]
         struct In {
@@ -83,10 +96,12 @@ where
             }))
     }
 
+    /// Calls the forwarded canister call on the wallet canister. Equivalent to `.build().call()`.
     pub async fn call(self) -> Result<RequestId, AgentError> {
         self.build()?.call().await
     }
 
+    /// Calls the forwarded canister call on the wallet canister, and waits for the result. Equivalent to `.build().call_and_wait(waiter)`.
     pub async fn call_and_wait<W>(self, waiter: W) -> Result<Out, AgentError>
     where
         W: Waiter,
@@ -114,79 +129,124 @@ where
 
 /// A wallet canister interface, for the standard wallet provided by DFINITY.
 /// This interface implements most methods conveniently for the user.
+#[derive(Debug, Copy, Clone)]
 pub struct Wallet;
 
+/// The possible kinds of events that can be stored in an [`Event`].
 #[derive(CandidType, Debug, Deserialize)]
 pub enum EventKind {
+    /// Cycles were sent to a canister.
     CyclesSent {
+        /// The canister the cycles were sent to.
         to: Principal,
+        /// The number of cycles that were initially sent.
         amount: u64,
+        /// The number of cycles that were refunded by the canister.
         refund: u64,
     },
+    /// Cycles were received from a canister.
     CyclesReceived {
+        /// The canister that sent the cycles.
         from: Principal,
+        /// The number of cycles received.
         amount: u64,
     },
+    /// A known principal was added to the address book.
     AddressAdded {
+        /// The principal that was added.
         id: Principal,
+        /// The friendly name of the principal, if any.
         name: Option<String>,
+        /// The significance of this principal to the wallet.
         role: Role,
     },
+    /// A principal was removed from the address book.
     AddressRemoved {
+        /// The principal that was removed.
         id: Principal,
     },
+    /// A canister was created.
     CanisterCreated {
+        /// The canister that was created.
         canister: Principal,
+        /// The initial cycles balance that the canister was created with.
         cycles: u64,
     },
+    /// A call was forwarded to the canister.
     CanisterCalled {
+        /// The canister that was called.
         canister: Principal,
+        /// The name of the canister method that was called.
         method_name: String,
+        /// The number of cycles that were supplied with the call.
         cycles: u64,
     },
 }
 
+/// A transaction event tracked by the wallet's history feature.
 #[derive(CandidType, Debug, Deserialize)]
 pub struct Event {
+    /// An ID uniquely identifying this event.
     pub id: u32,
+    /// The Unix timestamp that this event occurred at.
     pub timestamp: u64,
+    /// The kind of event that occurred.
     pub kind: EventKind,
 }
 
+/// The significance of a principal in the wallet's address book.
 #[derive(CandidType, Debug, Deserialize)]
 pub enum Role {
+    /// The principal has no particular significance, and is only there to be assigned a friendly name or be mentioned in the event log.
     Contact,
+    /// The principal is a custodian of the wallet, and can therefore access the wallet, create canisters, and send and receive cycles.
     Custodian,
+    /// The principal is a controller of the wallet, and can therefore access any wallet function or action.
     Controller,
 }
 
+/// The kind of principal that a particular principal is.
 #[derive(CandidType, Debug, Deserialize)]
 pub enum Kind {
+    /// The kind of principal is unknown, such as the anonymous principal `2vxsx-fae`.
     Unknown,
+    /// The principal belongs to an external user.
     User,
+    /// The principal belongs to an IC canister.
     Canister,
 }
 
+/// An entry in the address book.
 #[derive(CandidType, Debug, Deserialize)]
 pub struct AddressEntry {
+    /// The principal being identified.
     pub id: Principal,
+    /// The friendly name for this principal, if one exists.
     pub name: Option<String>,
+    /// The kind of principal it is.
     pub kind: Kind,
+    /// The significance of this principal to the wallet canister.
     pub role: Role,
 }
 
-#[derive(CandidType, Deserialize)]
+/// The result of a balance request.
+#[derive(Debug, Copy, Clone, CandidType, Deserialize)]
 pub struct BalanceResult {
+    /// The balance of the wallet, in cycles.
     pub amount: u64,
 }
 
-#[derive(CandidType, Deserialize)]
+/// The result of a canister creation request.
+#[derive(Debug, Copy, Clone, CandidType, Deserialize)]
 pub struct CreateResult {
+    /// The principal ID of the newly created (empty) canister.
     pub canister_id: Principal,
 }
 
-#[derive(CandidType, Deserialize)]
+/// The result of a call forwarding request.
+#[derive(Debug, Clone, CandidType, Deserialize)]
 pub struct CallResult {
+    /// The encoded return value blob of the canister method.
     #[serde(with = "serde_bytes")]
     pub r#return: Vec<u8>,
 }
@@ -211,16 +271,19 @@ impl Wallet {
 }
 
 impl<'agent> Canister<'agent, Wallet> {
+    /// Get the API version string of the wallet.
     pub fn wallet_api_version<'canister: 'agent>(
         &'canister self,
     ) -> impl 'agent + SyncCall<(Option<String>,)> {
         self.query_("wallet_api_version").build()
     }
 
+    /// Get the friendly name of the wallet (if one exists).
     pub fn name<'canister: 'agent>(&'canister self) -> impl 'agent + SyncCall<(Option<String>,)> {
         self.query_("name").build()
     }
 
+    /// Set the friendly name of the wallet.
     pub fn set_name<'canister: 'agent>(
         &'canister self,
         name: String,
@@ -243,6 +306,7 @@ impl<'agent> Canister<'agent, Wallet> {
         self.update_("add_controller").with_arg(principal).build()
     }
 
+    /// Remove a user as a wallet controller.
     pub fn remove_controller<'canister: 'agent>(
         &'canister self,
         principal: Principal,
@@ -324,9 +388,9 @@ impl<'agent> Canister<'agent, Wallet> {
 
         let settings = CanisterSettingsV1 {
             controller,
-            compute_allocation: compute_allocation.map(u8::from).map(candid::Nat::from),
-            memory_allocation: memory_allocation.map(u64::from).map(candid::Nat::from),
-            freezing_threshold: freezing_threshold.map(u64::from).map(candid::Nat::from),
+            compute_allocation: compute_allocation.map(u8::from).map(Nat::from),
+            memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
+            freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
         };
 
         self.update_("wallet_create_canister")
@@ -352,9 +416,9 @@ impl<'agent> Canister<'agent, Wallet> {
 
         let settings = CanisterSettings {
             controllers,
-            compute_allocation: compute_allocation.map(u8::from).map(candid::Nat::from),
-            memory_allocation: memory_allocation.map(u64::from).map(candid::Nat::from),
-            freezing_threshold: freezing_threshold.map(u64::from).map(candid::Nat::from),
+            compute_allocation: compute_allocation.map(u8::from).map(Nat::from),
+            memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
+            freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
         };
 
         self.update_("wallet_create_canister")
@@ -438,9 +502,9 @@ impl<'agent> Canister<'agent, Wallet> {
 
         let settings = CanisterSettingsV1 {
             controller,
-            compute_allocation: compute_allocation.map(u8::from).map(candid::Nat::from),
-            memory_allocation: memory_allocation.map(u64::from).map(candid::Nat::from),
-            freezing_threshold: freezing_threshold.map(u64::from).map(candid::Nat::from),
+            compute_allocation: compute_allocation.map(u8::from).map(Nat::from),
+            memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
+            freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
         };
 
         self.update_("wallet_create_wallet")
@@ -466,9 +530,9 @@ impl<'agent> Canister<'agent, Wallet> {
 
         let settings = CanisterSettings {
             controllers,
-            compute_allocation: compute_allocation.map(u8::from).map(candid::Nat::from),
-            memory_allocation: memory_allocation.map(u64::from).map(candid::Nat::from),
-            freezing_threshold: freezing_threshold.map(u64::from).map(candid::Nat::from),
+            compute_allocation: compute_allocation.map(u8::from).map(Nat::from),
+            memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
+            freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
         };
 
         self.update_("wallet_create_wallet")
@@ -552,6 +616,7 @@ impl<'agent> Canister<'agent, Wallet> {
             .build()
     }
 
+    /// Add a principal to the address book.
     pub fn add_address<'canister: 'agent>(
         &'canister self,
         address: AddressEntry,
@@ -559,12 +624,14 @@ impl<'agent> Canister<'agent, Wallet> {
         self.update_("add_address").with_arg(address).build()
     }
 
+    /// List the entries in the address book.
     pub fn list_addresses<'canister: 'agent>(
         &'canister self,
     ) -> impl 'agent + SyncCall<(Vec<AddressEntry>,)> {
         self.query_("list_addresses").build()
     }
 
+    /// Remove a principal from the address book.
     pub fn remove_address<'canister: 'agent>(
         &'canister self,
         principal: Principal,
@@ -572,6 +639,7 @@ impl<'agent> Canister<'agent, Wallet> {
         self.update_("remove_address").with_arg(principal).build()
     }
 
+    /// Get a list of all transaction events this wallet remembers.
     pub fn get_events<'canister: 'agent>(
         &'canister self,
         from: Option<u32>,

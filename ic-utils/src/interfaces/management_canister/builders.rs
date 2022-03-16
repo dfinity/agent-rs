@@ -1,8 +1,10 @@
+//! Builder interfaces for some method calls of the management canister.
+
 use crate::{
     call::AsyncCall, canister::Argument, interfaces::management_canister::MgmtMethod, Canister,
 };
 use async_trait::async_trait;
-use candid::{CandidType, Deserialize};
+use candid::{CandidType, Deserialize, Nat};
 use garcon::Waiter;
 use ic_agent::{export::Principal, AgentError, RequestId};
 use std::str::FromStr;
@@ -10,14 +12,35 @@ use std::str::FromStr;
 pub use super::attributes::{ComputeAllocation, FreezingThreshold, MemoryAllocation};
 use std::convert::{From, TryInto};
 
-#[derive(CandidType, Deserialize)]
+/// The set of possible canister settings. Similar to [`DefiniteCanisterSettings`](super::DefiniteCanisterSettings),
+/// but all the fields are optional.
+#[derive(Debug, Clone, CandidType, Deserialize)]
 pub struct CanisterSettings {
+    /// The set of canister controllers. Controllers can update the canister via the management canister.
+    ///
+    /// If unspecified and a canister is being created with these settings, defaults to the caller.
     pub controllers: Option<Vec<Principal>>,
-    pub compute_allocation: Option<candid::Nat>,
-    pub memory_allocation: Option<candid::Nat>,
-    pub freezing_threshold: Option<candid::Nat>,
+    /// The allocation percentage (between 0 and 100 inclusive) for *guaranteed* compute capacity.
+    ///
+    /// The settings update will be rejected if the IC can't commit to allocating this much compupte capacity.
+    ///
+    /// If unspecified and a canister is being created with these settings, defaults to 0, i.e. best-effort.
+    pub compute_allocation: Option<Nat>,
+    /// The allocation, in bytes (up to 256 TiB) that the canister is allowed to use for storage.
+    ///
+    /// The settings update will be rejected if the IC can't commit to allocating this much storage.
+    ///
+    /// If unspecified and a canister is being created with these settings, defaults to 0, i.e. best-effort.
+    pub memory_allocation: Option<Nat>,
+
+    /// The IC will freeze a canister protectively if it will run out of cycles before this amount of time, in seconds (up to `u64::MAX`), has passed.
+    ///
+    /// If unspecified and a canister is being created with these settings, defaults to 2592000, i.e. ~30 days.
+    pub freezing_threshold: Option<Nat>,
 }
 
+/// A builder for a `create_canister` call.
+#[derive(Debug)]
 pub struct CreateCanisterBuilder<'agent, 'canister: 'agent, T> {
     canister: &'canister Canister<'agent, T>,
     controllers: Option<Result<Vec<Principal>, AgentError>>,
@@ -25,7 +48,7 @@ pub struct CreateCanisterBuilder<'agent, 'canister: 'agent, T> {
     memory_allocation: Option<Result<MemoryAllocation, AgentError>>,
     freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
     is_provisional_create: bool,
-    amount: Option<u64>,
+    amount: Option<u128>,
 }
 
 impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
@@ -49,7 +72,7 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
     /// Cycles added to this call via ic0.call_cycles_add are returned to the caller.
     /// This method is only available in local development instances, and will be removed in the future.
     #[allow(clippy::wrong_self_convention)]
-    pub fn as_provisional_create_with_amount(self, amount: Option<u64>) -> Self {
+    pub fn as_provisional_create_with_amount(self, amount: Option<u128>) -> Self {
         Self {
             is_provisional_create: true,
             amount,
@@ -180,17 +203,17 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
         };
         let compute_allocation = match self.compute_allocation {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
-            Some(Ok(x)) => Some(candid::Nat::from(u8::from(x))),
+            Some(Ok(x)) => Some(Nat::from(u8::from(x))),
             None => None,
         };
         let memory_allocation = match self.memory_allocation {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
-            Some(Ok(x)) => Some(candid::Nat::from(u64::from(x))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
         let freezing_threshold = match self.freezing_threshold {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
-            Some(Ok(x)) => Some(candid::Nat::from(u64::from(x))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
 
@@ -202,11 +225,11 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
         let async_builder = if self.is_provisional_create {
             #[derive(CandidType)]
             struct In {
-                amount: Option<candid::Nat>,
+                amount: Option<Nat>,
                 settings: CanisterSettings,
             }
             let in_arg = In {
-                amount: self.amount.map(candid::Nat::from),
+                amount: self.amount.map(Nat::from),
                 settings: CanisterSettings {
                     controllers,
                     compute_allocation,
@@ -266,22 +289,30 @@ impl<'agent, 'canister: 'agent, T: Sync> AsyncCall<(Principal,)>
 /// The install mode of the canister to install. If a canister is already installed,
 /// using [InstallMode::Install] will be an error. [InstallMode::Reinstall] overwrites
 /// the module, and [InstallMode::Upgrade] performs an Upgrade step.
-#[derive(Copy, Clone, CandidType, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, CandidType, Deserialize, Eq, PartialEq)]
 pub enum InstallMode {
+    /// Install the module into the empty canister.
     #[serde(rename = "install")]
     Install,
+    /// Overwrite the canister with this module.
     #[serde(rename = "reinstall")]
     Reinstall,
+    /// Upgrade the canister with this module.
     #[serde(rename = "upgrade")]
     Upgrade,
 }
 
-#[derive(candid::CandidType, Deserialize)]
+/// A prepared call to `install_code`.
+#[derive(Debug, Clone, CandidType, Deserialize)]
 pub struct CanisterInstall {
+    /// The installation mode to install the module with.
     pub mode: InstallMode,
+    /// The ID of the canister to install the module into.
     pub canister_id: Principal,
+    /// The WebAssembly code blob to install.
     #[serde(with = "serde_bytes")]
     pub wasm_module: Vec<u8>,
+    /// The encoded argument to pass to the module's constructor.
     #[serde(with = "serde_bytes")]
     pub arg: Vec<u8>,
 }
@@ -299,6 +330,8 @@ impl FromStr for InstallMode {
     }
 }
 
+/// A builder for an `install_code` call.
+#[derive(Debug)]
 pub struct InstallCodeBuilder<'agent, 'canister: 'agent, T> {
     canister: &'canister Canister<'agent, T>,
     canister_id: Principal,
@@ -393,6 +426,8 @@ impl<'agent, 'canister: 'agent, T: Sync> AsyncCall<()>
     }
 }
 
+/// A builder for an `update_settings` call.
+#[derive(Debug)]
 pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent, T> {
     canister: &'canister Canister<'agent, T>,
     canister_id: Principal,
@@ -532,7 +567,7 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
     /// Create an [AsyncCall] implementation that, when called, will update a
     /// canisters settings.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
-        #[derive(candid::CandidType)]
+        #[derive(CandidType)]
         struct In {
             canister_id: Principal,
             settings: CanisterSettings,
@@ -545,17 +580,17 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
         };
         let compute_allocation = match self.compute_allocation {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
-            Some(Ok(x)) => Some(candid::Nat::from(u8::from(x))),
+            Some(Ok(x)) => Some(Nat::from(u8::from(x))),
             None => None,
         };
         let memory_allocation = match self.memory_allocation {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
-            Some(Ok(x)) => Some(candid::Nat::from(u64::from(x))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
         let freezing_threshold = match self.freezing_threshold {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
-            Some(Ok(x)) => Some(candid::Nat::from(u64::from(x))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
 

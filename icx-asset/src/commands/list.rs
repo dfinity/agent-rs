@@ -1,5 +1,5 @@
 use crate::support::Result;
-use candid::CandidType;
+use candid::{CandidType, Int, Nat};
 use ic_utils::call::SyncCall;
 use ic_utils::Canister;
 
@@ -10,10 +10,10 @@ use std::time::SystemTime;
 pub async fn list(canister: &Canister<'_>) -> Result {
     #[derive(CandidType, Deserialize)]
     struct Encoding {
-        modified: candid::Int,
+        modified: Int,
         content_encoding: String,
         sha256: Option<Vec<u8>>,
-        length: candid::Nat,
+        length: Nat,
     }
 
     #[derive(CandidType, Deserialize)]

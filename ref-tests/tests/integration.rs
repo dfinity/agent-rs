@@ -2,6 +2,7 @@
 //!
 //! Contrary to ic-ref.rs, these tests are not meant to match any other tests. They're
 //! integration tests with a running IC-Ref.
+use candid::CandidType;
 use ic_agent::{agent::agent_error::HttpErrorPayload, export::Principal, AgentError};
 use ic_utils::{
     call::{AsyncCall, SyncCall},
@@ -70,14 +71,12 @@ fn canister_query() {
 
         let arg = payload().reply_data(b"hello").build();
 
-        let out = unsafe {
-            universal
-                .query_("query")
-                .with_arg_raw(arg)
-                .build::<()>()
-                .call_raw()
-                .await?
-        };
+        let out = universal
+            .query_("query")
+            .with_arg_raw(arg)
+            .build::<()>()
+            .call_raw()
+            .await?;
 
         assert_eq!(out, b"hello");
 
@@ -157,7 +156,7 @@ fn wallet_canister_create_and_install() {
             .with_canister_id(Principal::management_canister())
             .build()?;
 
-        #[derive(candid::CandidType)]
+        #[derive(CandidType)]
         struct CanisterInstall {
             mode: InstallMode,
             canister_id: Principal,
@@ -339,7 +338,7 @@ fn wallet_create_wallet() {
         //
         // Create a grandchild wallet from second child wallet
         //
-        #[derive(candid::CandidType)]
+        #[derive(CandidType)]
         struct In {
             cycles: u64,
             settings: CanisterSettings,
@@ -561,6 +560,7 @@ mod sign_send {
                     &signed_request_status.request_id,
                     signed_request_status.effective_canister_id,
                     signed_request_status.signed_request_status.clone(),
+                    false,
                 )
                 .await?;
 

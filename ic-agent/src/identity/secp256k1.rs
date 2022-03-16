@@ -9,10 +9,17 @@ use k256::{
     pkcs8::{PublicKeyDocument, SubjectPublicKeyInfo},
     Secp256k1, SecretKey,
 };
+use simple_asn1::{
+    oid, to_der, ASN1Block,
+    ASN1Block::{BitString, ObjectIdentifier, Sequence},
+};
 use std::convert::TryInto;
 #[cfg(feature = "pem")]
 use std::{fs::File, io, path::Path};
 
+/// A cryptographic identity based on the Secp256k1 elliptic curve.
+///
+/// The caller will be represented via [`Principal::self_authenticating`], which contains the SHA-224 hash of the public key.
 #[derive(Clone, Debug)]
 pub struct Secp256k1Identity {
     private_key: SigningKey,
@@ -21,11 +28,13 @@ pub struct Secp256k1Identity {
 }
 
 impl Secp256k1Identity {
+    /// Creates an identity from a PEM file. Shorthand for calling `from_pem` with `std::fs::read`.
     #[cfg(feature = "pem")]
     pub fn from_pem_file<P: AsRef<Path>>(file_path: P) -> Result<Self, PemError> {
         Self::from_pem(File::open(file_path)?)
     }
 
+    /// Creates an identity from a PEM certificate.
     #[cfg(feature = "pem")]
     pub fn from_pem<R: io::Read>(pem_reader: R) -> Result<Self, PemError> {
         use sec1::{pem::PemLabel, EcPrivateKeyDocument};
@@ -43,6 +52,7 @@ impl Secp256k1Identity {
         Err(pem::PemError::MissingData.into())
     }
 
+    /// Creates an identity from a private key.
     pub fn from_private_key(private_key: SecretKey) -> Self {
         let public_key = private_key.public_key();
         let public_key_bytes = public_key.to_encoded_point(false);

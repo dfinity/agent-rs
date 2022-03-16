@@ -1,6 +1,6 @@
 [package]
 name = "icx"
-version = "0.11.1"
+version = "0.13.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
 description = "CLI tool to call canisters on the Internet Computer."
@@ -19,13 +19,12 @@ path = "src/main.rs"
 [dependencies]
 anyhow = { version = "1.0", features = ["backtrace"] }
 candid = "0.7.10"
-clap = "=3.0.0-beta.5"
-clap_derive = "=3.0.0-beta.5"
+clap = { version = "3.0.14", features = ["derive", "cargo"] }
 garcon = { version = "0.2.3", features = ["async"] }
 hex = "0.4.2"
 humantime = "2.0.1"
-ic-agent = { path = "../ic-agent", version = "0.11" }
-ic-utils = { path = "../ic-utils", version = "0.11" }
+ic-agent = { path = "../ic-agent", version = "0.13" }
+ic-utils = { path = "../ic-utils", version = "0.13" }
 pem = "1.0"
 ring = "0.16.11"
 serde = "1.0.115"

@@ -22,10 +22,12 @@ type Sha256Hash = [u8; 32];
 pub struct RequestId(Sha256Hash);
 
 impl RequestId {
+    /// Creates a new `RequestId` from a SHA-256 hash.
     pub fn new(from: &[u8; 32]) -> RequestId {
         RequestId(*from)
     }
 
+    /// Returns the SHA-256 hash this ID is based on.
     pub fn as_slice(&self) -> &[u8] {
         &self.0
     }

@@ -105,7 +105,17 @@
 //! publicly available yet. When these specifications are made public and
 //! generally available, additional details about the versions supported will
 //! be available here.
-//!
+
+#![deny(
+    missing_docs,
+    missing_debug_implementations,
+    rustdoc::broken_intra_doc_links,
+    rustdoc::private_intra_doc_links
+)]
+
+#[macro_use]
+mod macros;
+
 #[allow(clippy::all)]
 #[allow(dead_code)]
 mod bls;
@@ -122,5 +132,5 @@ pub use agent::{
 pub use identity::{Identity, Signature};
 pub use request_id::{to_request_id, RequestId, RequestIdError};
 
-pub(crate) use crate::ic_types::hash_tree;
+pub use crate::ic_types::hash_tree;
 pub use ic_types;

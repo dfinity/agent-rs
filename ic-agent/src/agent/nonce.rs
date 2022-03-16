@@ -5,36 +5,41 @@ use std::sync::{
 };
 
 /// A Factory for nonce blobs.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct NonceFactory {
     inner: Arc<dyn NonceGenerator>,
 }
 
 impl NonceFactory {
+    /// Creates a nonce factory from an iterator over blobs. The iterator is not assumed to be fused.
     pub fn from_iterator(iter: Box<dyn Iterator<Item = Vec<u8>> + Send>) -> Self {
         Self {
             inner: Arc::new(Iter::from(iter)),
         }
     }
 
+    /// Creates a nonce factory that generates random blobs using `getrandom`.
     pub fn random() -> NonceFactory {
         Self {
             inner: Arc::new(RandomBlob {}),
         }
     }
 
+    /// Creates a nonce factory that returns None every time.
     pub fn empty() -> NonceFactory {
         Self {
             inner: Arc::new(Empty),
         }
     }
 
+    /// Creates a nonce factory that generates incrementing blobs.
     pub fn incrementing() -> NonceFactory {
         Self {
             inner: Arc::new(Incrementing::default()),
         }
     }
 
+    /// Generates a nonce, if one is available. Otherwise, returns None.
     pub fn generate(&self) -> Option<Vec<u8>> {
         NonceGenerator::generate(self)
     }
@@ -48,8 +53,11 @@ impl NonceGenerator for NonceFactory {
 
 /// An interface for generating nonces.
 pub trait NonceGenerator: Send + Sync {
+    /// Generates a nonce, if one is available. Otherwise, returns None.
     fn generate(&self) -> Option<Vec<u8>>;
 }
+
+impl_debug_empty!(dyn NonceGenerator);
 
 pub struct Func<T>(pub T);
 impl<T: Send + Sync + Fn() -> Option<Vec<u8>>> NonceGenerator for Func<T> {

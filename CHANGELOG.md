@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2022-03-07
+Secp256k1 identity now checks if a curve actually uses the secp256k1 parameters. It cannot be used to load non-secp256k1 identities anymore.
+
+Data type of `cycles` changed to `u128` (was `u64`).
+
+fetch_root_key() only fetches on the first call.
+
+Re-genericized Token to allow use of an arbitrary Token type with StreamingStrategy.
+
+## [0.12.1] - 2022-02-09
+
+Renamed BatchOperationKind._Clear to Clear for compatibility with the certified assets canister.
+This avoids decode errors, even though the type isn't referenced here.
+
+## [0.12.0] - 2022-02-03
+
+Changed the 'HttpRequest.upgrade' field to 'Option<bool>' from 'bool'.
+
 ## [0.11.1] - 2022-01-10
 
 The `lookup_value` function now takes generics which can be iterated over (`IntoIterator<Item = &'p Label>`)  and transformed into a `Vec<Label>`, rather than just a `Vec<Label>`.

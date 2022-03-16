@@ -35,7 +35,7 @@ jobs:
         echo "END" >> $GITHUB_ENV
 
     - name: Static build
-      uses: gmiam/rust-musl-action@master
+      uses: dfinity/rust-musl-action@master
       with:
         args: cargo build --target x86_64-unknown-linux-musl ${{ env.cargo_build_ARGS }}
       if: contains(matrix.os, 'ubuntu')

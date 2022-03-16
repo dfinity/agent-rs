@@ -1,6 +1,6 @@
 [package]
 name = "icx-cert"
-version = "0.11.1"
+version = "0.13.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2018"
 description = "CLI tool to download a document from the Internet Computer and pretty-print the contents of its IC-Certificate header."
@@ -17,11 +17,10 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 [dependencies]
 anyhow = "1.0"
 base64 = "0.13"
-clap = "=3.0.0-beta.5"
-clap_derive = "=3.0.0-beta.5"
+clap = { version = "3.0.14", features = ["derive", "cargo"] }
 chrono = "0.4.19"
 hex = "0.4.2"
-ic-agent = { path = "../ic-agent", version = "0.11" }
+ic-agent = { path = "../ic-agent", version = "0.13" }
 leb128 = "0.2.4"
 sha2 = "0.10.1"
 serde = { version = "1.0.115", features = ["derive"] }

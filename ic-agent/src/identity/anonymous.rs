@@ -1,5 +1,9 @@
 use crate::{export::Principal, identity::Identity, Signature};
 
+/// The anonymous identity.
+///
+/// The caller will be represented as [`Principal::anonymous`], or `2vxsx-fae`.
+#[derive(Debug, Copy, Clone)]
 pub struct AnonymousIdentity;
 
 impl Identity for AnonymousIdentity {

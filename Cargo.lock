@@ -221,9 +221,9 @@ checksum = "c4872d67bab6358e59559027aa3b9157c53d9358c51423c17554809a8858e0f8"
 
 [[package]]
 name = "candid"
-version = "0.7.10"
+version = "0.7.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12970d8d0620d2bdb7e81a5b13ed11e41fcdfeba53d61e45b5853afcbf9611fd"
+checksum = "7d5d4dbc61f5125dab4168ce321c559aaca5511c2915ccb531e212b1c8d199d8"
 dependencies = [
  "anyhow",
  "binread",
@@ -285,9 +285,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.0.0-beta.5"
+version = "3.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "feff3878564edb93745d58cf63e17b63f24142506e7a20c87a5521ed7bfb1d63"
+checksum = "b63edc3f163b3c71ec8aa23f9bd6070f77edbf3d1d198b164afa90ff00e4ec62"
 dependencies = [
  "atty",
  "bitflags",
@@ -298,16 +298,15 @@ dependencies = [
  "strsim",
  "termcolor",
  "textwrap",
- "unicase",
 ]
 
 [[package]]
 name = "clap_derive"
-version = "3.0.0-beta.5"
+version = "3.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b15c6b4f786ffb6192ffe65a36855bc1fc2444bcd0945ae16748dcd6ed7d0d3"
+checksum = "9a1132dc3944b31c20dd8b906b3a9f0a5d0243e092d59171414969657ac6aa85"
 dependencies = [
- "heck",
+ "heck 0.4.0",
  "proc-macro-error",
  "proc-macro2",
  "quote",
@@ -778,6 +777,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "heck"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2540771e65fc8cb83cd6e8a237f70c319bd5c29f78ed1084ba5d50eeac86f7f9"
+
+[[package]]
 name = "hermit-abi"
 version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -887,7 +892,7 @@ dependencies = [
 
 [[package]]
 name = "ic-agent"
-version = "0.11.1"
+version = "0.13.0"
 dependencies = [
  "async-trait",
  "base32",
@@ -924,7 +929,7 @@ dependencies = [
 
 [[package]]
 name = "ic-asset"
-version = "0.11.1"
+version = "0.13.0"
 dependencies = [
  "anyhow",
  "candid",
@@ -948,7 +953,7 @@ dependencies = [
 
 [[package]]
 name = "ic-identity-hsm"
-version = "0.11.1"
+version = "0.13.0"
 dependencies = [
  "hex",
  "ic-agent",
@@ -976,12 +981,15 @@ dependencies = [
 
 [[package]]
 name = "ic-utils"
-version = "0.11.1"
+version = "0.13.0"
 dependencies = [
  "async-trait",
  "candid",
  "garcon",
  "ic-agent",
+ "leb128",
+ "num-bigint 0.4.3",
+ "paste",
  "ring",
  "serde",
  "serde_bytes",
@@ -993,12 +1001,11 @@ dependencies = [
 
 [[package]]
 name = "icx"
-version = "0.11.1"
+version = "0.13.0"
 dependencies = [
  "anyhow",
  "candid",
  "clap",
- "clap_derive",
  "garcon",
  "hex",
  "humantime",
@@ -1014,13 +1021,12 @@ dependencies = [
 
 [[package]]
 name = "icx-asset"
-version = "0.11.1"
+version = "0.13.0"
 dependencies = [
  "anyhow",
  "candid",
  "chrono",
  "clap",
- "clap_derive",
  "delay",
  "garcon",
  "humantime",
@@ -1041,13 +1047,12 @@ dependencies = [
 
 [[package]]
 name = "icx-cert"
-version = "0.11.1"
+version = "0.13.0"
 dependencies = [
  "anyhow",
  "base64",
  "chrono",
  "clap",
- "clap_derive",
  "hex",
  "ic-agent",
  "leb128",
@@ -1454,9 +1459,9 @@ checksum = "28988d872ab76095a6e6ac88d99b54fd267702734fd7ffe610ca27f533ddb95a"
 
 [[package]]
 name = "os_str_bytes"
-version = "4.2.0"
+version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "addaa943333a514159c80c97ff4a93306530d965d27e139188283cd13e06a799"
+checksum = "8e22443d1643a904602595ba1cd8f7d896afe56d26712531c5ff73a15b2fbf64"
 dependencies = [
  "memchr",
 ]
@@ -2194,7 +2199,7 @@ version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5bb0dc7ee9c15cea6199cde9a127fa16a4c5819af85395457ad72d68edc85a38"
 dependencies = [
- "heck",
+ "heck 0.3.3",
  "proc-macro2",
  "quote",
  "rustversion",
@@ -2257,9 +2262,6 @@ name = "textwrap"
 version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0066c8d12af8b5acd21e00547c3797fde4e8677254a7ee429176ccebbe93dd80"
-dependencies = [
- "unicode-width",
-]
 
 [[package]]
 name = "thiserror"
