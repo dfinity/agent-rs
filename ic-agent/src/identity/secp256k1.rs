@@ -9,10 +9,6 @@ use k256::{
     pkcs8::{PublicKeyDocument, SubjectPublicKeyInfo},
     Secp256k1, SecretKey,
 };
-use simple_asn1::{
-    oid, to_der, ASN1Block,
-    ASN1Block::{BitString, ObjectIdentifier, Sequence},
-};
 use std::convert::TryInto;
 #[cfg(feature = "pem")]
 use std::{fs::File, io, path::Path};

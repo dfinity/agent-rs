@@ -10,6 +10,14 @@ pub struct AgentBuilder {
     config: AgentConfig,
 }
 
+impl Default for AgentBuilder {
+    fn default() -> Self {
+        Self {
+            config: Default::default(),
+        }
+    }
+}
+
 impl AgentBuilder {
     /// Create an instance of [Agent] with the information from this builder.
     pub fn build(self) -> Result<Agent, AgentError> {
