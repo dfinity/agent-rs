@@ -168,7 +168,7 @@ impl CandidType for ArgToken {
         Type::Empty
     }
     fn idl_serialize<S: Serializer>(&self, _serializer: S) -> Result<(), S::Error> {
-        // We cannot implement serialize, since our type must be `Reserved` in order to accept anything.
+        // We cannot implement serialize, since our type must be `Empty` in order to accept anything.
         // Attempting to serialize this type is always an error and should be regarded as a compile time error.
         unimplemented!("Token is not serializable")
     }
