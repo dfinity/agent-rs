@@ -496,7 +496,6 @@ async fn main() -> Result<()> {
                     _ => unreachable!(),
                 }
             }
-            exit(1)
         }
         SubCommand::Status => {
             let status = agent
