@@ -6,12 +6,19 @@ use crate::{
     Canister,
 };
 use candid::{
-    parser::value::{IDLValue, IDLValueVisitor},
-    types::{Serializer, Type},
+    parser::{
+        types::FuncMode,
+        value::{IDLValue, IDLValueVisitor},
+    },
+    types::{Function, Serializer, Type},
     CandidType, Deserialize, Func,
 };
 use ic_agent::{export::Principal, Agent};
-use std::fmt::Debug;
+use std::{
+    fmt::Debug,
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
 /// A canister that can serve a HTTP request.
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
@@ -37,7 +44,7 @@ pub struct HttpRequest<'body> {
 
 /// A HTTP response.
 #[derive(Debug, Clone, CandidType, Deserialize)]
-pub struct HttpResponse<Token = self::Token> {
+pub struct HttpResponse<Token = self::Token, ArgToken = self::ArgToken> {
     /// The HTTP status code.
     pub status_code: u16,
     /// The response header map.
@@ -46,25 +53,76 @@ pub struct HttpResponse<Token = self::Token> {
     #[serde(with = "serde_bytes")]
     pub body: Vec<u8>,
     /// The strategy for streaming the rest of the data, if the full response is to be streamed.
-    pub streaming_strategy: Option<StreamingStrategy<Token>>,
+    pub streaming_strategy: Option<StreamingStrategy<Token, ArgToken>>,
     /// Whether the query call should be upgraded to an update call.
     pub upgrade: Option<bool>,
 }
 
 /// Possible strategies for a streaming response.
 #[derive(Debug, Clone, CandidType, Deserialize)]
-pub enum StreamingStrategy<Token = self::Token> {
+pub enum StreamingStrategy<Token = self::Token, ArgToken = self::ArgToken> {
     /// A callback-based streaming strategy, where a callback function is provided for continuing the stream.
-    Callback(CallbackStrategy<Token>),
+    Callback(CallbackStrategy<Token, ArgToken>),
 }
 
 /// A callback-token pair for a callback streaming strategy.
 #[derive(Debug, Clone, CandidType, Deserialize)]
-pub struct CallbackStrategy<Token = self::Token> {
+pub struct CallbackStrategy<Token = self::Token, ArgToken = self::ArgToken> {
     /// The callback function to be called to continue the stream.
-    pub callback: Func,
+    pub callback: HttpRequestStreamingCallback<ArgToken>,
     /// The token to pass to the function.
     pub token: Token,
+}
+
+/// A callback of type `shared query (Token) -> async StreamingCallbackHttpResponse`
+#[derive(Debug, Clone)]
+pub struct HttpRequestStreamingCallback<ArgToken = self::ArgToken>(
+    pub Func,
+    pub PhantomData<ArgToken>,
+);
+
+impl<ArgToken: CandidType> CandidType for HttpRequestStreamingCallback<ArgToken> {
+    fn _ty() -> Type {
+        Type::Func(Function {
+            modes: vec![FuncMode::Query],
+            args: vec![ArgToken::ty()],
+            rets: vec![StreamingCallbackHttpResponse::<ArgToken>::ty()],
+        })
+    }
+    fn idl_serialize<S: Serializer>(&self, serializer: S) -> Result<(), S::Error> {
+        self.0.idl_serialize(serializer)
+    }
+}
+
+impl<'de, ArgToken> Deserialize<'de> for HttpRequestStreamingCallback<ArgToken> {
+    fn deserialize<D: serde::de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Func::deserialize(deserializer).map(Self::from)
+    }
+}
+
+impl<ArgToken> From<Func> for HttpRequestStreamingCallback<ArgToken> {
+    fn from(f: Func) -> Self {
+        Self(f, PhantomData)
+    }
+}
+
+impl<ArgToken> From<HttpRequestStreamingCallback<ArgToken>> for Func {
+    fn from(c: HttpRequestStreamingCallback<ArgToken>) -> Self {
+        c.0
+    }
+}
+
+impl<ArgToken> Deref for HttpRequestStreamingCallback<ArgToken> {
+    type Target = Func;
+    fn deref(&self) -> &Func {
+        &self.0
+    }
+}
+
+impl<ArgToken> DerefMut for HttpRequestStreamingCallback<ArgToken> {
+    fn deref_mut(&mut self) -> &mut Func {
+        &mut self.0
+    }
 }
 
 /// The next chunk of a streaming HTTP response.
@@ -98,6 +156,21 @@ impl<'de> Deserialize<'de> for Token {
         deserializer
             .deserialize_ignored_any(IDLValueVisitor)
             .map(Token)
+    }
+}
+
+/// A marker type to match unconstrained callback arguments
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+pub struct ArgToken;
+
+impl CandidType for ArgToken {
+    fn _ty() -> Type {
+        Type::Empty
+    }
+    fn idl_serialize<S: Serializer>(&self, _serializer: S) -> Result<(), S::Error> {
+        // We cannot implement serialize, since our type must be `Empty` in order to accept anything.
+        // Attempting to serialize this type is always an error and should be regarded as a compile time error.
+        unimplemented!("Token is not serializable")
     }
 }
 
@@ -238,7 +311,7 @@ mod test {
     fn deserialize_response_with_token() {
         use candid::{types::Label, Func, Principal};
 
-        let bytes: Vec<u8> = Encode!(&HttpResponse {
+        let bytes: Vec<u8> = Encode!(&HttpResponse::<_, pre_update_legacy::Token> {
             status_code: 100,
             headers: Vec::new(),
             body: Vec::new(),
@@ -246,7 +319,8 @@ mod test {
                 callback: Func {
                     principal: Principal::from_text("2chl6-4hpzw-vqaaa-aaaaa-c").unwrap(),
                     method: "callback".into()
-                },
+                }
+                .into(),
                 token: pre_update_legacy::Token {
                     key: "foo".into(),
                     content_encoding: "bar".into(),
