@@ -10,7 +10,7 @@ use candid::{
         types::FuncMode,
         value::{IDLValue, IDLValueVisitor},
     },
-    types::{reference::FuncVisitor, Function, Serializer, Type},
+    types::{reference::FuncVisitor, Compound, Function, Serializer, Type},
     CandidType, Deserialize, Func,
 };
 use ic_agent::{export::Principal, Agent};
@@ -32,15 +32,38 @@ pub struct HeaderField<'a>(pub Cow<'a, str>, pub Cow<'a, str>);
 
 /// The important components of an HTTP request.
 #[derive(Debug, Clone, CandidType)]
-pub struct HttpRequest<'a> {
+struct HttpRequest<'a, H> {
     /// The HTTP method string.
     pub method: &'a str,
     /// The URL that was visited.
     pub url: &'a str,
     /// The request headers.
-    pub headers: &'a [HeaderField<'a>],
+    pub headers: H,
     /// The request body.
     pub body: &'a [u8],
+}
+
+/// A wraper around an iterator of headers
+#[derive(Debug, Clone)]
+pub struct Headers<H>(H);
+
+impl<'a, H: Clone + ExactSizeIterator<Item = HeaderField<'a>>> From<H> for Headers<H> {
+    fn from(h: H) -> Self {
+        Headers(h)
+    }
+}
+
+impl<'a, H: Clone + ExactSizeIterator<Item = HeaderField<'a>>> CandidType for Headers<H> {
+    fn _ty() -> Type {
+        Type::Vec(Box::new(HeaderField::ty()))
+    }
+    fn idl_serialize<S: Serializer>(&self, serializer: S) -> Result<(), S::Error> {
+        let mut ser = serializer.serialize_vec(self.0.len())?;
+        for e in self.0.clone() {
+            Compound::serialize_element(&mut ser, &e)?;
+        }
+        Ok(())
+    }
 }
 
 /// A HTTP response.
@@ -299,7 +322,7 @@ pub struct StreamingCallbackHttpResponse<Token = self::Token> {
     pub token: Option<Token>,
 }
 
-/// A token for continuing a callback streaming strategy.
+/// A token for continuing a callback streaming strategy. This type cannot be serialized despite implementing `CandidType`
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token(pub IDLValue);
 
@@ -365,18 +388,27 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
         &'canister self,
         method: impl AsRef<str>,
         url: impl AsRef<str>,
-        headers: &[HeaderField],
+        headers: impl IntoIterator<
+            Item = HeaderField<'agent>,
+            IntoIter = impl 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
+        >,
         body: impl AsRef<[u8]>,
     ) -> impl 'agent + SyncCall<(HttpResponse,)> {
-        self.http_request_custom(method.as_ref(), url.as_ref(), headers.as_ref(), body.as_ref())
+        self.http_request_custom(
+            method.as_ref(),
+            url.as_ref(),
+            headers.into_iter(),
+            body.as_ref(),
+        )
     }
 
     /// Performs a HTTP request, receiving a HTTP response.
+    /// `T` and `C` are the `token` and `callback` types for the `streaming_strategy`.
     pub fn http_request_custom<'canister: 'agent, T, C>(
         &'canister self,
         method: &str,
         url: &str,
-        headers: &[HeaderField],
+        headers: impl 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
         body: &[u8],
     ) -> impl 'agent + SyncCall<(HttpResponse<T, C>,)>
     where
@@ -385,10 +417,10 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
     {
         self.query_("http_request")
             .with_arg(HttpRequest {
-                method: method.into(),
-                url: url.into(),
-                headers: headers.into(),
-                body: body.into(),
+                method,
+                url,
+                headers: Headers(headers),
+                body,
             })
             .build()
     }
@@ -399,30 +431,32 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
         &'canister self,
         method: impl AsRef<str>,
         url: impl AsRef<str>,
-        headers: &[HeaderField],
+        headers: impl 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
         body: impl AsRef<[u8]>,
-    ) -> impl 'agent + AsyncCall<(HttpResponse,)>  {
+    ) -> impl 'agent + AsyncCall<(HttpResponse,)> {
         self.http_request_update_custom(method.as_ref(), url.as_ref(), headers, body.as_ref())
     }
 
     /// Performs a HTTP request over an update call. Unlike query calls, update calls must pass consensus
     /// and therefore cannot be tampered with by a malicious node.
+    /// `T` and `C` are the `token` and `callback` types for the `streaming_strategy`.
     pub fn http_request_update_custom<'canister: 'agent, T, C>(
         &'canister self,
         method: &str,
         url: &str,
-        headers: &[HeaderField],
+        headers: impl 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
         body: &[u8],
-    ) -> impl 'agent + AsyncCall<(HttpResponse<T, C>,)> 
+    ) -> impl 'agent + AsyncCall<(HttpResponse<T, C>,)>
     where
         T: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
-        C: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>, {
+        C: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
+    {
         self.update_("http_request_update")
             .with_arg(HttpRequest {
-                method: method.into(),
-                url: url.into(),
-                headers: headers.into(),
-                body: body.into(),
+                method,
+                url,
+                headers: Headers(headers),
+                body,
             })
             .build()
     }
@@ -437,12 +471,15 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
     }
 
     /// Retrieves the next chunk of a stream from a streaming callback, using the method from [`CallbackStrategy`].
+    /// `T` is the `token` type.
     pub fn http_request_stream_callback_custom<'canister: 'agent, T>(
         &'canister self,
         method: impl AsRef<str>,
         token: T,
     ) -> impl 'agent + SyncCall<(StreamingCallbackHttpResponse<T>,)>
-    where T: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>, {
+    where
+        T: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
+    {
         self.query_(method.as_ref()).with_arg(token).build()
     }
 }
