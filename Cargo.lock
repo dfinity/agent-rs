@@ -216,7 +216,33 @@ dependencies = [
  "anyhow",
  "binread",
  "byteorder",
- "candid_derive",
+ "candid_derive 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "codespan-reporting",
+ "hex",
+ "ic-types",
+ "lalrpop",
+ "lalrpop-util",
+ "leb128",
+ "logos",
+ "num-bigint 0.4.3",
+ "num-traits",
+ "num_enum",
+ "paste",
+ "pretty",
+ "serde",
+ "serde_bytes",
+ "thiserror",
+]
+
+[[package]]
+name = "candid"
+version = "0.7.13"
+source = "git+https://github.com/Daniel-Bloom-dfinity/candid/?branch=dbloom/func#dc54ad434feca415f1eaae7099e9df4289286185"
+dependencies = [
+ "anyhow",
+ "binread",
+ "byteorder",
+ "candid_derive 0.4.5 (git+https://github.com/Daniel-Bloom-dfinity/candid/?branch=dbloom/func)",
  "codespan-reporting",
  "hex",
  "ic-types",
@@ -239,6 +265,17 @@ name = "candid_derive"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2e02c03c4d547674a3f3f3109538fb49871fbe636216daa019f06a62faca9061"
+dependencies = [
+ "lazy_static",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "candid_derive"
+version = "0.4.5"
+source = "git+https://github.com/Daniel-Bloom-dfinity/candid/?branch=dbloom/func#dc54ad434feca415f1eaae7099e9df4289286185"
 dependencies = [
  "lazy_static",
  "proc-macro2",
@@ -815,7 +852,7 @@ dependencies = [
  "base32",
  "base64",
  "byteorder",
- "candid",
+ "candid 0.7.12",
  "garcon",
  "hex",
  "http",
@@ -846,7 +883,7 @@ name = "ic-asset"
 version = "0.14.0"
 dependencies = [
  "anyhow",
- "candid",
+ "candid 0.7.12",
  "flate2",
  "futures",
  "futures-intrusive",
@@ -895,10 +932,10 @@ dependencies = [
 
 [[package]]
 name = "ic-utils"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "async-trait",
- "candid",
+ "candid 0.7.13",
  "garcon",
  "ic-agent",
  "leb128",
@@ -918,7 +955,7 @@ name = "icx"
 version = "0.14.0"
 dependencies = [
  "anyhow",
- "candid",
+ "candid 0.7.12",
  "clap",
  "garcon",
  "hex",
@@ -938,7 +975,7 @@ name = "icx-asset"
 version = "0.14.0"
 dependencies = [
  "anyhow",
- "candid",
+ "candid 0.7.12",
  "chrono",
  "clap",
  "delay",
@@ -1698,7 +1735,7 @@ dependencies = [
 name = "ref-tests"
 version = "0.0.0"
 dependencies = [
- "candid",
+ "candid 0.7.12",
  "garcon",
  "ic-agent",
  "ic-identity-hsm",
