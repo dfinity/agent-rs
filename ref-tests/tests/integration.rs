@@ -145,7 +145,7 @@ fn wallet_canister_create_and_install() {
         let wallet = Wallet::create(&agent, wallet_id);
 
         let (create_result,) = wallet
-            .wallet_create_canister_v2(1_000_000, None, None, None, None)
+            .wallet_create_canister64_v2(1_000_000, None, None, None, None)
             .call_and_wait(create_waiter())
             .await?;
 
@@ -206,7 +206,7 @@ fn wallet_create_and_set_controller() {
         eprintln!("Agent id: {:?}", other_agent_principal.to_text());
 
         let create_result = wallet
-            .wallet_create_wallet(
+            .wallet_create_wallet64(
                 1_000_000_000_000_u64,
                 Some(vec![other_agent_principal]),
                 None,
@@ -263,7 +263,7 @@ fn wallet_create_wallet() {
 
         // create a child wallet
         let child_create_res = wallet
-            .wallet_create_wallet(
+            .wallet_create_wallet64(
                 1_000_000_000_000_u64,
                 None,
                 None,
@@ -298,7 +298,7 @@ fn wallet_create_wallet() {
         // create a second child wallet
         //
         let child_two_create_res = wallet
-            .wallet_create_wallet(
+            .wallet_create_wallet64(
                 2_100_000_000_000_u64,
                 None,
                 None,
