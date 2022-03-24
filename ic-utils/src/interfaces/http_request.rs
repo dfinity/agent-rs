@@ -552,7 +552,7 @@ mod test {
         use candid::{types::Label, Func, Principal};
 
         fn decode<C: CandidType + DeserializeOwned>(bytes: &[u8]) {
-            let response = Decode!(&bytes, HttpResponse::<_, C>).unwrap();
+            let response = Decode!(bytes, HttpResponse::<_, C>).unwrap();
             assert_eq!(response.status_code, 100);
             let token = match response.streaming_strategy {
                 Some(StreamingStrategy::Callback(CallbackStrategy { token, .. })) => token,
