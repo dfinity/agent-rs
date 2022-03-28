@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2022-03-28
+
+Updated `ic_utils::interfaces::http_request` structures to use `&'str` to reduce copying.
+
+Removed `Deserialize` from `HttpRequest`.
+
+Changed `HttpResponse` to be generic over entire callback instead of just `ArgToken`.
+
+Added conversion helpers for `HttpResponse`, `StreamingStrategy` and `CallbackStrategy` across generics.
+
+Changes to `Canister<HttpRequestCanister>` interface.
+
+* Made `http_request`, `http_request_update`, and `http_request_stream_callback` more generic and require fewer string copies.
+* Added `_custom` variants to enable custom `token` deserialization.
+
 ## [0.14.0] - 2022-03-17
 
 Introduced HttpRequestStreamingCallback to work around https://github.com/dfinity/candid/issues/273.
