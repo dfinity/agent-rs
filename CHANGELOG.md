@@ -15,6 +15,8 @@ Removed `Deserialize` from `HttpRequest`.
 
 Changed `HttpResponse` to be generic over entire callback instead of just `ArgToken`.
 
+Added `HttpRequestStreamingCallbackAny` to deserialize any callback, regardless of signature.
+
 Added conversion helpers for `HttpResponse`, `StreamingStrategy` and `CallbackStrategy` across generics.
 
 Changes to `Canister<HttpRequestCanister>` interface.
