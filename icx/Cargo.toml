@@ -11,6 +11,7 @@ readme = "README.md"
 categories = ["command-line-interface", "web-programming::http-client"]
 keywords = ["internet-computer", "agent", "icp", "dfinity", "call"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
+rust-version = "1.58.1"
 
 [[bin]]
 name = "icx"
