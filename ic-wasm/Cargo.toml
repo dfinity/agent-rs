@@ -1,0 +1,6 @@
+[package]
+name = "ic-wasm"
+version = "0.1.0"
+
+[dependencies]
+walrus = "0.19.0"

@@ -1,0 +1,10 @@
+[package]
+name = "icx-wasm"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.34"
+clap = { version = "3.0.14", features = ["derive", "cargo"] }
+ic-wasm = { path = "../ic-wasm" }
+walrus = "0.19.0"
