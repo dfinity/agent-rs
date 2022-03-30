@@ -129,8 +129,10 @@ fn wallet_canister_forward() {
             .reply_data(b"DIDL\0\x01\x71\x0bHello World")
             .build();
 
-        let forward = wallet
-            .call_forward64::<(String,)>(universal.update_("update").with_arg_raw(arg).build(), 0)?;
+        let forward = wallet.call_forward64::<(String,)>(
+            universal.update_("update").with_arg_raw(arg).build(),
+            0,
+        )?;
         let (result,) = forward.call_and_wait(create_waiter()).await.unwrap();
 
         assert_eq!(result, "Hello World");
