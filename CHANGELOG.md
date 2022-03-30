@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.15.0] - 2022-03-28
 
-Updated `ic_utils::interfaces::http_request` structures to use `&'str` to reduce copying.
+Updated `ic_utils::interfaces::http_request` structures to use `&str` to reduce copying.
 
 Removed `Deserialize` from `HttpRequest`.
 
