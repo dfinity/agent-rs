@@ -2,7 +2,7 @@
 name = "ic-agent"
 version = "0.14.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
-edition = "2018"
+edition = "2021"
 description = "Agent library to communicate with the Internet Computer, following the Public Specification."
 homepage = "https://docs.rs/ic-agent"
 documentation = "https://docs.rs/ic-agent"
@@ -11,6 +11,7 @@ readme = "README.md"
 categories = ["api-bindings", "data-structures", "no-std"]
 keywords = ["internet-computer", "agent", "icp", "dfinity"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
+rust-version = "1.58.1"
 
 [dependencies]
 async-trait = "0.1.51"

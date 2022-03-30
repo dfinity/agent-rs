@@ -5,17 +5,9 @@ use crate::{
 use std::sync::Arc;
 
 /// A builder for an [`Agent`].
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct AgentBuilder {
     config: AgentConfig,
-}
-
-impl Default for AgentBuilder {
-    fn default() -> Self {
-        Self {
-            config: Default::default(),
-        }
-    }
 }
 
 impl AgentBuilder {

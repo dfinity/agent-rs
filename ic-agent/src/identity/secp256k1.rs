@@ -23,7 +23,7 @@ use simple_asn1::{
 #[derive(Clone, Debug)]
 pub struct Secp256k1Identity {
     private_key: EcKey<Private>,
-    public_key: EcKey<Public>,
+    _public_key: EcKey<Public>,
     der_encoded_public_key: Vec<u8>,
 }
 
@@ -58,7 +58,7 @@ impl Secp256k1Identity {
             to_der(&asn1_block).expect("Cannot DER encode secp256k1 public key.");
         Self {
             private_key,
-            public_key,
+            _public_key: public_key,
             der_encoded_public_key,
         }
     }
@@ -72,7 +72,7 @@ impl Identity for Secp256k1Identity {
     fn sign(&self, msg: &[u8]) -> Result<Signature, String> {
         let digest = sha256(msg);
         let ecdsa_sig = EcdsaSig::sign(&digest, &self.private_key.clone())
-            .map_err(|err| format!("Cannot create secp256k1 signature: {}", err.to_string(),))?;
+            .map_err(|err| format!("Cannot create secp256k1 signature: {}", err))?;
         let r = ecdsa_sig.r().to_vec();
         let s = ecdsa_sig.s().to_vec();
         let mut bytes = [0; 64];
@@ -186,7 +186,7 @@ N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
 
         // Assert the secp256k1 signature is valid.
         let digest = sha256(message);
-        let public_key = identity.public_key;
+        let public_key = identity._public_key;
         let success = ecdsa_sig
             .verify(&digest, &public_key)
             .expect("Cannot verify secp256k1 signature.");
