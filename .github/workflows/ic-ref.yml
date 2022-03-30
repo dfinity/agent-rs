@@ -151,6 +151,6 @@ jobs:
     if: ${{ always() }}
     needs: test
     steps:
-      - name: Check fmt result
+      - name: Check ic-ref result
         if: ${{ needs.test.result != 'success' }}
         run: exit 1
