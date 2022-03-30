@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - adamspofford/1.58.1
 
 jobs:
   build:
