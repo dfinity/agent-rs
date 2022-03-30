@@ -496,7 +496,7 @@ mod test {
     };
     use candid::{
         parser::value::{IDLField, IDLValue},
-        CandidType, Decode, Encode, Deserialize,
+        CandidType, Decode, Deserialize, Encode,
     };
     use serde::de::DeserializeOwned;
 
@@ -716,7 +716,7 @@ mod test {
             value: String,
             other_value: EnumToken,
         }
-        
+
         let bytes: Vec<u8> = Encode!(&StreamingCallbackHttpResponse {
             body: b"this is a body".as_ref().into(),
             token: Some(EnumToken::Foo),
@@ -737,11 +737,12 @@ mod test {
         assert_eq!(response.body, b"this is a body");
         assert_eq!(response.token, None);
 
-
-        
         let bytes: Vec<u8> = Encode!(&StreamingCallbackHttpResponse {
             body: b"this is a body".as_ref().into(),
-            token: Some(EmbedToken{ value: "token string".into(), other_value: EnumToken::Foo}),
+            token: Some(EmbedToken {
+                value: "token string".into(),
+                other_value: EnumToken::Foo
+            }),
         })
         .unwrap();
 
