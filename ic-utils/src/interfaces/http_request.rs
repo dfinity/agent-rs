@@ -404,14 +404,15 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
 
     /// Performs a HTTP request, receiving a HTTP response.
     /// `T` and `C` are the `token` and `callback` types for the `streaming_strategy`.
-    pub fn http_request_custom<'canister: 'agent, T, C>(
+    pub fn http_request_custom<'canister: 'agent, H, T, C>(
         &'canister self,
         method: &str,
         url: &str,
-        headers: impl 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
+        headers: H,
         body: &[u8],
     ) -> impl 'agent + SyncCall<(HttpResponse<T, C>,)>
     where
+        H: 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
         T: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
         C: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
     {
@@ -440,14 +441,15 @@ impl<'agent> Canister<'agent, HttpRequestCanister> {
     /// Performs a HTTP request over an update call. Unlike query calls, update calls must pass consensus
     /// and therefore cannot be tampered with by a malicious node.
     /// `T` and `C` are the `token` and `callback` types for the `streaming_strategy`.
-    pub fn http_request_update_custom<'canister: 'agent, T, C>(
+    pub fn http_request_update_custom<'canister: 'agent, H, T, C>(
         &'canister self,
         method: &str,
         url: &str,
-        headers: impl 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
+        headers: H,
         body: &[u8],
     ) -> impl 'agent + AsyncCall<(HttpResponse<T, C>,)>
     where
+        H: 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
         T: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
         C: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
     {
@@ -494,7 +496,7 @@ mod test {
     };
     use candid::{
         parser::value::{IDLField, IDLValue},
-        CandidType, Decode, Encode,
+        CandidType, Decode, Encode, Deserialize,
     };
     use serde::de::DeserializeOwned;
 
@@ -693,6 +695,63 @@ mod test {
         let bytes: Vec<u8> = Encode!(&StreamingCallbackHttpResponse {
             body: b"this is a body".as_ref().into(),
             token: Option::<pre_update_legacy::Token>::None,
+        })
+        .unwrap();
+
+        let response = Decode!(&bytes, StreamingCallbackHttpResponse).unwrap();
+        assert_eq!(response.body, b"this is a body");
+        assert_eq!(response.token, None);
+    }
+
+    #[test]
+    fn deserialize_with_enum_token() {
+        #[derive(Debug, Clone, CandidType, Deserialize)]
+        pub enum EnumToken {
+            Foo,
+            Bar,
+            Baz,
+        }
+        #[derive(Debug, Clone, CandidType, Deserialize)]
+        pub struct EmbedToken {
+            value: String,
+            other_value: EnumToken,
+        }
+        
+        let bytes: Vec<u8> = Encode!(&StreamingCallbackHttpResponse {
+            body: b"this is a body".as_ref().into(),
+            token: Some(EnumToken::Foo),
+        })
+        .unwrap();
+
+        let response = Decode!(&bytes, StreamingCallbackHttpResponse).unwrap();
+        assert_eq!(response.body, b"this is a body");
+        assert!(response.token.is_some());
+
+        let bytes: Vec<u8> = Encode!(&StreamingCallbackHttpResponse {
+            body: b"this is a body".as_ref().into(),
+            token: Option::<EnumToken>::None,
+        })
+        .unwrap();
+
+        let response = Decode!(&bytes, StreamingCallbackHttpResponse).unwrap();
+        assert_eq!(response.body, b"this is a body");
+        assert_eq!(response.token, None);
+
+
+        
+        let bytes: Vec<u8> = Encode!(&StreamingCallbackHttpResponse {
+            body: b"this is a body".as_ref().into(),
+            token: Some(EmbedToken{ value: "token string".into(), other_value: EnumToken::Foo}),
+        })
+        .unwrap();
+
+        let response = Decode!(&bytes, StreamingCallbackHttpResponse).unwrap();
+        assert_eq!(response.body, b"this is a body");
+        assert!(response.token.is_some());
+
+        let bytes: Vec<u8> = Encode!(&StreamingCallbackHttpResponse {
+            body: b"this is a body".as_ref().into(),
+            token: Option::<EmbedToken>::None,
         })
         .unwrap();
 
