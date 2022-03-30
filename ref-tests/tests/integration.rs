@@ -94,7 +94,7 @@ fn canister_reject_call() {
         let bob = Wallet::create(&agent, create_wallet_canister(&agent, None).await?);
 
         let result = alice
-            .wallet_send(&bob, 1_000_000)
+            .wallet_send64(&bob, 1_000_000)
             .call_and_wait(create_waiter())
             .await;
 
@@ -286,7 +286,7 @@ fn wallet_create_wallet() {
             .with_canister_id(child_create_res.canister_id)
             .build()?;
 
-        let (child_wallet_balance,): (ic_utils::interfaces::wallet::BalanceResult,) = wallet
+        let (child_wallet_balance,): (ic_utils::interfaces::wallet::BalanceResult<u64>,) = wallet
             .call64(&child_wallet, "wallet_balance", Argument::default(), 0)
             .call_and_wait(create_waiter())
             .await?;
@@ -319,7 +319,7 @@ fn wallet_create_wallet() {
             "Created child wallet two.\nChild wallet two canister id: {:?}",
             child_two_create_res.canister_id.to_text()
         );
-        let (child_wallet_two_balance,): (ic_utils::interfaces::wallet::BalanceResult,) = wallet
+        let (child_wallet_two_balance,): (ic_utils::interfaces::wallet::BalanceResult<u64>,) = wallet
             .call64(&child_wallet_two, "wallet_balance", Argument::default(), 0)
             .call_and_wait(create_waiter())
             .await?;
