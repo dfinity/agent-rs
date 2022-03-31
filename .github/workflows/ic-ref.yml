@@ -17,7 +17,7 @@ jobs:
             ghc: '8.10.7'
             spec: 'f771c6b3e7cdde413d3b960f63165c6ecf3e0b7c'
             os: ubuntu-latest
-            rust: 1.55.0
+            rust: '1.58.1'
 
     steps:
       - uses: haskell/actions/setup@v1
@@ -145,3 +145,12 @@ jobs:
           killall ic-ref
         env:
           RUST_BACKTRACE: 1
+  aggregate:
+    name: ic-ref:required
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs: test
+    steps:
+      - name: Check ic-ref result
+        if: ${{ needs.test.result != 'success' }}
+        run: exit 1

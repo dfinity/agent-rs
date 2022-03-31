@@ -5,12 +5,13 @@ authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 description = "Identity implementation for HSM for the ic-agent package."
 homepage = "https://docs.rs/ic-identity-hsm"
 documentation = "https://docs.rs/ic-identity-hsm"
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 readme = "README.md"
 categories = ["api-bindings", "data-structures", "no-std"]
 keywords = ["internet-computer", "agent", "utility", "icp", "dfinity"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
+rust-version = "1.58.1"
 
 [dependencies]
 hex = "0.4.2"

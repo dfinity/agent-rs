@@ -8,7 +8,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        rust: [ '1.55.0' ]
+        rust: [ '1.58.1' ]
         os: [ ubuntu-latest ]
 
     steps:
@@ -31,3 +31,12 @@ jobs:
         run: cargo clippy --verbose --tests --benches -- -D clippy::all
         env:
           RUST_BACKTRACE: 1
+  aggregate:
+    name: lint:required
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs: test
+    steps:
+      - name: Check lint result
+        if: ${{ needs.test.result != 'success' }}
+        run: exit 1
