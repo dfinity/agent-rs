@@ -11,7 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        rust: [ '1.55.0' ]
+        rust: [ '1.58.1' ]
         os: [ ubuntu-latest, macos-latest, windows-latest ]
 
     steps:
@@ -52,3 +52,12 @@ jobs:
           # information. An alternative solution here is to install GNU tar, but
           # flushing the disk cache seems to work, too.
           sudo /usr/sbin/purge
+  aggregate:
+    name: test:required
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs: test
+    steps:
+      - name: Check test result
+        if: ${{ needs.test.result != 'success' }}
+        run: exit 1

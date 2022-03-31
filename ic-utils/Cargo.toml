@@ -1,8 +1,8 @@
 [package]
 name = "ic-utils"
-version = "0.13.0"
+version = "0.14.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
-edition = "2018"
+edition = "2021"
 description = "Collection of utilities for Rust, on top of ic-agent, to communicate with the Internet Computer, following the Public Specification."
 homepage = "https://docs.rs/ic-utils"
 documentation = "https://docs.rs/ic-utils"
@@ -11,6 +11,7 @@ readme = "README.md"
 categories = ["api-bindings", "data-structures", "no-std"]
 keywords = ["internet-computer", "agent", "utility", "icp", "dfinity"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
+rust-version = "1.58.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -18,7 +19,7 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 async-trait = "0.1.40"
 candid = "0.7.12"
 garcon = { version = "0.2", features = ["async"] }
-ic-agent = { path = "../ic-agent", version = "0.13" }
+ic-agent = { path = "../ic-agent", version = "0.14" }
 serde = "1.0.115"
 serde_bytes = "0.11"
 strum = "0.23"

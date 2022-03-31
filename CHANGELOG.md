@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2022-03-17
+
+Introduced HttpRequestStreamingCallback to work around https://github.com/dfinity/candid/issues/273.
+
+Response certificate verification will check that the canister id falls within the range of valid canister ids for the subnet.
+
 ## [0.13.0] - 2022-03-07
 Secp256k1 identity now checks if a curve actually uses the secp256k1 parameters. It cannot be used to load non-secp256k1 identities anymore.
 

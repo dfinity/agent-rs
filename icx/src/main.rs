@@ -21,10 +21,7 @@ use ic_utils::interfaces::management_canister::{
     MgmtMethod,
 };
 use ring::signature::Ed25519KeyPair;
-use std::{
-    collections::VecDeque, convert::TryFrom, io::BufRead, path::PathBuf, process::exit,
-    str::FromStr,
-};
+use std::{collections::VecDeque, convert::TryFrom, io::BufRead, path::PathBuf, str::FromStr};
 
 const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
 
@@ -496,7 +493,6 @@ async fn main() -> Result<()> {
                     _ => unreachable!(),
                 }
             }
-            exit(1)
         }
         SubCommand::Status => {
             let status = agent

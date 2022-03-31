@@ -1,8 +1,8 @@
 [package]
 name = "icx-cert"
-version = "0.13.0"
+version = "0.14.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
-edition = "2018"
+edition = "2021"
 description = "CLI tool to download a document from the Internet Computer and pretty-print the contents of its IC-Certificate header."
 homepage = "https://docs.rs/icx-cert"
 documentation = "https://docs.rs/icx-cert"
@@ -11,6 +11,7 @@ readme = "README.md"
 categories = ["command-line-interface"]
 keywords = ["internet-computer", "agent", "icp", "dfinity", "certificate"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
+rust-version = "1.58.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -20,7 +21,7 @@ base64 = "0.13"
 clap = { version = "3.0.14", features = ["derive", "cargo"] }
 chrono = "0.4.19"
 hex = "0.4.2"
-ic-agent = { path = "../ic-agent", version = "0.13" }
+ic-agent = { path = "../ic-agent", version = "0.14" }
 leb128 = "0.2.4"
 sha2 = "0.10.1"
 serde = { version = "1.0.115", features = ["derive"] }

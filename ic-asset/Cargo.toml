@@ -1,8 +1,8 @@
 [package]
 name = "ic-asset"
-version = "0.13.0"
+version = "0.14.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
-edition = "2018"
+edition = "2021"
 description = "Library for storing files in an asset canister."
 homepage = "https://docs.rs/ic-asset"
 documentation = "https://docs.rs/ic-asset"
@@ -11,6 +11,7 @@ readme = "README.md"
 categories = ["api-bindings", "data-structures"]
 keywords = ["internet-computer", "assets", "icp", "dfinity"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
+rust-version = "1.58.1"
 
 [dependencies]
 anyhow = "1.0"
@@ -20,9 +21,9 @@ futures = "0.3.19"
 futures-intrusive = "0.4.0"
 garcon = { version = "0.2", features = ["async"] }
 hex = {version = "0.4.2", features = ["serde"] }
-ic-agent = { path = "../ic-agent", version = "0.13", features = [ "pem" ] }
+ic-agent = { path = "../ic-agent", version = "0.14", features = [ "pem" ] }
 ic-types = "0.3.0"
-ic-utils = { path = "../ic-utils", version = "0.13" }
+ic-utils = { path = "../ic-utils", version = "0.14" }
 mime = "0.3.16"
 mime_guess = "2.0.3"
 serde = "1.0"
