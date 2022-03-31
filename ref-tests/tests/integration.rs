@@ -222,10 +222,12 @@ fn wallet_create_and_set_controller() {
         );
 
         eprintln!("...build child_wallet");
-        let child_wallet = WalletCanister::from_canister(Canister::builder()
-            .with_agent(&other_agent)
-            .with_canister_id(create_result.canister_id)
-            .build()?);
+        let child_wallet = WalletCanister::from_canister(
+            Canister::builder()
+                .with_agent(&other_agent)
+                .with_canister_id(create_result.canister_id)
+                .build()?,
+        );
 
         eprintln!("...child_wallet.get_controllers");
         let (controller_list,) = child_wallet.get_controllers().call().await?;

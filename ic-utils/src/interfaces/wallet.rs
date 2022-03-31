@@ -263,11 +263,13 @@ pub struct CallResult {
 impl<'agent> WalletCanister<'agent> {
     /// Create an instance of a `WalletCanister` interface pointing to the given Canister ID.
     pub fn create(agent: &'agent Agent, canister_id: Principal) -> Self {
-        Self(Canister::builder()
-            .with_agent(agent)
-            .with_canister_id(canister_id)
-            .build()
-            .unwrap())
+        Self(
+            Canister::builder()
+                .with_agent(agent)
+                .with_canister_id(canister_id)
+                .build()
+                .unwrap(),
+        )
     }
 
     /// Create a `WalletCanister` interface from an existing canister object.

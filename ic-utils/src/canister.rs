@@ -23,7 +23,7 @@ pub enum CanisterBuilderError {
 }
 
 /// A canister builder, which can be used to create a canister abstraction.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CanisterBuilder<'agent> {
     agent: Option<&'agent Agent>,
     canister_id: Option<Result<Principal, CanisterBuilderError>>,
@@ -70,19 +70,7 @@ impl<'agent> CanisterBuilder<'agent> {
         let agent = self
             .agent
             .ok_or(CanisterBuilderError::MustSpecifyAnAgent())?;
-        Ok(Canister {
-            agent,
-            canister_id,
-        })
-    }
-}
-
-impl Default for CanisterBuilder<'static> {
-    fn default() -> Self {
-        CanisterBuilder {
-            agent: None,
-            canister_id: None,
-        }
+        Ok(Canister { agent, canister_id })
     }
 }
 
@@ -272,10 +260,7 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
 impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
     /// Add an argument to the candid argument list. This requires Candid arguments, if
     /// there is a raw argument set (using [with_arg_raw]), this will fail.
-    pub fn with_arg<Argument>(
-        mut self,
-        arg: Argument,
-    ) -> SyncCallBuilder<'agent, 'canister>
+    pub fn with_arg<Argument>(mut self, arg: Argument) -> SyncCallBuilder<'agent, 'canister>
     where
         Argument: CandidType + Sync + Send,
     {
@@ -286,10 +271,7 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
     /// Add an argument to the candid argument list. This requires Candid arguments, if
     /// there is a raw argument set (using [with_arg_raw]), this will fail.
     /// TODO: make this method unnecessary https://github.com/dfinity/agent-rs/issues/132
-    pub fn with_value_arg(
-        mut self,
-        arg: IDLValue,
-    ) -> SyncCallBuilder<'agent, 'canister> {
+    pub fn with_value_arg(mut self, arg: IDLValue) -> SyncCallBuilder<'agent, 'canister> {
         self.arg.push_value_arg(arg);
         self
     }
@@ -357,10 +339,7 @@ impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
 impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
     /// Add an argument to the candid argument list. This requires Candid arguments, if
     /// there is a raw argument set (using [with_arg_raw]), this will fail.
-    pub fn with_arg<Argument>(
-        mut self,
-        arg: Argument,
-    ) -> AsyncCallBuilder<'agent, 'canister>
+    pub fn with_arg<Argument>(mut self, arg: Argument) -> AsyncCallBuilder<'agent, 'canister>
     where
         Argument: CandidType + Sync + Send,
     {
@@ -431,11 +410,13 @@ mod tests {
             .unwrap();
         agent.fetch_root_key().await.unwrap();
 
-        let management_canister = ManagementCanister::from_canister(Canister::builder()
-            .with_agent(&agent)
-            .with_canister_id("aaaaa-aa")
-            .build()
-            .unwrap());
+        let management_canister = ManagementCanister::from_canister(
+            Canister::builder()
+                .with_agent(&agent)
+                .with_canister_id("aaaaa-aa")
+                .build()
+                .unwrap(),
+        );
 
         let (new_canister_id,) = management_canister
             .create_canister()

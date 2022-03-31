@@ -370,11 +370,13 @@ impl CandidType for ArgToken {
 impl<'agent> HttpRequestCanister<'agent> {
     /// Create an instance of a `HttpRequestCanister` interface pointing to the specified Canister ID.
     pub fn create(agent: &'agent Agent, canister_id: Principal) -> Self {
-        Self(Canister::builder()
-            .with_agent(agent)
-            .with_canister_id(canister_id)
-            .build()
-            .unwrap())
+        Self(
+            Canister::builder()
+                .with_agent(agent)
+                .with_canister_id(canister_id)
+                .build()
+                .unwrap(),
+        )
     }
 
     /// Create a `HttpRequestCanister` interface from an existing canister object.

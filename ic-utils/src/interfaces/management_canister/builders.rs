@@ -411,9 +411,7 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
 }
 
 #[async_trait]
-impl<'agent, 'canister: 'agent> AsyncCall<()>
-    for InstallCodeBuilder<'agent, 'canister>
-{
+impl<'agent, 'canister: 'agent> AsyncCall<()> for InstallCodeBuilder<'agent, 'canister> {
     async fn call(self) -> Result<RequestId, AgentError> {
         self.build()?.call().await
     }
@@ -625,9 +623,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
 }
 
 #[async_trait]
-impl<'agent, 'canister: 'agent> AsyncCall<()>
-    for UpdateCanisterBuilder<'agent, 'canister>
-{
+impl<'agent, 'canister: 'agent> AsyncCall<()> for UpdateCanisterBuilder<'agent, 'canister> {
     async fn call(self) -> Result<RequestId, AgentError> {
         self.build()?.call().await
     }

@@ -57,11 +57,13 @@ pub enum MgmtMethod {
 impl<'agent> ManagementCanister<'agent> {
     /// Create an instance of a `ManagementCanister` interface pointing to the specified Canister ID.
     pub fn create(agent: &'agent Agent) -> Self {
-        Self(Canister::builder()
-            .with_agent(agent)
-            .with_canister_id(Principal::management_canister())
-            .build()
-            .unwrap())
+        Self(
+            Canister::builder()
+                .with_agent(agent)
+                .with_canister_id(Principal::management_canister())
+                .build()
+                .unwrap(),
+        )
     }
 
     /// Create a `ManagementCanister` interface from an existing canister object.
