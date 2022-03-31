@@ -454,7 +454,7 @@ impl<'agent> WalletCanister<'agent> {
     /// Send cycles to another (hopefully Wallet) canister.
     pub fn wallet_send<'canister: 'agent>(
         &'canister self,
-        destination: &'_ Canister<'agent, Wallet>,
+        destination: &'_ Canister<'agent>,
         amount: u128,
     ) -> impl 'agent + AsyncCall<(Result<(), String>,)> {
         #[derive(CandidType)]
