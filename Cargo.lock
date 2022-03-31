@@ -209,40 +209,14 @@ checksum = "c4872d67bab6358e59559027aa3b9157c53d9358c51423c17554809a8858e0f8"
 
 [[package]]
 name = "candid"
-version = "0.7.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5653120543c9c2f3990b23a6734c905e2cc2ad88f5b82414117ab573465edc3c"
-dependencies = [
- "anyhow",
- "binread",
- "byteorder",
- "candid_derive 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "codespan-reporting",
- "hex",
- "ic-types",
- "lalrpop",
- "lalrpop-util",
- "leb128",
- "logos",
- "num-bigint 0.4.3",
- "num-traits",
- "num_enum",
- "paste",
- "pretty",
- "serde",
- "serde_bytes",
- "thiserror",
-]
-
-[[package]]
-name = "candid"
 version = "0.7.14"
-source = "git+https://github.com/Daniel-Bloom-dfinity/candid?branch=dbloom/bump#74398af80aafbebb19e69741ac31a77b21518b0e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba9e536514a3c655568e23e36e68cbef20ee6595f641719ade03a849a13ed0ac"
 dependencies = [
  "anyhow",
  "binread",
  "byteorder",
- "candid_derive 0.4.5 (git+https://github.com/Daniel-Bloom-dfinity/candid?branch=dbloom/bump)",
+ "candid_derive",
  "codespan-reporting",
  "hex",
  "ic-types",
@@ -265,17 +239,6 @@ name = "candid_derive"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2e02c03c4d547674a3f3f3109538fb49871fbe636216daa019f06a62faca9061"
-dependencies = [
- "lazy_static",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "candid_derive"
-version = "0.4.5"
-source = "git+https://github.com/Daniel-Bloom-dfinity/candid?branch=dbloom/bump#74398af80aafbebb19e69741ac31a77b21518b0e"
 dependencies = [
  "lazy_static",
  "proc-macro2",
@@ -852,7 +815,7 @@ dependencies = [
  "base32",
  "base64",
  "byteorder",
- "candid 0.7.13",
+ "candid",
  "garcon",
  "hex",
  "http",
@@ -883,7 +846,7 @@ name = "ic-asset"
 version = "0.15.0"
 dependencies = [
  "anyhow",
- "candid 0.7.13",
+ "candid",
  "flate2",
  "futures",
  "futures-intrusive",
@@ -935,7 +898,7 @@ name = "ic-utils"
 version = "0.15.0"
 dependencies = [
  "async-trait",
- "candid 0.7.14",
+ "candid",
  "garcon",
  "ic-agent",
  "leb128",
@@ -955,7 +918,7 @@ name = "icx"
 version = "0.15.0"
 dependencies = [
  "anyhow",
- "candid 0.7.13",
+ "candid",
  "clap",
  "garcon",
  "hex",
@@ -975,7 +938,7 @@ name = "icx-asset"
 version = "0.15.0"
 dependencies = [
  "anyhow",
- "candid 0.7.13",
+ "candid",
  "chrono",
  "clap",
  "delay",
@@ -1735,7 +1698,7 @@ dependencies = [
 name = "ref-tests"
 version = "0.0.0"
 dependencies = [
- "candid 0.7.13",
+ "candid",
  "garcon",
  "ic-agent",
  "ic-identity-hsm",

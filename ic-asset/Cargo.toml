@@ -14,7 +14,7 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
 anyhow = "1.0"
-candid = "0.7.13"
+candid = "0.7.14"
 flate2 = "1.0.22"
 futures = "0.3.19"
 futures-intrusive = "0.4.0"

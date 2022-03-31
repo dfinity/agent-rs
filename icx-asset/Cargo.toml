@@ -16,7 +16,7 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
 anyhow = "1.0.34"
-candid = "0.7.13"
+candid = "0.7.14"
 chrono = "0.4.19"
 clap = { version = "3.0.14", features = ["derive", "cargo"] }
 delay = "0.3.1"
