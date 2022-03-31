@@ -41,8 +41,8 @@ pub struct CanisterSettings {
 
 /// A builder for a `create_canister` call.
 #[derive(Debug)]
-pub struct CreateCanisterBuilder<'agent, 'canister: 'agent, T> {
-    canister: &'canister Canister<'agent, T>,
+pub struct CreateCanisterBuilder<'agent, 'canister: 'agent> {
+    canister: &'canister Canister<'agent>,
     controllers: Option<Result<Vec<Principal>, AgentError>>,
     compute_allocation: Option<Result<ComputeAllocation, AgentError>>,
     memory_allocation: Option<Result<MemoryAllocation, AgentError>>,
@@ -51,9 +51,9 @@ pub struct CreateCanisterBuilder<'agent, 'canister: 'agent, T> {
     amount: Option<u128>,
 }
 
-impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
+impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
     /// Create an CreateCanister builder, which is also an AsyncCall implementation.
-    pub fn builder(canister: &'canister Canister<'agent, T>) -> Self {
+    pub fn builder(canister: &'canister Canister<'agent>) -> Self {
         Self {
             canister,
             controllers: None,
@@ -271,8 +271,8 @@ impl<'agent, 'canister: 'agent, T> CreateCanisterBuilder<'agent, 'canister, T> {
 }
 
 #[async_trait]
-impl<'agent, 'canister: 'agent, T: Sync> AsyncCall<(Principal,)>
-    for CreateCanisterBuilder<'agent, 'canister, T>
+impl<'agent, 'canister: 'agent> AsyncCall<(Principal,)>
+    for CreateCanisterBuilder<'agent, 'canister>
 {
     async fn call(self) -> Result<RequestId, AgentError> {
         self.build()?.call().await
@@ -332,18 +332,18 @@ impl FromStr for InstallMode {
 
 /// A builder for an `install_code` call.
 #[derive(Debug)]
-pub struct InstallCodeBuilder<'agent, 'canister: 'agent, T> {
-    canister: &'canister Canister<'agent, T>,
+pub struct InstallCodeBuilder<'agent, 'canister: 'agent> {
+    canister: &'canister Canister<'agent>,
     canister_id: Principal,
     wasm: &'canister [u8],
     arg: Argument,
     mode: Option<InstallMode>,
 }
 
-impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
+impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
     /// Create an InstallCode builder, which is also an AsyncCall implementation.
     pub fn builder(
-        canister: &'canister Canister<'agent, T>,
+        canister: &'canister Canister<'agent>,
         canister_id: &Principal,
         wasm: &'canister [u8],
     ) -> Self {
@@ -361,13 +361,13 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
     pub fn with_arg<Argument: CandidType + Sync + Send>(
         mut self,
         arg: Argument,
-    ) -> InstallCodeBuilder<'agent, 'canister, T> {
+    ) -> InstallCodeBuilder<'agent, 'canister> {
         self.arg.push_idl_arg(arg);
         self
     }
 
     /// Override the argument passed in to the canister with raw bytes.
-    pub fn with_raw_arg(mut self, arg: Vec<u8>) -> InstallCodeBuilder<'agent, 'canister, T> {
+    pub fn with_raw_arg(mut self, arg: Vec<u8>) -> InstallCodeBuilder<'agent, 'canister> {
         self.arg.set_raw_arg(arg);
         self
     }
@@ -411,8 +411,8 @@ impl<'agent, 'canister: 'agent, T> InstallCodeBuilder<'agent, 'canister, T> {
 }
 
 #[async_trait]
-impl<'agent, 'canister: 'agent, T: Sync> AsyncCall<()>
-    for InstallCodeBuilder<'agent, 'canister, T>
+impl<'agent, 'canister: 'agent> AsyncCall<()>
+    for InstallCodeBuilder<'agent, 'canister>
 {
     async fn call(self) -> Result<RequestId, AgentError> {
         self.build()?.call().await
@@ -428,8 +428,8 @@ impl<'agent, 'canister: 'agent, T: Sync> AsyncCall<()>
 
 /// A builder for an `update_settings` call.
 #[derive(Debug)]
-pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent, T> {
-    canister: &'canister Canister<'agent, T>,
+pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent> {
+    canister: &'canister Canister<'agent>,
     canister_id: Principal,
     controllers: Option<Result<Vec<Principal>, AgentError>>,
     compute_allocation: Option<Result<ComputeAllocation, AgentError>>,
@@ -437,9 +437,9 @@ pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent, T> {
     freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
 }
 
-impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
+impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
     /// Create an UpdateCanister builder, which is also an AsyncCall implementation.
-    pub fn builder(canister: &'canister Canister<'agent, T>, canister_id: &Principal) -> Self {
+    pub fn builder(canister: &'canister Canister<'agent>, canister_id: &Principal) -> Self {
         Self {
             canister,
             canister_id: *canister_id,
@@ -625,8 +625,8 @@ impl<'agent, 'canister: 'agent, T> UpdateCanisterBuilder<'agent, 'canister, T> {
 }
 
 #[async_trait]
-impl<'agent, 'canister: 'agent, T: Sync> AsyncCall<()>
-    for UpdateCanisterBuilder<'agent, 'canister, T>
+impl<'agent, 'canister: 'agent> AsyncCall<()>
+    for UpdateCanisterBuilder<'agent, 'canister>
 {
     async fn call(self) -> Result<RequestId, AgentError> {
         self.build()?.call().await

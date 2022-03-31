@@ -2,10 +2,10 @@
 //!
 //! [spec]: https://smartcontracts.org/docs/interface-spec/index.html#ic-management-canister
 
-use crate::{call::AsyncCall, canister::CanisterBuilder, Canister};
+use crate::{call::AsyncCall, Canister};
 use candid::{CandidType, Deserialize, Nat};
 use ic_agent::{export::Principal, Agent};
-use std::{convert::AsRef, fmt::Debug};
+use std::{convert::AsRef, fmt::Debug, ops::Deref};
 use strum_macros::{AsRefStr, EnumString};
 
 pub mod attributes;
@@ -13,8 +13,15 @@ pub mod builders;
 pub use builders::{CreateCanisterBuilder, InstallCodeBuilder, UpdateCanisterBuilder};
 
 /// The IC management canister.
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
-pub struct ManagementCanister;
+#[derive(Debug, Clone)]
+pub struct ManagementCanister<'agent>(Canister<'agent>);
+
+impl<'agent> Deref for ManagementCanister<'agent> {
+    type Target = Canister<'agent>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// All the known methods of the management canister.
 #[derive(AsRefStr, Debug, EnumString)]
@@ -47,25 +54,19 @@ pub enum MgmtMethod {
     UpdateSettings,
 }
 
-impl ManagementCanister {
-    /// Create an instance of a [Canister] implementing the ManagementCanister interface
-    /// and pointing to the right Canister ID.
-    pub fn create(agent: &Agent) -> Canister<ManagementCanister> {
-        Canister::builder()
+impl<'agent> ManagementCanister<'agent> {
+    /// Create an instance of a `ManagementCanister` interface pointing to the specified Canister ID.
+    pub fn create(agent: &'agent Agent) -> Self {
+        Self(Canister::builder()
             .with_agent(agent)
             .with_canister_id(Principal::management_canister())
-            .with_interface(ManagementCanister)
             .build()
-            .unwrap()
+            .unwrap())
     }
 
-    /// Creating a CanisterBuilder with the right interface and Canister Id. This can
-    /// be useful, for example, for providing additional Builder information.
-    pub fn with_agent(agent: &Agent) -> CanisterBuilder<ManagementCanister> {
-        Canister::builder()
-            .with_agent(agent)
-            .with_canister_id(Principal::management_canister())
-            .with_interface(ManagementCanister)
+    /// Create a `ManagementCanister` interface from an existing canister object.
+    pub fn from_canister(canister: Canister<'agent>) -> Self {
+        Self(canister)
     }
 }
 
@@ -126,7 +127,7 @@ impl std::fmt::Display for CanisterStatus {
     }
 }
 
-impl<'agent> Canister<'agent, ManagementCanister> {
+impl<'agent> ManagementCanister<'agent> {
     /// Get the status of a canister.
     pub fn canister_status<'canister: 'agent>(
         &'canister self,
@@ -149,7 +150,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
     /// Create a canister.
     pub fn create_canister<'canister: 'agent>(
         &'canister self,
-    ) -> CreateCanisterBuilder<'agent, 'canister, ManagementCanister> {
+    ) -> CreateCanisterBuilder<'agent, 'canister> {
         CreateCanisterBuilder::builder(self)
     }
 
@@ -288,7 +289,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
         &'canister self,
         canister_id: &Principal,
         wasm: &'canister [u8],
-    ) -> InstallCodeBuilder<'agent, 'canister, ManagementCanister> {
+    ) -> InstallCodeBuilder<'agent, 'canister> {
         InstallCodeBuilder::builder(self, canister_id, wasm)
     }
 
@@ -296,7 +297,7 @@ impl<'agent> Canister<'agent, ManagementCanister> {
     pub fn update_settings<'canister: 'agent>(
         &'canister self,
         canister_id: &Principal,
-    ) -> UpdateCanisterBuilder<'agent, 'canister, ManagementCanister> {
+    ) -> UpdateCanisterBuilder<'agent, 'canister> {
         UpdateCanisterBuilder::builder(self, canister_id)
     }
 }

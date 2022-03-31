@@ -2,9 +2,11 @@
 //!
 //! [cycles wallet]: https://github.com/dfinity/cycles-wallet
 
+use std::ops::Deref;
+
 use crate::{
     call::{AsyncCall, AsyncCaller, SyncCall},
-    canister::{Argument, CanisterBuilder},
+    canister::Argument,
     interfaces::management_canister::{
         attributes::{ComputeAllocation, FreezingThreshold, MemoryAllocation},
         builders::CanisterSettings,
@@ -26,7 +28,7 @@ where
     Self: 'canister,
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
-    wallet: &'canister Canister<'agent, Wallet>,
+    wallet: &'canister WalletCanister<'agent>,
     destination: Principal,
     method_name: String,
     amount: u64,
@@ -129,8 +131,15 @@ where
 
 /// A wallet canister interface, for the standard wallet provided by DFINITY.
 /// This interface implements most methods conveniently for the user.
-#[derive(Debug, Copy, Clone)]
-pub struct Wallet;
+#[derive(Debug, Clone)]
+pub struct WalletCanister<'agent>(Canister<'agent>);
+
+impl<'agent> Deref for WalletCanister<'agent> {
+    type Target = Canister<'agent>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// The possible kinds of events that can be stored in an [`Event`].
 #[derive(CandidType, Debug, Deserialize)]
@@ -251,26 +260,23 @@ pub struct CallResult {
     pub r#return: Vec<u8>,
 }
 
-impl Wallet {
-    /// Create an instance of a [Canister] implementing the Wallet interface
-    /// and pointing to the right Canister ID.
-    pub fn create(agent: &Agent, canister_id: Principal) -> Canister<Wallet> {
-        Canister::builder()
+impl<'agent> WalletCanister<'agent> {
+    /// Create an instance of a `WalletCanister` interface pointing to the given Canister ID.
+    pub fn create(agent: &'agent Agent, canister_id: Principal) -> Self {
+        Self(Canister::builder()
             .with_agent(agent)
             .with_canister_id(canister_id)
-            .with_interface(Wallet)
             .build()
-            .unwrap()
+            .unwrap())
     }
 
-    /// Creating a CanisterBuilder with the right interface and Canister Id. This can
-    /// be useful, for example, for providing additional Builder information.
-    pub fn with_agent(agent: &Agent) -> CanisterBuilder<Wallet> {
-        Canister::builder().with_agent(agent).with_interface(Wallet)
+    /// Create a `WalletCanister` interface from an existing canister object.
+    pub fn from_canister(canister: Canister<'agent>) -> Self {
+        Self(canister)
     }
 }
 
-impl<'agent> Canister<'agent, Wallet> {
+impl<'agent> WalletCanister<'agent> {
     /// Get the API version string of the wallet.
     pub fn wallet_api_version<'canister: 'agent>(
         &'canister self,
@@ -349,7 +355,7 @@ impl<'agent> Canister<'agent, Wallet> {
     /// Send cycles to another (hopefully Wallet) canister.
     pub fn wallet_send<'canister: 'agent>(
         &'canister self,
-        destination: &'_ Canister<'agent, Wallet>,
+        destination: &'_ Canister<'_>,
         amount: u64,
     ) -> impl 'agent + AsyncCall<(Result<(), String>,)> {
         #[derive(CandidType)]

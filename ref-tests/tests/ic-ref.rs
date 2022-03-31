@@ -47,7 +47,7 @@ mod management_canister {
                 CanisterStatus, StatusCallResult,
             },
             wallet::CreateResult,
-            ManagementCanister, Wallet,
+            ManagementCanister, WalletCanister,
         },
         Argument, Canister,
     };
@@ -597,7 +597,7 @@ mod management_canister {
             let default_canister_balance: u128 = 100_000_000_000_000;
 
             // empty cycle balance on create
-            let wallet = Wallet::create(&agent, wallet_id);
+            let wallet = WalletCanister::create(&agent, wallet_id);
             let ic00 = Canister::builder()
                 .with_agent(&agent)
                 .with_canister_id(Principal::management_canister())
@@ -678,7 +678,7 @@ mod management_canister {
     #[test]
     fn randomness() {
         with_wallet_canister(None, |agent, wallet_id| async move {
-            let wallet = Wallet::create(&agent, wallet_id);
+            let wallet = WalletCanister::create(&agent, wallet_id);
             let ic00 = Canister::builder()
                 .with_agent(&agent)
                 .with_canister_id(Principal::management_canister())
