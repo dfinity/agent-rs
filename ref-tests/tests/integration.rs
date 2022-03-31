@@ -94,7 +94,7 @@ fn canister_reject_call() {
         let bob = Wallet::create(&agent, create_wallet_canister(&agent, None).await?);
 
         let result = alice
-            .wallet_send(&bob, 1_000_000)
+            .wallet_send64(&bob, 1_000_000)
             .call_and_wait(create_waiter())
             .await;
 
@@ -129,8 +129,10 @@ fn wallet_canister_forward() {
             .reply_data(b"DIDL\0\x01\x71\x0bHello World")
             .build();
 
-        let forward = wallet
-            .call_forward::<(String,)>(universal.update_("update").with_arg_raw(arg).build(), 0)?;
+        let forward = wallet.call_forward64::<(String,)>(
+            universal.update_("update").with_arg_raw(arg).build(),
+            0,
+        )?;
         let (result,) = forward.call_and_wait(create_waiter()).await.unwrap();
 
         assert_eq!(result, "Hello World");
@@ -145,7 +147,7 @@ fn wallet_canister_create_and_install() {
         let wallet = Wallet::create(&agent, wallet_id);
 
         let (create_result,) = wallet
-            .wallet_create_canister_v2(1_000_000, None, None, None, None)
+            .wallet_create_canister64_v2(1_000_000, None, None, None, None)
             .call_and_wait(create_waiter())
             .await?;
 
@@ -175,7 +177,7 @@ fn wallet_canister_create_and_install() {
         args.push_idl_arg(install_config);
 
         wallet
-            .call(&ic00, "install_code", args, 0)
+            .call64(&ic00, "install_code", args, 0)
             .call_and_wait(create_waiter())
             .await?;
 
@@ -206,7 +208,7 @@ fn wallet_create_and_set_controller() {
         eprintln!("Agent id: {:?}", other_agent_principal.to_text());
 
         let create_result = wallet
-            .wallet_create_wallet(
+            .wallet_create_wallet64(
                 1_000_000_000_000_u64,
                 Some(vec![other_agent_principal]),
                 None,
@@ -250,7 +252,7 @@ fn wallet_create_wallet() {
     with_wallet_canister(None, |agent, wallet_id| async move {
         eprintln!("Parent wallet canister id: {:?}", wallet_id.to_text());
         let wallet = Wallet::create(&agent, wallet_id);
-        let (wallet_initial_balance,) = wallet.wallet_balance().call().await?;
+        let (wallet_initial_balance,) = wallet.wallet_balance64().call().await?;
 
         // get the wallet wasm from the environment
         let wallet_wasm = get_wallet_wasm_from_env();
@@ -263,7 +265,7 @@ fn wallet_create_wallet() {
 
         // create a child wallet
         let child_create_res = wallet
-            .wallet_create_wallet(
+            .wallet_create_wallet64(
                 1_000_000_000_000_u64,
                 None,
                 None,
@@ -284,8 +286,8 @@ fn wallet_create_wallet() {
             .with_canister_id(child_create_res.canister_id)
             .build()?;
 
-        let (child_wallet_balance,): (ic_utils::interfaces::wallet::BalanceResult,) = wallet
-            .call(&child_wallet, "wallet_balance", Argument::default(), 0)
+        let (child_wallet_balance,): (ic_utils::interfaces::wallet::BalanceResult<u64>,) = wallet
+            .call64(&child_wallet, "wallet_balance", Argument::default(), 0)
             .call_and_wait(create_waiter())
             .await?;
 
@@ -298,7 +300,7 @@ fn wallet_create_wallet() {
         // create a second child wallet
         //
         let child_two_create_res = wallet
-            .wallet_create_wallet(
+            .wallet_create_wallet64(
                 2_100_000_000_000_u64,
                 None,
                 None,
@@ -317,10 +319,11 @@ fn wallet_create_wallet() {
             "Created child wallet two.\nChild wallet two canister id: {:?}",
             child_two_create_res.canister_id.to_text()
         );
-        let (child_wallet_two_balance,): (ic_utils::interfaces::wallet::BalanceResult,) = wallet
-            .call(&child_wallet_two, "wallet_balance", Argument::default(), 0)
-            .call_and_wait(create_waiter())
-            .await?;
+        let (child_wallet_two_balance,): (ic_utils::interfaces::wallet::BalanceResult<u64>,) =
+            wallet
+                .call64(&child_wallet_two, "wallet_balance", Argument::default(), 0)
+                .call_and_wait(create_waiter())
+                .await?;
         eprintln!(
             "Child wallet two cycle balance: {}",
             child_wallet_two_balance.amount
@@ -329,7 +332,7 @@ fn wallet_create_wallet() {
         //
         // Get wallet intermediate balance
         //
-        let (wallet_intermediate_balance,) = wallet.wallet_balance().call().await?;
+        let (wallet_intermediate_balance,) = wallet.wallet_balance64().call().await?;
         eprintln!(
             "Parent wallet initial balance: {}\n      intermediate balance:  {}",
             wallet_initial_balance.amount, wallet_intermediate_balance.amount
@@ -357,7 +360,7 @@ fn wallet_create_wallet() {
 
         let (grandchild_create_res,): (Result<ic_utils::interfaces::wallet::CreateResult, String>,) =
             wallet
-                .call(&child_wallet_two, "wallet_create_wallet", args, 0)
+                .call64(&child_wallet_two, "wallet_create_wallet", args, 0)
                 .call_and_wait(create_waiter())
                 .await?;
         let grandchild_create_res = grandchild_create_res?;
@@ -367,7 +370,7 @@ fn wallet_create_wallet() {
             grandchild_create_res.canister_id.to_text()
         );
 
-        let (wallet_final_balance,) = wallet.wallet_balance().call().await?;
+        let (wallet_final_balance,) = wallet.wallet_balance64().call().await?;
         eprintln!(
             "Parent wallet initial balance: {}\n      final balance:  {}",
             wallet_initial_balance.amount, wallet_final_balance.amount
@@ -388,18 +391,18 @@ fn wallet_canister_funds() {
             create_wallet_canister(&agent, Some(provisional_amount)).await?,
         );
 
-        let (alice_previous_balance,) = alice.wallet_balance().call().await?;
-        let (bob_previous_balance,) = bob.wallet_balance().call().await?;
+        let (alice_previous_balance,) = alice.wallet_balance64().call().await?;
+        let (bob_previous_balance,) = bob.wallet_balance64().call().await?;
 
         alice
-            .wallet_send(&bob, 1_000_000)
+            .wallet_send64(&bob, 1_000_000)
             .call_and_wait(create_waiter())
             .await?
             .0?;
 
-        let (bob_balance,) = bob.wallet_balance().call().await?;
+        let (bob_balance,) = bob.wallet_balance64().call().await?;
 
-        let (alice_balance,) = alice.wallet_balance().call().await?;
+        let (alice_balance,) = alice.wallet_balance64().call().await?;
         eprintln!(
             "Alice previous: {}\n      current:  {}",
             alice_previous_balance.amount, alice_balance.amount
