@@ -622,7 +622,7 @@ mod management_canister {
             args.push_idl_arg(create_args);
 
             let (create_result,): (CreateResult,) = wallet
-                .call(&ic00, "create_canister", args, 0)
+                .call64(&ic00, "create_canister", args, 0)
                 .call_and_wait(create_waiter())
                 .await?;
             let canister_id = create_result.canister_id;
@@ -636,7 +636,7 @@ mod management_canister {
             args.push_idl_arg(status_args);
 
             let (result,): (StatusCallResult,) = wallet
-                .call(&ic00, "canister_status", args, 0)
+                .call64(&ic00, "canister_status", args, 0)
                 .call_and_wait(create_waiter())
                 .await?;
 
@@ -684,15 +684,15 @@ mod management_canister {
                 .with_canister_id(Principal::management_canister())
                 .build()?;
             let (rand_1,): (Vec<u8>,) = wallet
-                .call(&ic00, "raw_rand", Argument::default(), 0)
+                .call64(&ic00, "raw_rand", Argument::default(), 0)
                 .call_and_wait(create_waiter())
                 .await?;
             let (rand_2,): (Vec<u8>,) = wallet
-                .call(&ic00, "raw_rand", Argument::default(), 0)
+                .call64(&ic00, "raw_rand", Argument::default(), 0)
                 .call_and_wait(create_waiter())
                 .await?;
             let (rand_3,): (Vec<u8>,) = wallet
-                .call(&ic00, "raw_rand", Argument::default(), 0)
+                .call64(&ic00, "raw_rand", Argument::default(), 0)
                 .call_and_wait(create_waiter())
                 .await?;
 
