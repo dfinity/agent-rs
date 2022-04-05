@@ -2,7 +2,6 @@
 
 use crate::{
     call::{AsyncCall, SyncCall},
-    canister::CanisterBuilder,
     Canister,
 };
 use candid::{
@@ -23,8 +22,15 @@ use std::{
 };
 
 /// A canister that can serve a HTTP request.
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
-pub struct HttpRequestCanister;
+#[derive(Debug, Clone)]
+pub struct HttpRequestCanister<'agent>(Canister<'agent>);
+
+impl<'agent> Deref for HttpRequestCanister<'agent> {
+    type Target = Canister<'agent>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// A key-value pair for a HTTP header.
 #[derive(Debug, CandidType, Clone, Deserialize)]
@@ -361,28 +367,25 @@ impl CandidType for ArgToken {
     }
 }
 
-impl HttpRequestCanister {
-    /// Create an instance of a [Canister] implementing the [HttpRequestCanister] interface
-    /// and pointing to the right Canister ID.
-    pub fn create(agent: &Agent, canister_id: Principal) -> Canister<HttpRequestCanister> {
-        Canister::builder()
-            .with_agent(agent)
-            .with_canister_id(canister_id)
-            .with_interface(HttpRequestCanister)
-            .build()
-            .unwrap()
+impl<'agent> HttpRequestCanister<'agent> {
+    /// Create an instance of a `HttpRequestCanister` interface pointing to the specified Canister ID.
+    pub fn create(agent: &'agent Agent, canister_id: Principal) -> Self {
+        Self(
+            Canister::builder()
+                .with_agent(agent)
+                .with_canister_id(canister_id)
+                .build()
+                .unwrap(),
+        )
     }
 
-    /// Creating a CanisterBuilder with the right interface and Canister Id. This can
-    /// be useful, for example, for providing additional Builder information.
-    pub fn with_agent(agent: &Agent) -> CanisterBuilder<HttpRequestCanister> {
-        Canister::builder()
-            .with_agent(agent)
-            .with_interface(HttpRequestCanister)
+    /// Create a `HttpRequestCanister` interface from an existing canister object.
+    pub fn from_canister(canister: Canister<'agent>) -> Self {
+        Self(canister)
     }
 }
 
-impl<'agent> Canister<'agent, HttpRequestCanister> {
+impl<'agent> HttpRequestCanister<'agent> {
     /// Performs a HTTP request, receiving a HTTP response.
     pub fn http_request<'canister: 'agent>(
         &'canister self,

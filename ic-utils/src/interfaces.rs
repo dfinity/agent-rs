@@ -4,4 +4,4 @@ pub mod wallet;
 
 pub use http_request::HttpRequestCanister;
 pub use management_canister::ManagementCanister;
-pub use wallet::Wallet;
+pub use wallet::WalletCanister;
