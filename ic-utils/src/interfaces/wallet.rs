@@ -447,8 +447,8 @@ impl<'agent> WalletCanister<'agent> {
         Ok(Self { canister, version })
     }
 
-    /// Create a `WalletCanister` interface from an existing canister object and a known wallet version. 
-    /// 
+    /// Create a `WalletCanister` interface from an existing canister object and a known wallet version.
+    ///
     /// This interface's methods may raise errors if the provided version is newer than the wallet's actual supported version.
     pub fn from_canister_with_version(canister: Canister<'agent>, version: Version) -> Self {
         Self { canister, version }
