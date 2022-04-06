@@ -17,13 +17,15 @@ use async_trait::async_trait;
 use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize, Nat};
 use garcon::{Delay, Waiter};
 use ic_agent::{agent::UpdateBuilder, export::Principal, Agent, AgentError, RequestId};
+use once_cell::sync::Lazy;
+use semver::{Version, VersionReq};
 
 const REPLICA_ERROR_NO_SUCH_QUERY_METHOD: &str = "has no query method 'wallet_api_version'";
 const IC_REF_ERROR_NO_SUCH_QUERY_METHOD: &str = "query method does not exist";
 
 /// An interface for forwarding a canister method call through the wallet canister via `wallet_canister_call`.
 #[derive(Debug)]
-pub struct CallForwarder<'agent, 'canister: 'agent, Out, TCycles = u128>
+pub struct CallForwarder<'agent, 'canister: 'agent, Out>
 where
     Self: 'canister,
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
@@ -31,7 +33,8 @@ where
     wallet: &'canister WalletCanister<'agent>,
     destination: Principal,
     method_name: String,
-    amount: TCycles,
+    amount: u128,
+    u128: bool,
     arg: Argument,
     phantom_out: std::marker::PhantomData<Out>,
 }
@@ -50,31 +53,9 @@ pub struct CanisterSettingsV1 {
     pub freezing_threshold: Option<Nat>,
 }
 
-/// Types that can be used as cycle counts. The IC supports a 128-bit cycle size, but older wallets only have a 64-bit interface.
-pub trait CycleCount: CandidType + Send + Sync + Sealed {
-    #[doc(hidden)]
-    const CALL_FUNC: &'static str;
-}
-
-impl CycleCount for u64 {
-    const CALL_FUNC: &'static str = "wallet_call";
-}
-
-impl CycleCount for u128 {
-    const CALL_FUNC: &'static str = "wallet_call128";
-}
-
-use private::Sealed;
-mod private {
-    pub trait Sealed {}
-    impl Sealed for u64 {}
-    impl Sealed for u128 {}
-}
-
-impl<'agent, 'canister: 'agent, Out, TCycles> CallForwarder<'agent, 'canister, Out, TCycles>
+impl<'agent, 'canister: 'agent, Out> CallForwarder<'agent, 'canister, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
-    TCycles: CycleCount,
 {
     /// Add an argument to the candid argument list. This requires Candid arguments, if
     /// there is a raw argument set (using [with_arg_raw]), this will fail.
@@ -103,21 +84,31 @@ where
             args: Vec<u8>,
             cycles: TCycles,
         }
-        Ok(self
-            .wallet
-            .update_(TCycles::CALL_FUNC)
-            .with_arg(In {
+        Ok(if self.u128 {
+            self.wallet.update_("wallet_call128").with_arg(In {
                 canister: self.destination,
                 method_name: self.method_name,
                 args: self.arg.serialize()?.to_vec(),
                 cycles: self.amount,
             })
-            .build()
-            .and_then(|(result,): (Result<CallResult, String>,)| async move {
-                let result = result.map_err(AgentError::WalletCallFailed)?;
-                decode_args::<Out>(result.r#return.as_slice())
-                    .map_err(|e| AgentError::CandidError(Box::new(e)))
-            }))
+        } else {
+            self.wallet.update_("wallet_call").with_arg(In {
+                canister: self.destination,
+                method_name: self.method_name,
+                args: self.arg.serialize()?.to_vec(),
+                cycles: u64::try_from(self.amount).map_err(|_| {
+                    AgentError::WalletUpgradeRequired(
+                        "The installed wallet does not support cycle counts >2^64-1".to_string(),
+                    )
+                })?,
+            })
+        }
+        .build()
+        .and_then(|(result,): (Result<CallResult, String>,)| async move {
+            let result = result.map_err(AgentError::WalletCallFailed)?;
+            decode_args::<Out>(result.r#return.as_slice())
+                .map_err(|e| AgentError::CandidError(Box::new(e)))
+        }))
     }
 
     /// Calls the forwarded canister call on the wallet canister. Equivalent to `.build().call()`.
@@ -154,12 +145,15 @@ where
 /// A wallet canister interface, for the standard wallet provided by DFINITY.
 /// This interface implements most methods conveniently for the user.
 #[derive(Debug, Clone)]
-pub struct WalletCanister<'agent>(Canister<'agent>);
+pub struct WalletCanister<'agent> {
+    canister: Canister<'agent>,
+    version: Version,
+}
 
 impl<'agent> Deref for WalletCanister<'agent> {
     type Target = Canister<'agent>;
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.canister
     }
 }
 
@@ -216,6 +210,39 @@ pub enum EventKind<TCycles = u128> {
     },
 }
 
+impl From<EventKind<u64>> for EventKind {
+    fn from(kind: EventKind<u64>) -> Self {
+        use EventKind::*;
+        match kind {
+            AddressAdded { id, name, role } => AddressAdded { id, name, role },
+            AddressRemoved { id } => AddressRemoved { id },
+            CanisterCalled {
+                canister,
+                cycles,
+                method_name,
+            } => CanisterCalled {
+                canister,
+                cycles: cycles as u128,
+                method_name,
+            },
+            CanisterCreated { canister, cycles } => CanisterCreated {
+                canister,
+                cycles: cycles as u128,
+            },
+            CyclesReceived { amount, from, memo } => CyclesReceived {
+                amount: amount as u128,
+                from,
+                memo,
+            },
+            CyclesSent { amount, refund, to } => CyclesSent {
+                amount: amount as u128,
+                refund: refund as u128,
+                to,
+            },
+        }
+    }
+}
+
 /// A transaction event tracked by the wallet's history feature.
 #[derive(CandidType, Debug, Deserialize)]
 pub struct Event<TCycles = u128> {
@@ -225,6 +252,22 @@ pub struct Event<TCycles = u128> {
     pub timestamp: u64,
     /// The kind of event that occurred.
     pub kind: EventKind<TCycles>,
+}
+
+impl From<Event<u64>> for Event {
+    fn from(
+        Event {
+            id,
+            timestamp,
+            kind,
+        }: Event<u64>,
+    ) -> Self {
+        Self {
+            id,
+            timestamp,
+            kind: kind.into(),
+        }
+    }
 }
 
 /// The significance of a principal in the wallet's address book.
@@ -297,6 +340,28 @@ pub enum ManagedCanisterEventKind<TCycles = u128> {
     },
 }
 
+impl From<ManagedCanisterEventKind<u64>> for ManagedCanisterEventKind {
+    fn from(event: ManagedCanisterEventKind<u64>) -> Self {
+        use ManagedCanisterEventKind::*;
+        match event {
+            Called {
+                cycles,
+                method_name,
+            } => Called {
+                cycles: cycles as u128,
+                method_name,
+            },
+            Created { cycles } => Created {
+                cycles: cycles as u128,
+            },
+            CyclesSent { amount, refund } => CyclesSent {
+                amount: amount as u128,
+                refund: refund as u128,
+            },
+        }
+    }
+}
+
 /// A transaction event related to a [`ManagedCanisterInfo`].
 #[derive(CandidType, Deserialize, Debug)]
 pub struct ManagedCanisterEvent<TCycles = u128> {
@@ -306,6 +371,22 @@ pub struct ManagedCanisterEvent<TCycles = u128> {
     pub timestamp: u64,
     /// The kind of event that occurred.
     pub kind: ManagedCanisterEventKind<TCycles>,
+}
+
+impl From<ManagedCanisterEvent<u64>> for ManagedCanisterEvent {
+    fn from(
+        ManagedCanisterEvent {
+            id,
+            timestamp,
+            kind,
+        }: ManagedCanisterEvent<u64>,
+    ) -> Self {
+        Self {
+            id,
+            timestamp,
+            kind: kind.into(),
+        }
+    }
 }
 
 /// The result of a balance request.
@@ -331,29 +412,60 @@ pub struct CallResult {
 }
 
 impl<'agent> WalletCanister<'agent> {
-    /// Create an instance of a `WalletCanister` interface pointing to the given Canister ID.
-    pub fn create(agent: &'agent Agent, canister_id: Principal) -> Self {
-        Self(
-            Canister::builder()
-                .with_agent(agent)
-                .with_canister_id(canister_id)
-                .build()
-                .unwrap(),
-        )
+    /// Create an instance of a `WalletCanister` interface pointing to the given Canister ID. Fails if it cannot learn the wallet's version.
+    pub async fn create(
+        agent: &'agent Agent,
+        canister_id: Principal,
+    ) -> Result<WalletCanister<'agent>, AgentError> {
+        let canister = Canister::builder()
+            .with_agent(agent)
+            .with_canister_id(canister_id)
+            .build()
+            .unwrap();
+        Self::from_canister(canister).await
     }
 
-    /// Create a `WalletCanister` interface from an existing canister object.
-    pub fn from_canister(canister: Canister<'agent>) -> Self {
-        Self(canister)
+    /// Create a `WalletCanister` interface from an existing canister object. Fails if it cannot learn the wallet's version.
+    pub async fn from_canister(
+        canister: Canister<'agent>,
+    ) -> Result<WalletCanister<'agent>, AgentError> {
+        static DEFAULT_VERSION: Lazy<Version> = Lazy::new(|| Version::parse("0.1.0").unwrap());
+        let version: Result<(String,), _> =
+            canister.query_("wallet_api_version").build().call().await;
+        let version = match version {
+            Err(AgentError::ReplicaError {
+                reject_code,
+                reject_message,
+            }) if reject_code == 3
+                && (reject_message.contains(REPLICA_ERROR_NO_SUCH_QUERY_METHOD)
+                    || reject_message.contains(IC_REF_ERROR_NO_SUCH_QUERY_METHOD)) =>
+            {
+                DEFAULT_VERSION.clone()
+            }
+            version => Version::parse(&version?.0).unwrap_or_else(|_| DEFAULT_VERSION.clone()),
+        };
+        Ok(Self { canister, version })
+    }
+
+    /// Create a `WalletCanister` interface from an existing canister object and a known wallet version.
+    ///
+    /// This interface's methods may raise errors if the provided version is newer than the wallet's actual supported version.
+    pub fn from_canister_with_version(canister: Canister<'agent>, version: Version) -> Self {
+        Self { canister, version }
     }
 }
 
 impl<'agent> WalletCanister<'agent> {
-    /// Get the API version string of the wallet.
-    pub fn wallet_api_version<'canister: 'agent>(
+    /// Re-fetch the API version string of the wallet.
+    pub fn fetch_wallet_api_version<'canister: 'agent>(
         &'canister self,
     ) -> impl 'agent + SyncCall<(Option<String>,)> {
         self.query_("wallet_api_version").build()
+    }
+
+    /// Get the (cached) API version of the wallet.
+    pub fn wallet_api_version(&self) -> &Version {
+        &self.version
     }
 
     /// Get the friendly name of the wallet (if one exists).
@@ -424,14 +536,30 @@ impl<'agent> WalletCanister<'agent> {
         self.query_("wallet_balance").build()
     }
 
-    /// Get the balance.
-    pub fn wallet_balance<'canister: 'agent>(
+    /// Get the balance with the 128-bit API.
+    pub fn wallet_balance128<'canister: 'agent>(
         &'canister self,
     ) -> impl 'agent + SyncCall<(BalanceResult,)> {
         self.query_("wallet_balance128").build()
     }
 
-    /// Send cycles to another (hopefully Wallet) canister using the 64-bit API.
+    /// Get the balance.
+    pub async fn wallet_balance<'canister: 'agent>(
+        &'canister self,
+    ) -> Result<BalanceResult, AgentError> {
+        if self.version_supports_u128_cycles() {
+            self.wallet_balance128().call().await.map(|(r,)| r)
+        } else {
+            self.wallet_balance64()
+                .call()
+                .await
+                .map(|(r,)| BalanceResult {
+                    amount: r.amount as u128,
+                })
+        }
+    }
+
+    /// Send cycles to another canister using the 64-bit API.
     pub fn wallet_send64<'canister: 'agent>(
         &'canister self,
         destination: &'_ Canister<'_>,
@@ -451,8 +579,8 @@ impl<'agent> WalletCanister<'agent> {
             .build()
     }
 
-    /// Send cycles to another (hopefully Wallet) canister.
-    pub fn wallet_send<'canister: 'agent>(
+    /// Send cycles to another canister using the 128-bit API.
+    pub fn wallet_send128<'canister: 'agent>(
         &'canister self,
         destination: &'_ Canister<'agent>,
         amount: u128,
@@ -471,7 +599,32 @@ impl<'agent> WalletCanister<'agent> {
             .build()
     }
 
-    /// Send cycles to another (hopefully Wallet) canister.
+    /// Send cycles to another canister.
+    pub async fn wallet_send<'canister: 'agent>(
+        &'canister self,
+        destination: &'_ Canister<'agent>,
+        amount: u128,
+        waiter: Delay,
+    ) -> Result<(), AgentError> {
+        if self.version_supports_u128_cycles() {
+            self.wallet_send128(destination, amount)
+                .call_and_wait(waiter)
+                .await?
+        } else {
+            let amount = u64::try_from(amount).map_err(|_| {
+                AgentError::WalletUpgradeRequired(
+                    "The installed wallet does not support cycle counts >2^64-1.".to_string(),
+                )
+            })?;
+            self.wallet_send64(destination, amount)
+                .call_and_wait(waiter)
+                .await?
+        }
+        .0
+        .map_err(AgentError::WalletError)
+    }
+
+    /// A function for sending cycles to, so that a memo can be passed along with them.
     pub fn wallet_receive<'canister: 'agent>(
         &'canister self,
         memo: Option<String>,
@@ -485,7 +638,7 @@ impl<'agent> WalletCanister<'agent> {
             .build()
     }
 
-    /// Wallet 64-bit API version 0.1.0 only accepts a single controller
+    /// Create a canister through the wallet, using the single-controller 64-bit API.
     pub fn wallet_create_canister64_v1<'canister: 'agent>(
         &'canister self,
         cycles: u64,
@@ -513,7 +666,7 @@ impl<'agent> WalletCanister<'agent> {
             .map(|result: (Result<CreateResult, String>,)| (result.0,))
     }
 
-    /// Wallet 64-bit API version >= 0.2.0 accepts multiple controllers
+    /// Create a canister through the wallet, using the multi-controller 64-bit API.
     pub fn wallet_create_canister64_v2<'canister: 'agent>(
         &'canister self,
         cycles: u64,
@@ -541,8 +694,8 @@ impl<'agent> WalletCanister<'agent> {
             .map(|result: (Result<CreateResult, String>,)| (result.0,))
     }
 
-    /// Create a canister through the wallet.
-    pub fn wallet_create_canister<'canister: 'agent>(
+    /// Create a canister through the wallet, using the 128-bit API.
+    pub fn wallet_create_canister128<'canister: 'agent>(
         &'canister self,
         cycles: u128,
         controllers: Option<Vec<Principal>>,
@@ -569,20 +722,34 @@ impl<'agent> WalletCanister<'agent> {
             .map(|result: (Result<CreateResult, String>,)| (result.0,))
     }
 
-    /// Call wallet_create_canister64_v1 or wallet_create_canister64_v2, depending
-    /// on the cycles wallet version.
-    pub async fn wallet_create_canister64<'canister: 'agent>(
+    /// Create a canister through the wallet.
+    pub async fn wallet_create_canister<'canister: 'agent>(
         &'canister self,
-        cycles: u64,
+        cycles: u128,
         controllers: Option<Vec<Principal>>,
         compute_allocation: Option<ComputeAllocation>,
         memory_allocation: Option<MemoryAllocation>,
         freezing_threshold: Option<FreezingThreshold>,
         waiter: Delay,
     ) -> Result<CreateResult, AgentError> {
-        match self.wallet_api_version().call().await {
-            Ok(_) => self
-                .wallet_create_canister64_v2(
+        if self.version_supports_u128_cycles() {
+            self.wallet_create_canister128(
+                cycles,
+                controllers,
+                compute_allocation,
+                memory_allocation,
+                freezing_threshold,
+            )
+            .call_and_wait(waiter)
+            .await?
+        } else {
+            let cycles = u64::try_from(cycles).map_err(|_| {
+                AgentError::WalletUpgradeRequired(
+                    "The installed wallet does not support cycle counts >2^64-1.".to_string(),
+                )
+            })?;
+            if self.version_supports_multiple_controllers() {
+                self.wallet_create_canister64_v2(
                     cycles,
                     controllers,
                     compute_allocation,
@@ -591,15 +758,7 @@ impl<'agent> WalletCanister<'agent> {
                 )
                 .call_and_wait(waiter)
                 .await?
-                .0
-                .map_err(AgentError::WalletError),
-            Err(AgentError::ReplicaError {
-                reject_code,
-                reject_message,
-            }) if reject_code == 3
-                && (reject_message.contains(REPLICA_ERROR_NO_SUCH_QUERY_METHOD)
-                    || reject_message.contains(IC_REF_ERROR_NO_SUCH_QUERY_METHOD)) =>
-            {
+            } else {
                 let controller: Option<Principal> = match &controllers {
                     Some(c) if c.len() == 1 => {
                         let first: Option<&Principal> = c.first();
@@ -620,11 +779,10 @@ impl<'agent> WalletCanister<'agent> {
                 )
                 .call_and_wait(waiter)
                 .await?
-                .0
-                .map_err(AgentError::WalletError)
             }
-            Err(other_err) => Err(other_err),
         }
+        .0
+        .map_err(AgentError::WalletError)
     }
 
     /// Create a wallet canister with the single-controller 64-bit API.
@@ -683,8 +841,8 @@ impl<'agent> WalletCanister<'agent> {
             .map(|result: (Result<CreateResult, String>,)| (result.0,))
     }
 
-    /// Create a wallet canister.
-    pub fn wallet_create_wallet<'canister: 'agent>(
+    /// Create a wallet canister with the 128-bit API.
+    pub fn wallet_create_wallet128<'canister: 'agent>(
         &'canister self,
         cycles: u128,
         controllers: Option<Vec<Principal>>,
@@ -711,20 +869,34 @@ impl<'agent> WalletCanister<'agent> {
             .map(|result: (Result<CreateResult, String>,)| (result.0,))
     }
 
-    /// Call wallet_create_wallet64_v1 or wallet_create_wallet64_v2, depending
-    /// on the cycles wallet version.
-    pub async fn wallet_create_wallet64<'canister: 'agent>(
+    /// Create a wallet canister.
+    pub async fn wallet_create_wallet<'canister: 'agent>(
         &'canister self,
-        cycles: u64,
+        cycles: u128,
         controllers: Option<Vec<Principal>>,
         compute_allocation: Option<ComputeAllocation>,
         memory_allocation: Option<MemoryAllocation>,
         freezing_threshold: Option<FreezingThreshold>,
         waiter: Delay,
     ) -> Result<CreateResult, AgentError> {
-        match self.wallet_api_version().call().await {
-            Ok(_) => self
-                .wallet_create_wallet64_v2(
+        if self.version_supports_u128_cycles() {
+            self.wallet_create_wallet128(
+                cycles,
+                controllers,
+                compute_allocation,
+                memory_allocation,
+                freezing_threshold,
+            )
+            .call_and_wait(waiter)
+            .await?
+        } else {
+            let cycles = u64::try_from(cycles).map_err(|_| {
+                AgentError::WalletUpgradeRequired(
+                    "The installed wallet does not support cycle counts >2^64-1.".to_string(),
+                )
+            })?;
+            if self.version_supports_multiple_controllers() {
+                self.wallet_create_wallet64_v2(
                     cycles,
                     controllers,
                     compute_allocation,
@@ -733,22 +905,9 @@ impl<'agent> WalletCanister<'agent> {
                 )
                 .call_and_wait(waiter)
                 .await?
-                .0
-                .map_err(AgentError::WalletError),
-            Err(AgentError::ReplicaError {
-                reject_code,
-                reject_message,
-            }) if reject_code == 3
-                && (reject_message.contains("has no query method 'wallet_api_version'")
-                    || reject_message.contains("query method does not exist")) =>
-            // ic-ref
-            {
+            } else {
                 let controller: Option<Principal> = match &controllers {
-                    Some(c) if c.len() == 1 => {
-                        let first: Option<&Principal> = c.first();
-                        let first: Principal = *first.unwrap();
-                        Ok(Some(first))
-                    }
+                    Some(c) if c.len() == 1 => Ok(Some(c[0])),
                     Some(_) => Err(AgentError::WalletUpgradeRequired(
                         "The installed wallet does not support multiple controllers.".to_string(),
                     )),
@@ -763,11 +922,10 @@ impl<'agent> WalletCanister<'agent> {
                 )
                 .call_and_wait(waiter)
                 .await?
-                .0
-                .map_err(AgentError::WalletError)
             }
-            Err(other_err) => Err(other_err),
         }
+        .0
+        .map_err(AgentError::WalletError)
     }
 
     /// Store the wallet WASM inside the wallet canister.
@@ -830,8 +988,8 @@ impl<'agent> WalletCanister<'agent> {
         self.query_("get_events").with_arg(arg).build()
     }
 
-    /// Get a list of all transaction events this wallet remembers.
-    pub fn get_events<'canister: 'agent>(
+    /// Get a list of all transaction events this wallet remembers, using the 128-bit API.
+    pub fn get_events128<'canister: 'agent>(
         &'canister self,
         from: Option<u32>,
         to: Option<u32>,
@@ -849,6 +1007,25 @@ impl<'agent> WalletCanister<'agent> {
         self.query_("get_events128").with_arg(arg).build()
     }
 
+    /// Get a list of all transaction events this wallet remembers.
+    pub async fn get_events<'canister: 'agent>(
+        &'canister self,
+        from: Option<u32>,
+        to: Option<u32>,
+    ) -> Result<Vec<Event>, AgentError> {
+        if self.version_supports_u128_cycles() {
+            self.get_events128(from, to)
+                .call()
+                .await
+                .map(|(events,)| events)
+        } else {
+            self.get_events64(from, to)
+                .call()
+                .await
+                .map(|(events,)| events.into_iter().map(|event| event.into()).collect())
+        }
+    }
+
     /// Forward a call to another canister, including an amount of cycles
     /// from the wallet, using the 64-bit API.
     pub fn call64<'canister: 'agent, Out, M: Into<String>>(
@@ -857,7 +1034,30 @@ impl<'agent> WalletCanister<'agent> {
         method_name: M,
         arg: Argument,
         amount: u64,
-    ) -> CallForwarder<'agent, 'canister, Out, u64>
+    ) -> CallForwarder<'agent, 'canister, Out>
+    where
+        Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
+    {
+        CallForwarder {
+            wallet: self,
+            destination: *destination.canister_id_(),
+            method_name: method_name.into(),
+            amount: amount as u128,
+            arg,
+            phantom_out: std::marker::PhantomData,
+            u128: false,
+        }
+    }
+
+    /// Forward a call to another canister, including an amount of cycles
+    /// from the wallet, using the 128-bit API.
+    pub fn call128<'canister: 'agent, Out, M: Into<String>>(
+        &'canister self,
+        destination: &'canister Canister<'canister>,
+        method_name: M,
+        arg: Argument,
+        amount: u128,
+    ) -> CallForwarder<'agent, 'canister, Out>
     where
         Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
     {
@@ -868,6 +1068,7 @@ impl<'agent> WalletCanister<'agent> {
             amount,
             arg,
             phantom_out: std::marker::PhantomData,
+            u128: true,
         }
     }
 
@@ -890,6 +1091,7 @@ impl<'agent> WalletCanister<'agent> {
             amount,
             arg,
             phantom_out: std::marker::PhantomData,
+            u128: self.version_supports_u128_cycles(),
         }
     }
 
@@ -917,7 +1119,40 @@ impl<'agent> WalletCanister<'agent> {
             wallet: self,
             destination: canister_id,
             method_name,
+            amount: amount as u128,
+            u128: false,
+            arg: argument,
+            phantom_out: std::marker::PhantomData,
+        }
+        .build()
+    }
+
+    /// Forward a call using another call's builder. This takes an UpdateBuilder,
+    /// marshalls it to a buffer, and sends it through the wallet canister, adding
+    /// a separate amount, using the 128-bit API.
+    pub fn call_forward128<'canister: 'agent, Out: 'agent>(
+        &'canister self,
+        call: AsyncCaller<'agent, Out>,
+        amount: u128,
+    ) -> Result<impl 'agent + AsyncCall<Out>, AgentError>
+    where
+        Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
+    {
+        let UpdateBuilder {
+            canister_id,
+            method_name,
+            arg,
+            ..
+        } = call.build_call()?;
+        let mut argument = Argument::default();
+        argument.set_raw_arg(arg);
+
+        CallForwarder {
+            wallet: self,
+            destination: canister_id,
+            method_name,
             amount,
+            u128: true,
             arg: argument,
             phantom_out: std::marker::PhantomData,
         }
@@ -949,6 +1184,7 @@ impl<'agent> WalletCanister<'agent> {
             destination: canister_id,
             method_name,
             amount,
+            u128: self.version_supports_u128_cycles(),
             arg: argument,
             phantom_out: std::marker::PhantomData,
         }
@@ -989,8 +1225,8 @@ impl<'agent> WalletCanister<'agent> {
             .build()
     }
 
-    /// Gets the [`ManagedCanisterEvent`]s for a particular canister, if the wallet knows about that canister.
-    pub fn get_managed_canister_events<'canister: 'agent>(
+    /// Gets the [`ManagedCanisterEvent`]s for a particular canister, if the wallet knows about that canister, using the 128-bit API.
+    pub fn get_managed_canister_events128<'canister: 'agent>(
         &'canister self,
         canister: Principal,
         from: Option<u32>,
@@ -1005,5 +1241,39 @@ impl<'agent> WalletCanister<'agent> {
         self.query_("get_managed_canister_events128")
             .with_arg((In { canister, from, to },))
             .build()
+    }
+
+    /// Gets the [`ManagedCanisterEvent`]s for a particular canister, if the wallet knows about that canister
+    pub async fn get_managed_canister_events<'canister: 'agent>(
+        &'canister self,
+        canister: Principal,
+        from: Option<u32>,
+        to: Option<u32>,
+    ) -> Result<Option<Vec<ManagedCanisterEvent>>, AgentError> {
+        if self.version_supports_u128_cycles() {
+            self.get_managed_canister_events128(canister, from, to)
+                .call()
+                .await
+                .map(|(events,)| events)
+        } else {
+            self.get_managed_canister_events64(canister, from, to)
+                .call()
+                .await
+                .map(|(events,)| {
+                    events.map(|events| events.into_iter().map(|event| event.into()).collect())
+                })
+        }
+    }
+
+    /// Gets whether the wallet version supports initializing a canister with multiple controllers (introduced in 0.2.0).
+    pub fn version_supports_multiple_controllers(&self) -> bool {
+        static CONTROLLERS: Lazy<VersionReq> = Lazy::new(|| VersionReq::parse(">=0.2.0").unwrap());
+        CONTROLLERS.matches(&self.version)
+    }
+
+    /// Gets whether the wallet version supports 128-bit cycle counts (introduced in 0.3.0).
+    pub fn version_supports_u128_cycles(&self) -> bool {
+        static U128_CYCLES: Lazy<VersionReq> = Lazy::new(|| VersionReq::parse(">=0.3.0").unwrap());
+        U128_CYCLES.matches(&self.version)
     }
 }

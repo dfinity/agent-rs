@@ -597,7 +597,7 @@ mod management_canister {
             let default_canister_balance: u128 = 100_000_000_000_000;
 
             // empty cycle balance on create
-            let wallet = WalletCanister::create(&agent, wallet_id);
+            let wallet = WalletCanister::create(&agent, wallet_id).await?;
             let ic00 = Canister::builder()
                 .with_agent(&agent)
                 .with_canister_id(Principal::management_canister())
@@ -622,7 +622,7 @@ mod management_canister {
             args.push_idl_arg(create_args);
 
             let (create_result,): (CreateResult,) = wallet
-                .call64(&ic00, "create_canister", args, 0)
+                .call(&ic00, "create_canister", args, 0)
                 .call_and_wait(create_waiter())
                 .await?;
             let canister_id = create_result.canister_id;
@@ -636,7 +636,7 @@ mod management_canister {
             args.push_idl_arg(status_args);
 
             let (result,): (StatusCallResult,) = wallet
-                .call64(&ic00, "canister_status", args, 0)
+                .call(&ic00, "canister_status", args, 0)
                 .call_and_wait(create_waiter())
                 .await?;
 
@@ -678,21 +678,21 @@ mod management_canister {
     #[test]
     fn randomness() {
         with_wallet_canister(None, |agent, wallet_id| async move {
-            let wallet = WalletCanister::create(&agent, wallet_id);
+            let wallet = WalletCanister::create(&agent, wallet_id).await?;
             let ic00 = Canister::builder()
                 .with_agent(&agent)
                 .with_canister_id(Principal::management_canister())
                 .build()?;
             let (rand_1,): (Vec<u8>,) = wallet
-                .call64(&ic00, "raw_rand", Argument::default(), 0)
+                .call(&ic00, "raw_rand", Argument::default(), 0)
                 .call_and_wait(create_waiter())
                 .await?;
             let (rand_2,): (Vec<u8>,) = wallet
-                .call64(&ic00, "raw_rand", Argument::default(), 0)
+                .call(&ic00, "raw_rand", Argument::default(), 0)
                 .call_and_wait(create_waiter())
                 .await?;
             let (rand_3,): (Vec<u8>,) = wallet
-                .call64(&ic00, "raw_rand", Argument::default(), 0)
+                .call(&ic00, "raw_rand", Argument::default(), 0)
                 .call_and_wait(create_waiter())
                 .await?;
 
