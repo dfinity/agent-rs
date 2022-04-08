@@ -18,13 +18,13 @@ rust-version = "1.58.1"
 [dependencies]
 anyhow = "1.0"
 base64 = "0.13"
-clap = { version = "3.0.14", features = ["derive", "cargo"] }
+clap = { version = "3.1.8", features = ["derive", "cargo"] }
 chrono = "0.4.19"
 hex = "0.4.2"
 ic-agent = { path = "../ic-agent", version = "0.15" }
 leb128 = "0.2.4"
 reqwest = { version = "0.11", features = [ "blocking", "rustls-tls" ] }
-sha2 = "0.10.1"
+sha2 = "0.10.2"
 serde = { version = "1.0.115", features = ["derive"] }
 serde_bytes = "0.11"
 serde_cbor = "0.11"
