@@ -123,8 +123,7 @@ fn wallet_canister_forward() {
             .reply_data(b"DIDL\0\x01\x71\x0bHello World")
             .build();
 
-        let mut args = Argument::default();
-        args.set_raw_arg(arg);
+        let args = Argument::from_raw(arg);
 
         let (result,): (String,) = wallet
             .call(universal_id, "update", args, 0)
@@ -162,8 +161,7 @@ fn wallet_canister_create_and_install() {
             arg: Argument::default().serialize()?,
         };
 
-        let mut args = Argument::default();
-        args.push_idl_arg(install_config);
+        let args = Argument::from_candid((install_config,));
 
         wallet
             .call64(Principal::management_canister(), "install_code", args, 0)
@@ -345,8 +343,7 @@ fn wallet_create_wallet() {
                 freezing_threshold: None,
             },
         };
-        let mut args = Argument::default();
-        args.push_idl_arg(create_args);
+        let args = Argument::from_candid((create_args,));
 
         let (grandchild_create_res,): (Result<ic_utils::interfaces::wallet::CreateResult, String>,) =
             wallet

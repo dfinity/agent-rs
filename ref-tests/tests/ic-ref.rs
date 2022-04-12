@@ -614,8 +614,7 @@ mod management_canister {
                 },
             };
 
-            let mut args = Argument::default();
-            args.push_idl_arg(create_args);
+            let args = Argument::from_candid((create_args,));
 
             let (create_result,): (CreateResult,) = wallet
                 .call(Principal::management_canister(), "create_canister", args, 0)
@@ -628,8 +627,7 @@ mod management_canister {
                 canister_id: Principal,
             }
             let status_args = In { canister_id };
-            let mut args = Argument::default();
-            args.push_idl_arg(status_args);
+            let args = Argument::from_candid((status_args,));
 
             let (result,): (StatusCallResult,) = wallet
                 .call(Principal::management_canister(), "canister_status", args, 0)

@@ -249,7 +249,7 @@ impl Argument {
 
 impl Default for Argument {
     fn default() -> Self {
-        Argument(Ok(ArgumentType::Idl(IDLBuilder::new())))
+        Self(Ok(ArgumentType::Idl(IDLBuilder::new())))
     }
 }
 
