@@ -35,9 +35,18 @@ impl Secp256k1Identity {
     pub fn from_pem<R: io::Read>(pem_reader: R) -> Result<Self, PemError> {
         use sec1::{pem::PemLabel, EcPrivateKeyDocument};
 
+        const EC_PARAMETERS: &str = "EC PARAMETERS";
+        const SECP256K1: &[u8] = b"\x06\x05\x2b\x81\x04\x00\x0a";
+
         let contents = pem_reader.bytes().collect::<Result<Vec<u8>, io::Error>>()?;
 
         for pem in pem::parse_many(contents)? {
+            if pem.tag == EC_PARAMETERS && pem.contents != SECP256K1 {
+                return Err(PemError::ErrorStack(
+                    k256::pkcs8::Error::ParametersMalformed,
+                ));
+            }
+
             if pem.tag != EcPrivateKeyDocument::TYPE_LABEL {
                 continue;
             }
@@ -102,6 +111,29 @@ mod test {
         FieldBytes, Scalar,
     };
 
+    // WRONG_CURVE_IDENTITY_FILE is generated from the following command:
+    // > openssl ecparam -name secp160r2 -genkey
+    // it uses hte secp160r2 curve instead of secp256k1 and should
+    // therefore be rejected by Secp256k1Identity when loading an identity
+    const WRONG_CURVE_IDENTITY_FILE: &str = "-----BEGIN EC PARAMETERS-----
+BgUrgQQAHg==
+-----END EC PARAMETERS-----
+-----BEGIN EC PRIVATE KEY-----
+MFACAQEEFI9cF6zXxMKhtjn1gBD7AHPbzehfoAcGBSuBBAAeoSwDKgAEh5NXszgR
+oGSXVWaGxcQhQWlFG4pbnOG+93xXzfRD7eKWOdmun2bKxQ==
+-----END EC PRIVATE KEY-----
+";
+
+    // WRONG_CURVE_IDENTITY_FILE_NO_PARAMS is generated from the following command:
+    // > openssl ecparam -name secp160r2 -genkey -noout
+    // it uses hte secp160r2 curve instead of secp256k1 and should
+    // therefore be rejected by Secp256k1Identity when loading an identity
+    const WRONG_CURVE_IDENTITY_FILE_NO_PARAMS: &str = "-----BEGIN EC PRIVATE KEY-----
+MFACAQEEFI9cF6zXxMKhtjn1gBD7AHPbzehfoAcGBSuBBAAeoSwDKgAEh5NXszgR
+oGSXVWaGxcQhQWlFG4pbnOG+93xXzfRD7eKWOdmun2bKxQ==
+-----END EC PRIVATE KEY-----
+";
+
     // IDENTITY_FILE was generated from the the following commands:
     // > openssl ecparam -name secp256k1 -genkey -noout -out identity.pem
     // > cat identity.pem
@@ -119,6 +151,18 @@ N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
     // > openssl ec -in identity.pem -pubout -outform DER -out public.der
     // > hexdump -ve '1/1 "%.2x"' public.der
     const DER_ENCODED_PUBLIC_KEY: &str = "3056301006072a8648ce3d020106052b8104000a0342000480ef3bac9d68cf374cbc9c9943e180043a94c462ef8270274e57089d5dcdba1b8fbf83b7546ccc1b3781377776e9c4710fdf533ed9bcba8d8ebb32a14a2aba11";
+
+    #[test]
+    #[should_panic(expected = "ParametersMalformed")]
+    fn test_secp256k1_reject_wrong_curve() {
+        Secp256k1Identity::from_pem(WRONG_CURVE_IDENTITY_FILE.as_bytes()).unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "KeyMalformed")]
+    fn test_secp256k1_reject_wrong_curve_no_id() {
+        Secp256k1Identity::from_pem(WRONG_CURVE_IDENTITY_FILE_NO_PARAMS.as_bytes()).unwrap();
+    }
 
     #[test]
     fn test_secp256k1_public_key() {
