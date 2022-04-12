@@ -5,7 +5,7 @@
 use std::ops::Deref;
 
 use crate::{
-    call::{AsyncCall, AsyncCaller, SyncCall},
+    call::{AsyncCall, SyncCall},
     canister::Argument,
     interfaces::management_canister::{
         attributes::{ComputeAllocation, FreezingThreshold, MemoryAllocation},
@@ -16,7 +16,7 @@ use crate::{
 use async_trait::async_trait;
 use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize, Nat};
 use garcon::{Delay, Waiter};
-use ic_agent::{agent::UpdateBuilder, export::Principal, Agent, AgentError, RequestId};
+use ic_agent::{export::Principal, Agent, AgentError, RequestId};
 use once_cell::sync::Lazy;
 use semver::{Version, VersionReq};
 
@@ -1030,7 +1030,7 @@ impl<'agent> WalletCanister<'agent> {
     /// from the wallet, using the 64-bit API.
     pub fn call64<'canister: 'agent, Out, M: Into<String>>(
         &'canister self,
-        destination: &'canister Canister<'canister>,
+        destination: Principal,
         method_name: M,
         arg: Argument,
         amount: u64,
@@ -1040,7 +1040,7 @@ impl<'agent> WalletCanister<'agent> {
     {
         CallForwarder {
             wallet: self,
-            destination: *destination.canister_id_(),
+            destination,
             method_name: method_name.into(),
             amount: amount as u128,
             arg,
@@ -1053,7 +1053,7 @@ impl<'agent> WalletCanister<'agent> {
     /// from the wallet, using the 128-bit API.
     pub fn call128<'canister: 'agent, Out, M: Into<String>>(
         &'canister self,
-        destination: &'canister Canister<'canister>,
+        destination: Principal,
         method_name: M,
         arg: Argument,
         amount: u128,
@@ -1063,7 +1063,7 @@ impl<'agent> WalletCanister<'agent> {
     {
         CallForwarder {
             wallet: self,
-            destination: *destination.canister_id_(),
+            destination,
             method_name: method_name.into(),
             amount,
             arg,
@@ -1076,7 +1076,7 @@ impl<'agent> WalletCanister<'agent> {
     /// from the wallet.
     pub fn call<'canister: 'agent, Out, M: Into<String>>(
         &'canister self,
-        destination: &'canister Canister<'canister>,
+        destination: Principal,
         method_name: M,
         arg: Argument,
         amount: u128,
@@ -1086,109 +1086,13 @@ impl<'agent> WalletCanister<'agent> {
     {
         CallForwarder {
             wallet: self,
-            destination: *destination.canister_id_(),
+            destination,
             method_name: method_name.into(),
             amount,
             arg,
             phantom_out: std::marker::PhantomData,
             u128: self.version_supports_u128_cycles(),
         }
-    }
-
-    /// Forward a call using another call's builder. This takes an UpdateBuilder,
-    /// marshalls it to a buffer, and sends it through the wallet canister, adding
-    /// a separate amount, using the 64-bit API.
-    pub fn call_forward64<'canister: 'agent, Out: 'agent>(
-        &'canister self,
-        call: AsyncCaller<'agent, Out>,
-        amount: u64,
-    ) -> Result<impl 'agent + AsyncCall<Out>, AgentError>
-    where
-        Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
-    {
-        let UpdateBuilder {
-            canister_id,
-            method_name,
-            arg,
-            ..
-        } = call.build_call()?;
-        let mut argument = Argument::default();
-        argument.set_raw_arg(arg);
-
-        CallForwarder {
-            wallet: self,
-            destination: canister_id,
-            method_name,
-            amount: amount as u128,
-            u128: false,
-            arg: argument,
-            phantom_out: std::marker::PhantomData,
-        }
-        .build()
-    }
-
-    /// Forward a call using another call's builder. This takes an UpdateBuilder,
-    /// marshalls it to a buffer, and sends it through the wallet canister, adding
-    /// a separate amount, using the 128-bit API.
-    pub fn call_forward128<'canister: 'agent, Out: 'agent>(
-        &'canister self,
-        call: AsyncCaller<'agent, Out>,
-        amount: u128,
-    ) -> Result<impl 'agent + AsyncCall<Out>, AgentError>
-    where
-        Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
-    {
-        let UpdateBuilder {
-            canister_id,
-            method_name,
-            arg,
-            ..
-        } = call.build_call()?;
-        let mut argument = Argument::default();
-        argument.set_raw_arg(arg);
-
-        CallForwarder {
-            wallet: self,
-            destination: canister_id,
-            method_name,
-            amount,
-            u128: true,
-            arg: argument,
-            phantom_out: std::marker::PhantomData,
-        }
-        .build()
-    }
-
-    /// Forward a call using another call's builder. This takes an UpdateBuilder,
-    /// marshalls it to a buffer, and sends it through the wallet canister, adding
-    /// a separate amount.
-    pub fn call_forward<'canister: 'agent, Out: 'agent>(
-        &'canister self,
-        call: AsyncCaller<'agent, Out>,
-        amount: u128,
-    ) -> Result<impl 'agent + AsyncCall<Out>, AgentError>
-    where
-        Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
-    {
-        let UpdateBuilder {
-            canister_id,
-            method_name,
-            arg,
-            ..
-        } = call.build_call()?;
-        let mut argument = Argument::default();
-        argument.set_raw_arg(arg);
-
-        CallForwarder {
-            wallet: self,
-            destination: canister_id,
-            method_name,
-            amount,
-            u128: self.version_supports_u128_cycles(),
-            arg: argument,
-            phantom_out: std::marker::PhantomData,
-        }
-        .build()
     }
 
     /// Gets the managed canisters the wallet knows about.

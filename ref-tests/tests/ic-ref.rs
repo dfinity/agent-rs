@@ -49,7 +49,7 @@ mod management_canister {
             wallet::CreateResult,
             ManagementCanister, WalletCanister,
         },
-        Argument, Canister,
+        Argument,
     };
     use openssl::sha::Sha256;
     use ref_tests::{
@@ -598,10 +598,6 @@ mod management_canister {
 
             // empty cycle balance on create
             let wallet = WalletCanister::create(&agent, wallet_id).await?;
-            let ic00 = Canister::builder()
-                .with_agent(&agent)
-                .with_canister_id(Principal::management_canister())
-                .build()?;
 
             #[derive(CandidType)]
             struct InCreate {
@@ -618,11 +614,10 @@ mod management_canister {
                 },
             };
 
-            let mut args = Argument::default();
-            args.push_idl_arg(create_args);
+            let args = Argument::from_candid((create_args,));
 
             let (create_result,): (CreateResult,) = wallet
-                .call(&ic00, "create_canister", args, 0)
+                .call(Principal::management_canister(), "create_canister", args, 0)
                 .call_and_wait(create_waiter())
                 .await?;
             let canister_id = create_result.canister_id;
@@ -632,11 +627,10 @@ mod management_canister {
                 canister_id: Principal,
             }
             let status_args = In { canister_id };
-            let mut args = Argument::default();
-            args.push_idl_arg(status_args);
+            let args = Argument::from_candid((status_args,));
 
             let (result,): (StatusCallResult,) = wallet
-                .call(&ic00, "canister_status", args, 0)
+                .call(Principal::management_canister(), "canister_status", args, 0)
                 .call_and_wait(create_waiter())
                 .await?;
 
@@ -679,20 +673,31 @@ mod management_canister {
     fn randomness() {
         with_wallet_canister(None, |agent, wallet_id| async move {
             let wallet = WalletCanister::create(&agent, wallet_id).await?;
-            let ic00 = Canister::builder()
-                .with_agent(&agent)
-                .with_canister_id(Principal::management_canister())
-                .build()?;
             let (rand_1,): (Vec<u8>,) = wallet
-                .call(&ic00, "raw_rand", Argument::default(), 0)
+                .call(
+                    Principal::management_canister(),
+                    "raw_rand",
+                    Argument::default(),
+                    0,
+                )
                 .call_and_wait(create_waiter())
                 .await?;
             let (rand_2,): (Vec<u8>,) = wallet
-                .call(&ic00, "raw_rand", Argument::default(), 0)
+                .call(
+                    Principal::management_canister(),
+                    "raw_rand",
+                    Argument::default(),
+                    0,
+                )
                 .call_and_wait(create_waiter())
                 .await?;
             let (rand_3,): (Vec<u8>,) = wallet
-                .call(&ic00, "raw_rand", Argument::default(), 0)
+                .call(
+                    Principal::management_canister(),
+                    "raw_rand",
+                    Argument::default(),
+                    0,
+                )
                 .call_and_wait(create_waiter())
                 .await?;
 
