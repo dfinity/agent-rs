@@ -5,7 +5,7 @@ use candid::{
     types::{Function, Type},
     CandidType, Decode, Deserialize, IDLArgs, IDLProg, TypeEnv,
 };
-use clap::{crate_authors, crate_version, AppSettings, Parser};
+use clap::{crate_authors, crate_version, Parser};
 use ic_agent::{
     agent::{self, signed::SignedUpdate, Replied},
     agent::{
@@ -29,7 +29,7 @@ const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
 #[clap(
     version = crate_version!(),
     author = crate_authors!(),
-    global_setting = AppSettings::PropagateVersion,
+    propagate_version(true),
 )]
 struct Opts {
     /// Some input. Because this isn't an Option<T> it's required to be used
