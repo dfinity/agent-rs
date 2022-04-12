@@ -23,14 +23,18 @@ pub enum CanisterBuilderError {
 }
 
 /// A canister builder, which can be used to create a canister abstraction.
-#[derive(Debug)]
-pub struct CanisterBuilder<'agent, T = ()> {
+#[derive(Debug, Default)]
+pub struct CanisterBuilder<'agent> {
     agent: Option<&'agent Agent>,
     canister_id: Option<Result<Principal, CanisterBuilderError>>,
-    interface: T,
 }
 
-impl<'agent, T> CanisterBuilder<'agent, T> {
+impl<'agent> CanisterBuilder<'agent> {
+    /// Create a canister builder with no value.
+    pub fn new() -> CanisterBuilder<'static> {
+        Default::default()
+    }
+
     /// Attach a canister ID to this canister.
     pub fn with_canister_id<E, P>(self, canister_id: P) -> Self
     where
@@ -56,7 +60,7 @@ impl<'agent, T> CanisterBuilder<'agent, T> {
     }
 
     /// Create this canister abstraction after passing in all the necessary state.
-    pub fn build(self) -> Result<Canister<'agent, T>, CanisterBuilderError> {
+    pub fn build(self) -> Result<Canister<'agent>, CanisterBuilderError> {
         let canister_id = if let Some(cid) = self.canister_id {
             cid?
         } else {
@@ -66,38 +70,7 @@ impl<'agent, T> CanisterBuilder<'agent, T> {
         let agent = self
             .agent
             .ok_or(CanisterBuilderError::MustSpecifyAnAgent())?;
-        Ok(Canister {
-            agent,
-            canister_id,
-            interface: self.interface,
-        })
-    }
-}
-
-impl Default for CanisterBuilder<'static, ()> {
-    fn default() -> Self {
-        CanisterBuilder {
-            agent: None,
-            canister_id: None,
-            interface: (),
-        }
-    }
-}
-
-impl<'agent> CanisterBuilder<'agent, ()> {
-    /// Create a canister builder with no value.
-    pub fn new() -> CanisterBuilder<'static, ()> {
-        Default::default()
-    }
-
-    /// Apply an interface to this canister. An interface can add methods to the canister's
-    /// type. For example, see the Management Canister.
-    pub fn with_interface<T>(self, interface: T) -> CanisterBuilder<'agent, T> {
-        CanisterBuilder {
-            agent: self.agent,
-            canister_id: self.canister_id,
-            interface,
-        }
+        Ok(Canister { agent, canister_id })
     }
 }
 
@@ -107,30 +80,23 @@ impl<'agent> CanisterBuilder<'agent, ()> {
 ///
 /// This is the higher level construct for talking to a canister on the Internet
 /// Computer.
-#[derive(Debug)]
-pub struct Canister<'agent, T = ()> {
+#[derive(Debug, Clone)]
+pub struct Canister<'agent> {
     pub(super) agent: &'agent Agent,
     pub(super) canister_id: Principal,
-    interface: T,
 }
 
-impl<'agent, T> Canister<'agent, T> {
+impl<'agent> Canister<'agent> {
     /// Get the canister ID of this canister.
     pub fn canister_id_<'canister: 'agent>(&'canister self) -> &Principal {
         &self.canister_id
-    }
-
-    /// Get the interface object from this canister. Sometimes those interfaces might have
-    /// custom methods that are useful.
-    pub fn interface_<'canister: 'agent>(&'canister self) -> &T {
-        &self.interface
     }
 
     /// Create an AsyncCallBuilder to do an update call.
     pub fn update_<'canister: 'agent>(
         &'canister self,
         method_name: &str,
-    ) -> AsyncCallBuilder<'agent, 'canister, T> {
+    ) -> AsyncCallBuilder<'agent, 'canister> {
         AsyncCallBuilder::new(self, method_name)
     }
 
@@ -138,7 +104,7 @@ impl<'agent, T> Canister<'agent, T> {
     pub fn query_<'canister: 'agent>(
         &'canister self,
         method_name: &str,
-    ) -> SyncCallBuilder<'agent, 'canister, T> {
+    ) -> SyncCallBuilder<'agent, 'canister> {
         SyncCallBuilder::new(self, method_name)
     }
 
@@ -156,25 +122,17 @@ impl<'agent, T> Canister<'agent, T> {
             .wait(request_id, self.canister_id, disable_range_check, waiter)
             .await
     }
-}
 
-impl<'agent, T> Canister<'agent, T>
-where
-    T: Clone,
-{
     /// Creates a copy of this canister, changing the canister ID to the provided principal.
     pub fn clone_with_(&self, id: Principal) -> Self {
         Self {
             agent: self.agent,
             canister_id: id,
-            interface: self.interface.clone(),
         }
     }
-}
 
-impl<'agent> Canister<'agent, ()> {
     /// Create a CanisterBuilder instance to build a canister abstraction.
-    pub fn builder() -> CanisterBuilder<'agent, ()> {
+    pub fn builder() -> CanisterBuilder<'agent> {
         Default::default()
     }
 }
@@ -277,17 +235,17 @@ impl Default for Argument {
 ///
 /// See [SyncCaller] for a description of this structure once built.
 #[derive(Debug)]
-pub struct SyncCallBuilder<'agent, 'canister: 'agent, T> {
-    canister: &'canister Canister<'agent, T>,
+pub struct SyncCallBuilder<'agent, 'canister: 'agent> {
+    canister: &'canister Canister<'agent>,
     method_name: String,
     effective_canister_id: Principal,
     arg: Argument,
 }
 
-impl<'agent, 'canister: 'agent, T> SyncCallBuilder<'agent, 'canister, T> {
+impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
     /// Create a new instance of an AsyncCallBuilder.
     pub(super) fn new<M: Into<String>>(
-        canister: &'canister Canister<'agent, T>,
+        canister: &'canister Canister<'agent>,
         method_name: M,
     ) -> Self {
         Self {
@@ -299,13 +257,10 @@ impl<'agent, 'canister: 'agent, T> SyncCallBuilder<'agent, 'canister, T> {
     }
 }
 
-impl<'agent, 'canister: 'agent, Interface> SyncCallBuilder<'agent, 'canister, Interface> {
+impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
     /// Add an argument to the candid argument list. This requires Candid arguments, if
     /// there is a raw argument set (using [with_arg_raw]), this will fail.
-    pub fn with_arg<Argument>(
-        mut self,
-        arg: Argument,
-    ) -> SyncCallBuilder<'agent, 'canister, Interface>
+    pub fn with_arg<Argument>(mut self, arg: Argument) -> SyncCallBuilder<'agent, 'canister>
     where
         Argument: CandidType + Sync + Send,
     {
@@ -316,17 +271,14 @@ impl<'agent, 'canister: 'agent, Interface> SyncCallBuilder<'agent, 'canister, In
     /// Add an argument to the candid argument list. This requires Candid arguments, if
     /// there is a raw argument set (using [with_arg_raw]), this will fail.
     /// TODO: make this method unnecessary https://github.com/dfinity/agent-rs/issues/132
-    pub fn with_value_arg(
-        mut self,
-        arg: IDLValue,
-    ) -> SyncCallBuilder<'agent, 'canister, Interface> {
+    pub fn with_value_arg(mut self, arg: IDLValue) -> SyncCallBuilder<'agent, 'canister> {
         self.arg.push_value_arg(arg);
         self
     }
 
     /// Replace the argument with raw argument bytes. This will overwrite the current
     /// argument set, so calling this method twice will discard the first argument.
-    pub fn with_arg_raw(mut self, arg: Vec<u8>) -> SyncCallBuilder<'agent, 'canister, Interface> {
+    pub fn with_arg_raw(mut self, arg: Vec<u8>) -> SyncCallBuilder<'agent, 'canister> {
         self.arg.set_raw_arg(arg);
         self
     }
@@ -335,7 +287,7 @@ impl<'agent, 'canister: 'agent, Interface> SyncCallBuilder<'agent, 'canister, In
     pub fn with_effective_canister_id(
         mut self,
         canister_id: Principal,
-    ) -> SyncCallBuilder<'agent, 'canister, Interface> {
+    ) -> SyncCallBuilder<'agent, 'canister> {
         self.effective_canister_id = canister_id;
         self
     }
@@ -362,19 +314,19 @@ impl<'agent, 'canister: 'agent, Interface> SyncCallBuilder<'agent, 'canister, In
 ///
 /// See [AsyncCaller] for a description of this structure.
 #[derive(Debug)]
-pub struct AsyncCallBuilder<'agent, 'canister: 'agent, T> {
-    canister: &'canister Canister<'agent, T>,
+pub struct AsyncCallBuilder<'agent, 'canister: 'agent> {
+    canister: &'canister Canister<'agent>,
     method_name: String,
     effective_canister_id: Principal,
     arg: Argument,
 }
 
-impl<'agent, 'canister: 'agent, T> AsyncCallBuilder<'agent, 'canister, T> {
+impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
     /// Create a new instance of an AsyncCallBuilder.
     pub(super) fn new(
-        canister: &'canister Canister<'agent, T>,
+        canister: &'canister Canister<'agent>,
         method_name: &str,
-    ) -> AsyncCallBuilder<'agent, 'canister, T> {
+    ) -> AsyncCallBuilder<'agent, 'canister> {
         Self {
             canister,
             method_name: method_name.to_string(),
@@ -384,13 +336,10 @@ impl<'agent, 'canister: 'agent, T> AsyncCallBuilder<'agent, 'canister, T> {
     }
 }
 
-impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, Interface> {
+impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
     /// Add an argument to the candid argument list. This requires Candid arguments, if
     /// there is a raw argument set (using [with_arg_raw]), this will fail.
-    pub fn with_arg<Argument>(
-        mut self,
-        arg: Argument,
-    ) -> AsyncCallBuilder<'agent, 'canister, Interface>
+    pub fn with_arg<Argument>(mut self, arg: Argument) -> AsyncCallBuilder<'agent, 'canister>
     where
         Argument: CandidType + Sync + Send,
     {
@@ -400,7 +349,7 @@ impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, I
 
     /// Replace the argument with raw argument bytes. This will overwrite the current
     /// argument set, so calling this method twice will discard the first argument.
-    pub fn with_arg_raw(mut self, arg: Vec<u8>) -> AsyncCallBuilder<'agent, 'canister, Interface> {
+    pub fn with_arg_raw(mut self, arg: Vec<u8>) -> AsyncCallBuilder<'agent, 'canister> {
         self.arg.set_raw_arg(arg);
         self
     }
@@ -409,7 +358,7 @@ impl<'agent, 'canister: 'agent, Interface> AsyncCallBuilder<'agent, 'canister, I
     pub fn with_effective_canister_id(
         mut self,
         canister_id: Principal,
-    ) -> AsyncCallBuilder<'agent, 'canister, Interface> {
+    ) -> AsyncCallBuilder<'agent, 'canister> {
         self.effective_canister_id = canister_id;
         self
     }
@@ -461,12 +410,13 @@ mod tests {
             .unwrap();
         agent.fetch_root_key().await.unwrap();
 
-        let management_canister = Canister::builder()
-            .with_agent(&agent)
-            .with_canister_id("aaaaa-aa")
-            .with_interface(ManagementCanister)
-            .build()
-            .unwrap();
+        let management_canister = ManagementCanister::from_canister(
+            Canister::builder()
+                .with_agent(&agent)
+                .with_canister_id("aaaaa-aa")
+                .build()
+                .unwrap(),
+        );
 
         let (new_canister_id,) = management_canister
             .create_canister()
