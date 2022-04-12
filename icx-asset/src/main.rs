@@ -4,7 +4,7 @@ mod support;
 use crate::commands::list::list;
 use crate::commands::sync::sync;
 use candid::Principal;
-use clap::{crate_authors, crate_version, AppSettings, Parser};
+use clap::{crate_authors, crate_version, Parser};
 use ic_agent::identity::{AnonymousIdentity, BasicIdentity, Secp256k1Identity};
 use ic_agent::{agent, Agent, Identity};
 
@@ -16,9 +16,9 @@ const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
 
 #[derive(Parser)]
 #[clap(
-version = crate_version!(),
-author = crate_authors!(),
-global_setting = AppSettings::PropagateVersion,
+    version = crate_version!(),
+    author = crate_authors!(),
+    propagate_version(true),
 )]
 struct Opts {
     /// Some input. Because this isn't an Option<T> it's required to be used
