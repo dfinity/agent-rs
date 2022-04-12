@@ -158,7 +158,7 @@ impl fmt::Debug for ArgumentType {
     }
 }
 
-/// A builder for a canister argument, allowing you to append elements to [`ArgumentType`] with chaining syntax.
+/// A builder for a canister argument, allowing you to append elements to an argument tuple with chaining syntax.
 #[derive(Debug)]
 pub struct Argument(Result<ArgumentType, AgentError>);
 
