@@ -1,4 +1,5 @@
 use crate::call::{AsyncCaller, SyncCaller};
+use candid::utils::ArgumentEncoder;
 use candid::{parser::value::IDLValue, ser::IDLBuilder, utils::ArgumentDecoder, CandidType};
 use garcon::Waiter;
 use ic_agent::{ic_types::Principal, Agent, AgentError, RequestId};
@@ -222,6 +223,27 @@ impl Argument {
     /// Resets the argument to an empty builder.
     pub fn reset(&mut self) {
         *self = Default::default();
+    }
+
+    /// Creates an empty argument.
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Creates an argument from an arbitrary blob. Equivalent to [`set_raw_arg`].
+    pub fn from_raw(raw: Vec<u8>) -> Self {
+        Self(Ok(ArgumentType::Raw(raw)))
+    }
+
+    /// Creates an argument from an existing Candid ArgumentEncoder.
+    pub fn from_candid(tuple: impl ArgumentEncoder) -> Self {
+        let mut builder = IDLBuilder::new();
+        Self(
+            tuple
+                .encode(&mut builder)
+                .map(|_| ArgumentType::Idl(builder))
+                .map_err(|e| AgentError::CandidError(Box::new(e))),
+        )
     }
 }
 
