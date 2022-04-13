@@ -42,9 +42,7 @@ impl Secp256k1Identity {
 
         for pem in pem::parse_many(contents)? {
             if pem.tag == EC_PARAMETERS && pem.contents != SECP256K1 {
-                return Err(PemError::ErrorStack(
-                    k256::pkcs8::Error::ParametersMalformed,
-                ));
+                return Err(PemError::UnsupportedKeyCurve(pem.contents));
             }
 
             if pem.tag != EcPrivateKeyDocument::TYPE_LABEL {
@@ -153,7 +151,7 @@ N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
     const DER_ENCODED_PUBLIC_KEY: &str = "3056301006072a8648ce3d020106052b8104000a0342000480ef3bac9d68cf374cbc9c9943e180043a94c462ef8270274e57089d5dcdba1b8fbf83b7546ccc1b3781377776e9c4710fdf533ed9bcba8d8ebb32a14a2aba11";
 
     #[test]
-    #[should_panic(expected = "ParametersMalformed")]
+    #[should_panic(expected = "UnsupportedKeyCurve")]
     fn test_secp256k1_reject_wrong_curve() {
         Secp256k1Identity::from_pem(WRONG_CURVE_IDENTITY_FILE.as_bytes()).unwrap();
     }
