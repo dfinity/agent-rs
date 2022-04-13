@@ -2,7 +2,7 @@ use crate::content_encoder::ContentEncoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use mime::Mime;
-use openssl::sha::Sha256;
+use sha2::{Digest, Sha256};
 use std::io::Write;
 use std::path::Path;
 
@@ -40,8 +40,6 @@ impl Content {
     }
 
     pub fn sha256(&self) -> Vec<u8> {
-        let mut sha256 = Sha256::new();
-        sha256.update(&self.data);
-        sha256.finish().to_vec()
+        Sha256::digest(&self.data).to_vec()
     }
 }

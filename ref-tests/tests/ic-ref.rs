@@ -51,11 +51,11 @@ mod management_canister {
         },
         Argument,
     };
-    use openssl::sha::Sha256;
     use ref_tests::{
         create_agent, create_basic_identity, create_secp256k1_identity, create_waiter, with_agent,
         with_wallet_canister,
     };
+    use sha2::{Digest, Sha256};
     use std::collections::HashSet;
 
     mod create_canister {
@@ -236,10 +236,8 @@ mod management_canister {
                 .canister_status(&canister_id_3)
                 .call_and_wait(create_waiter())
                 .await?;
-            let mut hasher = Sha256::new();
-            hasher.update(&canister_wasm);
-            let sha256_digest = hasher.finish();
-            assert_eq!(result.0.module_hash, Some(sha256_digest.into()));
+            let sha256_digest = Sha256::digest(&canister_wasm);
+            assert_eq!(result.0.module_hash, Some(sha256_digest.to_vec()));
 
             Ok(())
         })
