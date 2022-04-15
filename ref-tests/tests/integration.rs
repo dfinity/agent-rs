@@ -94,7 +94,9 @@ fn canister_reject_call() {
         let bob =
             WalletCanister::create(&agent, create_wallet_canister(&agent, None).await?).await?;
 
-        let result = alice.wallet_send(&bob, 1_000_000, create_waiter()).await;
+        let result = alice
+            .wallet_send(*bob.canister_id_(), 1_000_000, create_waiter())
+            .await;
 
         assert_eq!(
             result,
@@ -387,7 +389,9 @@ fn wallet_canister_funds() {
         let alice_previous_balance = alice.wallet_balance().await?;
         let bob_previous_balance = bob.wallet_balance().await?;
 
-        alice.wallet_send(&bob, 1_000_000, create_waiter()).await?;
+        alice
+            .wallet_send(*bob.canister_id_(), 1_000_000, create_waiter())
+            .await?;
 
         let bob_balance = bob.wallet_balance().await?;
 

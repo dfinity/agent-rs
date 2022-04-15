@@ -562,7 +562,7 @@ impl<'agent> WalletCanister<'agent> {
     /// Send cycles to another canister using the 64-bit API.
     pub fn wallet_send64<'canister: 'agent>(
         &'canister self,
-        destination: &'_ Canister<'_>,
+        destination: Principal,
         amount: u64,
     ) -> impl 'agent + AsyncCall<(Result<(), String>,)> {
         #[derive(CandidType)]
@@ -573,7 +573,7 @@ impl<'agent> WalletCanister<'agent> {
 
         self.update_("wallet_send")
             .with_arg(In {
-                canister: *destination.canister_id_(),
+                canister: destination,
                 amount,
             })
             .build()
@@ -582,7 +582,7 @@ impl<'agent> WalletCanister<'agent> {
     /// Send cycles to another canister using the 128-bit API.
     pub fn wallet_send128<'canister: 'agent>(
         &'canister self,
-        destination: &'_ Canister<'agent>,
+        destination: Principal,
         amount: u128,
     ) -> impl 'agent + AsyncCall<(Result<(), String>,)> {
         #[derive(CandidType)]
@@ -593,7 +593,7 @@ impl<'agent> WalletCanister<'agent> {
 
         self.update_("wallet_send128")
             .with_arg(In {
-                canister: *destination.canister_id_(),
+                canister: destination,
                 amount,
             })
             .build()
@@ -602,7 +602,7 @@ impl<'agent> WalletCanister<'agent> {
     /// Send cycles to another canister.
     pub async fn wallet_send<'canister: 'agent>(
         &'canister self,
-        destination: &'_ Canister<'agent>,
+        destination: Principal,
         amount: u128,
         waiter: Delay,
     ) -> Result<(), AgentError> {
