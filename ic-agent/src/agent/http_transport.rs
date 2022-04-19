@@ -57,7 +57,7 @@ impl ReqwestHttpReplicaV2Transport {
         )
     }
 
-    /// Creates a replica transport from a HTTP URL and a `[reqwest::Client]`.
+    /// Creates a replica transport from a HTTP URL and a [`reqwest::Client`].
     pub fn create_with_client<U: Into<String>>(
         url: U,
         client: reqwest::Client,
