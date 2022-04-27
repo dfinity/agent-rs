@@ -9,6 +9,10 @@ pub enum PemError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
+    /// An unsupported curve was detected
+    #[error("Only secp256k1 curve is supported: {0:?}")]
+    UnsupportedKeyCurve(Vec<u8>),
+
     /// An error occurred while reading the file in PEM format.
     #[cfg(feature = "pem")]
     #[error("An error occurred while reading the file: {0}")]
@@ -18,7 +22,7 @@ pub enum PemError {
     #[error("A key was rejected by Ring: {0}")]
     KeyRejected(#[from] ring::error::KeyRejected),
 
-    /// The key was rejected by OpenSSL.
-    #[error("A key was rejected by OpenSSL: {0}")]
-    ErrorStack(#[from] openssl::error::ErrorStack),
+    /// The key was rejected by k256.
+    #[error("A key was rejected by k256: {0}")]
+    ErrorStack(#[from] k256::pkcs8::Error),
 }

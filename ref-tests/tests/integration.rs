@@ -94,7 +94,9 @@ fn canister_reject_call() {
         let bob =
             WalletCanister::create(&agent, create_wallet_canister(&agent, None).await?).await?;
 
-        let result = alice.wallet_send(&bob, 1_000_000, create_waiter()).await;
+        let result = alice
+            .wallet_send(*bob.canister_id_(), 1_000_000, create_waiter())
+            .await;
 
         assert_eq!(
             result,
@@ -115,10 +117,6 @@ fn wallet_canister_forward() {
         let wallet = WalletCanister::create(&agent, wallet_id).await?;
 
         let universal_id = create_universal_canister(&agent).await?;
-        let universal = Canister::builder()
-            .with_canister_id(universal_id)
-            .with_agent(&agent)
-            .build()?;
 
         // Perform an "echo" call through the wallet canister.
         // We encode the result in DIDL to decode it on the other side (would normally get
@@ -127,9 +125,13 @@ fn wallet_canister_forward() {
             .reply_data(b"DIDL\0\x01\x71\x0bHello World")
             .build();
 
-        let forward = wallet
-            .call_forward::<(String,)>(universal.update_("update").with_arg_raw(arg).build(), 0)?;
-        let (result,) = forward.call_and_wait(create_waiter()).await.unwrap();
+        let args = Argument::from_raw(arg);
+
+        let (result,): (String,) = wallet
+            .call(universal_id, "update", args, 0)
+            .call_and_wait(create_waiter())
+            .await
+            .unwrap();
 
         assert_eq!(result, "Hello World");
         Ok(())
@@ -146,11 +148,6 @@ fn wallet_canister_create_and_install() {
             .wallet_create_canister(1_000_000, None, None, None, None, create_waiter())
             .await?;
 
-        let ic00 = Canister::builder()
-            .with_agent(&agent)
-            .with_canister_id(Principal::management_canister())
-            .build()?;
-
         #[derive(CandidType)]
         struct CanisterInstall {
             mode: InstallMode,
@@ -166,11 +163,10 @@ fn wallet_canister_create_and_install() {
             arg: Argument::default().serialize()?,
         };
 
-        let mut args = Argument::default();
-        args.push_idl_arg(install_config);
+        let args = Argument::from_candid((install_config,));
 
         wallet
-            .call64(&ic00, "install_code", args, 0)
+            .call64(Principal::management_canister(), "install_code", args, 0)
             .call_and_wait(create_waiter())
             .await?;
 
@@ -275,14 +271,13 @@ fn wallet_create_wallet() {
             child_create_res.canister_id.to_text()
         );
 
-        // verify the child wallet by checking its balance
-        let child_wallet = Canister::builder()
-            .with_agent(&agent)
-            .with_canister_id(child_create_res.canister_id)
-            .build()?;
-
         let (child_wallet_balance,): (ic_utils::interfaces::wallet::BalanceResult<u64>,) = wallet
-            .call64(&child_wallet, "wallet_balance", Argument::default(), 0)
+            .call64(
+                child_create_res.canister_id,
+                "wallet_balance",
+                Argument::default(),
+                0,
+            )
             .call_and_wait(create_waiter())
             .await?;
 
@@ -305,18 +300,18 @@ fn wallet_create_wallet() {
             )
             .await?;
 
-        let child_wallet_two = Canister::builder()
-            .with_agent(&agent)
-            .with_canister_id(child_two_create_res.canister_id)
-            .build()?;
-
         eprintln!(
             "Created child wallet two.\nChild wallet two canister id: {:?}",
             child_two_create_res.canister_id.to_text()
         );
         let (child_wallet_two_balance,): (ic_utils::interfaces::wallet::BalanceResult<u64>,) =
             wallet
-                .call64(&child_wallet_two, "wallet_balance", Argument::default(), 0)
+                .call64(
+                    child_two_create_res.canister_id,
+                    "wallet_balance",
+                    Argument::default(),
+                    0,
+                )
                 .call_and_wait(create_waiter())
                 .await?;
         eprintln!(
@@ -350,12 +345,16 @@ fn wallet_create_wallet() {
                 freezing_threshold: None,
             },
         };
-        let mut args = Argument::default();
-        args.push_idl_arg(create_args);
+        let args = Argument::from_candid((create_args,));
 
         let (grandchild_create_res,): (Result<ic_utils::interfaces::wallet::CreateResult, String>,) =
             wallet
-                .call64(&child_wallet_two, "wallet_create_wallet", args, 0)
+                .call64(
+                    child_two_create_res.canister_id,
+                    "wallet_create_wallet",
+                    args,
+                    0,
+                )
                 .call_and_wait(create_waiter())
                 .await?;
         let grandchild_create_res = grandchild_create_res?;
@@ -390,7 +389,9 @@ fn wallet_canister_funds() {
         let alice_previous_balance = alice.wallet_balance().await?;
         let bob_previous_balance = bob.wallet_balance().await?;
 
-        alice.wallet_send(&bob, 1_000_000, create_waiter()).await?;
+        alice
+            .wallet_send(*bob.canister_id_(), 1_000_000, create_waiter())
+            .await?;
 
         let bob_balance = bob.wallet_balance().await?;
 
