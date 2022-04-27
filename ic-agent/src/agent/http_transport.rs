@@ -1,6 +1,8 @@
 //! A [ReplicaV2Transport] that connects using a reqwest client.
 #![cfg(feature = "reqwest")]
 
+pub use reqwest;
+
 use crate::{agent::agent_error::HttpErrorPayload, ic_types::Principal, AgentError, RequestId};
 use hyper_rustls::ConfigBuilderExt;
 use reqwest::Method;
@@ -46,8 +48,21 @@ impl ReqwestHttpReplicaV2Transport {
         // Advertise support for HTTP/2
         tls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
 
-        let url = url.into();
+        Self::create_with_client(
+            url,
+            reqwest::Client::builder()
+                .use_preconfigured_tls(tls_config)
+                .build()
+                .expect("Could not create HTTP client."),
+        )
+    }
 
+    /// Creates a replica transport from a HTTP URL and a [`reqwest::Client`].
+    pub fn create_with_client<U: Into<String>>(
+        url: U,
+        client: reqwest::Client,
+    ) -> Result<Self, AgentError> {
+        let url = url.into();
         Ok(Self {
             url: reqwest::Url::parse(&url)
                 .and_then(|mut url| {
@@ -60,10 +75,7 @@ impl ReqwestHttpReplicaV2Transport {
                     url.join("api/v2/")
                 })
                 .map_err(|_| AgentError::InvalidReplicaUrl(url.clone()))?,
-            client: reqwest::Client::builder()
-                .use_preconfigured_tls(tls_config)
-                .build()
-                .expect("Could not create HTTP client."),
+            client,
             password_manager: None,
         })
     }
