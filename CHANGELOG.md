@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2022-04-28
+
 Added `ReqwestHttpReplicaV2Transport::create_with_client`.
 
 Updated minimum version of reqwest to 0.11.7.  This is to avoid the following error, seen with reqwest 0.11.6:
@@ -14,6 +16,13 @@ Updated minimum version of reqwest to 0.11.7.  This is to avoid the following er
 ```
 Unknown TLS backend passed to use_preconfigured_tls
 ```
+
+Updated wallet interface for 128-bit API.
+
+Remove parameterized canister pattern.  Use `WalletCanister::create` rather than `Wallet::create`.
+
+wallet_send takes Principal instead of &Canister.
+
 
 ## [0.15.0] - 2022-03-28
 
