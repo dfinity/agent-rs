@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Added `ReqwestHttpReplicaV2Transport::create_with_client`.
 
+Updated minimum version of reqwest to 0.11.7.  This is to avoid the following error, seen with reqwest 0.11.6:
+
+```
+Unknown TLS backend passed to use_preconfigured_tls
+```
+
 ## [0.15.0] - 2022-03-28
 
 Updated `ic_utils::interfaces::http_request` structures to use `&str` to reduce copying.
