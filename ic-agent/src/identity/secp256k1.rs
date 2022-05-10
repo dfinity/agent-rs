@@ -87,7 +87,7 @@ impl Identity for Secp256k1Identity {
             .map_err(|err| format!("Cannot create secp256k1 signature: {}", err))?;
         let r = ecdsa_sig.r().as_ref().to_bytes();
         let s = ecdsa_sig.s().as_ref().to_bytes();
-        let mut bytes = [0; 64];
+        let mut bytes = [0u8; 64];
         if r.len() > 32 || s.len() > 64 {
             return Err(format!(
                 "Cannot create secp256k1 signature: {}",
