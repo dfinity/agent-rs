@@ -88,6 +88,12 @@ impl Identity for Secp256k1Identity {
         let r = ecdsa_sig.r().as_ref().to_bytes();
         let s = ecdsa_sig.s().as_ref().to_bytes();
         let mut bytes = [0; 64];
+        if r.len() > 32 || s.len() > 64 {
+            return Err(format!(
+                "Cannot create secp256k1 signature: {}",
+                "signature too long."
+            ));
+        }
         bytes[(32 - r.len())..32].clone_from_slice(&r);
         bytes[(64 - s.len())..64].clone_from_slice(&s);
         let signature = Some(bytes.to_vec());
