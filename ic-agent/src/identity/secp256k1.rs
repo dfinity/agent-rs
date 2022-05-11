@@ -5,11 +5,10 @@ use crate::identity::error::PemError;
 
 use k256::{
     ecdsa::{self, signature::Signer, SigningKey, VerifyingKey},
-    pkcs8::{AssociatedOid, Document, SubjectPublicKeyInfo},
-    Secp256k1, SecretKey,
+    pkcs8::{Document},
+    SecretKey,
 };
-use pkcs8::{EncodePrivateKey, EncodePublicKey};
-use std::convert::TryInto;
+use pkcs8::EncodePublicKey;
 #[cfg(feature = "pem")]
 use std::{fs::File, io, path::Path};
 

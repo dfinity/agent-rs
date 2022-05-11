@@ -913,7 +913,6 @@ dependencies = [
  "base64",
  "byteorder",
  "candid",
- "elliptic-curve",
  "garcon",
  "hex",
  "http",
