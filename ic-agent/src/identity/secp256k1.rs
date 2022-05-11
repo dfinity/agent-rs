@@ -5,10 +5,9 @@ use crate::identity::error::PemError;
 
 use k256::{
     ecdsa::{self, signature::Signer, SigningKey, VerifyingKey},
-    pkcs8::{Document},
+    pkcs8::{Document, EncodePublicKey},
     SecretKey,
 };
-use pkcs8::EncodePublicKey;
 #[cfg(feature = "pem")]
 use std::{fs::File, io, path::Path};
 
