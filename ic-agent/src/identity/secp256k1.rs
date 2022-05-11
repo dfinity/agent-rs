@@ -5,10 +5,10 @@ use crate::identity::error::PemError;
 
 use k256::{
     ecdsa::{self, signature::Signer, SigningKey, VerifyingKey},
-    elliptic_curve::{sec1::ToEncodedPoint, AlgorithmParameters},
-    pkcs8::{PublicKeyDocument, SubjectPublicKeyInfo},
+    pkcs8::{AssociatedOid, Document, SubjectPublicKeyInfo},
     Secp256k1, SecretKey,
 };
+use pkcs8::{EncodePrivateKey, EncodePublicKey};
 use std::convert::TryInto;
 #[cfg(feature = "pem")]
 use std::{fs::File, io, path::Path};
@@ -20,7 +20,7 @@ use std::{fs::File, io, path::Path};
 pub struct Secp256k1Identity {
     private_key: SigningKey,
     _public_key: VerifyingKey,
-    der_encoded_public_key: PublicKeyDocument,
+    der_encoded_public_key: Document,
 }
 
 impl Secp256k1Identity {
@@ -33,7 +33,7 @@ impl Secp256k1Identity {
     /// Creates an identity from a PEM certificate.
     #[cfg(feature = "pem")]
     pub fn from_pem<R: io::Read>(pem_reader: R) -> Result<Self, PemError> {
-        use sec1::{pem::PemLabel, EcPrivateKeyDocument};
+        use sec1::{pem::PemLabel, EcPrivateKey};
 
         const EC_PARAMETERS: &str = "EC PARAMETERS";
         const SECP256K1: &[u8] = b"\x06\x05\x2b\x81\x04\x00\x0a";
@@ -45,7 +45,7 @@ impl Secp256k1Identity {
                 return Err(PemError::UnsupportedKeyCurve(pem.contents));
             }
 
-            if pem.tag != EcPrivateKeyDocument::TYPE_LABEL {
+            if pem.tag != EcPrivateKey::PEM_LABEL {
                 continue;
             }
             let private_key =
@@ -58,13 +58,9 @@ impl Secp256k1Identity {
     /// Creates an identity from a private key.
     pub fn from_private_key(private_key: SecretKey) -> Self {
         let public_key = private_key.public_key();
-        let public_key_bytes = public_key.to_encoded_point(false);
-        let der_encoded_public_key = SubjectPublicKeyInfo {
-            algorithm: Secp256k1::algorithm_identifier(),
-            subject_public_key: public_key_bytes.as_ref(),
-        }
-        .try_into()
-        .expect("Cannot DER encode secp256k1 public key.");
+        let der_encoded_public_key = public_key
+            .to_public_key_der()
+            .expect("Cannot DER encode secp256k1 public key.");
         Self {
             private_key: private_key.into(),
             _public_key: public_key.into(),
