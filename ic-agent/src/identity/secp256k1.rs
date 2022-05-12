@@ -89,10 +89,7 @@ impl Identity for Secp256k1Identity {
         let s = ecdsa_sig.s().as_ref().to_bytes();
         let mut bytes = [0u8; 64];
         if r.len() > 32 || s.len() > 64 {
-            return Err(format!(
-                "Cannot create secp256k1 signature: {}",
-                "signature too long."
-            ));
+            return Err("Cannot create secp256k1 signature: malformed signature.".to_string());
         }
         bytes[(32 - r.len())..32].clone_from_slice(&r);
         bytes[(64 - s.len())..64].clone_from_slice(&s);
