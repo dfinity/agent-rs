@@ -1,6 +1,6 @@
 [package]
 name = "ic-agent"
-version = "0.15.0"
+version = "0.16.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2021"
 description = "Agent library to communicate with the Internet Computer, following the Public Specification."
@@ -23,7 +23,7 @@ hex = "0.4.0"
 http = "0.2.6"
 hyper-rustls = { version = "0.23.0", features = [ "webpki-roots" ] }
 ic-types = "0.3.0"
-k256 = "0.10"
+k256 = { version = "0.11", features = ["pem"] }
 leb128 = "0.2.5"
 mime = "0.3.16"
 rand = "0.8.5"
@@ -36,8 +36,8 @@ sha2 = "0.10"
 simple_asn1 = "0.6.1"
 thiserror = "1.0.30"
 url = "2.1.0"
-pkcs8 = { version = "0.8", features = ["std"] }
-sec1 = { version = "0.2", features = ["pem"]}
+pkcs8 = { version = "0.9", features = ["std"] }
+sec1 = { version = "0.3", features = ["pem"]}
 
 [dependencies.reqwest]
 version = "0.11.7"
