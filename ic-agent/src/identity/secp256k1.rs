@@ -81,9 +81,12 @@ impl Identity for Secp256k1Identity {
             .map_err(|err| format!("Cannot create secp256k1 signature: {}", err))?;
         let r = ecdsa_sig.r().as_ref().to_bytes();
         let s = ecdsa_sig.s().as_ref().to_bytes();
-        let mut bytes = [0; 64];
+        let mut bytes = [0u8; 64];
+        if r.len() > 32 || s.len() > 32 {
+            return Err("Cannot create secp256k1 signature: malformed signature.".to_string());
+        }
         bytes[(32 - r.len())..32].clone_from_slice(&r);
-        bytes[(64 - s.len())..64].clone_from_slice(&s);
+        bytes[32 + (32 - s.len())..].clone_from_slice(&s);
         let signature = Some(bytes.to_vec());
         let public_key = Some(self.der_encoded_public_key.as_ref().to_vec());
         Ok(Signature {
