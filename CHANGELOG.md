@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2022-05-19
+
 Updated dependencies.  Some had breaking changes: k256 0.11, pkcs 0.9, and sec1 0.3.
 
 Fixed a potential panic in secp256k1 signature generation.
