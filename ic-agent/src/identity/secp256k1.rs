@@ -1,4 +1,7 @@
-use crate::{export::Principal, Identity, Signature};
+use crate::{
+    export::{Principal, SignedDelegation},
+    Identity, Signature,
+};
 
 #[cfg(feature = "pem")]
 use crate::identity::error::PemError;
@@ -18,7 +21,8 @@ use std::{fs::File, io, path::Path};
 pub struct Secp256k1Identity {
     private_key: SigningKey,
     _public_key: VerifyingKey,
-    der_encoded_public_key: Document,
+    /// der encoded public key.
+    pub der_encoded_public_key: Document,
 }
 
 impl Secp256k1Identity {
@@ -93,6 +97,10 @@ impl Identity for Secp256k1Identity {
             public_key,
             signature,
         })
+    }
+
+    fn delegation(&self) -> Option<Vec<SignedDelegation>> {
+        None
     }
 }
 

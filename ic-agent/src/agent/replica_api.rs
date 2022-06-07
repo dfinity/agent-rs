@@ -1,5 +1,5 @@
 use crate::{
-    export::Principal,
+    export::{Principal, SignedDelegation},
     hash_tree::{HashTree, Label},
 };
 use serde::{Deserialize, Serialize};
@@ -16,6 +16,8 @@ pub struct Envelope<T: Serialize> {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(with = "serde_bytes")]
     pub sender_sig: Option<Vec<u8>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sender_delegation: Option<Vec<SignedDelegation>>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

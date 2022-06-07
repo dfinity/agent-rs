@@ -25,6 +25,7 @@ hyper-rustls = { version = "0.23.0", features = [ "webpki-roots" ] }
 ic-types = "0.3.0"
 k256 = { version = "0.11", features = ["pem"] }
 leb128 = "0.2.5"
+maplit = "1.0.2"
 mime = "0.3.16"
 rand = "0.8.5"
 rustls = "0.20.4"
@@ -38,6 +39,8 @@ thiserror = "1.0.30"
 url = "2.1.0"
 pkcs8 = { version = "0.9", features = ["std"] }
 sec1 = { version = "0.3", features = ["pem"]}
+types = { package = "ic-types", git = "https://github.com/dfinity/ic" }
+ic-crypto-sha = { git = "https://github.com/dfinity/ic" }
 
 [dependencies.reqwest]
 version = "0.11.7"

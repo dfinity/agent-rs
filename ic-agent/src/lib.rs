@@ -134,3 +134,5 @@ pub use request_id::{to_request_id, RequestId, RequestIdError};
 
 pub use crate::ic_types::hash_tree;
 pub use ic_types;
+
+pub use types;

@@ -1,8 +1,9 @@
 //! Types and traits dealing with identity across the Internet Computer.
-use crate::export::Principal;
+use crate::export::{Principal, SignedDelegation};
 
 pub(crate) mod anonymous;
 pub(crate) mod basic;
+pub(crate) mod delegation;
 pub(crate) mod secp256k1;
 
 #[cfg(feature = "pem")]
@@ -10,6 +11,7 @@ pub(crate) mod error;
 
 pub use anonymous::AnonymousIdentity;
 pub use basic::BasicIdentity;
+pub use delegation::DelegationIdentity;
 pub use secp256k1::Secp256k1Identity;
 
 #[cfg(feature = "pem")]
@@ -37,6 +39,9 @@ pub trait Identity: Send + Sync {
     /// Sign a blob, the concatenation of the domain separator & request ID,
     /// creating the sender signature.
     fn sign(&self, blob: &[u8]) -> Result<Signature, String>;
+
+    /// delegation
+    fn delegation(&self) -> Option<Vec<SignedDelegation>>;
 }
 
 impl_debug_empty!(dyn Identity);

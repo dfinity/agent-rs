@@ -1,4 +1,7 @@
-use crate::{export::Principal, Identity, Signature};
+use crate::{
+    export::{Principal, SignedDelegation},
+    Identity, Signature,
+};
 
 #[cfg(feature = "pem")]
 use crate::identity::error::PemError;
@@ -14,7 +17,8 @@ use std::fmt;
 /// A Basic Identity which sign using an ED25519 key pair.
 pub struct BasicIdentity {
     key_pair: Ed25519KeyPair,
-    der_encoded_public_key: Vec<u8>,
+    /// der encoded public key.
+    pub der_encoded_public_key: Vec<u8>,
 }
 
 impl fmt::Debug for BasicIdentity {
@@ -68,6 +72,10 @@ impl Identity for BasicIdentity {
             signature: Some(signature.as_ref().to_vec()),
             public_key: Some(self.der_encoded_public_key.clone()),
         })
+    }
+
+    fn delegation(&self) -> Option<Vec<SignedDelegation>> {
+        None
     }
 }
 

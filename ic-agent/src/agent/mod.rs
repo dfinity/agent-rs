@@ -841,6 +841,7 @@ where
         content: request,
         sender_pubkey: signature.public_key,
         sender_sig: signature.signature,
+        sender_delegation: identity.delegation(),
     };
 
     let mut serialized_bytes = Vec::new();
