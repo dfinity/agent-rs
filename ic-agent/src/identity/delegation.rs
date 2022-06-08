@@ -24,9 +24,10 @@ enum SecondIdentity {
 /// A Delegation Identity which sign using an ED25519 key pair.
 #[derive(Debug)]
 pub struct DelegationIdentity {
-    second_identity: SecondIdentity,
+    second_identity: SecondIdentity, // the delegation key
     delegation: Option<Vec<SignedDelegation>>,
-    main_identity_pubkey: Option<Vec<u8>>,
+    /// der encoded public key.
+    pub der_encoded_public_key: Vec<u8>, // the origin identity public key
 }
 
 impl DelegationIdentity {
@@ -36,23 +37,24 @@ impl DelegationIdentity {
         if base {
             Ok(Self {
                 second_identity: SecondIdentity::BasicIdentity(BasicIdentity::from_pem_file(
-                    file_path,
+                    &file_path,
                 )?),
                 delegation: None,
-                main_identity_pubkey: None,
+                der_encoded_public_key: BasicIdentity::from_pem_file(&file_path)?
+                    .der_encoded_public_key,
             })
         } else {
+            let second_identity = Secp256k1Identity::from_pem_file(file_path)?;
+
             Ok(Self {
-                second_identity: SecondIdentity::Secp256k1Identity(
-                    Secp256k1Identity::from_pem_file(file_path)?,
-                ),
+                second_identity: SecondIdentity::Secp256k1Identity(second_identity.clone()),
                 delegation: None,
-                main_identity_pubkey: None,
+                der_encoded_public_key: second_identity.der_encoded_public_key.as_ref().to_vec(),
             })
         }
     }
 
-    /// Creates an identity from a PEM file. Shorthand for calling `from_pem` with `std::fs::read`.
+    /// Set main key for an identity from a PEM file. Shorthand for calling `from_pem` with `std::fs::read`.
     #[cfg(feature = "pem")]
     pub fn set_delegation_from_pem_file<P: AsRef<Path>>(
         &mut self,
@@ -68,7 +70,7 @@ impl DelegationIdentity {
                 SecondIdentity::Secp256k1Identity(s) => s.der_encoded_public_key.as_ref().to_vec(),
             }
         } else {
-            self.main_identity_pubkey.clone().unwrap()
+            self.der_encoded_public_key.clone()
         };
 
         let delegation = match delegation_targets {
@@ -104,22 +106,27 @@ impl DelegationIdentity {
         };
         origin.push(result.0);
         self.delegation = Some(origin);
-        self.main_identity_pubkey = Some(result.1);
+        self.der_encoded_public_key = result.1;
+        Ok(())
+    }
+
+    /// Set main key from delegation
+    pub fn set_delegation(
+        &mut self,
+        der_encoded_public_key: Vec<u8>,
+        delegation: SignedDelegation,
+    ) -> Result<(), String> {
+        let mut origin = self.delegation.clone().unwrap_or_default();
+        origin.push(delegation);
+        self.delegation = Some(origin);
+        self.der_encoded_public_key = der_encoded_public_key;
         Ok(())
     }
 }
 
 impl Identity for DelegationIdentity {
     fn sender(&self) -> Result<Principal, String> {
-        match &self.delegation {
-            None => match &self.second_identity {
-                SecondIdentity::BasicIdentity(b) => b.sender(),
-                SecondIdentity::Secp256k1Identity(s) => s.sender(),
-            },
-            Some(_) => Ok(Principal::self_authenticating(
-                self.main_identity_pubkey.as_ref().unwrap(),
-            )),
-        }
+        Ok(Principal::self_authenticating(&self.der_encoded_public_key))
     }
 
     fn sign(&self, msg: &[u8]) -> Result<Signature, String> {
@@ -134,7 +141,7 @@ impl Identity for DelegationIdentity {
                     SecondIdentity::Secp256k1Identity(s) => s.sign(msg)?,
                 };
                 Ok(Signature {
-                    public_key: self.main_identity_pubkey.clone(),
+                    public_key: Some(self.der_encoded_public_key.clone()),
                     signature: sign.signature,
                 })
             }
