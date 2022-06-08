@@ -1,4 +1,8 @@
-use crate::{export::Principal, identity::Identity, Signature};
+use crate::{
+    export::{Principal, SignedDelegation},
+    identity::Identity,
+    Signature,
+};
 
 /// The anonymous identity.
 ///
@@ -16,5 +20,9 @@ impl Identity for AnonymousIdentity {
             signature: None,
             public_key: None,
         })
+    }
+
+    fn delegation(&self) -> Option<Vec<SignedDelegation>> {
+        None
     }
 }

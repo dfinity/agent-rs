@@ -1,4 +1,4 @@
-use ic_agent::{ic_types::Principal, Identity, Signature};
+use ic_agent::{export::SignedDelegation, ic_types::Principal, Identity, Signature};
 
 use pkcs11::{
     types::{
@@ -144,6 +144,9 @@ impl Identity for HardwareIdentity {
             public_key: Some(self.public_key.clone()),
             signature: Some(signature),
         })
+    }
+    fn delegation(&self) -> Option<Vec<SignedDelegation>> {
+        None
     }
 }
 
