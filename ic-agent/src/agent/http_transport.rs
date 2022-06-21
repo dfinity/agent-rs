@@ -4,6 +4,7 @@
 pub use reqwest;
 
 use crate::{agent::agent_error::HttpErrorPayload, ic_types::Principal, AgentError, RequestId};
+use futures_util::StreamExt;
 use hyper_rustls::ConfigBuilderExt;
 use reqwest::Method;
 use std::{future::Future, pin::Pin, sync::Arc};
@@ -32,6 +33,7 @@ pub struct ReqwestHttpReplicaV2Transport {
     url: reqwest::Url,
     client: reqwest::Client,
     password_manager: Option<Arc<dyn PasswordManager>>,
+    max_response_body_size: Option<usize>,
 }
 
 const IC0_DOMAIN: &str = "ic0.app";
@@ -77,6 +79,7 @@ impl ReqwestHttpReplicaV2Transport {
                 .map_err(|_| AgentError::InvalidReplicaUrl(url.clone()))?,
             client,
             password_manager: None,
+            max_response_body_size: None,
         })
     }
 
@@ -84,8 +87,7 @@ impl ReqwestHttpReplicaV2Transport {
     pub fn with_password_manager<P: 'static + PasswordManager>(self, password_manager: P) -> Self {
         ReqwestHttpReplicaV2Transport {
             password_manager: Some(Arc::new(password_manager)),
-            url: self.url,
-            client: self.client,
+            ..self
         }
     }
 
@@ -93,8 +95,15 @@ impl ReqwestHttpReplicaV2Transport {
     pub fn with_arc_password_manager(self, password_manager: Arc<dyn PasswordManager>) -> Self {
         ReqwestHttpReplicaV2Transport {
             password_manager: Some(password_manager),
-            url: self.url,
-            client: self.client,
+            ..self
+        }
+    }
+
+    /// Sets a max response body size limit
+    pub fn with_max_response_body_size(self, max_response_body_size: usize) -> Self {
+        ReqwestHttpReplicaV2Transport {
+            max_response_body_size: Some(max_response_body_size),
+            ..self
         }
     }
 
@@ -142,13 +151,37 @@ impl ReqwestHttpReplicaV2Transport {
 
         let http_status = response.status();
         let response_headers = response.headers().clone();
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|x| AgentError::TransportError(Box::new(x)))?
-            .to_vec();
 
-        Ok((http_status, response_headers, bytes))
+        // Size Check (Content-Length)
+        if let Some(true) = self
+            .max_response_body_size
+            .zip(response.content_length())
+            .map(|(size_limit, content_length)| content_length as usize > size_limit)
+        {
+            return Err(AgentError::ResponseSizeExceededLimit());
+        }
+
+        let mut body: Vec<u8> = response
+            .content_length()
+            .map_or_else(Vec::new, |n| Vec::with_capacity(n as usize));
+
+        let mut stream = response.bytes_stream();
+
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|x| AgentError::TransportError(Box::new(x)))?;
+
+            // Size Check (Body Size)
+            if let Some(true) = self
+                .max_response_body_size
+                .map(|size_limit| body.len() + chunk.len() > size_limit)
+            {
+                return Err(AgentError::ResponseSizeExceededLimit());
+            }
+
+            body.extend_from_slice(chunk.as_ref());
+        }
+
+        Ok((http_status, response_headers, body))
     }
 
     async fn execute(
