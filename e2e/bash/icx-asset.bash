@@ -45,6 +45,7 @@ icx_asset_list() {
   echo "new file content" >src/e2e_project_assets/assets/new-asset.txt
   icx_asset_sync
 
+  # shellcheck disable=SC2086
   assert_command dfx canister ${DFX_NO_WALLET:-} call --query e2e_project_assets get '(record{key="/new-asset.txt";accept_encodings=vec{"identity"}})'
 }
 
@@ -52,6 +53,7 @@ icx_asset_list() {
     echo -n "an asset that will change" >src/e2e_project_assets/assets/asset-to-change.txt
     assert_command dfx deploy
 
+    # shellcheck disable=SC2086
     assert_command dfx canister ${DFX_NO_WALLET:-} call --query e2e_project_assets get '(record{key="/asset-to-change.txt";accept_encodings=vec{"identity"}})'
     # shellcheck disable=SC2154
     assert_match '"an asset that will change"' "$stdout"
@@ -60,6 +62,7 @@ icx_asset_list() {
 
     icx_asset_sync
 
+    # shellcheck disable=SC2086
     assert_command dfx canister ${DFX_NO_WALLET:-} call --query e2e_project_assets get '(record{key="/asset-to-change.txt";accept_encodings=vec{"identity"}})'
     # shellcheck disable=SC2154
     assert_match '"an asset that has been changed"' "$stdout"
@@ -85,14 +88,19 @@ icx_asset_list() {
 
 @test "unsets asset encodings that are removed from project" {
 
+    # shellcheck disable=SC2086
     assert_command dfx canister ${DFX_NO_WALLET:-} call --update e2e_project_assets store '(record{key="/sample-asset.txt"; content_type="text/plain"; content_encoding="arbitrary"; content=blob "content encoded in another way!"})'
 
+    # shellcheck disable=SC2086
     assert_command dfx canister ${DFX_NO_WALLET:-} call --query e2e_project_assets get '(record{key="/sample-asset.txt";accept_encodings=vec{"identity"}})'
+    # shellcheck disable=SC2086
     assert_command dfx canister ${DFX_NO_WALLET:-} call --query e2e_project_assets get '(record{key="/sample-asset.txt";accept_encodings=vec{"arbitrary"}})'
 
     icx_asset_sync
 
+    # shellcheck disable=SC2086
     assert_command dfx canister ${DFX_NO_WALLET:-} call --query e2e_project_assets get '(record{key="/sample-asset.txt";accept_encodings=vec{"identity"}})'
+    # shellcheck disable=SC2086
     assert_command_fail dfx canister ${DFX_NO_WALLET:-} call --query e2e_project_assets get '(record{key="/sample-asset.txt";accept_encodings=vec{"arbitrary"}})'
 }
 
