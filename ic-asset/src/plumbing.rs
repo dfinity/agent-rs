@@ -237,23 +237,20 @@ pub(crate) async fn make_project_assets(
     let project_asset_futures: Vec<_> = locs
         .iter()
         .map(|loc| {
-            let cfg = assets_configs
+            let asset_config = assets_configs
                 // TODO: wait for this to stabilize https://github.com/rust-lang/rust/issues/43244
                 .iter()
                 .find(|AssetConfig { filepath, .. }| Path::new(filepath).eq(&loc.source))
-                // TODO: double check
-                // We're guaranteed to find config for each file
-                .unwrap()
+                .unwrap_or(&AssetConfig::default().with_path(&loc.source, &loc.source))
                 .clone();
-            // // TODO: maybe fix .clone
-            // .map_or(AssetConfig::default(), |v| v.clone());
+
             make_project_asset(
                 canister_call_params,
                 batch_id,
                 loc.clone(),
                 container_assets,
                 &semaphores,
-                cfg,
+                asset_config,
             )
         })
         .collect();

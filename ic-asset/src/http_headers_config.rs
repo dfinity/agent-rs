@@ -115,7 +115,7 @@ pub struct AssetConfig {
 }
 
 impl AssetConfig {
-    fn with_path(self, filepath: &Path, relative_filepath: &Path) -> Self {
+    pub fn with_path(self, filepath: &Path, relative_filepath: &Path) -> Self {
         Self {
             filepath: filepath.to_path_buf(),
             relative_filepath: relative_filepath.to_path_buf(),
