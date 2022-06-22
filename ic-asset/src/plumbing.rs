@@ -38,6 +38,7 @@ pub(crate) struct ProjectAsset {
     pub(crate) media_type: Mime,
     pub(crate) encodings: HashMap<String, ProjectAssetEncoding>,
     pub(crate) max_age: u64,
+    #[allow(dead_code)]
     pub(crate) headers: HeadersConfig,
 }
 

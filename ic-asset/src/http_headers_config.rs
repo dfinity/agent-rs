@@ -21,6 +21,7 @@ pub(crate) struct CacheConfig {
     pub(crate) max_age: u64,
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for CacheConfig {
     fn default() -> Self {
         // TODO: what defaults should be used
