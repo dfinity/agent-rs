@@ -168,6 +168,10 @@ pub enum AgentError {
     #[error("Missing replica transport in the Agent Builder.")]
     MissingReplicaTransport(),
 
+    /// The response size exceeded the provided limit.
+    #[error("Response size exceeded limit.")]
+    ResponseSizeExceededLimit(),
+
     /// An unknown error occurred during communication with the replica.
     #[error("An error happened during communication with the replica: {0}")]
     TransportError(Box<dyn std::error::Error + Send + Sync>),

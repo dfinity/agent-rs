@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+[agent-rs/349](https://github.com/dfinity/agent-rs/pull/349) feat: add with_max_response_body_size to ReqwestHttpReplicaV2Tran
+
 ## [0.17.0] - 2022-05-19
 
 Updated dependencies.  Some had breaking changes: k256 0.11, pkcs 0.9, and sec1 0.3.
