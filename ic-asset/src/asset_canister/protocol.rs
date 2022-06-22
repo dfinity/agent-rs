@@ -1,8 +1,7 @@
 use candid::{CandidType, Nat};
 use serde::Deserialize;
 
-#[allow(unused_imports)]
-use crate::http_headers_config::HeadersConfig;
+// use crate::http_headers_config::HeadersConfig;
 
 /// Create a new batch, which will expire after some time period.
 /// This expiry is extended by any call to create_chunk().
