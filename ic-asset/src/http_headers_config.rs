@@ -124,11 +124,7 @@ impl AssetConfig {
     }
 
     /// Helper function, enables to easily `fold` the `Vec<AssetsHeadersConfig>`.
-    ///
     /// Merges by overwritting left (self) with right (other).
-    /// In the case of [`headers` HashMap](HeadersConfig), it will merge both
-    /// HashMaps, by concating non-overlaping keys, and for overlaping keys
-    /// the values from the right (other) will be kept.
     fn merge(mut self, other: Self) -> Self {
         if let Some(c) = other.cache {
             self.cache = Some(c);
