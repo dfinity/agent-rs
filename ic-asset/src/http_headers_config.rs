@@ -201,7 +201,6 @@ impl AssetsConfigMatcher {
         let mut assets = vec![];
 
         for entry in WalkDir::new(assets_dir) {
-            println!("{:?}", &entry);
             match entry {
                 Ok(e) if e.file_type().is_file() && e.file_name() == ASSETS_CONFIG_FILENAME => {
                     match AssetsHeadersConfigFile::read(e.path()) {
@@ -240,7 +239,6 @@ impl AssetsConfigMatcher {
             // TODO: naming?
             let mut configs_in_paths = vec![];
             for cfg_file in &self.configs {
-                dbg!(&cfg_file);
                 if asset_file
                     .filepath
                     .starts_with(cfg_file.filepath.parent().unwrap())
@@ -359,7 +357,7 @@ mod with_tempdir {
         let assets_temp_dir = create_temporary_assets_directory(Some(cfg), 7).unwrap();
         let assets_dir = assets_temp_dir.path();
         assert_eq!(
-            dbg!(AssetsConfigMatcher::new(&assets_dir).get_config()?),
+            AssetsConfigMatcher::new(&assets_dir).get_config()?,
             vec![
                 AssetConfig::test_default_with_path(assets_dir, "index.html"),
                 AssetConfig::test_default_with_path(assets_dir, "css/main.css"),
@@ -400,7 +398,7 @@ mod with_tempdir {
         let assets_temp_dir = create_temporary_assets_directory(cfg, 7).unwrap();
         let assets_path = assets_temp_dir.path();
         assert_eq!(
-            dbg!(AssetsConfigMatcher::new(&assets_path).get_config()?),
+            AssetsConfigMatcher::new(&assets_path).get_config()?,
             vec![
                 AssetConfig {
                     filepath: assets_path.join("index.html"),
@@ -496,7 +494,7 @@ mod with_tempdir {
         let assets_temp_dir = create_temporary_assets_directory(cfg, 1).unwrap();
         let assets_path = assets_temp_dir.path();
         assert_eq!(
-            dbg!(AssetsConfigMatcher::new(&assets_path).get_config()?),
+            AssetsConfigMatcher::new(&assets_path).get_config()?,
             vec![AssetConfig {
                 filepath: assets_path.join("index.html"),
                 relative_filepath: PathBuf::from_str("index.html").unwrap(),
@@ -540,7 +538,7 @@ mod with_tempdir {
         let assets_path = assets_temp_dir.path();
         let x = AssetsConfigMatcher::new(&assets_path).get_config().unwrap();
         assert_eq!(
-            dbg!(serde_json::to_string_pretty(&x).unwrap()),
+            serde_json::to_string_pretty(&x).unwrap(),
             r#"[
   {
     "filepath": "{{path}}/index.html",
@@ -612,7 +610,7 @@ mod with_tempdir {
         let assets_temp_dir = create_temporary_assets_directory(cfg, 7).unwrap();
         let assets_path = assets_temp_dir.path();
         assert_eq!(
-            dbg!(AssetsConfigMatcher::new(&assets_path).get_config()?),
+            AssetsConfigMatcher::new(&assets_path).get_config()?,
             vec![
                 AssetConfig::test_default_with_path(assets_path, "index.html"),
                 AssetConfig::test_default_with_path(assets_path, "css/main.css"),
@@ -650,7 +648,7 @@ mod with_tempdir {
         let assets_temp_dir = create_temporary_assets_directory(cfg, 7).unwrap();
         let assets_path = assets_temp_dir.path();
         assert_eq!(
-            dbg!(AssetsConfigMatcher::new(&assets_path).get_config()?),
+            AssetsConfigMatcher::new(&assets_path).get_config()?,
             vec![
                 AssetConfig::test_default_with_path(assets_path, "index.html"),
                 AssetConfig::test_default_with_path(assets_path, "css/main.css"),
