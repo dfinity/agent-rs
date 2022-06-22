@@ -170,23 +170,16 @@ impl AssetFile {
     }
 }
 
-/// For given [`assets_dir`](AssetsConfigGlobMatcher::new), it will walk trough the assets directory,
+/// For given [`assets_dir`](AssetsConfigMatcher::new), it will walk trough the assets directory,
 /// and find all [.ic-assets.json](ASSETS_CONFIG_FILENAME) config files in directories and
-/// subdirectories, and finally assignes [AssetsHeadersConfig] for each asset file matched.
-///
-/// Sometimes, one file might have multiple rules assigne to it. We are resolving such conflicts similarly
-/// to how `git` deals with nested `.gitignore` files, or, how CSS resolves overlapping CSS rules, meaning
-/// the `.ic-assets.json` file sitting in the same directory as the asset file, will have the highest weight,
-/// (the most specific glob match / best glob match), whereas the `*` glob pattern located in a
-/// topmost .ic-assets.json will have the lowest weight (the least specific glob match).
+/// subdirectories, and finally assignes [AssetConfig] for each asset file matched.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub(crate) struct AssetsConfigMatcher {
-    /// List of all configurations, loaded from all .ic-assets.json files from `assets_dir` and
-    /// all of its subdirectories
+    /// List of all .ic-assets.json config files.
     configs: Vec<AssetsHeadersConfigFile>,
-    /// List of all assets
+    /// List of all assets.
     assets: Vec<AssetFile>,
-    /// Assets root dir (usually defined in dfx.json canisters/<name>/source)
+    /// Assets root dir (usually defined in dfx.json canisters/<name>/source).
     assets_dir: PathBuf,
 }
 
