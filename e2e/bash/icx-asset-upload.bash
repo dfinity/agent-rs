@@ -62,8 +62,10 @@ icx_asset_upload() {
 }
 
 @test "deletes asset if necessary in order to change content type" {
-    assert_command dfx canister --no-wallet call --update e2e_project_assets store '(record{key="/sample-asset.txt"; content_type="application/pdf"; content_encoding="identity"; content=blob "whatever contents!"})'
-    assert_command dfx canister --no-wallet call --update e2e_project_assets store '(record{key="/sample-asset.txt"; content_type="application/pdf"; content_encoding="arbitrary"; content=blob "other contents"})'
+    # shellcheck disable=SC2086
+    assert_command dfx canister ${DFX_NO_WALLET:-} call --update e2e_project_assets store '(record{key="/sample-asset.txt"; content_type="application/pdf"; content_encoding="identity"; content=blob "whatever contents!"})'
+    # shellcheck disable=SC2086
+    assert_command dfx canister ${DFX_NO_WALLET:-} call --update e2e_project_assets store '(record{key="/sample-asset.txt"; content_type="application/pdf"; content_encoding="arbitrary"; content=blob "other contents"})'
 
     icx_asset_list
 
