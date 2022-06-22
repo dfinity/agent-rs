@@ -169,7 +169,7 @@ pub enum AgentError {
     MissingReplicaTransport(),
 
     /// The response size exceeded the provided limit.
-    #[error("Responze size exceeded limit.")]
+    #[error("Response size exceeded limit.")]
     ResponseSizeExceededLimit(),
 
     /// An unknown error occurred during communication with the replica.
