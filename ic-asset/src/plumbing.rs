@@ -1,6 +1,7 @@
 use crate::asset_canister::protocol::AssetDetails;
 use crate::content::Content;
 use crate::content_encoder::ContentEncoder;
+use crate::http_headers_config::{AssetConfig, HeadersConfig};
 use crate::params::CanisterCallParams;
 
 use crate::asset_canister::chunk::create_chunk;
@@ -10,7 +11,7 @@ use futures::future::try_join_all;
 use futures::TryFutureExt;
 use mime::Mime;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const CONTENT_ENCODING_IDENTITY: &str = "identity";
 
@@ -36,6 +37,8 @@ pub(crate) struct ProjectAsset {
     pub(crate) asset_location: AssetLocation,
     pub(crate) media_type: Mime,
     pub(crate) encodings: HashMap<String, ProjectAssetEncoding>,
+    pub(crate) max_age: u64,
+    pub(crate) headers: HeadersConfig,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -189,6 +192,7 @@ async fn make_project_asset(
     asset_location: AssetLocation,
     container_assets: &HashMap<String, AssetDetails>,
     semaphores: &Semaphores,
+    asset_config: AssetConfig,
 ) -> anyhow::Result<ProjectAsset> {
     let file_size = std::fs::metadata(&asset_location.source)?.len();
     let permits = std::cmp::max(
@@ -215,26 +219,41 @@ async fn make_project_asset(
         asset_location,
         media_type: content.media_type,
         encodings,
+        max_age: asset_config.cache.unwrap_or_default().max_age,
+        headers: asset_config.headers.unwrap_or_default(),
     })
 }
 
 pub(crate) async fn make_project_assets(
+    // TODO: i think this is where I should pass the config
     canister_call_params: &CanisterCallParams<'_>,
     batch_id: &Nat,
     locs: Vec<AssetLocation>,
     container_assets: &HashMap<String, AssetDetails>,
+    assets_configs: Vec<AssetConfig>,
 ) -> anyhow::Result<HashMap<String, ProjectAsset>> {
     let semaphores = Semaphores::new();
 
     let project_asset_futures: Vec<_> = locs
         .iter()
         .map(|loc| {
+            let cfg = assets_configs
+                // TODO: wait for this to stabilize https://github.com/rust-lang/rust/issues/43244
+                .iter()
+                .find(|AssetConfig { filepath, .. }| Path::new(filepath).eq(&loc.source))
+                // TODO: double check
+                // We're guaranteed to find config for each file
+                .unwrap()
+                .clone();
+            // // TODO: maybe fix .clone
+            // .map_or(AssetConfig::default(), |v| v.clone());
             make_project_asset(
                 canister_call_params,
                 batch_id,
                 loc.clone(),
                 container_assets,
                 &semaphores,
+                cfg,
             )
         })
         .collect();

@@ -40,6 +40,7 @@ pub async fn upload(
         &batch_id,
         asset_locations,
         &container_assets,
+        vec![],
     )
     .await?;
 

@@ -1,6 +1,9 @@
 use candid::{CandidType, Nat};
 use serde::Deserialize;
 
+#[allow(unused_imports)]
+use crate::http_headers_config::HeadersConfig;
+
 /// Create a new batch, which will expire after some time period.
 /// This expiry is extended by any call to create_chunk().
 /// Also, removes any expired batches.
@@ -67,6 +70,11 @@ pub struct CreateAssetArguments {
     pub key: String,
     /// The MIME type of this asset
     pub content_type: String,
+    /// The cache HTTP header Time To Live parameter
+    pub max_age: u64,
+    // TODO: (SDK-473) serde_json::Value is not serializable into CandidType
+    // /// The HTTP headers
+    // pub headers: HeadersConfig,
 }
 
 /// Set the data for a particular content encoding for the given asset.

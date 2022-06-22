@@ -34,6 +34,7 @@ mod asset_canister;
 mod content;
 mod content_encoder;
 mod convenience;
+mod http_headers_config;
 mod operations;
 mod params;
 mod plumbing;
