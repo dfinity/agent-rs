@@ -44,8 +44,6 @@ jobs:
         run: |
           if [[ "${{ matrix.dfx }}" == "0.7.2" ]] || [[ "${{ matrix.dfx }}" == "0.8.4" ]]; then
               echo "DFX_NO_WALLET=--no-wallet" >> "$GITHUB_ENV"
-          else
-              echo "DFX_NO_WALLET= >> "$GITHUB_ENV"
           fi
 
       - name: 'Run tests'

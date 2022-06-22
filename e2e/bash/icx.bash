@@ -18,10 +18,11 @@ teardown() {
     dfx stop
 }
 
+# this test does not work, and is not run in CI
 @test "sign update" {
-  assert_command "$ICX" --pem "$HOME"/.config/dfx/identity/default/identity.pem update --serialize rwlgt-iiaaa-aaaaa-aaaaa-cai greet '("everyone")' > output.txt
+  "$ICX" --pem "$HOME"/.config/dfx/identity/default/identity.pem update --serialize rwlgt-iiaaa-aaaaa-aaaaa-cai greet '("everyone")' > output.txt
   head -n 1 output.txt > update.json
   tail -n 1 output.txt > request_status.json
-  assert_command cat update.json | "$ICX" send
-  assert_command cat request_status.json | "$ICX" send
+  "$ICX" send <update.json
+  "$ICX" send <request_status.json
 }
