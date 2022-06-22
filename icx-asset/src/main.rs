@@ -67,7 +67,7 @@ struct SyncOpts {
 
     /// The directory to synchronize
     #[clap()]
-    directory: PathBuf,
+    directory: Vec<PathBuf>,
 }
 
 #[derive(Parser)]
