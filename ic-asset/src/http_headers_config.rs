@@ -195,7 +195,7 @@ impl AssetsConfigMatcher {
                 Ok(e) if e.file_type().is_file() && e.file_name() == ASSETS_CONFIG_FILENAME => {
                     match AssetsHeadersConfigFile::read(e.path()) {
                         Ok(config) => configs.push(config),
-                        Err(e) => eprintln!("error reading {}: {}", 3, e),
+                        Err(err) => println!("error reading {:?}: {}", e.path(), err),
                     }
                 }
                 Ok(e) if e.file_type().is_file() => {
