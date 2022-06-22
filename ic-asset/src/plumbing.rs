@@ -226,7 +226,6 @@ async fn make_project_asset(
 }
 
 pub(crate) async fn make_project_assets(
-    // TODO: i think this is where I should pass the config
     canister_call_params: &CanisterCallParams<'_>,
     batch_id: &Nat,
     locs: Vec<AssetLocation>,

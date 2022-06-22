@@ -16,25 +16,17 @@ use walkdir::WalkDir;
 pub const ASSETS_CONFIG_FILENAME: &str = ".ic-assets.json";
 
 /// HTTP cache configuration.
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 pub(crate) struct CacheConfig {
     pub(crate) max_age: u64,
 }
 
-#[allow(clippy::derivable_impls)]
-impl Default for CacheConfig {
-    fn default() -> Self {
-        // TODO: what defaults should be used
-        Self { max_age: 0 }
-    }
-}
-
 /// Map of custom HTTP headers defined by the end developer.
-// TODO: instead of serde_json::Value, maybe consider this https://docs.rs/http-serde/1.1.0/http_serde/index.html
 pub(crate) type HeadersConfig = HashMap<String, Value>;
 
 /// The single map from array from deserialized .ic-assets.json file.
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[derive(Deserialize, Debug, Clone)]
 struct AssetsHeadersConfiguration {
     /// Glob pattern
     r#match: String,
@@ -67,7 +59,7 @@ struct AssetsHeadersConfiguration {
 ///  }
 /// ]
 /// ```
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[derive(Deserialize, Debug, Clone)]
 struct AssetsHeadersConfigFile {
     filepath: PathBuf,
     config_maps: Vec<AssetsHeadersConfiguration>,
@@ -75,7 +67,6 @@ struct AssetsHeadersConfigFile {
 
 impl AssetsHeadersConfigFile {
     /// Parse JSON config file
-    // TODO: Error handling
     fn read(filepath: &Path) -> Result<Self, std::io::Error> {
         let mut file = File::open(filepath)?;
         let mut contents = String::new();
@@ -101,17 +92,16 @@ impl AssetsHeadersConfigFile {
 }
 
 /// Configuration assigned to single asset
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[derive(Serialize, Debug, Clone)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 pub(crate) struct AssetConfig {
     /// asset' full path
     pub(crate) filepath: PathBuf,
     /// asset' relative path - used only for pretty printing
     pub(crate) relative_filepath: PathBuf,
     /// HTTP cache config, if omitted, the default value will be used.
-    // TODO: discuss: perhaps this shouldnt be an option
     pub(crate) cache: Option<CacheConfig>,
     /// HTTP Headers.
-    // TODO: discuss: perhaps this shouldnt be an option
     pub(crate) headers: Option<HeadersConfig>,
 }
 
@@ -144,7 +134,6 @@ impl Default for AssetConfig {
         Self {
             filepath: PathBuf::new(),
             relative_filepath: PathBuf::new(),
-            // TODO: what defaults should be used
             cache: None,
             headers: None,
         }
@@ -152,7 +141,7 @@ impl Default for AssetConfig {
 }
 
 /// Single asset file.
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[derive(Debug)]
 struct AssetFile {
     /// asset' full path
     filepath: PathBuf,
@@ -174,14 +163,12 @@ impl AssetFile {
 /// For given [`assets_dir`](AssetsConfigMatcher::new), it will walk trough the assets directory,
 /// and find all [.ic-assets.json](ASSETS_CONFIG_FILENAME) config files in directories and
 /// subdirectories, and finally assignes [AssetConfig] for each asset file matched.
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[derive(Debug)]
 pub(crate) struct AssetsConfigMatcher {
     /// List of all .ic-assets.json config files.
     configs: Vec<AssetsHeadersConfigFile>,
     /// List of all assets.
     assets: Vec<AssetFile>,
-    /// Assets root dir (usually defined in dfx.json canisters/<name>/source).
-    assets_dir: PathBuf,
 }
 
 impl AssetsConfigMatcher {
@@ -201,16 +188,11 @@ impl AssetsConfigMatcher {
                 Ok(e) if e.file_type().is_file() => {
                     assets.push(AssetFile::from_path(assets_dir, e.path()))
                 }
-                // TODO: error handling
                 _ => continue,
             }
         }
 
-        AssetsConfigMatcher {
-            configs,
-            assets,
-            assets_dir: assets_dir.to_path_buf(),
-        }
+        AssetsConfigMatcher { configs, assets }
     }
 
     /// for each asset file:
@@ -226,7 +208,6 @@ impl AssetsConfigMatcher {
         let mut assets_config = vec![];
 
         for mut asset_file in self.assets {
-            // TODO: naming?
             let mut configs_in_paths = vec![];
             for cfg_file in &self.configs {
                 if asset_file
@@ -672,14 +653,12 @@ mod with_tempdir {
 mod config_generation {
     use super::*;
     use serde_json::json;
-    use std::str::FromStr;
 
     #[test]
     fn empty() -> anyhow::Result<()> {
         let c = AssetsConfigMatcher {
             assets: vec![],
             configs: vec![],
-            assets_dir: PathBuf::from_str("").unwrap(),
         };
         assert_eq!(c.get_config()?, vec![]);
         Ok(())
@@ -689,7 +668,6 @@ mod config_generation {
     fn no_assets() -> anyhow::Result<()> {
         let c = AssetsConfigMatcher {
             assets: vec![],
-            assets_dir: PathBuf::from_str("").unwrap(),
             configs: vec![AssetsHeadersConfigFile {
                 filepath: PathBuf::new(),
                 config_maps: vec![AssetsHeadersConfiguration {
@@ -714,7 +692,6 @@ mod config_generation {
                 matched_configurations: vec![],
             }],
             configs: vec![],
-            assets_dir: assets_dir.to_path_buf(),
         };
         assert_eq!(
             c.get_config()?,
@@ -738,7 +715,6 @@ mod config_generation {
         let assets_dir = Path::new("/something/");
         let asset = Path::new("index.js");
         let c = AssetsConfigMatcher {
-            assets_dir: assets_dir.to_path_buf(),
             assets: vec![AssetFile {
                 filepath: assets_dir.join(asset),
                 relative_filepath: asset.to_path_buf(),
@@ -771,7 +747,6 @@ mod config_generation {
         let assets_dir = Path::new("/something/");
         let asset = Path::new("index.js");
         let c = AssetsConfigMatcher {
-            assets_dir: assets_dir.to_path_buf(),
             assets: vec![AssetFile {
                 filepath: assets_dir.join(asset),
                 relative_filepath: asset.to_path_buf(),
