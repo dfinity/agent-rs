@@ -6,6 +6,7 @@ edition = "2021"
 description = "Library for storing files in an asset canister."
 homepage = "https://docs.rs/ic-asset"
 documentation = "https://docs.rs/ic-asset"
+repository = "https://github.com/dfinity/agent-rs"
 license = "Apache-2.0"
 readme = "README.md"
 categories = ["api-bindings", "data-structures"]
