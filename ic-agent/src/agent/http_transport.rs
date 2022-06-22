@@ -153,10 +153,9 @@ impl ReqwestHttpReplicaV2Transport {
         let response_headers = response.headers().clone();
 
         // Size Check (Content-Length)
-        if let Some(true) = self
+        if matches!(self
             .max_response_body_size
-            .zip(response.content_length())
-            .map(|(size_limit, content_length)| content_length as usize > size_limit)
+            .zip(response.content_length()), Some((size_limit, content_length)) if content_length as usize > size_limit)
         {
             return Err(AgentError::ResponseSizeExceededLimit());
         }
@@ -171,9 +170,8 @@ impl ReqwestHttpReplicaV2Transport {
             let chunk = chunk.map_err(|x| AgentError::TransportError(Box::new(x)))?;
 
             // Size Check (Body Size)
-            if let Some(true) = self
-                .max_response_body_size
-                .map(|size_limit| body.len() + chunk.len() > size_limit)
+            if matches!(self
+                .max_response_body_size, Some(size_limit) if body.len() + chunk.len() > size_limit)
             {
                 return Err(AgentError::ResponseSizeExceededLimit());
             }
