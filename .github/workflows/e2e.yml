@@ -1,17 +1,17 @@
-name: test-icx-asset
+name: test-e2e
 on:
   push:
     branches:
       - main
   pull_request:
 jobs:
-  icx-asset:
+  test:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ macos-latest, ubuntu-latest ]
         rust: [ '1.58.1' ]
-        dfx: [ '0.7.2', '0.8.4' ]
+        dfx: [ '0.7.2', '0.8.4', '0.9.2', '0.10.1' ]
 
     steps:
       - uses: actions/checkout@v1
@@ -39,16 +39,23 @@ jobs:
         run: bash .github/workflows/provision-linux.sh
         env:
           INSTALL_DFX_VERSION: ${{ matrix.dfx }}
+      - name: Setup for dfx version differences
+        run: |
+          if [[ "${{ matrix.dfx }}" == "0.7.2" ]] || [[ "${{ matrix.dfx }} == "0.8.4" ]]; then
+              echo "DFX_NO_WALLET="--no-wallet" >> "$GITHUB_ENV"
+          else
+              echo "DFX_NO_WALLET="" >> "$GITHUB_ENV"
+          fi
 
-      - name: 'Test icx-asset'
-        run: bats e2e/bash/icx-asset.bash
+      - name: 'Run tests'
+        run: bats e2e/bash/*.bash
 
   aggregate:
-    name: icx-asset:required
+    name: e2e:required
     if: ${{ always() }}
-    needs: [ icx-asset ]
+    needs: [ test ]
     runs-on: ubuntu-latest
     steps:
       - name: check e2e test result
-        if: ${{ needs.icx-asset.result != 'success' }}
+        if: ${{ needs.test.result != 'success' }}
         run: exit 1
