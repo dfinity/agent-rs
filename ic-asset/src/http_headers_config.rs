@@ -531,11 +531,18 @@ mod with_tempdir {
         let assets_temp_dir = create_temporary_assets_directory(cfg, 1).unwrap();
         let assets_dir = assets_temp_dir.path();
         let x = AssetsConfigMatcher::new(assets_dir).get_config().unwrap();
+        let tested = serde_json::to_string_pretty(&x).unwrap();
+
+        let filepath = tested
+            .lines()
+            .filter(|l| l.contains("\"filepath\": "))
+            .next()
+            .unwrap();
         assert_eq!(
-            serde_json::to_string_pretty(&x).unwrap(),
+            tested,
             r#"[
   {
-    "filepath": "{{path}}/index.html",
+{{filepath}}
     "relative_filepath": "index.html",
     "cache": null,
     "headers": {
@@ -563,7 +570,7 @@ mod with_tempdir {
   }
 ]"#
             .to_string()
-            .replace("{{path}}", assets_dir.to_str().unwrap())
+            .replace("{{filepath}}", filepath)
         );
         Ok(())
     }
