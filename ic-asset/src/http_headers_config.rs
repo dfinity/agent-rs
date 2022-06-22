@@ -250,7 +250,7 @@ impl AssetsConfigMatcher {
                             })
                         }
                     } else {
-                        eprintln!(
+                        println!(
                             "malformed glob pattern '{}' in {:?}",
                             &configuration.r#match, cfg_file.filepath
                         );
@@ -337,7 +337,6 @@ mod with_tempdir {
         }
     }
 
-    // ---
     #[test]
     fn match_only_nested_files() -> anyhow::Result<()> {
         let cfg = HashMap::from([(
@@ -346,30 +345,32 @@ mod with_tempdir {
         )]);
         let assets_temp_dir = create_temporary_assets_directory(Some(cfg), 7).unwrap();
         let assets_dir = assets_temp_dir.path();
-        assert_eq!(
-            AssetsConfigMatcher::new(assets_dir).get_config()?,
-            vec![
-                AssetConfig::test_default_with_path(assets_dir, "index.html"),
-                AssetConfig::test_default_with_path(assets_dir, "css/main.css"),
-                AssetConfig::test_default_with_path(assets_dir, "css/stylish.css"),
-                AssetConfig::test_default_with_path(assets_dir, "js/index.js"),
-                AssetConfig::test_default_with_path(assets_dir, "js/index.map.js"),
-                AssetConfig {
-                    filepath: assets_dir.join("nested/the-thing.txt"),
-                    relative_filepath: PathBuf::from_str("nested/the-thing.txt").unwrap(),
-                    cache: Some(CacheConfig { max_age: 333 }),
-                    ..Default::default()
-                },
-                AssetConfig {
-                    filepath: assets_dir.join("nested/deep/the-next-thing.toml"),
-                    relative_filepath: PathBuf::from_str("nested/deep/the-next-thing.toml")
-                        .unwrap(),
-                    cache: Some(CacheConfig { max_age: 333 }),
-                    ..Default::default()
-                },
-            ]
-        );
-        assets_temp_dir.close().unwrap();
+
+        let mut tested = AssetsConfigMatcher::new(assets_dir).get_config()?;
+        let mut expected = vec![
+            AssetConfig::test_default_with_path(assets_dir, "index.html"),
+            AssetConfig::test_default_with_path(assets_dir, "css/main.css"),
+            AssetConfig::test_default_with_path(assets_dir, "css/stylish.css"),
+            AssetConfig::test_default_with_path(assets_dir, "js/index.js"),
+            AssetConfig::test_default_with_path(assets_dir, "js/index.map.js"),
+            AssetConfig {
+                filepath: assets_dir.join("nested/the-thing.txt"),
+                relative_filepath: PathBuf::from_str("nested/the-thing.txt").unwrap(),
+                cache: Some(CacheConfig { max_age: 333 }),
+                ..Default::default()
+            },
+            AssetConfig {
+                filepath: assets_dir.join("nested/deep/the-next-thing.toml"),
+                relative_filepath: PathBuf::from_str("nested/deep/the-next-thing.toml").unwrap(),
+                cache: Some(CacheConfig { max_age: 333 }),
+                ..Default::default()
+            },
+        ];
+        tested.sort_by_key(|c| c.filepath.clone());
+        expected.sort_by_key(|c| c.filepath.clone());
+
+        assert_eq!(tested, expected);
+
         Ok(())
     }
 
@@ -387,54 +388,57 @@ mod with_tempdir {
         ]));
         let assets_temp_dir = create_temporary_assets_directory(cfg, 7).unwrap();
         let assets_dir = assets_temp_dir.path();
-        assert_eq!(
-            AssetsConfigMatcher::new(assets_dir).get_config()?,
-            vec![
-                AssetConfig {
-                    filepath: assets_dir.join("index.html"),
-                    relative_filepath: PathBuf::from_str("index.html").unwrap(),
-                    cache: Some(CacheConfig { max_age: 333 },),
-                    ..Default::default()
-                },
-                AssetConfig {
-                    filepath: assets_dir.join("css/main.css"),
-                    relative_filepath: PathBuf::from_str("css/main.css").unwrap(),
-                    cache: Some(CacheConfig { max_age: 333 },),
-                    ..Default::default()
-                },
-                AssetConfig {
-                    filepath: assets_dir.join("css/stylish.css"),
-                    relative_filepath: PathBuf::from_str("css/stylish.css").unwrap(),
-                    cache: Some(CacheConfig { max_age: 333 },),
-                    ..Default::default()
-                },
-                AssetConfig {
-                    filepath: assets_dir.join("js/index.js"),
-                    relative_filepath: PathBuf::from_str("js/index.js").unwrap(),
-                    cache: Some(CacheConfig { max_age: 333 },),
-                    ..Default::default()
-                },
-                AssetConfig {
-                    filepath: assets_dir.join("js/index.map.js"),
-                    relative_filepath: PathBuf::from_str("js/index.map.js").unwrap(),
-                    cache: Some(CacheConfig { max_age: 333 },),
-                    ..Default::default()
-                },
-                AssetConfig {
-                    filepath: assets_dir.join("nested/the-thing.txt"),
-                    relative_filepath: PathBuf::from_str("nested/the-thing.txt").unwrap(),
-                    cache: Some(CacheConfig { max_age: 111 },),
-                    ..Default::default()
-                },
-                AssetConfig {
-                    filepath: assets_dir.join("nested/deep/the-next-thing.toml"),
-                    relative_filepath: PathBuf::from_str("nested/deep/the-next-thing.toml")
-                        .unwrap(),
-                    cache: Some(CacheConfig { max_age: 111 },),
-                    ..Default::default()
-                },
-            ],
-        );
+
+        let mut tested = AssetsConfigMatcher::new(assets_dir).get_config()?;
+        let mut expected = vec![
+            AssetConfig {
+                filepath: assets_dir.join("index.html"),
+                relative_filepath: PathBuf::from_str("index.html").unwrap(),
+                cache: Some(CacheConfig { max_age: 333 }),
+                ..Default::default()
+            },
+            AssetConfig {
+                filepath: assets_dir.join("css/main.css"),
+                relative_filepath: PathBuf::from_str("css/main.css").unwrap(),
+                cache: Some(CacheConfig { max_age: 333 }),
+                ..Default::default()
+            },
+            AssetConfig {
+                filepath: assets_dir.join("css/stylish.css"),
+                relative_filepath: PathBuf::from_str("css/stylish.css").unwrap(),
+                cache: Some(CacheConfig { max_age: 333 }),
+                ..Default::default()
+            },
+            AssetConfig {
+                filepath: assets_dir.join("js/index.js"),
+                relative_filepath: PathBuf::from_str("js/index.js").unwrap(),
+                cache: Some(CacheConfig { max_age: 333 }),
+                ..Default::default()
+            },
+            AssetConfig {
+                filepath: assets_dir.join("js/index.map.js"),
+                relative_filepath: PathBuf::from_str("js/index.map.js").unwrap(),
+                cache: Some(CacheConfig { max_age: 333 }),
+                ..Default::default()
+            },
+            AssetConfig {
+                filepath: assets_dir.join("nested/the-thing.txt"),
+                relative_filepath: PathBuf::from_str("nested/the-thing.txt").unwrap(),
+                cache: Some(CacheConfig { max_age: 111 }),
+                ..Default::default()
+            },
+            AssetConfig {
+                filepath: assets_dir.join("nested/deep/the-next-thing.toml"),
+                relative_filepath: PathBuf::from_str("nested/deep/the-next-thing.toml").unwrap(),
+                cache: Some(CacheConfig { max_age: 111 }),
+                ..Default::default()
+            },
+        ];
+        tested.sort_by_key(|c| c.filepath.clone());
+        expected.sort_by_key(|c| c.filepath.clone());
+
+        assert_eq!(tested, expected);
+
         Ok(())
     }
 
@@ -599,30 +603,32 @@ mod with_tempdir {
         ]));
         let assets_temp_dir = create_temporary_assets_directory(cfg, 7).unwrap();
         let assets_dir = assets_temp_dir.path();
-        assert_eq!(
-            AssetsConfigMatcher::new(assets_dir).get_config()?,
-            vec![
-                AssetConfig::test_default_with_path(assets_dir, "index.html"),
-                AssetConfig::test_default_with_path(assets_dir, "css/main.css"),
-                AssetConfig::test_default_with_path(assets_dir, "css/stylish.css"),
-                AssetConfig::test_default_with_path(assets_dir, "js/index.js"),
-                AssetConfig::test_default_with_path(assets_dir, "js/index.map.js"),
-                AssetConfig {
-                    filepath: assets_dir.join("nested/the-thing.txt"),
-                    relative_filepath: PathBuf::from_str("nested/the-thing.txt").unwrap(),
-                    cache: Some(CacheConfig { max_age: 400 }),
-                    ..Default::default()
-                },
-                AssetConfig {
-                    filepath: assets_dir.join("nested/deep/the-next-thing.toml"),
-                    relative_filepath: PathBuf::from_str("nested/deep/the-next-thing.toml")
-                        .unwrap(),
-                    cache: Some(CacheConfig { max_age: 100 }),
-                    ..Default::default()
-                },
-            ]
-        );
-        assets_temp_dir.close().unwrap();
+
+        let mut tested = AssetsConfigMatcher::new(assets_dir).get_config()?;
+        let mut expected = vec![
+            AssetConfig::test_default_with_path(assets_dir, "index.html"),
+            AssetConfig::test_default_with_path(assets_dir, "css/main.css"),
+            AssetConfig::test_default_with_path(assets_dir, "css/stylish.css"),
+            AssetConfig::test_default_with_path(assets_dir, "js/index.js"),
+            AssetConfig::test_default_with_path(assets_dir, "js/index.map.js"),
+            AssetConfig {
+                filepath: assets_dir.join("nested/the-thing.txt"),
+                relative_filepath: PathBuf::from_str("nested/the-thing.txt").unwrap(),
+                cache: Some(CacheConfig { max_age: 400 }),
+                ..Default::default()
+            },
+            AssetConfig {
+                filepath: assets_dir.join("nested/deep/the-next-thing.toml"),
+                relative_filepath: PathBuf::from_str("nested/deep/the-next-thing.toml").unwrap(),
+                cache: Some(CacheConfig { max_age: 100 }),
+                ..Default::default()
+            },
+        ];
+
+        tested.sort_by_key(|c| c.filepath.clone());
+        expected.sort_by_key(|c| c.filepath.clone());
+
+        assert_eq!(tested, expected);
         Ok(())
     }
 
@@ -637,19 +643,21 @@ mod with_tempdir {
         ]));
         let assets_temp_dir = create_temporary_assets_directory(cfg, 7).unwrap();
         let assets_dir = assets_temp_dir.path();
-        assert_eq!(
-            AssetsConfigMatcher::new(assets_dir).get_config()?,
-            vec![
-                AssetConfig::test_default_with_path(assets_dir, "index.html"),
-                AssetConfig::test_default_with_path(assets_dir, "css/main.css"),
-                AssetConfig::test_default_with_path(assets_dir, "css/stylish.css"),
-                AssetConfig::test_default_with_path(assets_dir, "js/index.js"),
-                AssetConfig::test_default_with_path(assets_dir, "js/index.map.js"),
-                AssetConfig::test_default_with_path(assets_dir, "nested/the-thing.txt"),
-                AssetConfig::test_default_with_path(assets_dir, "nested/deep/the-next-thing.toml"),
-            ]
-        );
-        assets_temp_dir.close().unwrap();
+        let mut tested = AssetsConfigMatcher::new(assets_dir).get_config()?;
+        let mut expected = vec![
+            AssetConfig::test_default_with_path(assets_dir, "index.html"),
+            AssetConfig::test_default_with_path(assets_dir, "css/main.css"),
+            AssetConfig::test_default_with_path(assets_dir, "css/stylish.css"),
+            AssetConfig::test_default_with_path(assets_dir, "js/index.js"),
+            AssetConfig::test_default_with_path(assets_dir, "js/index.map.js"),
+            AssetConfig::test_default_with_path(assets_dir, "nested/the-thing.txt"),
+            AssetConfig::test_default_with_path(assets_dir, "nested/deep/the-next-thing.toml"),
+        ];
+
+        tested.sort_by_key(|c| c.filepath.clone());
+        expected.sort_by_key(|c| c.filepath.clone());
+
+        assert_eq!(tested, expected);
         Ok(())
     }
 }
