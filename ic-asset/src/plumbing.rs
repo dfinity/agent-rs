@@ -238,7 +238,6 @@ pub(crate) async fn make_project_assets(
         .iter()
         .map(|loc| {
             let asset_config = assets_configs
-                // TODO: wait for this to stabilize https://github.com/rust-lang/rust/issues/43244
                 .iter()
                 .find(|AssetConfig { filepath, .. }| Path::new(filepath).eq(&loc.source))
                 .unwrap_or(&AssetConfig::default().with_path(&loc.source, &loc.source))
