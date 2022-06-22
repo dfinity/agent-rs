@@ -6,6 +6,7 @@ edition = "2021"
 description = "CLI tool to manage assets on an asset canister on the Internet Computer."
 homepage = "https://docs.rs/icx-asset"
 documentation = "https://docs.rs/icx-asset"
+repository = "https://github.com/dfinity/agent-rs"
 license = "Apache-2.0"
 readme = "README.md"
 categories = ["command-line-interface"]

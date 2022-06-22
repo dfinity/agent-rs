@@ -5,6 +5,7 @@ authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 description = "Identity implementation for HSM for the ic-agent package."
 homepage = "https://docs.rs/ic-identity-hsm"
 documentation = "https://docs.rs/ic-identity-hsm"
+repository = "https://github.com/dfinity/agent-rs"
 edition = "2021"
 license = "Apache-2.0"
 readme = "README.md"
