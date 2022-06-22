@@ -535,8 +535,7 @@ mod with_tempdir {
 
         let filepath = tested
             .lines()
-            .filter(|l| l.contains("\"filepath\": "))
-            .next()
+            .find(|l| l.contains("\"filepath\": "))
             .unwrap();
         assert_eq!(
             tested,
