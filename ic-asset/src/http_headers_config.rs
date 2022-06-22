@@ -30,17 +30,17 @@ impl Default for CacheConfig {
 
 /// Map of custom HTTP headers defined by the end developer.
 // TODO: instead of serde_json::Value, maybe consider this https://docs.rs/http-serde/1.1.0/http_serde/index.html
-pub type HeadersConfig = HashMap<String, Value>;
+pub(crate) type HeadersConfig = HashMap<String, Value>;
 
 /// The single map from array from deserialized .ic-assets.json file.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
-pub struct AssetsHeadersConfiguration {
+struct AssetsHeadersConfiguration {
     /// Glob pattern
-    pub(crate) r#match: String,
+    r#match: String,
     /// HTTP cache config, if omitted, the default value will be used.
-    pub(crate) cache: Option<CacheConfig>,
+    cache: Option<CacheConfig>,
     /// HTTP Headers.
-    pub(crate) headers: Option<HeadersConfig>,
+    headers: Option<HeadersConfig>,
 }
 
 /// Represents single .ic-assets.json file.
@@ -67,7 +67,7 @@ pub struct AssetsHeadersConfiguration {
 /// ]
 /// ```
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
-pub struct AssetsHeadersConfigFile {
+struct AssetsHeadersConfigFile {
     filepath: PathBuf,
     config_maps: Vec<AssetsHeadersConfiguration>,
 }
@@ -101,7 +101,7 @@ impl AssetsHeadersConfigFile {
 
 /// Configuration assigned to single asset
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
-pub struct AssetConfig {
+pub(crate) struct AssetConfig {
     /// asset' full path
     pub(crate) filepath: PathBuf,
     /// asset' relative path - used only for pretty printing
@@ -115,7 +115,7 @@ pub struct AssetConfig {
 }
 
 impl AssetConfig {
-    pub fn with_path(self, filepath: &Path, relative_filepath: &Path) -> Self {
+    pub(crate) fn with_path(self, filepath: &Path, relative_filepath: &Path) -> Self {
         Self {
             filepath: filepath.to_path_buf(),
             relative_filepath: relative_filepath.to_path_buf(),
@@ -156,7 +156,7 @@ impl Default for AssetConfig {
 
 /// Single asset file.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
-pub struct AssetFile {
+struct AssetFile {
     /// asset' full path
     filepath: PathBuf,
     /// asset' relative path - used only for pretty printing
@@ -184,7 +184,7 @@ impl AssetFile {
 /// (the most specific glob match / best glob match), whereas the `*` glob pattern located in a
 /// topmost .ic-assets.json will have the lowest weight (the least specific glob match).
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
-pub struct AssetsConfigMatcher {
+pub(crate) struct AssetsConfigMatcher {
     /// List of all configurations, loaded from all .ic-assets.json files from `assets_dir` and
     /// all of its subdirectories
     configs: Vec<AssetsHeadersConfigFile>,
@@ -196,7 +196,7 @@ pub struct AssetsConfigMatcher {
 
 impl AssetsConfigMatcher {
     /// Walks `assets_dir` to find each .ic-assets.json file and all assets files.
-    pub fn new(assets_dir: &Path) -> Self {
+    pub(crate) fn new(assets_dir: &Path) -> Self {
         let mut configs = vec![];
         let mut assets = vec![];
 
@@ -233,7 +233,7 @@ impl AssetsConfigMatcher {
     /// The strategy for conflict resolution is simple: assets directory is being walk trought in DFS fashion
     /// which makes it easy to prioritize the most deeply nested .ic-assets.json config file.
     /// Afterwards, within each config file, the latter config maps take precedense over former ones.
-    pub fn get_config(self) -> anyhow::Result<Vec<AssetConfig>> {
+    pub(crate) fn get_config(self) -> anyhow::Result<Vec<AssetConfig>> {
         let mut assets_config = vec![];
 
         for mut asset_file in self.assets {
