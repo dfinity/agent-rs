@@ -8,6 +8,7 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ macos-latest, ubuntu-latest ]
         rust: [ '1.58.1' ]
