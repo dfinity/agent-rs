@@ -71,23 +71,19 @@ impl AssetConfigFile {
         let mut file = File::open(filepath)?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
-        match serde_json::from_str::<Vec<AssetConfigRule>>(&contents) {
-            Ok(mut config_maps) => {
-                config_maps.iter_mut().for_each(|c| {
-                    let glob_pattern = format!(
-                        "{}/{}",
-                        filepath.parent().unwrap().to_str().unwrap(),
-                        &c.r#match
-                    );
-                    c.r#match = glob_pattern;
-                });
-                Ok(Self {
-                    rules: config_maps,
-                    filepath: filepath.to_path_buf(),
-                })
-            }
-            Err(e) => Err(e.into()),
-        }
+        let mut rules = serde_json::from_str::<Vec<AssetConfigRule>>(&contents)?;
+        rules.iter_mut().for_each(|c| {
+            let glob_pattern = format!(
+                "{}/{}",
+                filepath.parent().unwrap().to_str().unwrap(),
+                &c.r#match
+            );
+            c.r#match = glob_pattern;
+        });
+        Ok(Self {
+            rules,
+            filepath: filepath.to_path_buf(),
+        })
     }
 }
 
