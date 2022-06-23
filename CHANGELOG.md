@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2022-06-23
+
 Breaking change: ic-asset::sync() now synchronizes from multiple source directories.
 
 This is to allow for configuration files located alongside assets in asset source directories.
