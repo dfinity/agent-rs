@@ -61,17 +61,15 @@ fn gather_asset_locations(dirs: &[&Path]) -> anyhow::Result<Vec<AssetLocation>> 
     for dir in dirs {
         let asset_locations = WalkDir::new(dir)
             .into_iter()
-            .filter_entry(|entry|!filename_starts_with_dot(entry))
+            .filter_entry(|entry| !filename_starts_with_dot(entry))
             .filter_map(|r| {
-                r.ok()
-                    .filter(|entry| entry.file_type().is_file())
-                    .map(|e| {
-                        let source = e.path().to_path_buf();
-                        let relative = source.strip_prefix(dir).expect("cannot strip prefix");
-                        let key = String::from("/") + relative.to_string_lossy().as_ref();
+                r.ok().filter(|entry| entry.file_type().is_file()).map(|e| {
+                    let source = e.path().to_path_buf();
+                    let relative = source.strip_prefix(dir).expect("cannot strip prefix");
+                    let key = String::from("/") + relative.to_string_lossy().as_ref();
 
-                        AssetLocation { source, key }
-                    })
+                    AssetLocation { source, key }
+                })
             })
             .collect::<Vec<_>>();
         for asset_location in asset_locations {
