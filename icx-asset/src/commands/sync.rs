@@ -1,4 +1,5 @@
 use ic_utils::Canister;
+use std::path::Path;
 
 use crate::{support, SyncOpts};
 use std::time::Duration;
@@ -8,6 +9,7 @@ pub(crate) async fn sync(
     timeout: Duration,
     o: &SyncOpts,
 ) -> support::Result {
-    ic_asset::sync(canister, &o.directory, timeout).await?;
+    let dirs: Vec<&Path> = o.directory.iter().map(|d| d.as_path()).collect();
+    ic_asset::sync(canister, &dirs, timeout).await?;
     Ok(())
 }

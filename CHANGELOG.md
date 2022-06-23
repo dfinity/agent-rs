@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Breaking change: ic-asset::sync() now synchronizes from multiple source directories.
+
+This is to allow for configuration files located alongside assets in asset source directories.
+
+Also, ic-asset::sync:
+- skips files and directories that begin with a ".", as dfx does when copying assets to an output directory.
+- reports an error if more than one asset file would resolve to the same asset key
+
 ## [0.17.1] - 2022-06-22
 
 [agent-rs/349](https://github.com/dfinity/agent-rs/pull/349) feat: add with_max_response_body_size to ReqwestHttpReplicaV2Transport

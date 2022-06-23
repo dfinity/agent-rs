@@ -65,9 +65,9 @@ struct SyncOpts {
     #[clap()]
     canister_id: String,
 
-    /// The directory to synchronize
+    /// The directories to synchronize
     #[clap()]
-    directory: PathBuf,
+    directory: Vec<PathBuf>,
 }
 
 #[derive(Parser)]
