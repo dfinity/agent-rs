@@ -70,7 +70,7 @@ pub struct CreateAssetArguments {
     /// The MIME type of this asset
     pub content_type: String,
     /// The cache HTTP header Time To Live parameter
-    pub max_age: u64,
+    pub max_age: Option<u64>,
     // TODO: (SDK-473) serde_json::Value is not serializable into CandidType
     // /// The HTTP headers
     // pub headers: HeadersConfig,

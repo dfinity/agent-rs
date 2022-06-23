@@ -37,9 +37,9 @@ pub(crate) struct ProjectAsset {
     pub(crate) asset_location: AssetLocation,
     pub(crate) media_type: Mime,
     pub(crate) encodings: HashMap<String, ProjectAssetEncoding>,
-    pub(crate) max_age: u64,
+    pub(crate) max_age: Option<u64>,
     #[allow(dead_code)]
-    pub(crate) headers: HeadersConfig,
+    pub(crate) headers: Option<HeadersConfig>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -216,12 +216,18 @@ async fn make_project_asset(
     )
     .await?;
 
+    let max_age = if let Some(cache) = asset_config.cache {
+        Some(cache.max_age)
+    } else {
+        None
+    };
+
     Ok(ProjectAsset {
         asset_location,
         media_type: content.media_type,
         encodings,
-        max_age: asset_config.cache.unwrap_or_default().max_age,
-        headers: asset_config.headers.unwrap_or_default(),
+        max_age,
+        headers: asset_config.headers,
     })
 }
 
