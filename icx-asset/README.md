@@ -3,7 +3,7 @@ A command line tool to manage an asset storage canister.
 
 ## icx-asset sync
 
-Synchronize a directory to an asset canister.
+Synchronize one or more directories to an asset canister.
 
 Usage: `icx-asset sync <canister id> <source directory>...`
 
