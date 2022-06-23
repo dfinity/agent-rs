@@ -1,7 +1,7 @@
 use crate::asset_canister::protocol::AssetDetails;
+use crate::asset_config::{AssetConfig, HeadersConfig};
 use crate::content::Content;
 use crate::content_encoder::ContentEncoder;
-use crate::http_headers_config::{AssetConfig, HeadersConfig};
 use crate::params::CanisterCallParams;
 
 use crate::asset_canister::chunk::create_chunk;

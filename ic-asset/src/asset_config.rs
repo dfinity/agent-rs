@@ -27,7 +27,7 @@ pub(crate) type HeadersConfig = HashMap<String, Value>;
 
 /// The single map from array from deserialized .ic-assets.json file.
 #[derive(Deserialize, Debug, Clone)]
-struct AssetsHeadersConfiguration {
+struct AssetConfigRule {
     /// Glob pattern
     r#match: String,
     /// HTTP cache config, if omitted, the default value will be used.
@@ -60,18 +60,18 @@ struct AssetsHeadersConfiguration {
 /// ]
 /// ```
 #[derive(Deserialize, Debug, Clone)]
-struct AssetsHeadersConfigFile {
+struct AssetConfigFile {
     filepath: PathBuf,
-    config_maps: Vec<AssetsHeadersConfiguration>,
+    rules: Vec<AssetConfigRule>,
 }
 
-impl AssetsHeadersConfigFile {
+impl AssetConfigFile {
     /// Parse JSON config file
     fn read(filepath: &Path) -> Result<Self, std::io::Error> {
         let mut file = File::open(filepath)?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
-        match serde_json::from_str::<Vec<AssetsHeadersConfiguration>>(&contents) {
+        match serde_json::from_str::<Vec<AssetConfigRule>>(&contents) {
             Ok(mut config_maps) => {
                 config_maps.iter_mut().for_each(|c| {
                     let glob_pattern = format!(
@@ -82,7 +82,7 @@ impl AssetsHeadersConfigFile {
                     c.r#match = glob_pattern;
                 });
                 Ok(Self {
-                    config_maps,
+                    rules: config_maps,
                     filepath: filepath.to_path_buf(),
                 })
             }
@@ -166,7 +166,7 @@ impl AssetFile {
 #[derive(Debug)]
 pub(crate) struct AssetsConfigMatcher {
     /// List of all .ic-assets.json config files.
-    configs: Vec<AssetsHeadersConfigFile>,
+    configs: Vec<AssetConfigFile>,
     /// List of all assets.
     assets: Vec<AssetFile>,
 }
@@ -180,7 +180,7 @@ impl AssetsConfigMatcher {
         for entry in WalkDir::new(assets_dir) {
             match entry {
                 Ok(e) if e.file_type().is_file() && e.file_name() == ASSETS_CONFIG_FILENAME => {
-                    match AssetsHeadersConfigFile::read(e.path()) {
+                    match AssetConfigFile::read(e.path()) {
                         Ok(config) => configs.push(config),
                         Err(err) => println!("error reading {:?}: {}", e.path(), err),
                     }
@@ -220,7 +220,7 @@ impl AssetsConfigMatcher {
 
             for cfg_file in configs_in_paths {
                 // FIXME: n^3 time complexity
-                for configuration in &cfg_file.config_maps {
+                for configuration in &cfg_file.rules {
                     if let Ok(glob) = Glob::new(&configuration.r#match) {
                         if glob.compile_matcher().is_match(&asset_file.filepath) {
                             asset_file.matched_configurations.push(AssetConfig {
@@ -668,9 +668,9 @@ mod config_generation {
     fn no_assets() -> anyhow::Result<()> {
         let c = AssetsConfigMatcher {
             assets: vec![],
-            configs: vec![AssetsHeadersConfigFile {
+            configs: vec![AssetConfigFile {
                 filepath: PathBuf::new(),
-                config_maps: vec![AssetsHeadersConfiguration {
+                rules: vec![AssetConfigRule {
                     r#match: "*".to_string(),
                     cache: Some(CacheConfig { max_age: 11111 }),
                     headers: None,
@@ -720,9 +720,9 @@ mod config_generation {
                 relative_filepath: asset.to_path_buf(),
                 matched_configurations: vec![],
             }],
-            configs: vec![AssetsHeadersConfigFile {
+            configs: vec![AssetConfigFile {
                 filepath: assets_dir.to_path_buf(),
-                config_maps: vec![AssetsHeadersConfiguration {
+                rules: vec![AssetConfigRule {
                     r#match: "*".to_string(),
                     cache: Some(CacheConfig { max_age: 11111 }),
                     headers: Some(hm.clone()),
@@ -752,20 +752,20 @@ mod config_generation {
                 relative_filepath: asset.to_path_buf(),
                 matched_configurations: vec![],
             }],
-            configs: vec![AssetsHeadersConfigFile {
+            configs: vec![AssetConfigFile {
                 filepath: assets_dir.to_path_buf(),
-                config_maps: vec![
-                    AssetsHeadersConfiguration {
+                rules: vec![
+                    AssetConfigRule {
                         r#match: "\\".to_string(),
                         cache: Some(CacheConfig { max_age: 11111 }),
                         headers: Some(hm.clone()),
                     },
-                    AssetsHeadersConfiguration {
+                    AssetConfigRule {
                         r#match: "[".to_string(),
                         cache: Some(CacheConfig { max_age: 11111 }),
                         headers: Some(hm.clone()),
                     },
-                    AssetsHeadersConfiguration {
+                    AssetConfigRule {
                         r#match: "{".to_string(),
                         cache: Some(CacheConfig { max_age: 11111 }),
                         headers: Some(hm),

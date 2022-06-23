@@ -1,7 +1,7 @@
 use crate::asset_canister::batch::{commit_batch, create_batch};
 use crate::asset_canister::list::list_assets;
 use crate::asset_canister::protocol::{AssetDetails, BatchOperationKind};
-use crate::http_headers_config::AssetsConfigMatcher;
+use crate::asset_config::AssetsConfigMatcher;
 use crate::params::CanisterCallParams;
 
 use crate::operations::{
