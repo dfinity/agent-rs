@@ -111,8 +111,10 @@ icx_asset_list() {
     echo "y_contents" >multiple/b/y
 
     icx_asset_sync multiple/a multiple/b
+    # shellcheck disable=SC2086
     assert_command dfx canister ${DFX_NO_WALLET:-} call --query e2e_project_assets get '(record{key="/x";accept_encodings=vec{"identity"}})'
     assert_match "x_contents"
+    # shellcheck disable=SC2086
     assert_command dfx canister ${DFX_NO_WALLET:-} call --query e2e_project_assets get '(record{key="/y";accept_encodings=vec{"identity"}})'
     assert_match "y_contents"
 }
