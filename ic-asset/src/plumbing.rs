@@ -216,11 +216,7 @@ async fn make_project_asset(
     )
     .await?;
 
-    let max_age = if let Some(cache) = asset_config.cache {
-        Some(cache.max_age)
-    } else {
-        None
-    };
+    let max_age = asset_config.cache.and_then(|cache|cache.max_age);
 
     Ok(ProjectAsset {
         asset_location,
