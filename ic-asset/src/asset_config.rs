@@ -107,8 +107,8 @@ where
 }
 
 impl AssetConfigRule {
-    fn applies(&self, cannonical_path: &Path) -> bool {
-        self.r#match.is_match(cannonical_path)
+    fn applies(&self, canonical_path: &Path) -> bool {
+        self.r#match.is_match(canonical_path)
     }
 }
 
