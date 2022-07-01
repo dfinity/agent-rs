@@ -3,14 +3,14 @@ A command line tool to manage an asset storage canister.
 
 ## icx-asset sync
 
-Synchronize a directory to an asset canister.
+Synchronize one or more directories to an asset canister.
 
-Usage: `icx-asset sync <directory>`
+Usage: `icx-asset sync <canister id> <source directory>...`
 
 Example:
 ```
-# same asset synchronization as dfx deploy
-$ icx-asset sync src/<project>/assets   
+# same asset synchronization as dfx deploy for a default project, if you've already run dfx build
+$ icx-asset --pem ~/.config/dfx/identity/default/identity.pem sync <canister id> src/prj_assets/assets dist/prj_assets  
 ```
 
 ## icx-asset ls
