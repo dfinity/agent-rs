@@ -1,250 +1,224 @@
-// FIXME: support a way to clear header key-value (currently not possible, once it's there, you can only overwrite it)
-
-use globset::Glob;
-use pathdiff::diff_paths;
+use anyhow::bail;
+use derivative::Derivative;
+use globset::{Glob, GlobMatcher};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
+    cell::{RefCell, RefMut},
     collections::HashMap,
     fs::File,
-    io::Read,
+    io::BufReader,
     path::{Path, PathBuf},
+    sync::Arc,
 };
-use walkdir::WalkDir;
 
-/// Filename for assets configuration JSON file.
-pub const ASSETS_CONFIG_FILENAME: &str = ".ic-assets.json";
+const ASSETS_CONFIG_FILENAME: &str = ".ic-assets.json";
 
-/// HTTP cache configuration.
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+thread_local! {
+    // There is no simple way to pass state into serde deserializer. Using this as a walkaround.
+    // https://stackoverflow.com/questions/54052495/mock-instance-inside-serde-implementation
+    static CURRENTLY_PROCESSED_ASSETS_DIRECTORY: RefCell<PathBuf> = RefCell::new(PathBuf::new());
+}
+
+pub(crate) type HeadersConfig = HashMap<String, Value>;
+type Map = HashMap<PathBuf, Arc<AssetConfigTreeNode>>;
+
+#[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, Eq)]
 pub(crate) struct CacheConfig {
     pub(crate) max_age: u64,
 }
 
-/// Map of custom HTTP headers defined by the end developer.
-pub(crate) type HeadersConfig = HashMap<String, Value>;
-
-/// The single map from array from deserialized .ic-assets.json file.
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Clone, Derivative)]
+#[derivative(Debug)]
 struct AssetConfigRule {
-    /// Glob pattern
-    r#match: String,
-    /// HTTP cache config, if omitted, the default value will be used.
+    #[serde(deserialize_with = "string_to_glob")]
+    #[derivative(Debug(format_with = "fmt_glob_field"))]
+    r#match: GlobMatcher,
     cache: Option<CacheConfig>,
-    /// HTTP Headers.
-    headers: Option<HeadersConfig>,
+    #[serde(default, deserialize_with = "deser_headers")]
+    headers: Maybe<HeadersConfig>,
 }
 
-/// Represents single .ic-assets.json file.
-///
-/// Expected JSON format;
-/// ```json
-/// [
-///  {
-///    "match": "*",
-///    "cache": {
-///      "max_age": 86400
-///    },
-///    "headers": {
-///      "some-header-name": "some-header-value",
-///      "permissions-policy": "add; delete"
-///    }
-///  },
-///  {
-///    "match": "**/*.js",
-///    "cache": {
-///      "max_age": 3600
-///    }
-///  }
-/// ]
-/// ```
-#[derive(Deserialize, Debug, Clone)]
-struct AssetConfigFile {
-    filepath: PathBuf,
-    rules: Vec<AssetConfigRule>,
+#[derive(Deserialize, Clone, Debug)]
+enum Maybe<T> {
+    Null,
+    Absent,
+    Value(T),
 }
 
-impl AssetConfigFile {
-    /// Parse JSON config file
-    fn read(filepath: &Path) -> Result<Self, std::io::Error> {
-        let mut file = File::open(filepath)?;
-        let mut contents = String::new();
-        file.read_to_string(&mut contents)?;
-        let mut rules = serde_json::from_str::<Vec<AssetConfigRule>>(&contents)?;
-        rules.iter_mut().for_each(|c| {
-            let glob_pattern = format!(
-                "{}/{}",
-                filepath.parent().unwrap().to_str().unwrap(),
-                &c.r#match
-            );
-            c.r#match = glob_pattern;
-        });
-        Ok(Self {
-            rules,
-            filepath: filepath.to_path_buf(),
-        })
+impl<T> Default for Maybe<T> {
+    fn default() -> Self {
+        Self::Absent
     }
 }
 
-/// Configuration assigned to single asset
-#[derive(Serialize, Debug, Clone)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
-pub(crate) struct AssetConfig {
-    /// asset' full path
-    pub(crate) filepath: PathBuf,
-    /// asset' relative path - used only for pretty printing
-    pub(crate) relative_filepath: PathBuf,
-    /// HTTP cache config, if omitted, the default value will be used.
-    pub(crate) cache: Option<CacheConfig>,
-    /// HTTP Headers.
-    pub(crate) headers: Option<HeadersConfig>,
+impl Into<Option<HeadersConfig>> for Maybe<HeadersConfig> {
+    fn into(self) -> Option<HeadersConfig> {
+        match self {
+            Maybe::Null => None,
+            Maybe::Absent => Some(HashMap::new()),
+            Maybe::Value(v) => Some(v),
+        }
+    }
+}
+
+fn deser_headers<'de, D>(deserializer: D) -> Result<Maybe<HeadersConfig>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    match serde_json::value::Value::deserialize(deserializer)? {
+        Value::Object(v) => Ok(Maybe::Value(
+            v.into_iter().collect::<HashMap<String, Value>>(),
+        )),
+        Value::Null => Ok(Maybe::Null),
+        _ => Err(serde::de::Error::custom(
+            "wrong data format for field `headers` (only map or null are allowed)",
+        )),
+    }
+}
+
+fn fmt_glob_field(
+    field: &GlobMatcher,
+    formatter: &mut std::fmt::Formatter,
+) -> Result<(), std::fmt::Error> {
+    formatter.write_str(field.glob().glob())?;
+    Ok(())
+}
+
+fn string_to_glob<'de, D>(deserializer: D) -> Result<GlobMatcher, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let dir = CURRENTLY_PROCESSED_ASSETS_DIRECTORY.with(|book| book.borrow().clone());
+
+    if let Value::String(glob) = serde_json::value::Value::deserialize(deserializer)? {
+        if let Ok(glob) = Glob::new(&format!("{}/{}", dir.to_str().unwrap(), &glob)) {
+            Ok(glob.compile_matcher())
+        } else {
+            Err(serde::de::Error::custom(
+                "the value in `match` field is not a valid glob pattern",
+            ))
+        }
+    } else {
+        Err(serde::de::Error::custom(
+            "the value in `match` field is not a string",
+        ))
+    }
+}
+
+impl AssetConfigRule {
+    fn applies(&self, cannonical_path: &Path) -> bool {
+        self.r#match.is_match(cannonical_path)
+    }
 }
 
 impl AssetConfig {
-    pub(crate) fn with_path(self, filepath: &Path, relative_filepath: &Path) -> Self {
-        Self {
-            filepath: filepath.to_path_buf(),
-            relative_filepath: relative_filepath.to_path_buf(),
-            ..self
-        }
-    }
-
-    /// Helper function, enables to easily `fold` the `Vec<AssetsHeadersConfig>`.
-    /// Merges by overwritting left (self) with right (other).
     fn merge(mut self, other: Self) -> Self {
         if let Some(c) = other.cache {
             self.cache = Some(c);
         };
         match (self.headers.as_mut(), other.headers) {
             (Some(sh), Some(oh)) => sh.extend(oh),
-            (None, Some(h)) => self.headers = Some(h),
-            (_, None) => {}
+            (_, oh) => self.headers = oh,
         };
         self
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct AssetSourceDirectoryConfiguration {
+    config_map: Map,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize)]
+pub(crate) struct AssetConfig {
+    pub(crate) cache: Option<CacheConfig>,
+    pub(crate) headers: Option<HeadersConfig>,
+}
+
 impl Default for AssetConfig {
     fn default() -> Self {
         Self {
-            filepath: PathBuf::new(),
-            relative_filepath: PathBuf::new(),
-            cache: None,
-            headers: None,
+            headers: Some(HashMap::new()),
+            cache: Some(CacheConfig::default()),
         }
     }
 }
 
-/// Single asset file.
-#[derive(Debug)]
-struct AssetFile {
-    /// asset' full path
-    filepath: PathBuf,
-    /// asset' relative path - used only for pretty printing
-    relative_filepath: PathBuf,
-    matched_configurations: Vec<AssetConfig>,
+#[derive(Debug, Default)]
+struct AssetConfigTreeNode {
+    pub parent: Option<Arc<AssetConfigTreeNode>>,
+    pub rules: Vec<AssetConfigRule>,
 }
 
-impl AssetFile {
-    fn from_path(assets_dir: &Path, asset_fullpath: &Path) -> Self {
+impl AssetSourceDirectoryConfiguration {
+    pub(crate) fn load(root_dir: &Path) -> anyhow::Result<Self> {
+        let mut config_map = HashMap::new();
+        AssetConfigTreeNode::load(None, &root_dir, &mut config_map)?;
+        Ok(Self { config_map })
+    }
+
+    pub(crate) fn get_asset_config(&self, canonical_path: &Path) -> AssetConfig {
+        self.config_map
+            .get(canonical_path.parent().unwrap())
+            .unwrap()
+            .get_config(canonical_path)
+    }
+}
+
+impl AssetConfigTreeNode {
+    fn load(
+        parent: Option<Arc<AssetConfigTreeNode>>,
+        dir: &Path,
+        configs: &mut HashMap<PathBuf, Arc<AssetConfigTreeNode>>,
+    ) -> anyhow::Result<()> {
+        let mut rules = vec![];
+        if let Ok(file) = File::open(dir.join(ASSETS_CONFIG_FILENAME)) {
+            let reader = BufReader::new(file);
+            CURRENTLY_PROCESSED_ASSETS_DIRECTORY.with(|book| {
+                let x = book.borrow_mut();
+                let mut path = RefMut::map(x, |p| p);
+                *path = dir.to_path_buf();
+            });
+
+            match serde_json::from_reader(reader) {
+                Ok(mut v) => rules.append(&mut v),
+                Err(e) => bail!("{:?}: {:?}", dir, e),
+            }
+        }
+
+        let config_tree = Self { parent, rules };
+        let parent_ref = Arc::new(config_tree);
+        configs.insert(dir.to_path_buf(), parent_ref.clone());
+        for f in std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|x| x.ok())
+            .filter(|x| x.file_type().unwrap().is_dir())
+        {
+            Self::load(Some(parent_ref.clone()), &f.path(), configs)?;
+        }
+        Ok(())
+    }
+
+    fn get_config(&self, canonical_path: &Path) -> AssetConfig {
+        let base_config = match &self.parent {
+            Some(parent) => parent.get_config(&canonical_path),
+            None => AssetConfig::default(),
+        };
+        self.rules
+            .iter()
+            .cloned()
+            .filter(|rule| rule.applies(canonical_path))
+            .fold(base_config, |acc, x| acc.merge(x.into()))
+    }
+}
+
+impl From<AssetConfigRule> for AssetConfig {
+    fn from(AssetConfigRule { cache, headers, .. }: AssetConfigRule) -> Self {
         Self {
-            filepath: asset_fullpath.to_path_buf(),
-            relative_filepath: diff_paths(asset_fullpath, assets_dir).unwrap(),
-            matched_configurations: vec![],
+            cache,
+            headers: headers.into(),
         }
-    }
-}
-
-/// For given [`assets_dir`](AssetsConfigMatcher::new), it will walk trough the assets directory,
-/// and find all [.ic-assets.json](ASSETS_CONFIG_FILENAME) config files in directories and
-/// subdirectories, and finally assignes [AssetConfig] for each asset file matched.
-#[derive(Debug)]
-pub(crate) struct AssetsConfigMatcher {
-    /// List of all .ic-assets.json config files.
-    configs: Vec<AssetConfigFile>,
-    /// List of all assets.
-    assets: Vec<AssetFile>,
-}
-
-impl AssetsConfigMatcher {
-    /// Walks `assets_dir` to find each .ic-assets.json file and all assets files.
-    pub(crate) fn new(assets_dir: &Path) -> Self {
-        let mut configs = vec![];
-        let mut assets = vec![];
-
-        for entry in WalkDir::new(assets_dir) {
-            match entry {
-                Ok(e) if e.file_type().is_file() && e.file_name() == ASSETS_CONFIG_FILENAME => {
-                    match AssetConfigFile::read(e.path()) {
-                        Ok(config) => configs.push(config),
-                        Err(err) => println!("error reading {:?}: {}", e.path(), err),
-                    }
-                }
-                Ok(e) if e.file_type().is_file() => {
-                    assets.push(AssetFile::from_path(assets_dir, e.path()))
-                }
-                _ => continue,
-            }
-        }
-
-        AssetsConfigMatcher { configs, assets }
-    }
-
-    /// for each asset file:
-    ///     1. search for config in its directory or parent directories
-    ///     2. for each found config file, go trough all glob patterns and store all config maps which match asset' filepath
-    ///     3. fold all matched config maps (which return a single, final config for the file)
-    ///
-    /// Oftentimes, multiple patterns will be matched, which requires confict resolution.
-    /// The strategy for conflict resolution is simple: assets directory is being walk trought in DFS fashion
-    /// which makes it easy to prioritize the most deeply nested .ic-assets.json config file.
-    /// Afterwards, within each config file, the latter config maps take precedense over former ones.
-    pub(crate) fn get_config(self) -> anyhow::Result<Vec<AssetConfig>> {
-        let mut assets_config = vec![];
-
-        for mut asset_file in self.assets {
-            let mut configs_in_paths = vec![];
-            for cfg_file in &self.configs {
-                if asset_file
-                    .filepath
-                    .starts_with(cfg_file.filepath.parent().unwrap())
-                {
-                    configs_in_paths.push(cfg_file.clone());
-                }
-            }
-
-            for cfg_file in configs_in_paths {
-                // FIXME: n^3 time complexity
-                for configuration in &cfg_file.rules {
-                    if let Ok(glob) = Glob::new(&configuration.r#match) {
-                        if glob.compile_matcher().is_match(&asset_file.filepath) {
-                            asset_file.matched_configurations.push(AssetConfig {
-                                filepath: asset_file.filepath.clone(),
-                                relative_filepath: asset_file.relative_filepath.clone(),
-                                cache: configuration.cache.clone(),
-                                headers: configuration.headers.clone(),
-                            })
-                        }
-                    } else {
-                        println!(
-                            "malformed glob pattern '{}' in {:?}",
-                            &configuration.r#match, cfg_file.filepath
-                        );
-                    }
-                }
-            }
-
-            let default_asset_config = AssetConfig::default()
-                .with_path(&asset_file.filepath, &asset_file.relative_filepath);
-            let asset_config = asset_file
-                .matched_configurations
-                .into_iter()
-                .fold(default_asset_config, |acc, x| acc.merge(x));
-            assets_config.push(asset_config);
-        }
-
-        Ok(assets_config)
     }
 }
 
@@ -252,10 +226,8 @@ impl AssetsConfigMatcher {
 mod with_tempdir {
 
     use super::*;
-    use serde_json::json;
-    use std::fs::File;
     use std::io::Write;
-    use std::str::FromStr;
+    use std::{collections::BTreeMap, fs::File};
     use tempfile::{Builder, TempDir};
 
     fn create_temporary_assets_directory(
@@ -304,16 +276,6 @@ mod with_tempdir {
         Ok(assets_dir)
     }
 
-    impl AssetConfig {
-        fn test_default_with_path(assets_path: &Path, relative_filepath: &str) -> Self {
-            Self {
-                filepath: assets_path.join(relative_filepath),
-                relative_filepath: PathBuf::from_str(relative_filepath).unwrap(),
-                ..Self::default()
-            }
-        }
-    }
-
     #[test]
     fn match_only_nested_files() -> anyhow::Result<()> {
         let cfg = HashMap::from([(
@@ -323,30 +285,28 @@ mod with_tempdir {
         let assets_temp_dir = create_temporary_assets_directory(Some(cfg), 7).unwrap();
         let assets_dir = assets_temp_dir.path();
 
-        let mut tested = AssetsConfigMatcher::new(assets_dir).get_config()?;
-        let mut expected = vec![
-            AssetConfig::test_default_with_path(assets_dir, "index.html"),
-            AssetConfig::test_default_with_path(assets_dir, "css/main.css"),
-            AssetConfig::test_default_with_path(assets_dir, "css/stylish.css"),
-            AssetConfig::test_default_with_path(assets_dir, "js/index.js"),
-            AssetConfig::test_default_with_path(assets_dir, "js/index.map.js"),
-            AssetConfig {
-                filepath: assets_dir.join("nested/the-thing.txt"),
-                relative_filepath: PathBuf::from_str("nested/the-thing.txt").unwrap(),
-                cache: Some(CacheConfig { max_age: 333 }),
-                ..Default::default()
-            },
-            AssetConfig {
-                filepath: assets_dir.join("nested/deep/the-next-thing.toml"),
-                relative_filepath: PathBuf::from_str("nested/deep/the-next-thing.toml").unwrap(),
-                cache: Some(CacheConfig { max_age: 333 }),
-                ..Default::default()
-            },
-        ];
-        tested.sort_by_key(|c| c.filepath.clone());
-        expected.sort_by_key(|c| c.filepath.clone());
-
-        assert_eq!(tested, expected);
+        let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir)?;
+        for f in ["nested/the-thing.txt", "nested/deep/the-next-thing.toml"] {
+            assert_eq!(
+                assets_config.get_asset_config(assets_dir.join(f).as_path()),
+                AssetConfig {
+                    cache: Some(CacheConfig { max_age: 333 }),
+                    headers: Some(HashMap::new()),
+                }
+            );
+        }
+        for f in [
+            "index.html",
+            "js/index.js",
+            "js/index.map.js",
+            "css/main.css",
+            "css/stylish.css",
+        ] {
+            assert_eq!(
+                assets_config.get_asset_config(assets_dir.join(f).as_path()),
+                AssetConfig::default()
+            );
+        }
 
         Ok(())
     }
@@ -366,61 +326,38 @@ mod with_tempdir {
         let assets_temp_dir = create_temporary_assets_directory(cfg, 7).unwrap();
         let assets_dir = assets_temp_dir.path();
 
-        let mut tested = AssetsConfigMatcher::new(assets_dir).get_config()?;
-        let mut expected = vec![
-            AssetConfig {
-                filepath: assets_dir.join("index.html"),
-                relative_filepath: PathBuf::from_str("index.html").unwrap(),
-                cache: Some(CacheConfig { max_age: 333 }),
-                ..Default::default()
-            },
-            AssetConfig {
-                filepath: assets_dir.join("css/main.css"),
-                relative_filepath: PathBuf::from_str("css/main.css").unwrap(),
-                cache: Some(CacheConfig { max_age: 333 }),
-                ..Default::default()
-            },
-            AssetConfig {
-                filepath: assets_dir.join("css/stylish.css"),
-                relative_filepath: PathBuf::from_str("css/stylish.css").unwrap(),
-                cache: Some(CacheConfig { max_age: 333 }),
-                ..Default::default()
-            },
-            AssetConfig {
-                filepath: assets_dir.join("js/index.js"),
-                relative_filepath: PathBuf::from_str("js/index.js").unwrap(),
-                cache: Some(CacheConfig { max_age: 333 }),
-                ..Default::default()
-            },
-            AssetConfig {
-                filepath: assets_dir.join("js/index.map.js"),
-                relative_filepath: PathBuf::from_str("js/index.map.js").unwrap(),
-                cache: Some(CacheConfig { max_age: 333 }),
-                ..Default::default()
-            },
-            AssetConfig {
-                filepath: assets_dir.join("nested/the-thing.txt"),
-                relative_filepath: PathBuf::from_str("nested/the-thing.txt").unwrap(),
-                cache: Some(CacheConfig { max_age: 111 }),
-                ..Default::default()
-            },
-            AssetConfig {
-                filepath: assets_dir.join("nested/deep/the-next-thing.toml"),
-                relative_filepath: PathBuf::from_str("nested/deep/the-next-thing.toml").unwrap(),
-                cache: Some(CacheConfig { max_age: 111 }),
-                ..Default::default()
-            },
-        ];
-        tested.sort_by_key(|c| c.filepath.clone());
-        expected.sort_by_key(|c| c.filepath.clone());
-
-        assert_eq!(tested, expected);
+        let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir)?;
+        for f in ["nested/the-thing.txt", "nested/deep/the-next-thing.toml"] {
+            assert_eq!(
+                assets_config.get_asset_config(assets_dir.join(f).as_path()),
+                AssetConfig {
+                    cache: Some(CacheConfig { max_age: 111 }),
+                    headers: Some(HashMap::new()),
+                }
+            );
+        }
+        for f in [
+            "index.html",
+            "js/index.js",
+            "js/index.map.js",
+            "css/main.css",
+            "css/stylish.css",
+        ] {
+            assert_eq!(
+                assets_config.get_asset_config(assets_dir.join(f).as_path()),
+                AssetConfig {
+                    cache: Some(CacheConfig { max_age: 333 }),
+                    ..Default::default()
+                }
+            );
+        }
 
         Ok(())
     }
 
     #[test]
     fn overriding_headers() -> anyhow::Result<()> {
+        use serde_json::Value::*;
         let cfg = Some(HashMap::from([(
             "".to_string(),
             r#"
@@ -432,7 +369,7 @@ mod with_tempdir {
         },
         "headers": {
           "Content-Security-Policy": "add",
-          "x-frame-options": "ALLHELLBREAKSLOOSE",
+          "x-frame-options": "NONE",
           "x-content-type-options": "nosniff"
         }
       },
@@ -464,92 +401,104 @@ mod with_tempdir {
         )]));
         let assets_temp_dir = create_temporary_assets_directory(cfg, 1).unwrap();
         let assets_dir = assets_temp_dir.path();
+        let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir)?;
+        let parsed_asset_config =
+            assets_config.get_asset_config(assets_dir.join("index.html").as_path());
+        let expected_asset_config = AssetConfig {
+            cache: Some(CacheConfig { max_age: 88 }),
+            headers: Some(HashMap::from([
+                (
+                    "x-content-type-options".to_string(),
+                    String("nosniff".to_string()),
+                ),
+                (
+                    "x-frame-options".to_string(),
+                    String("SAMEORIGIN".to_string()),
+                ),
+                ("Some-Other-Policy".to_string(), String("add".to_string())),
+                (
+                    "Content-Security-Policy".to_string(),
+                    String("delete".to_string()),
+                ),
+                (
+                    "x-xss-protection".to_string(),
+                    Number(serde_json::Number::from(1).into()),
+                ),
+            ])),
+        };
+
+        assert_eq!(parsed_asset_config.cache, expected_asset_config.cache);
         assert_eq!(
-            AssetsConfigMatcher::new(assets_dir).get_config()?,
-            vec![AssetConfig {
-                filepath: assets_dir.join("index.html"),
-                relative_filepath: PathBuf::from_str("index.html").unwrap(),
-                headers: Some(HashMap::from([
-                    ("Content-Security-Policy".to_string(), json!("delete")),
-                    ("Some-Other-Policy".to_string(), json!("add")),
-                    ("x-xss-protection".to_string(), json!(1)),
-                    ("x-frame-options".to_string(), json!("SAMEORIGIN")),
-                    ("x-content-type-options".to_string(), json!("nosniff")),
-                ])),
-                cache: Some(CacheConfig { max_age: 88 })
-            }]
+            parsed_asset_config
+                .headers
+                .unwrap()
+                .iter()
+                // keys are sorted
+                .collect::<BTreeMap<_, _>>(),
+            expected_asset_config
+                .headers
+                .unwrap()
+                .iter()
+                .collect::<BTreeMap<_, _>>(),
         );
+
         Ok(())
     }
 
-    #[test]
-    fn stringify_headers() -> anyhow::Result<()> {
-        let cfg = Some(HashMap::from([(
-            "".to_string(),
-            r#"
-    [
-      {
-        "match": "*",
-        "headers": {
-          "array": [
-            {"map": "https://internetcomputer.org"},
-            {"null": null},
-            {"number": 3.14},
-            {"number-int": 888},
-            {"string": "well"},
-            {"bool": true}
-          ]
-        }
-      }
-    ]
-    "#
-            .to_string(),
-        )]));
-        let assets_temp_dir = create_temporary_assets_directory(cfg, 1).unwrap();
-        let assets_dir = assets_temp_dir.path();
-        let x = AssetsConfigMatcher::new(assets_dir).get_config().unwrap();
-        let tested = serde_json::to_string_pretty(&x).unwrap();
+    //     #[test]
+    //     fn stringify_different_json_types_in_headers() -> anyhow::Result<()> {
+    //         let cfg = Some(HashMap::from([(
+    //             "".to_string(),
+    //             r#"
+    //         [
+    //           {
+    //             "match": "*",
+    //             "headers": {
+    //                 "map": {"homepage": "https://internetcomputer.org"},
+    //                 "null": null,
+    //                 "number": 3.14,
+    //                 "number-int": 888,
+    //                 "string": "well",
+    //                 "bool": true,
+    //                 "array": ["a", "b", "c"]
+    //             }
+    //           }
+    //         ]
+    //         "#
+    //             .to_string(),
+    //         )]));
+    //         let assets_temp_dir = create_temporary_assets_directory(cfg, 1).unwrap();
+    //         let assets_dir = assets_temp_dir.path();
+    //         let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir)?;
+    //         let asset_config = assets_config.get_asset_config(assets_dir.join("index.html").as_path());
 
-        let filepath = tested
-            .lines()
-            .find(|l| l.contains("\"filepath\": "))
-            .unwrap();
-        assert_eq!(
-            tested,
-            r#"[
-  {
-{{filepath}}
-    "relative_filepath": "index.html",
-    "cache": null,
-    "headers": {
-      "array": [
-        {
-          "map": "https://internetcomputer.org"
-        },
-        {
-          "null": null
-        },
-        {
-          "number": 3.14
-        },
-        {
-          "number-int": 888
-        },
-        {
-          "string": "well"
-        },
-        {
-          "bool": true
-        }
-      ]
-    }
-  }
-]"#
-            .to_string()
-            .replace("{{filepath}}", filepath)
-        );
-        Ok(())
-    }
+    //         assert_eq!(
+    //             serde_json::to_string_pretty(&asset_config)?,
+    //             String::from(
+    //                 r#"{
+    //   "cache": {
+    //     "max_age": 0
+    //   },
+    //   "headers": {
+    //     "null": null,
+    //     "bool": true,
+    //     "map": {
+    //       "homepage": "https://internetcomputer.org"
+    //     },
+    //     "number": 3.14,
+    //     "number-int": 888,
+    //     "array": [
+    //       "a",
+    //       "b",
+    //       "c"
+    //     ],
+    //     "string": "well"
+    //   }
+    // }"#
+    //             )
+    //         );
+    //         Ok(())
+    //     }
 
     #[test]
     fn prioritization() -> anyhow::Result<()> {
@@ -587,36 +536,43 @@ mod with_tempdir {
         let assets_temp_dir = create_temporary_assets_directory(cfg, 7).unwrap();
         let assets_dir = assets_temp_dir.path();
 
-        let mut tested = AssetsConfigMatcher::new(assets_dir).get_config()?;
-        let mut expected = vec![
-            AssetConfig::test_default_with_path(assets_dir, "index.html"),
-            AssetConfig::test_default_with_path(assets_dir, "css/main.css"),
-            AssetConfig::test_default_with_path(assets_dir, "css/stylish.css"),
-            AssetConfig::test_default_with_path(assets_dir, "js/index.js"),
-            AssetConfig::test_default_with_path(assets_dir, "js/index.map.js"),
+        println!("ff");
+        let assets_config = dbg!(AssetSourceDirectoryConfiguration::load(assets_dir))?;
+        for f in [
+            "index.html",
+            "js/index.js",
+            "js/index.map.js",
+            "css/main.css",
+            "css/stylish.css",
+        ] {
+            assert_eq!(
+                assets_config.get_asset_config(assets_dir.join(f).as_path()),
+                AssetConfig::default()
+            );
+        }
+
+        assert_eq!(
+            assets_config.get_asset_config(assets_dir.join("nested/the-thing.txt").as_path()),
             AssetConfig {
-                filepath: assets_dir.join("nested/the-thing.txt"),
-                relative_filepath: PathBuf::from_str("nested/the-thing.txt").unwrap(),
                 cache: Some(CacheConfig { max_age: 400 }),
                 ..Default::default()
             },
+        );
+        assert_eq!(
+            assets_config
+                .get_asset_config(assets_dir.join("nested/deep/the-next-thing.toml").as_path()),
             AssetConfig {
-                filepath: assets_dir.join("nested/deep/the-next-thing.toml"),
-                relative_filepath: PathBuf::from_str("nested/deep/the-next-thing.toml").unwrap(),
                 cache: Some(CacheConfig { max_age: 100 }),
                 ..Default::default()
             },
-        ];
+        );
 
-        tested.sort_by_key(|c| c.filepath.clone());
-        expected.sort_by_key(|c| c.filepath.clone());
-
-        assert_eq!(tested, expected);
         Ok(())
     }
 
     #[test]
-    fn no_content_config_file() -> anyhow::Result<()> {
+    #[should_panic]
+    fn no_content_config_file() {
         let cfg = Some(HashMap::from([
             ("".to_string(), "".to_string()),
             ("css".to_string(), "".to_string()),
@@ -624,158 +580,47 @@ mod with_tempdir {
             ("nested".to_string(), "".to_string()),
             ("nested/deep".to_string(), "".to_string()),
         ]));
-        let assets_temp_dir = create_temporary_assets_directory(cfg, 7).unwrap();
+        let assets_temp_dir = create_temporary_assets_directory(cfg, 0).unwrap();
         let assets_dir = assets_temp_dir.path();
-        let mut tested = AssetsConfigMatcher::new(assets_dir).get_config()?;
-        let mut expected = vec![
-            AssetConfig::test_default_with_path(assets_dir, "index.html"),
-            AssetConfig::test_default_with_path(assets_dir, "css/main.css"),
-            AssetConfig::test_default_with_path(assets_dir, "css/stylish.css"),
-            AssetConfig::test_default_with_path(assets_dir, "js/index.js"),
-            AssetConfig::test_default_with_path(assets_dir, "js/index.map.js"),
-            AssetConfig::test_default_with_path(assets_dir, "nested/the-thing.txt"),
-            AssetConfig::test_default_with_path(assets_dir, "nested/deep/the-next-thing.toml"),
-        ];
-
-        tested.sort_by_key(|c| c.filepath.clone());
-        expected.sort_by_key(|c| c.filepath.clone());
-
-        assert_eq!(tested, expected);
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod config_generation {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn empty() -> anyhow::Result<()> {
-        let c = AssetsConfigMatcher {
-            assets: vec![],
-            configs: vec![],
-        };
-        assert_eq!(c.get_config()?, vec![]);
-        Ok(())
+        let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir);
+        assets_config.unwrap();
     }
 
     #[test]
-    fn no_assets() -> anyhow::Result<()> {
-        let c = AssetsConfigMatcher {
-            assets: vec![],
-            configs: vec![AssetConfigFile {
-                filepath: PathBuf::new(),
-                rules: vec![AssetConfigRule {
-                    r#match: "*".to_string(),
-                    cache: Some(CacheConfig { max_age: 11111 }),
-                    headers: None,
-                }],
-            }],
-        };
-        assert_eq!(c.get_config()?, vec![]);
-        Ok(())
+    #[should_panic]
+    fn invalid_json_config_file() {
+        let cfg = Some(HashMap::from([("".to_string(), "[[[{{{".to_string())]));
+        let assets_temp_dir = create_temporary_assets_directory(cfg, 0).unwrap();
+        let assets_dir = assets_temp_dir.path();
+        let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir);
+        assets_config.unwrap();
     }
 
     #[test]
-    fn no_config() -> anyhow::Result<()> {
-        let assets_dir = Path::new("/something/");
-        let asset = Path::new("index.js");
-        let c = AssetsConfigMatcher {
-            assets: vec![AssetFile {
-                filepath: assets_dir.join(asset),
-                relative_filepath: asset.to_path_buf(),
-                matched_configurations: vec![],
-            }],
-            configs: vec![],
-        };
+    #[should_panic]
+    fn invalid_glob_pattern() {
+        let cfg = Some(HashMap::from([(
+            "".to_string(),
+            r#"[
+        {"match": "{{{\\\", "cache": {"max_age": 900}},
+    ]"#
+            .to_string(),
+        )]));
+        let assets_temp_dir = create_temporary_assets_directory(cfg, 0).unwrap();
+        let assets_dir = assets_temp_dir.path();
+        let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir);
+        assets_config.unwrap();
+    }
+
+    #[test]
+    fn invalid_asset_path() -> anyhow::Result<()> {
+        let cfg = Some(HashMap::new());
+        let assets_temp_dir = create_temporary_assets_directory(cfg, 0).unwrap();
+        let assets_dir = assets_temp_dir.path();
+        let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir)?;
         assert_eq!(
-            c.get_config()?,
-            vec![AssetConfig {
-                filepath: assets_dir.join(asset),
-                relative_filepath: asset.to_path_buf(),
-                headers: None,
-                cache: None
-            }]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn glob_match_everything() -> anyhow::Result<()> {
-        let hm = HashMap::from([
-            ("some-header-name".to_string(), json!("some-header-value")),
-            ("permissions-policy".to_string(), json!("add")),
-            ("funky-policy".to_string(), json!("roll")),
-        ]);
-        let assets_dir = Path::new("/something/");
-        let asset = Path::new("index.js");
-        let c = AssetsConfigMatcher {
-            assets: vec![AssetFile {
-                filepath: assets_dir.join(asset),
-                relative_filepath: asset.to_path_buf(),
-                matched_configurations: vec![],
-            }],
-            configs: vec![AssetConfigFile {
-                filepath: assets_dir.to_path_buf(),
-                rules: vec![AssetConfigRule {
-                    r#match: "*".to_string(),
-                    cache: Some(CacheConfig { max_age: 11111 }),
-                    headers: Some(hm.clone()),
-                }],
-            }],
-        };
-        assert_eq!(
-            c.get_config()?,
-            vec![AssetConfig {
-                filepath: assets_dir.join(asset),
-                relative_filepath: asset.to_path_buf(),
-                cache: Some(CacheConfig { max_age: 11111 }),
-                headers: Some(hm)
-            }]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn bad_glob_pattern() -> anyhow::Result<()> {
-        let hm = HashMap::new();
-        let assets_dir = Path::new("/something/");
-        let asset = Path::new("index.js");
-        let c = AssetsConfigMatcher {
-            assets: vec![AssetFile {
-                filepath: assets_dir.join(asset),
-                relative_filepath: asset.to_path_buf(),
-                matched_configurations: vec![],
-            }],
-            configs: vec![AssetConfigFile {
-                filepath: assets_dir.to_path_buf(),
-                rules: vec![
-                    AssetConfigRule {
-                        r#match: "\\".to_string(),
-                        cache: Some(CacheConfig { max_age: 11111 }),
-                        headers: Some(hm.clone()),
-                    },
-                    AssetConfigRule {
-                        r#match: "[".to_string(),
-                        cache: Some(CacheConfig { max_age: 11111 }),
-                        headers: Some(hm.clone()),
-                    },
-                    AssetConfigRule {
-                        r#match: "{".to_string(),
-                        cache: Some(CacheConfig { max_age: 11111 }),
-                        headers: Some(hm),
-                    },
-                ],
-            }],
-        };
-        assert_eq!(
-            c.get_config()?,
-            vec![AssetConfig {
-                filepath: assets_dir.join(asset),
-                relative_filepath: asset.to_path_buf(),
-                ..Default::default()
-            }]
+            assets_config.get_asset_config(assets_dir.join("doesnt.exists").as_path()),
+            AssetConfig::default()
         );
         Ok(())
     }

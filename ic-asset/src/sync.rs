@@ -1,7 +1,7 @@
 use crate::asset_canister::batch::{commit_batch, create_batch};
 use crate::asset_canister::list::list_assets;
 use crate::asset_canister::protocol::{AssetDetails, BatchOperationKind};
-use crate::asset_config::AssetsConfigMatcher;
+use crate::asset_config::AssetSourceDirectoryConfiguration;
 use crate::params::CanisterCallParams;
 
 use crate::operations::{
@@ -17,7 +17,9 @@ use walkdir::WalkDir;
 /// Sets the contents of the asset canister to the contents of a directory, including deleting old assets.
 pub async fn sync(canister: &Canister<'_>, dir: &Path, timeout: Duration) -> anyhow::Result<()> {
     let asset_locations = gather_asset_locations(dir);
-    let asset_headers = AssetsConfigMatcher::new(dir).get_config()?;
+
+    println!("{:?}", asset_locations);
+    let configuration = AssetSourceDirectoryConfiguration::load(dir)?;
 
     let canister_call_params = CanisterCallParams { canister, timeout };
 
@@ -34,7 +36,7 @@ pub async fn sync(canister: &Canister<'_>, dir: &Path, timeout: Duration) -> any
         &batch_id,
         asset_locations,
         &container_assets,
-        asset_headers,
+        configuration,
     )
     .await?;
 

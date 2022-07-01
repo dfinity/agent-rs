@@ -1,5 +1,5 @@
 use crate::asset_canister::protocol::AssetDetails;
-use crate::asset_config::{AssetConfig, HeadersConfig};
+use crate::asset_config::{AssetConfig, AssetSourceDirectoryConfiguration, HeadersConfig};
 use crate::content::Content;
 use crate::content_encoder::ContentEncoder;
 use crate::params::CanisterCallParams;
@@ -11,7 +11,7 @@ use futures::future::try_join_all;
 use futures::TryFutureExt;
 use mime::Mime;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const CONTENT_ENCODING_IDENTITY: &str = "identity";
 
@@ -236,18 +236,14 @@ pub(crate) async fn make_project_assets(
     batch_id: &Nat,
     locs: Vec<AssetLocation>,
     container_assets: &HashMap<String, AssetDetails>,
-    assets_configs: Vec<AssetConfig>,
+    asset_configs: AssetSourceDirectoryConfiguration,
 ) -> anyhow::Result<HashMap<String, ProjectAsset>> {
     let semaphores = Semaphores::new();
 
     let project_asset_futures: Vec<_> = locs
         .iter()
         .map(|loc| {
-            let asset_config = assets_configs
-                .iter()
-                .find(|AssetConfig { filepath, .. }| Path::new(filepath).eq(&loc.source))
-                .unwrap_or(&AssetConfig::default().with_path(&loc.source, &loc.source))
-                .clone();
+            let asset_config = asset_configs.get_asset_config(std::path::Path::new("nfnf"));
 
             make_project_asset(
                 canister_call_params,

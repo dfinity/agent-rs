@@ -1,6 +1,7 @@
 use crate::asset_canister::batch::{commit_batch, create_batch};
 use crate::asset_canister::list::list_assets;
 use crate::asset_canister::protocol::{AssetDetails, BatchOperationKind};
+use crate::asset_config::AssetSourceDirectoryConfiguration;
 use crate::operations::{
     create_new_assets, delete_incompatible_assets, set_encodings, unset_obsolete_encodings,
 };
@@ -17,6 +18,8 @@ pub async fn upload(
     timeout: Duration,
     files: HashMap<String, PathBuf>,
 ) -> anyhow::Result<()> {
+    let random = files.iter().next();
+    let c = random.unwrap().1.canonicalize();
     let asset_locations: Vec<AssetLocation> = files
         .iter()
         .map(|x| AssetLocation {
@@ -40,7 +43,7 @@ pub async fn upload(
         &batch_id,
         asset_locations,
         &container_assets,
-        vec![],
+        AssetSourceDirectoryConfiguration::load(std::path::Path::new("/todo"))?,
     )
     .await?;
 
