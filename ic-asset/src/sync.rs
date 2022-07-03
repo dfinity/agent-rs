@@ -24,7 +24,8 @@ pub async fn sync(
     let asset_locations = gather_asset_locations(dirs)?;
 
     println!("{:?}", asset_locations);
-    let configuration = AssetSourceDirectoryConfiguration::load(dir)?;
+    let dirs = Path::new("");
+    let configuration = AssetSourceDirectoryConfiguration::load(dirs)?;
 
     let canister_call_params = CanisterCallParams { canister, timeout };
 

@@ -1,4 +1,4 @@
-use anyhow::bail;
+use anyhow::{bail, Context};
 use derivative::Derivative;
 use globset::{Glob, GlobMatcher};
 use serde::{Deserialize, Serialize};
@@ -158,11 +158,19 @@ impl AssetSourceDirectoryConfiguration {
         Ok(Self { config_map })
     }
 
-    pub(crate) fn get_asset_config(&self, canonical_path: &Path) -> AssetConfig {
-        self.config_map
-            .get(canonical_path.parent().unwrap())
-            .unwrap()
-            .get_config(canonical_path)
+    pub(crate) fn get_asset_config(&self, canonical_path: &Path) -> anyhow::Result<AssetConfig> {
+        let parent_dir = canonical_path.parent().context(format!(
+            "unable to get the parent directory for asset path: {:?}",
+            canonical_path
+        ))?;
+        Ok(self
+            .config_map
+            .get(parent_dir)
+            .context(format!(
+                "unable to find default config for following path: {:?}",
+                parent_dir
+            ))?
+            .get_config(canonical_path))
     }
 }
 
@@ -288,7 +296,7 @@ mod with_tempdir {
         let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir)?;
         for f in ["nested/the-thing.txt", "nested/deep/the-next-thing.toml"] {
             assert_eq!(
-                assets_config.get_asset_config(assets_dir.join(f).as_path()),
+                assets_config.get_asset_config(assets_dir.join(f).as_path())?,
                 AssetConfig {
                     cache: Some(CacheConfig { max_age: 333 }),
                     headers: Some(HashMap::new()),
@@ -303,7 +311,7 @@ mod with_tempdir {
             "css/stylish.css",
         ] {
             assert_eq!(
-                assets_config.get_asset_config(assets_dir.join(f).as_path()),
+                assets_config.get_asset_config(assets_dir.join(f).as_path())?,
                 AssetConfig::default()
             );
         }
@@ -329,7 +337,7 @@ mod with_tempdir {
         let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir)?;
         for f in ["nested/the-thing.txt", "nested/deep/the-next-thing.toml"] {
             assert_eq!(
-                assets_config.get_asset_config(assets_dir.join(f).as_path()),
+                assets_config.get_asset_config(assets_dir.join(f).as_path())?,
                 AssetConfig {
                     cache: Some(CacheConfig { max_age: 111 }),
                     headers: Some(HashMap::new()),
@@ -344,7 +352,7 @@ mod with_tempdir {
             "css/stylish.css",
         ] {
             assert_eq!(
-                assets_config.get_asset_config(assets_dir.join(f).as_path()),
+                assets_config.get_asset_config(assets_dir.join(f).as_path())?,
                 AssetConfig {
                     cache: Some(CacheConfig { max_age: 333 }),
                     ..Default::default()
@@ -403,7 +411,7 @@ mod with_tempdir {
         let assets_dir = assets_temp_dir.path();
         let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir)?;
         let parsed_asset_config =
-            assets_config.get_asset_config(assets_dir.join("index.html").as_path());
+            assets_config.get_asset_config(assets_dir.join("index.html").as_path())?;
         let expected_asset_config = AssetConfig {
             cache: Some(CacheConfig { max_age: 88 }),
             headers: Some(HashMap::from([
@@ -546,13 +554,13 @@ mod with_tempdir {
             "css/stylish.css",
         ] {
             assert_eq!(
-                assets_config.get_asset_config(assets_dir.join(f).as_path()),
+                assets_config.get_asset_config(assets_dir.join(f).as_path())?,
                 AssetConfig::default()
             );
         }
 
         assert_eq!(
-            assets_config.get_asset_config(assets_dir.join("nested/the-thing.txt").as_path()),
+            assets_config.get_asset_config(assets_dir.join("nested/the-thing.txt").as_path())?,
             AssetConfig {
                 cache: Some(CacheConfig { max_age: 400 }),
                 ..Default::default()
@@ -560,7 +568,7 @@ mod with_tempdir {
         );
         assert_eq!(
             assets_config
-                .get_asset_config(assets_dir.join("nested/deep/the-next-thing.toml").as_path()),
+                .get_asset_config(assets_dir.join("nested/deep/the-next-thing.toml").as_path())?,
             AssetConfig {
                 cache: Some(CacheConfig { max_age: 100 }),
                 ..Default::default()
@@ -619,7 +627,7 @@ mod with_tempdir {
         let assets_dir = assets_temp_dir.path();
         let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir)?;
         assert_eq!(
-            assets_config.get_asset_config(assets_dir.join("doesnt.exists").as_path()),
+            assets_config.get_asset_config(assets_dir.join("doesnt.exists").as_path())?,
             AssetConfig::default()
         );
         Ok(())

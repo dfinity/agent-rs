@@ -239,7 +239,10 @@ pub(crate) async fn make_project_assets(
     let project_asset_futures: Vec<_> = locs
         .iter()
         .map(|loc| {
-            let asset_config = asset_configs.get_asset_config(std::path::Path::new("nfnf"));
+            let asset_config = asset_configs
+                .get_asset_config(std::path::Path::new("nfnf"))
+                .context("no")
+                .unwrap();
 
             make_project_asset(
                 canister_call_params,
