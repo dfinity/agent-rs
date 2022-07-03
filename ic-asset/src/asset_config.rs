@@ -21,7 +21,7 @@ thread_local! {
 }
 
 pub(crate) type HeadersConfig = HashMap<String, Value>;
-type Map = HashMap<PathBuf, Arc<AssetConfigTreeNode>>;
+type ConfigMap = HashMap<PathBuf, Arc<AssetConfigTreeNode>>;
 
 #[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, Eq)]
 pub(crate) struct CacheConfig {
@@ -104,7 +104,7 @@ impl AssetConfigRule {
 
 #[derive(Debug)]
 pub(crate) struct AssetSourceDirectoryConfiguration {
-    config_map: Map,
+    config_map: ConfigMap,
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
