@@ -52,16 +52,6 @@ impl<T> Default for Maybe<T> {
     }
 }
 
-impl Into<Option<HeadersConfig>> for Maybe<HeadersConfig> {
-    fn into(self) -> Option<HeadersConfig> {
-        match self {
-            Maybe::Null => None,
-            Maybe::Absent => Some(HashMap::new()),
-            Maybe::Value(v) => Some(v),
-        }
-    }
-}
-
 fn deser_headers<'de, D>(deserializer: D) -> Result<Maybe<HeadersConfig>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -109,19 +99,6 @@ where
 impl AssetConfigRule {
     fn applies(&self, canonical_path: &Path) -> bool {
         self.r#match.is_match(canonical_path)
-    }
-}
-
-impl AssetConfig {
-    fn merge(mut self, other: Self) -> Self {
-        if let Some(c) = other.cache {
-            self.cache = Some(c);
-        };
-        match (self.headers.as_mut(), other.headers) {
-            (Some(sh), Some(oh)) => sh.extend(oh),
-            (_, oh) => self.headers = oh,
-        };
-        self
     }
 }
 
@@ -220,18 +197,23 @@ impl AssetConfigTreeNode {
         };
         self.rules
             .iter()
-            .cloned()
             .filter(|rule| rule.applies(canonical_path))
-            .fold(base_config, |acc, x| acc.merge(x.into()))
+            .fold(base_config, |acc, x| acc.merge(x))
     }
 }
 
-impl From<AssetConfigRule> for AssetConfig {
-    fn from(AssetConfigRule { cache, headers, .. }: AssetConfigRule) -> Self {
-        Self {
-            cache,
-            headers: headers.into(),
-        }
+impl AssetConfig {
+    fn merge(mut self, other: &AssetConfigRule) -> Self {
+        if let Some(c) = &other.cache {
+            self.cache = Some(c.to_owned());
+        };
+        match (self.headers.as_mut(), &other.headers) {
+            (Some(sh), Maybe::Value(oh)) => sh.extend(oh.to_owned()),
+            (None, Maybe::Value(oh)) => self.headers = Some(oh.to_owned()),
+            (_, Maybe::Null) => self.headers = None,
+            (_, Maybe::Absent) => (),
+        };
+        self
     }
 }
 
