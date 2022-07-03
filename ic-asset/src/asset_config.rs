@@ -4,7 +4,6 @@ use globset::{Glob, GlobMatcher};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-    cell::{RefCell, RefMut},
     collections::HashMap,
     fs::File,
     io::BufReader,
@@ -14,12 +13,6 @@ use std::{
 
 const ASSETS_CONFIG_FILENAME: &str = ".ic-assets.json";
 
-thread_local! {
-    // There is no simple way to pass state into serde deserializer. Using this as a walkaround.
-    // https://stackoverflow.com/questions/54052495/mock-instance-inside-serde-implementation
-    static CURRENTLY_PROCESSED_ASSETS_DIRECTORY: RefCell<PathBuf> = RefCell::new(PathBuf::new());
-}
-
 pub(crate) type HeadersConfig = HashMap<String, Value>;
 type ConfigMap = HashMap<PathBuf, Arc<AssetConfigTreeNode>>;
 
@@ -28,18 +21,49 @@ pub(crate) struct CacheConfig {
     pub(crate) max_age: u64,
 }
 
-#[derive(Deserialize, Clone, Derivative)]
-#[derivative(Debug)]
-struct AssetConfigRule {
-    #[serde(deserialize_with = "string_to_glob")]
-    #[derivative(Debug(format_with = "fmt_glob_field"))]
-    r#match: GlobMatcher,
+#[derive(Deserialize)]
+struct InterimAssetConfigRule {
+    r#match: String,
     cache: Option<CacheConfig>,
     #[serde(default, deserialize_with = "deser_headers")]
     headers: Maybe<HeadersConfig>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
+struct AssetConfigRule {
+    #[derivative(Debug(format_with = "fmt_glob_field"))]
+    r#match: GlobMatcher,
+    cache: Option<CacheConfig>,
+    headers: Maybe<HeadersConfig>,
+}
+
+impl AssetConfigRule {
+    fn from_interim(
+        InterimAssetConfigRule {
+            r#match,
+            cache,
+            headers,
+        }: InterimAssetConfigRule,
+        config_file_parent_dir: &Path,
+    ) -> anyhow::Result<Self> {
+        let glob = Glob::new(
+            config_file_parent_dir
+                .join(&r#match)
+                .to_str()
+                .context("not a ")?,
+        )
+        .context(format!("{} is not a valid glob pattern", r#match))?
+        .compile_matcher();
+        Ok(Self {
+            r#match: glob,
+            cache,
+            headers,
+        })
+    }
+}
+
+#[derive(Deserialize, Debug)]
 enum Maybe<T> {
     Null,
     Absent,
@@ -73,27 +97,6 @@ fn fmt_glob_field(
 ) -> Result<(), std::fmt::Error> {
     formatter.write_str(field.glob().glob())?;
     Ok(())
-}
-
-fn string_to_glob<'de, D>(deserializer: D) -> Result<GlobMatcher, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let dir = CURRENTLY_PROCESSED_ASSETS_DIRECTORY.with(|book| book.borrow().clone());
-
-    if let Value::String(glob) = serde_json::value::Value::deserialize(deserializer)? {
-        if let Ok(glob) = Glob::new(&format!("{}/{}", dir.to_str().unwrap(), &glob)) {
-            Ok(glob.compile_matcher())
-        } else {
-            Err(serde::de::Error::custom(
-                "the value in `match` field is not a valid glob pattern",
-            ))
-        }
-    } else {
-        Err(serde::de::Error::custom(
-            "the value in `match` field is not a string",
-        ))
-    }
 }
 
 impl AssetConfigRule {
@@ -161,14 +164,13 @@ impl AssetConfigTreeNode {
         let config_path = dir.join(ASSETS_CONFIG_FILENAME);
         if let Ok(file) = File::open(&config_path) {
             let reader = BufReader::new(file);
-            CURRENTLY_PROCESSED_ASSETS_DIRECTORY.with(|book| {
-                let x = book.borrow_mut();
-                let mut path = RefMut::map(x, |p| p);
-                *path = dir.to_path_buf();
-            });
 
             match serde_json::from_reader(reader) {
-                Ok(mut v) => rules.append(&mut v),
+                Ok::<Vec<InterimAssetConfigRule>, _>(v) => {
+                    for interim in v {
+                        rules.push(AssetConfigRule::from_interim(interim, dir)?);
+                    }
+                }
                 Err(e) => bail!(
                     "ERR: {} - {}",
                     e.to_string(),
@@ -595,7 +597,7 @@ mod with_tempdir {
         assert_eq!(
             assets_config.err().unwrap().to_string(),
             format!(
-                "ERR: key must be a string at line 1 column 5 - {}",
+                "ERR: invalid type: sequence, expected a string at line 1 column 3 - {}",
                 assets_dir.join(ASSETS_CONFIG_FILENAME).to_str().unwrap()
             )
         );
@@ -616,7 +618,7 @@ mod with_tempdir {
         assert_eq!(
             assets_config.err().unwrap().to_string(),
             format!(
-                "ERR: the value in `match` field is not a valid glob pattern at line 2 column 30 - {}",
+                "ERR: expected `,` or `}}` at line 2 column 30 - {}",
                 assets_dir.join(ASSETS_CONFIG_FILENAME).to_str().unwrap()
             )
         );
