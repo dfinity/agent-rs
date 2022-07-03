@@ -116,8 +116,8 @@ pub(crate) struct AssetConfig {
 impl Default for AssetConfig {
     fn default() -> Self {
         Self {
-            headers: Some(HashMap::new()),
-            cache: Some(CacheConfig::default()),
+            headers: None,
+            cache: None,
         }
     }
 }
@@ -286,7 +286,7 @@ mod with_tempdir {
                 assets_config.get_asset_config(assets_dir.join(f).as_path())?,
                 AssetConfig {
                     cache: Some(CacheConfig { max_age: 333 }),
-                    headers: Some(HashMap::new()),
+                    ..Default::default()
                 }
             );
         }
@@ -327,7 +327,7 @@ mod with_tempdir {
                 assets_config.get_asset_config(assets_dir.join(f).as_path())?,
                 AssetConfig {
                     cache: Some(CacheConfig { max_age: 111 }),
-                    headers: Some(HashMap::new()),
+                    ..Default::default()
                 }
             );
         }
