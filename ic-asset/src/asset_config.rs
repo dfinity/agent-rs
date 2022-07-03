@@ -181,9 +181,9 @@ impl AssetConfigTreeNode {
         let parent_ref = Arc::new(config_tree);
         configs.insert(dir.to_path_buf(), parent_ref.clone());
         for f in std::fs::read_dir(&dir)
-            .with_context(|| format!("Unable to read directory {:?}", &dir))?
+            .with_context(|| format!("Unable to read directory {}", &dir.to_str().unwrap()))?
             .filter_map(|x| x.ok())
-            .filter(|x| x.file_type().unwrap().is_dir())
+            .filter(|x| x.file_type().map_or_else(|_e| false, |ft| ft.is_dir()))
         {
             Self::load(Some(parent_ref.clone()), &f.path(), configs)?;
         }
