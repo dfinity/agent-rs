@@ -181,7 +181,8 @@ impl AssetConfigTreeNode {
         configs: &mut HashMap<PathBuf, Arc<AssetConfigTreeNode>>,
     ) -> anyhow::Result<()> {
         let mut rules = vec![];
-        if let Ok(file) = File::open(dir.join(ASSETS_CONFIG_FILENAME)) {
+        let config_path = dir.join(ASSETS_CONFIG_FILENAME);
+        if let Ok(file) = File::open(&config_path) {
             let reader = BufReader::new(file);
             CURRENTLY_PROCESSED_ASSETS_DIRECTORY.with(|book| {
                 let x = book.borrow_mut();
@@ -191,7 +192,11 @@ impl AssetConfigTreeNode {
 
             match serde_json::from_reader(reader) {
                 Ok(mut v) => rules.append(&mut v),
-                Err(e) => bail!("{:?}: {:?}", dir, e),
+                Err(e) => bail!(
+                    "ERR: {} - {}",
+                    e.to_string(),
+                    &config_path.to_str().unwrap()
+                ),
             }
         }
 
@@ -579,7 +584,6 @@ mod with_tempdir {
     }
 
     #[test]
-    #[should_panic]
     fn no_content_config_file() {
         let cfg = Some(HashMap::from([
             ("".to_string(), "".to_string()),
@@ -591,21 +595,31 @@ mod with_tempdir {
         let assets_temp_dir = create_temporary_assets_directory(cfg, 0).unwrap();
         let assets_dir = assets_temp_dir.path();
         let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir);
-        assets_config.unwrap();
+        assert_eq!(
+            assets_config.err().unwrap().to_string(),
+            format!(
+                "ERR: EOF while parsing a value at line 1 column 0 - {}",
+                assets_dir.join(ASSETS_CONFIG_FILENAME).to_str().unwrap()
+            )
+        );
     }
 
     #[test]
-    #[should_panic]
     fn invalid_json_config_file() {
         let cfg = Some(HashMap::from([("".to_string(), "[[[{{{".to_string())]));
         let assets_temp_dir = create_temporary_assets_directory(cfg, 0).unwrap();
         let assets_dir = assets_temp_dir.path();
         let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir);
-        assets_config.unwrap();
+        assert_eq!(
+            assets_config.err().unwrap().to_string(),
+            format!(
+                "ERR: key must be a string at line 1 column 5 - {}",
+                assets_dir.join(ASSETS_CONFIG_FILENAME).to_str().unwrap()
+            )
+        );
     }
 
     #[test]
-    #[should_panic]
     fn invalid_glob_pattern() {
         let cfg = Some(HashMap::from([(
             "".to_string(),
@@ -617,7 +631,13 @@ mod with_tempdir {
         let assets_temp_dir = create_temporary_assets_directory(cfg, 0).unwrap();
         let assets_dir = assets_temp_dir.path();
         let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir);
-        assets_config.unwrap();
+        assert_eq!(
+            assets_config.err().unwrap().to_string(),
+            format!(
+                "ERR: the value in `match` field is not a valid glob pattern at line 2 column 30 - {}",
+                assets_dir.join(ASSETS_CONFIG_FILENAME).to_str().unwrap()
+            )
+        );
     }
 
     #[test]
