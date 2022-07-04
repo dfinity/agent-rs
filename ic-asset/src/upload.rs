@@ -19,7 +19,7 @@ pub async fn upload(
     files: HashMap<String, PathBuf>,
 ) -> anyhow::Result<()> {
     let random = files.iter().next();
-    let c = random.unwrap().1.canonicalize();
+    let c = random.unwrap().1.canonicalize().unwrap();
     let asset_locations: Vec<AssetLocation> = files
         .iter()
         .map(|x| AssetLocation {
@@ -43,7 +43,7 @@ pub async fn upload(
         &batch_id,
         asset_locations,
         &container_assets,
-        AssetSourceDirectoryConfiguration::load(std::path::Path::new("/todo"))?,
+        AssetSourceDirectoryConfiguration::load(c.as_path())?,
     )
     .await?;
 
