@@ -61,8 +61,7 @@ pub(crate) fn create_new_assets(
                 .config
                 .cache
                 .as_ref()
-                .and_then(|c| c.max_age)
-                .map(|c| c);
+                .and_then(|c| c.max_age);
 
             operations.push(BatchOperationKind::CreateAsset(CreateAssetArguments {
                 key: key.clone(),
