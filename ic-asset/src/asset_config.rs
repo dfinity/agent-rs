@@ -154,19 +154,18 @@ impl AssetConfigTreeNode {
     ) -> anyhow::Result<()> {
         let config_path = dir.join(ASSETS_CONFIG_FILENAME);
         let mut rules = vec![];
-        if let Ok(file) = fs::read(&config_path) {
-            match serde_json::from_slice(&file) {
-                Ok::<Vec<InterimAssetConfigRule>, _>(v) => {
-                    for interim in v {
-                        rules.push(AssetConfigRule::from_interim(interim, dir)?);
-                    }
+        let file = fs::read(&config_path)?;
+        match serde_json::from_slice(&file) {
+            Ok::<Vec<InterimAssetConfigRule>, _>(v) => {
+                for interim in v {
+                    rules.push(AssetConfigRule::from_interim(interim, dir)?);
                 }
-                Err(e) => bail!(
-                    "ERR: {} - {}",
-                    e.to_string(),
-                    &config_path.to_str().unwrap()
-                ),
             }
+            Err(e) => bail!(
+                "ERR: {} - {}",
+                e.to_string(),
+                &config_path.to_str().unwrap()
+            ),
         }
 
         let config_tree = Self { parent, rules };
@@ -214,6 +213,7 @@ mod with_tempdir {
 
     use super::*;
     use std::io::Write;
+    use std::os::unix::prelude::PermissionsExt;
     use std::{collections::BTreeMap, fs::File};
     use tempfile::{Builder, TempDir};
 
@@ -575,6 +575,32 @@ mod with_tempdir {
             assets_config.get_asset_config(assets_dir.join("doesnt.exists").as_path())?,
             AssetConfig::default()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn no_read_permission() -> anyhow::Result<()> {
+        let cfg = Some(HashMap::from([(
+            "".to_string(),
+            r#"[
+        {"match": "*", "cache": {"max_age": 20}}
+    ]"#
+            .to_string(),
+        )]));
+        let assets_temp_dir = create_temporary_assets_directory(cfg, 1).unwrap();
+        let assets_dir = assets_temp_dir.path().canonicalize()?;
+        std::fs::set_permissions(
+            assets_dir.join(ASSETS_CONFIG_FILENAME).as_path(),
+            std::fs::Permissions::from_mode(0o000),
+        )
+        .unwrap();
+
+        let assets_config = AssetSourceDirectoryConfiguration::load(&assets_dir);
+        assert_eq!(
+            assets_config.err().unwrap().to_string(),
+            "Permission denied (os error 13)".to_string()
+        );
+
         Ok(())
     }
 }
