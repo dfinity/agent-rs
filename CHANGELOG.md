@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Added support for asset canister config files in `ic-assets`.
+- reads configuration from `.ic-assets.json` config files if placed inside assets directory, multiple config files can be used (nested in subdirectories)
+- runs successfully only if the config file is right format (valid JSON, valid glob pattern, JSON fields in correct format)
+
 ## [0.18.0] - 2022-06-23
 
 Breaking change: ic-asset::sync() now synchronizes from multiple source directories.
@@ -20,8 +24,6 @@ Also, ic-asset::sync:
 ## [0.17.1] - 2022-06-22
 
 [agent-rs/349](https://github.com/dfinity/agent-rs/pull/349) feat: add with_max_response_body_size to ReqwestHttpReplicaV2Transport
-
-Added support for asset canister config files in `ic-assets`.
 
 ## [0.17.0] - 2022-05-19
 
