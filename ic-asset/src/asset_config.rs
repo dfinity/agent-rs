@@ -495,6 +495,7 @@ mod with_tempdir {
             (
                 "".to_string(),
                 r#"[
+        {"match": "**/*", "cache": {"max_age": 999}},
         {"match": "nested/**/*", "cache": {"max_age": 900}},
         {"match": "nested/deep/*", "cache": {"max_age": 800}},
         {"match": "nested/**/*.toml","cache": {"max_age": 700}}
@@ -523,7 +524,6 @@ mod with_tempdir {
         let assets_temp_dir = create_temporary_assets_directory(cfg, 7).unwrap();
         let assets_dir = assets_temp_dir.path().canonicalize()?;
 
-        println!("ff");
         let assets_config = dbg!(AssetSourceDirectoryConfiguration::load(&assets_dir))?;
         for f in [
             "index.html",
@@ -534,7 +534,10 @@ mod with_tempdir {
         ] {
             assert_eq!(
                 assets_config.get_asset_config(assets_dir.join(f).as_path())?,
-                AssetConfig::default()
+                AssetConfig {
+                    cache: Some(CacheConfig { max_age: Some(999) }),
+                    ..Default::default()
+                }
             );
         }
 
