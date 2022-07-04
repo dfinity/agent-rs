@@ -59,7 +59,13 @@ pub(crate) fn create_new_assets(
             operations.push(BatchOperationKind::CreateAsset(CreateAssetArguments {
                 key: key.clone(),
                 content_type: project_asset.media_type.to_string(),
-                max_age: project_asset.max_age,
+                max_age: project_asset
+                    .asset_descriptor
+                    .config
+                    .cache
+                    .as_ref()
+                    .unwrap() // TODO
+                    .max_age,
                 // headers: project_asset.headers,
             }));
         }

@@ -55,7 +55,7 @@ pub(crate) struct AssetSourceDirectoryConfiguration {
     config_map: ConfigMap,
 }
 
-#[derive(Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Default, PartialEq, Eq, Serialize, Clone)]
 pub(crate) struct AssetConfig {
     pub(crate) cache: Option<CacheConfig>,
     pub(crate) headers: Option<HeadersConfig>,
