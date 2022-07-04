@@ -69,7 +69,7 @@ fn gather_asset_descriptors(dirs: &[&Path]) -> anyhow::Result<Vec<AssetDescripto
             .filter_entry(|entry| !filename_starts_with_dot(entry))
             .filter_map(|r| {
                 r.ok().filter(|entry| entry.file_type().is_file()).map(|e| {
-                    let source = e.path().canonicalize().unwrap().to_path_buf();
+                    let source = e.path().canonicalize().unwrap();
                     let relative = source.strip_prefix(&dir).expect("cannot strip prefix");
                     let key = String::from("/") + relative.to_string_lossy().as_ref();
                     let config = configuration
