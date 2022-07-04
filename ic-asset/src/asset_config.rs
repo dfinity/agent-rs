@@ -5,8 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::HashMap,
-    fs::File,
-    io::BufReader,
+    fs,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -21,14 +20,6 @@ pub(crate) struct CacheConfig {
     pub(crate) max_age: u64,
 }
 
-#[derive(Deserialize)]
-struct InterimAssetConfigRule {
-    r#match: String,
-    cache: Option<CacheConfig>,
-    #[serde(default, deserialize_with = "deser_headers")]
-    headers: Maybe<HeadersConfig>,
-}
-
 #[derive(Derivative)]
 #[derivative(Debug)]
 struct AssetConfigRule {
@@ -38,57 +29,11 @@ struct AssetConfigRule {
     headers: Maybe<HeadersConfig>,
 }
 
-impl AssetConfigRule {
-    fn from_interim(
-        InterimAssetConfigRule {
-            r#match,
-            cache,
-            headers,
-        }: InterimAssetConfigRule,
-        config_file_parent_dir: &Path,
-    ) -> anyhow::Result<Self> {
-        let glob = Glob::new(
-            config_file_parent_dir
-                .join(&r#match)
-                .to_str()
-                .context("not a ")?,
-        )
-        .context(format!("{} is not a valid glob pattern", r#match))?
-        .compile_matcher();
-        Ok(Self {
-            r#match: glob,
-            cache,
-            headers,
-        })
-    }
-}
-
 #[derive(Deserialize, Debug)]
 enum Maybe<T> {
     Null,
     Absent,
     Value(T),
-}
-
-impl<T> Default for Maybe<T> {
-    fn default() -> Self {
-        Self::Absent
-    }
-}
-
-fn deser_headers<'de, D>(deserializer: D) -> Result<Maybe<HeadersConfig>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    match serde_json::value::Value::deserialize(deserializer)? {
-        Value::Object(v) => Ok(Maybe::Value(
-            v.into_iter().collect::<HashMap<String, Value>>(),
-        )),
-        Value::Null => Ok(Maybe::Null),
-        _ => Err(serde::de::Error::custom(
-            "wrong data format for field `headers` (only map or null are allowed)",
-        )),
-    }
 }
 
 fn fmt_glob_field(
@@ -154,18 +99,70 @@ impl AssetSourceDirectoryConfiguration {
     }
 }
 
+#[derive(Deserialize)]
+struct InterimAssetConfigRule {
+    r#match: String,
+    cache: Option<CacheConfig>,
+    #[serde(default, deserialize_with = "deser_headers")]
+    headers: Maybe<HeadersConfig>,
+}
+
+impl<T> Default for Maybe<T> {
+    fn default() -> Self {
+        Self::Absent
+    }
+}
+
+fn deser_headers<'de, D>(deserializer: D) -> Result<Maybe<HeadersConfig>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    match serde_json::value::Value::deserialize(deserializer)? {
+        Value::Object(v) => Ok(Maybe::Value(
+            v.into_iter().collect::<HashMap<String, Value>>(),
+        )),
+        Value::Null => Ok(Maybe::Null),
+        _ => Err(serde::de::Error::custom(
+            "wrong data format for field `headers` (only map or null are allowed)",
+        )),
+    }
+}
+
+impl AssetConfigRule {
+    fn from_interim(
+        InterimAssetConfigRule {
+            r#match,
+            cache,
+            headers,
+        }: InterimAssetConfigRule,
+        config_file_parent_dir: &Path,
+    ) -> anyhow::Result<Self> {
+        let glob = Glob::new(
+            config_file_parent_dir
+                .join(&r#match)
+                .to_str()
+                .context(format!("{} is not a valid glob pattern", r#match))?,
+        )
+        .context(format!("{} is not a valid glob pattern", r#match))?
+        .compile_matcher();
+        Ok(Self {
+            r#match: glob,
+            cache,
+            headers,
+        })
+    }
+}
+
 impl AssetConfigTreeNode {
     fn load(
         parent: Option<Arc<AssetConfigTreeNode>>,
         dir: &Path,
         configs: &mut HashMap<PathBuf, Arc<AssetConfigTreeNode>>,
     ) -> anyhow::Result<()> {
-        let mut rules = vec![];
         let config_path = dir.join(ASSETS_CONFIG_FILENAME);
-        if let Ok(file) = File::open(&config_path) {
-            let reader = BufReader::new(file);
-
-            match serde_json::from_reader(reader) {
+        let mut rules = vec![];
+        if let Ok(file) = fs::read(&config_path) {
+            match serde_json::from_slice(&file) {
                 Ok::<Vec<InterimAssetConfigRule>, _>(v) => {
                     for interim in v {
                         rules.push(AssetConfigRule::from_interim(interim, dir)?);
@@ -597,7 +594,7 @@ mod with_tempdir {
         assert_eq!(
             assets_config.err().unwrap().to_string(),
             format!(
-                "ERR: invalid type: sequence, expected a string at line 1 column 3 - {}",
+                "ERR: invalid type: sequence, expected a string at line 1 column 2 - {}",
                 assets_dir.join(ASSETS_CONFIG_FILENAME).to_str().unwrap()
             )
         );
