@@ -17,7 +17,7 @@ type ConfigMap = HashMap<PathBuf, Arc<AssetConfigTreeNode>>;
 
 #[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, Eq)]
 pub(crate) struct CacheConfig {
-    pub(crate) max_age: u64,
+    pub(crate) max_age: Option<u64>,
 }
 
 #[derive(Derivative)]
@@ -275,7 +275,7 @@ mod with_tempdir {
             assert_eq!(
                 assets_config.get_asset_config(assets_dir.join(f).as_path())?,
                 AssetConfig {
-                    cache: Some(CacheConfig { max_age: 333 }),
+                    cache: Some(CacheConfig { max_age: Some(333) }),
                     ..Default::default()
                 }
             );
@@ -316,7 +316,7 @@ mod with_tempdir {
             assert_eq!(
                 assets_config.get_asset_config(assets_dir.join(f).as_path())?,
                 AssetConfig {
-                    cache: Some(CacheConfig { max_age: 111 }),
+                    cache: Some(CacheConfig { max_age: Some(111) }),
                     ..Default::default()
                 }
             );
@@ -331,7 +331,7 @@ mod with_tempdir {
             assert_eq!(
                 assets_config.get_asset_config(assets_dir.join(f).as_path())?,
                 AssetConfig {
-                    cache: Some(CacheConfig { max_age: 333 }),
+                    cache: Some(CacheConfig { max_age: Some(333) }),
                     ..Default::default()
                 }
             );
@@ -390,7 +390,7 @@ mod with_tempdir {
         let parsed_asset_config =
             assets_config.get_asset_config(assets_dir.join("index.html").as_path())?;
         let expected_asset_config = AssetConfig {
-            cache: Some(CacheConfig { max_age: 88 }),
+            cache: Some(CacheConfig { max_age: Some(88) }),
             headers: Some(HashMap::from([
                 (
                     "x-content-type-options".to_string(),
@@ -539,7 +539,7 @@ mod with_tempdir {
         assert_eq!(
             assets_config.get_asset_config(assets_dir.join("nested/the-thing.txt").as_path())?,
             AssetConfig {
-                cache: Some(CacheConfig { max_age: 400 }),
+                cache: Some(CacheConfig { max_age: Some(400) }),
                 ..Default::default()
             },
         );
@@ -547,7 +547,7 @@ mod with_tempdir {
             assets_config
                 .get_asset_config(assets_dir.join("nested/deep/the-next-thing.toml").as_path())?,
             AssetConfig {
-                cache: Some(CacheConfig { max_age: 100 }),
+                cache: Some(CacheConfig { max_age: Some(100) }),
                 ..Default::default()
             },
         );

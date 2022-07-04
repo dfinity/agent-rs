@@ -217,7 +217,7 @@ async fn make_project_asset(
     )
     .await?;
 
-    let max_age = asset_config.cache.map(|cache| cache.max_age);
+    let max_age = asset_config.cache.map(|cache| cache.max_age.unwrap()); // TODO
 
     Ok(ProjectAsset {
         asset_location,
