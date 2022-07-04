@@ -55,19 +55,10 @@ pub(crate) struct AssetSourceDirectoryConfiguration {
     config_map: ConfigMap,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Default, PartialEq, Eq, Serialize)]
 pub(crate) struct AssetConfig {
     pub(crate) cache: Option<CacheConfig>,
     pub(crate) headers: Option<HeadersConfig>,
-}
-
-impl Default for AssetConfig {
-    fn default() -> Self {
-        Self {
-            headers: None,
-            cache: None,
-        }
-    }
 }
 
 #[derive(Debug, Default)]
