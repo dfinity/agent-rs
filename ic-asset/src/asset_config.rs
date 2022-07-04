@@ -79,7 +79,7 @@ struct AssetConfigTreeNode {
 impl AssetSourceDirectoryConfiguration {
     pub(crate) fn load(root_dir: &Path) -> anyhow::Result<Self> {
         let mut config_map = HashMap::new();
-        AssetConfigTreeNode::load(None, &root_dir, &mut config_map)?;
+        AssetConfigTreeNode::load(None, root_dir, &mut config_map)?;
         Ok(Self { config_map })
     }
 
@@ -191,7 +191,7 @@ impl AssetConfigTreeNode {
 
     fn get_config(&self, canonical_path: &Path) -> AssetConfig {
         let base_config = match &self.parent {
-            Some(parent) => parent.get_config(&canonical_path),
+            Some(parent) => parent.get_config(canonical_path),
             None => AssetConfig::default(),
         };
         self.rules
@@ -416,7 +416,7 @@ mod with_tempdir {
                 ),
                 (
                     "x-xss-protection".to_string(),
-                    Number(serde_json::Number::from(1).into()),
+                    Number(serde_json::Number::from(1)),
                 ),
             ])),
         };

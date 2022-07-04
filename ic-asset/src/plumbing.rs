@@ -6,6 +6,7 @@ use crate::params::CanisterCallParams;
 
 use crate::asset_canister::chunk::create_chunk;
 use crate::semaphores::Semaphores;
+use anyhow::Context;
 use candid::Nat;
 use futures::future::try_join_all;
 use futures::TryFutureExt;
@@ -216,7 +217,7 @@ async fn make_project_asset(
     )
     .await?;
 
-    let max_age = asset_config.cache.and_then(|cache|cache.max_age);
+    let max_age = asset_config.cache.map(|cache| cache.max_age);
 
     Ok(ProjectAsset {
         asset_location,
@@ -240,6 +241,7 @@ pub(crate) async fn make_project_assets(
         .iter()
         .map(|loc| {
             let asset_config = asset_configs
+                // TODO
                 .get_asset_config(std::path::Path::new("nfnf"))
                 .context("no")
                 .unwrap();
