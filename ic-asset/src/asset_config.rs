@@ -70,7 +70,9 @@ struct AssetConfigTreeNode {
 impl AssetSourceDirectoryConfiguration {
     pub(crate) fn load(root_dir: &Path) -> anyhow::Result<Self> {
         let mut config_map = HashMap::new();
-        AssetConfigTreeNode::load(None, root_dir, &mut config_map)?;
+        let root_dir = root_dir.canonicalize()?;
+        AssetConfigTreeNode::load(None, &root_dir, &mut config_map)?;
+
         Ok(Self { config_map })
     }
 
@@ -218,7 +220,7 @@ mod with_tempdir {
     fn create_temporary_assets_directory(
         config_files: Option<HashMap<String, String>>,
         assets_count: usize,
-    ) -> Result<TempDir, std::io::Error> {
+    ) -> anyhow::Result<TempDir> {
         let assets_dir = Builder::new().prefix("assets").rand_bytes(5).tempdir()?;
 
         let _subdirs = ["css", "js", "nested/deep"]
@@ -268,9 +270,9 @@ mod with_tempdir {
             r#"[{"match": "*", "cache": {"max_age": 333}}]"#.to_string(),
         )]);
         let assets_temp_dir = create_temporary_assets_directory(Some(cfg), 7).unwrap();
-        let assets_dir = assets_temp_dir.path();
+        let assets_dir = assets_temp_dir.path().canonicalize()?;
 
-        let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir)?;
+        let assets_config = AssetSourceDirectoryConfiguration::load(&assets_dir)?;
         for f in ["nested/the-thing.txt", "nested/deep/the-next-thing.toml"] {
             assert_eq!(
                 assets_config.get_asset_config(assets_dir.join(f).as_path())?,
@@ -309,9 +311,9 @@ mod with_tempdir {
             ),
         ]));
         let assets_temp_dir = create_temporary_assets_directory(cfg, 7).unwrap();
-        let assets_dir = assets_temp_dir.path();
+        let assets_dir = assets_temp_dir.path().canonicalize()?;
 
-        let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir)?;
+        let assets_config = AssetSourceDirectoryConfiguration::load(&assets_dir)?;
         for f in ["nested/the-thing.txt", "nested/deep/the-next-thing.toml"] {
             assert_eq!(
                 assets_config.get_asset_config(assets_dir.join(f).as_path())?,
@@ -385,8 +387,8 @@ mod with_tempdir {
             .to_string(),
         )]));
         let assets_temp_dir = create_temporary_assets_directory(cfg, 1).unwrap();
-        let assets_dir = assets_temp_dir.path();
-        let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir)?;
+        let assets_dir = assets_temp_dir.path().canonicalize()?;
+        let assets_config = AssetSourceDirectoryConfiguration::load(&assets_dir)?;
         let parsed_asset_config =
             assets_config.get_asset_config(assets_dir.join("index.html").as_path())?;
         let expected_asset_config = AssetConfig {
@@ -519,10 +521,10 @@ mod with_tempdir {
             ),
         ]));
         let assets_temp_dir = create_temporary_assets_directory(cfg, 7).unwrap();
-        let assets_dir = assets_temp_dir.path();
+        let assets_dir = assets_temp_dir.path().canonicalize()?;
 
         println!("ff");
-        let assets_config = dbg!(AssetSourceDirectoryConfiguration::load(assets_dir))?;
+        let assets_config = dbg!(AssetSourceDirectoryConfiguration::load(&assets_dir))?;
         for f in [
             "index.html",
             "js/index.js",
@@ -556,7 +558,7 @@ mod with_tempdir {
     }
 
     #[test]
-    fn no_content_config_file() {
+    fn no_content_config_file() -> anyhow::Result<()> {
         let cfg = Some(HashMap::from([
             ("".to_string(), "".to_string()),
             ("css".to_string(), "".to_string()),
@@ -565,8 +567,8 @@ mod with_tempdir {
             ("nested/deep".to_string(), "".to_string()),
         ]));
         let assets_temp_dir = create_temporary_assets_directory(cfg, 0).unwrap();
-        let assets_dir = assets_temp_dir.path();
-        let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir);
+        let assets_dir = assets_temp_dir.path().canonicalize()?;
+        let assets_config = AssetSourceDirectoryConfiguration::load(&assets_dir);
         assert_eq!(
             assets_config.err().unwrap().to_string(),
             format!(
@@ -574,14 +576,15 @@ mod with_tempdir {
                 assets_dir.join(ASSETS_CONFIG_FILENAME).to_str().unwrap()
             )
         );
+        Ok(())
     }
 
     #[test]
-    fn invalid_json_config_file() {
+    fn invalid_json_config_file() -> anyhow::Result<()> {
         let cfg = Some(HashMap::from([("".to_string(), "[[[{{{".to_string())]));
         let assets_temp_dir = create_temporary_assets_directory(cfg, 0).unwrap();
-        let assets_dir = assets_temp_dir.path();
-        let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir);
+        let assets_dir = assets_temp_dir.path().canonicalize()?;
+        let assets_config = AssetSourceDirectoryConfiguration::load(&assets_dir);
         assert_eq!(
             assets_config.err().unwrap().to_string(),
             format!(
@@ -589,10 +592,11 @@ mod with_tempdir {
                 assets_dir.join(ASSETS_CONFIG_FILENAME).to_str().unwrap()
             )
         );
+        Ok(())
     }
 
     #[test]
-    fn invalid_glob_pattern() {
+    fn invalid_glob_pattern() -> anyhow::Result<()> {
         let cfg = Some(HashMap::from([(
             "".to_string(),
             r#"[
@@ -601,8 +605,8 @@ mod with_tempdir {
             .to_string(),
         )]));
         let assets_temp_dir = create_temporary_assets_directory(cfg, 0).unwrap();
-        let assets_dir = assets_temp_dir.path();
-        let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir);
+        let assets_dir = assets_temp_dir.path().canonicalize()?;
+        let assets_config = AssetSourceDirectoryConfiguration::load(&assets_dir);
         assert_eq!(
             assets_config.err().unwrap().to_string(),
             format!(
@@ -610,14 +614,15 @@ mod with_tempdir {
                 assets_dir.join(ASSETS_CONFIG_FILENAME).to_str().unwrap()
             )
         );
+        Ok(())
     }
 
     #[test]
     fn invalid_asset_path() -> anyhow::Result<()> {
         let cfg = Some(HashMap::new());
         let assets_temp_dir = create_temporary_assets_directory(cfg, 0).unwrap();
-        let assets_dir = assets_temp_dir.path();
-        let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir)?;
+        let assets_dir = assets_temp_dir.path().canonicalize()?;
+        let assets_config = AssetSourceDirectoryConfiguration::load(&assets_dir)?;
         assert_eq!(
             assets_config.get_asset_config(assets_dir.join("doesnt.exists").as_path())?,
             AssetConfig::default()
