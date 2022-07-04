@@ -432,61 +432,6 @@ mod with_tempdir {
         Ok(())
     }
 
-    //     #[test]
-    //     fn stringify_different_json_types_in_headers() -> anyhow::Result<()> {
-    //         let cfg = Some(HashMap::from([(
-    //             "".to_string(),
-    //             r#"
-    //         [
-    //           {
-    //             "match": "*",
-    //             "headers": {
-    //                 "map": {"homepage": "https://internetcomputer.org"},
-    //                 "null": null,
-    //                 "number": 3.14,
-    //                 "number-int": 888,
-    //                 "string": "well",
-    //                 "bool": true,
-    //                 "array": ["a", "b", "c"]
-    //             }
-    //           }
-    //         ]
-    //         "#
-    //             .to_string(),
-    //         )]));
-    //         let assets_temp_dir = create_temporary_assets_directory(cfg, 1).unwrap();
-    //         let assets_dir = assets_temp_dir.path();
-    //         let assets_config = AssetSourceDirectoryConfiguration::load(assets_dir)?;
-    //         let asset_config = assets_config.get_asset_config(assets_dir.join("index.html").as_path());
-
-    //         assert_eq!(
-    //             serde_json::to_string_pretty(&asset_config)?,
-    //             String::from(
-    //                 r#"{
-    //   "cache": {
-    //     "max_age": 0
-    //   },
-    //   "headers": {
-    //     "null": null,
-    //     "bool": true,
-    //     "map": {
-    //       "homepage": "https://internetcomputer.org"
-    //     },
-    //     "number": 3.14,
-    //     "number-int": 888,
-    //     "array": [
-    //       "a",
-    //       "b",
-    //       "c"
-    //     ],
-    //     "string": "well"
-    //   }
-    // }"#
-    //             )
-    //         );
-    //         Ok(())
-    //     }
-
     #[test]
     fn prioritization() -> anyhow::Result<()> {
         // 1. the most deeply nested config file takes precedens over the one in parent dir
