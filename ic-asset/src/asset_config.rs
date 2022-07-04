@@ -213,7 +213,7 @@ mod with_tempdir {
 
     use super::*;
     use std::io::Write;
-    #[cfg(target_os = "linux")]
+    #[cfg(target_family = "unix")]
     use std::os::unix::prelude::PermissionsExt;
     use std::{collections::BTreeMap, fs::File};
     use tempfile::{Builder, TempDir};
@@ -579,7 +579,7 @@ mod with_tempdir {
         Ok(())
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(target_family = "unix")]
     #[test]
     fn no_read_permission() -> anyhow::Result<()> {
         let cfg = Some(HashMap::from([(
