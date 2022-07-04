@@ -63,14 +63,14 @@ fn gather_asset_descriptors(dirs: &[&Path]) -> anyhow::Result<Vec<AssetDescripto
     let mut asset_descriptors: HashMap<String, AssetDescriptor> = HashMap::new();
     for dir in dirs {
         let dir = dir.canonicalize().unwrap();
-        let configuration = AssetSourceDirectoryConfiguration::load(dir)?;
-        let asset_descriptors_interim = WalkDir::new(dir)
+        let configuration = AssetSourceDirectoryConfiguration::load(&dir)?;
+        let asset_descriptors_interim = WalkDir::new(&dir)
             .into_iter()
             .filter_entry(|entry| !filename_starts_with_dot(entry))
             .filter_map(|r| {
                 r.ok().filter(|entry| entry.file_type().is_file()).map(|e| {
                     let source = e.path().canonicalize().unwrap().to_path_buf();
-                    let relative = source.strip_prefix(dir).expect("cannot strip prefix");
+                    let relative = source.strip_prefix(&dir).expect("cannot strip prefix");
                     let key = String::from("/") + relative.to_string_lossy().as_ref();
                     let config = configuration
                         .get_asset_config(&source)
