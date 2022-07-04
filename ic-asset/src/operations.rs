@@ -56,12 +56,14 @@ pub(crate) fn create_new_assets(
 ) {
     for (key, project_asset) in project_assets {
         if !container_assets.contains_key(key) {
-            let max_age =
-                if let Some(cache_cfg) = project_asset.asset_descriptor.config.cache.as_ref() {
-                    cache_cfg.max_age
-                } else {
-                    None
-                };
+            let max_age = project_asset
+                .asset_descriptor
+                .config
+                .cache
+                .as_ref()
+                .and_then(|c| c.max_age)
+                .map(|c| c);
+
             operations.push(BatchOperationKind::CreateAsset(CreateAssetArguments {
                 key: key.clone(),
                 content_type: project_asset.media_type.to_string(),
