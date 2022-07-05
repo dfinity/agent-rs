@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Added support for asset canister config files in `ic-assets`.
+- reads configuration from `.ic-assets.json` config files if placed inside assets directory, multiple config files can be used (nested in subdirectories)
+- runs successfully only if the config file is right format (valid JSON, valid glob pattern, JSON fields in correct format)
+- example of `.ic-assets.json` file format:
+  ```
+  [
+      {
+          "match": "*",
+          "cache": {
+              "max_age": 20
+          }
+      }
+  ]
+  ```
+- works only during asset creation
+- the config file is being taken into account only when calling `ic_asset::sync` (i.e. `dfx deploy` or `icx-asset sync`)
+
 ## [0.18.0] - 2022-06-23
 
 Breaking change: ic-asset::sync() now synchronizes from multiple source directories.

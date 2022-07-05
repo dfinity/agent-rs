@@ -1,13 +1,14 @@
 use crate::asset_canister::batch::{commit_batch, create_batch};
 use crate::asset_canister::list::list_assets;
 use crate::asset_canister::protocol::{AssetDetails, BatchOperationKind};
+use crate::asset_config::AssetSourceDirectoryConfiguration;
 use crate::params::CanisterCallParams;
 
 use crate::operations::{
     create_new_assets, delete_obsolete_assets, set_encodings, unset_obsolete_encodings,
 };
-use crate::plumbing::{make_project_assets, AssetLocation, ProjectAsset};
-use anyhow::bail;
+use crate::plumbing::{make_project_assets, AssetDescriptor, ProjectAsset};
+use anyhow::{bail, Context};
 use ic_utils::Canister;
 use std::collections::HashMap;
 use std::path::Path;
@@ -20,7 +21,7 @@ pub async fn sync(
     dirs: &[&Path],
     timeout: Duration,
 ) -> anyhow::Result<()> {
-    let asset_locations = gather_asset_locations(dirs)?;
+    let asset_descriptors = gather_asset_descriptors(dirs)?;
 
     let canister_call_params = CanisterCallParams { canister, timeout };
 
@@ -35,7 +36,7 @@ pub async fn sync(
     let project_assets = make_project_assets(
         &canister_call_params,
         &batch_id,
-        asset_locations,
+        asset_descriptors,
         &container_assets,
     )
     .await?;
@@ -56,32 +57,53 @@ fn filename_starts_with_dot(entry: &walkdir::DirEntry) -> bool {
         .unwrap_or(false)
 }
 
-fn gather_asset_locations(dirs: &[&Path]) -> anyhow::Result<Vec<AssetLocation>> {
-    let mut asset_descriptors: HashMap<String, AssetLocation> = HashMap::new();
+fn gather_asset_descriptors(dirs: &[&Path]) -> anyhow::Result<Vec<AssetDescriptor>> {
+    let mut asset_descriptors: HashMap<String, AssetDescriptor> = HashMap::new();
     for dir in dirs {
-        let asset_locations = WalkDir::new(dir)
+        let dir = dir.canonicalize().with_context(|| {
+            format!(
+                "unable to canonicalize the following path: {}",
+                dir.display()
+            )
+        })?;
+        let configuration = AssetSourceDirectoryConfiguration::load(&dir)?;
+        let mut asset_descriptors_interim = vec![];
+        for e in WalkDir::new(&dir)
             .into_iter()
             .filter_entry(|entry| !filename_starts_with_dot(entry))
-            .filter_map(|r| {
-                r.ok().filter(|entry| entry.file_type().is_file()).map(|e| {
-                    let source = e.path().to_path_buf();
-                    let relative = source.strip_prefix(dir).expect("cannot strip prefix");
-                    let key = String::from("/") + relative.to_string_lossy().as_ref();
+            .filter_map(|r| r.ok())
+            .filter(|entry| entry.file_type().is_file())
+        {
+            let source = e.path().canonicalize().with_context(|| {
+                format!(
+                    "unable to canonicalize the path when gathering asset descriptors: {}",
+                    dir.display()
+                )
+            })?;
+            let relative = source.strip_prefix(&dir).expect("cannot strip prefix");
+            let key = String::from("/") + relative.to_string_lossy().as_ref();
+            let config = configuration.get_asset_config(&source).context(format!(
+                "failed to get config for asset: {}",
+                source.display()
+            ))?;
 
-                    AssetLocation { source, key }
-                })
+            asset_descriptors_interim.push(AssetDescriptor {
+                source,
+                key,
+                config,
             })
-            .collect::<Vec<_>>();
-        for asset_location in asset_locations {
-            if let Some(already_seen) = asset_descriptors.get(&asset_location.key) {
+        }
+
+        for asset_descriptor in asset_descriptors_interim {
+            if let Some(already_seen) = asset_descriptors.get(&asset_descriptor.key) {
                 bail!(
                     "Asset with key '{}' defined at {} and {}",
-                    &asset_location.key,
-                    asset_location.source.display(),
+                    &asset_descriptor.key,
+                    asset_descriptor.source.display(),
                     already_seen.source.display()
                 )
             }
-            asset_descriptors.insert(asset_location.key.clone(), asset_location);
+            asset_descriptors.insert(asset_descriptor.key.clone(), asset_descriptor);
         }
     }
     Ok(asset_descriptors.into_values().collect())
