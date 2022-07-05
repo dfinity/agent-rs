@@ -126,7 +126,7 @@ icx_asset_list() {
     echo "b_duplicate_contents" >multiple/b/duplicate
 
     assert_command_fail icx_asset_sync multiple/a multiple/b
-    assert_match "Error: Asset with key '/duplicate' defined at [^\0]+/multiple/b/duplicate and [^\0]+/multiple/a/duplicate"
+    assert_match "[^\0]+Asset with key [^\0]+ defined at [^\0]+"
 }
 
 @test "ignores filenames and directories starting with a dot" {
