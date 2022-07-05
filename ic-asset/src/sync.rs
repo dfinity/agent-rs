@@ -62,7 +62,12 @@ fn filename_starts_with_dot(entry: &walkdir::DirEntry) -> bool {
 fn gather_asset_descriptors(dirs: &[&Path]) -> anyhow::Result<Vec<AssetDescriptor>> {
     let mut asset_descriptors: HashMap<String, AssetDescriptor> = HashMap::new();
     for dir in dirs {
-        let dir = dir.canonicalize().unwrap();
+        let dir = dir.canonicalize().with_context(|| {
+            format!(
+                "unable to canonicalize the following path: {}",
+                dir.display()
+            )
+        })?;
         let configuration = AssetSourceDirectoryConfiguration::load(&dir)?;
         let asset_descriptors_interim = WalkDir::new(&dir)
             .into_iter()
