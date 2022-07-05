@@ -154,13 +154,20 @@ impl AssetConfigTreeNode {
     ) -> anyhow::Result<()> {
         let config_path = dir.join(ASSETS_CONFIG_FILENAME);
         let mut rules = vec![];
-        let file = fs::read(&config_path)?;
-        match serde_json::from_slice(&file) {
-            Ok::<Vec<InterimAssetConfigRule>, _>(v) => {
-                for interim in v {
-                    rules.push(AssetConfigRule::from_interim(interim, dir)?);
+        match fs::read(&config_path) {
+            Ok(ref file) => match serde_json::from_slice(file) {
+                Ok::<Vec<InterimAssetConfigRule>, _>(v) => {
+                    for interim in v {
+                        rules.push(AssetConfigRule::from_interim(interim, dir)?);
+                    }
                 }
-            }
+                Err(e) => bail!(
+                    "ERR: {} - {}",
+                    e.to_string(),
+                    &config_path.to_str().unwrap()
+                ),
+            },
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
             Err(e) => bail!(
                 "ERR: {} - {}",
                 e.to_string(),
@@ -600,7 +607,14 @@ mod with_tempdir {
         let assets_config = AssetSourceDirectoryConfiguration::load(&assets_dir);
         assert_eq!(
             assets_config.err().unwrap().to_string(),
-            "Permission denied (os error 13)".to_string()
+            format!(
+                "ERR: Permission denied (os error 13) - {}",
+                assets_dir
+                    .join(ASSETS_CONFIG_FILENAME)
+                    .as_path()
+                    .to_str()
+                    .unwrap()
+            )
         );
 
         Ok(())
