@@ -126,7 +126,7 @@ icx_asset_list() {
     echo "b_duplicate_contents" >multiple/b/duplicate
 
     assert_command_fail icx_asset_sync multiple/a multiple/b
-    assert_match "Asset with key '/duplicate' defined at multiple/b/duplicate and multiple/a/duplicate"
+    assert_match "Asset with key '/duplicate' defined at $(pwd)/multiple/b/duplicate and $(pwd)/multiple/a/duplicate"
 }
 
 @test "ignores filenames and directories starting with a dot" {
