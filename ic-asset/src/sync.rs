@@ -23,8 +23,6 @@ pub async fn sync(
 ) -> anyhow::Result<()> {
     let asset_descriptors = gather_asset_descriptors(dirs)?;
 
-    println!("{:?}", asset_descriptors);
-
     let canister_call_params = CanisterCallParams { canister, timeout };
 
     let container_assets = list_assets(&canister_call_params).await?;
