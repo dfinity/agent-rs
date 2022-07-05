@@ -181,7 +181,7 @@ impl AssetConfigTreeNode {
         }
 
         let parent_ref = if rules.is_empty() && parent.is_some() {
-            parent.unwrap().clone()
+            parent.unwrap()
         } else {
             let config_tree = Self { parent, rules };
             Arc::new(config_tree)
