@@ -183,11 +183,12 @@ impl AssetConfigTreeNode {
             }
         }
 
-        let parent_ref = if rules.is_empty() && parent.is_some() {
-            parent.unwrap()
-        } else {
-            let config_tree = Self { parent, rules };
-            Arc::new(config_tree)
+        let parent_ref = match parent {
+            Some(p) if rules.is_empty() => p,
+            _ => {
+                let config_tree = Self { parent, rules };
+                Arc::new(config_tree)
+            }
         };
 
         configs.insert(dir.to_path_buf(), parent_ref.clone());
