@@ -77,17 +77,21 @@ impl AssetSourceDirectoryConfiguration {
     }
 
     pub(crate) fn get_asset_config(&self, canonical_path: &Path) -> anyhow::Result<AssetConfig> {
-        let parent_dir = canonical_path.parent().context(format!(
-            "unable to get the parent directory for asset path: {:?}",
-            canonical_path
-        ))?;
+        let parent_dir = canonical_path.parent().with_context(|| {
+            format!(
+                "unable to get the parent directory for asset path: {:?}",
+                canonical_path
+            )
+        })?;
         Ok(self
             .config_map
             .get(parent_dir)
-            .context(format!(
-                "unable to find default config for following path: {:?}",
-                parent_dir
-            ))?
+            .with_context(|| {
+                format!(
+                    "unable to find default config for following path: {:?}",
+                    parent_dir
+                )
+            })?
             .get_config(canonical_path))
     }
 }
@@ -134,9 +138,9 @@ impl AssetConfigRule {
             config_file_parent_dir
                 .join(&r#match)
                 .to_str()
-                .context(format!("{} is not a valid glob pattern", r#match))?,
+                .with_context(|| format!("{} is not a valid glob pattern", r#match))?,
         )
-        .context(format!("{} is not a valid glob pattern", r#match))?
+        .with_context(|| format!("{} is not a valid glob pattern", r#match))?
         .compile_matcher();
         Ok(Self {
             r#match: glob,
