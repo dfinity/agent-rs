@@ -64,30 +64,26 @@ fn gather_asset_descriptors(dirs: &[&Path]) -> anyhow::Result<Vec<AssetDescripto
     for dir in dirs {
         let dir = dir.canonicalize().unwrap();
         let configuration = AssetSourceDirectoryConfiguration::load(&dir)?;
-        let asset_descriptors_interim = WalkDir::new(&dir)
+        let mut asset_descriptors_interim = vec![];
+        for e in WalkDir::new(&dir)
             .into_iter()
-            .filter_entry(|entry| !filename_starts_with_dot(entry))
-            .filter_map(|r| {
-                r.ok().filter(|entry| entry.file_type().is_file()).map(|e| {
-                    let source = e.path().canonicalize().unwrap();
-                    let relative = source.strip_prefix(&dir).expect("cannot strip prefix");
-                    let key = String::from("/") + relative.to_string_lossy().as_ref();
-                    let config = configuration
-                        .get_asset_config(&source)
-                        .context(format!(
-                            "failed to get config for asset: {}",
-                            source.to_str().unwrap()
-                        ))
-                        .unwrap(); // TODO
+            .filter_entry(|entry| !filename_starts_with_dot(entry) && entry.file_type().is_file())
+            .filter_map(|r| r.ok())
+        {
+            let source = e.path().canonicalize().unwrap();
+            let relative = source.strip_prefix(&dir).expect("cannot strip prefix");
+            let key = String::from("/") + relative.to_string_lossy().as_ref();
+            let config = configuration.get_asset_config(&source).context(format!(
+                "failed to get config for asset: {}",
+                source.to_str().unwrap()
+            ))?;
 
-                    AssetDescriptor {
-                        source,
-                        key,
-                        config,
-                    }
-                })
+            asset_descriptors_interim.push(AssetDescriptor {
+                source,
+                key,
+                config,
             })
-            .collect::<Vec<_>>();
+        }
         for asset_descriptor in asset_descriptors_interim {
             if let Some(already_seen) = asset_descriptors.get(&asset_descriptor.key) {
                 bail!(
