@@ -17,15 +17,11 @@ Added support for asset canister config files in `ic-assets`.
           "match": "*",
           "cache": {
               "max_age": 20
-          },
-          "headers": {
-              "Access-Control-Allow-Origin": "*"
           }
       }
   ]
   ```
 - works only during asset creation
-- currently, only `cache.max_age` field actually makes it to the asset canister (support for the `headers` is still in progress)
 - the config file is being taken into account only when calling `ic_asset::sync` (i.e. `dfx deploy` or `icx-asset sync`)
 
 ## [0.18.0] - 2022-06-23
