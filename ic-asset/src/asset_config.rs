@@ -1,4 +1,4 @@
-use anyhow::{bail, Context};
+use anyhow::Context;
 use derivative::Derivative;
 use globset::{Glob, GlobMatcher};
 use serde::{Deserialize, Serialize};
@@ -88,7 +88,7 @@ impl AssetSourceDirectoryConfiguration {
             .get(parent_dir)
             .with_context(|| {
                 format!(
-                    "unable to find default config for following path: {:?}",
+                    "unable to find asset config for following path: {:?}",
                     parent_dir
                 )
             })?
@@ -138,7 +138,13 @@ impl AssetConfigRule {
             config_file_parent_dir
                 .join(&r#match)
                 .to_str()
-                .with_context(|| format!("{} is not a valid glob pattern", r#match))?,
+                .with_context(|| {
+                    format!(
+                        "cannot combine {} and {} into a string (to be later used as a glob pattern)",
+                        config_file_parent_dir.display(),
+                        r#match
+                    )
+                })?,
         )
         .with_context(|| format!("{} is not a valid glob pattern", r#match))?
         .compile_matcher();
@@ -158,25 +164,20 @@ impl AssetConfigTreeNode {
     ) -> anyhow::Result<()> {
         let config_path = dir.join(ASSETS_CONFIG_FILENAME);
         let mut rules = vec![];
-        match fs::read(&config_path) {
-            Ok(ref file) => match serde_json::from_slice(file) {
-                Ok::<Vec<InterimAssetConfigRule>, _>(v) => {
-                    for interim in v {
-                        rules.push(AssetConfigRule::from_interim(interim, dir)?);
-                    }
-                }
-                Err(e) => bail!(
-                    "ERR: {} - {}",
-                    e.to_string(),
-                    &config_path.to_str().unwrap()
-                ),
-            },
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
-            Err(e) => bail!(
-                "ERR: {} - {}",
-                e.to_string(),
-                &config_path.to_str().unwrap()
-            ),
+        if config_path.exists() {
+            let content = fs::read(&config_path).with_context(|| {
+                format!("unable to read config file: {}", config_path.display())
+            })?;
+            let interim_rules: Vec<InterimAssetConfigRule> = serde_json::from_slice(&content)
+                .with_context(|| {
+                    format!(
+                        "malformed JSON asset config file: {}",
+                        config_path.display()
+                    )
+                })?;
+            for interim_rule in interim_rules {
+                rules.push(AssetConfigRule::from_interim(interim_rule, dir)?);
+            }
         }
 
         let config_tree = Self { parent, rules };
@@ -532,7 +533,7 @@ mod with_tempdir {
         assert_eq!(
             assets_config.err().unwrap().to_string(),
             format!(
-                "ERR: EOF while parsing a value at line 1 column 0 - {}",
+                "malformed JSON asset config file: {}",
                 assets_dir.join(ASSETS_CONFIG_FILENAME).to_str().unwrap()
             )
         );
@@ -548,7 +549,7 @@ mod with_tempdir {
         assert_eq!(
             assets_config.err().unwrap().to_string(),
             format!(
-                "ERR: invalid type: sequence, expected a string at line 1 column 2 - {}",
+                "malformed JSON asset config file: {}",
                 assets_dir.join(ASSETS_CONFIG_FILENAME).to_str().unwrap()
             )
         );
@@ -570,7 +571,7 @@ mod with_tempdir {
         assert_eq!(
             assets_config.err().unwrap().to_string(),
             format!(
-                "ERR: expected `,` or `}}` at line 2 column 30 - {}",
+                "malformed JSON asset config file: {}",
                 assets_dir.join(ASSETS_CONFIG_FILENAME).to_str().unwrap()
             )
         );
@@ -612,7 +613,7 @@ mod with_tempdir {
         assert_eq!(
             assets_config.err().unwrap().to_string(),
             format!(
-                "ERR: Permission denied (os error 13) - {}",
+                "unable to read config file: {}",
                 assets_dir
                     .join(ASSETS_CONFIG_FILENAME)
                     .as_path()
