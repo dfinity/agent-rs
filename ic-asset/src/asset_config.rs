@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::{bail, Context};
 use derivative::Derivative;
 use globset::{Glob, GlobMatcher};
 use serde::{Deserialize, Serialize};
@@ -68,9 +68,12 @@ struct AssetConfigTreeNode {
 }
 
 impl AssetSourceDirectoryConfiguration {
+    /// Constructs config tree for assets directory.
     pub(crate) fn load(root_dir: &Path) -> anyhow::Result<Self> {
+        if !root_dir.has_root() {
+            bail!("root_dir paramenter is expected to be canonical path")
+        }
         let mut config_map = HashMap::new();
-        let root_dir = root_dir.canonicalize()?;
         AssetConfigTreeNode::load(None, &root_dir, &mut config_map)?;
 
         Ok(Self { config_map })
