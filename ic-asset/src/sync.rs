@@ -70,8 +70,9 @@ fn gather_asset_descriptors(dirs: &[&Path]) -> anyhow::Result<Vec<AssetDescripto
         let mut asset_descriptors_interim = vec![];
         for e in WalkDir::new(&dir)
             .into_iter()
-            .filter_entry(|entry| !filename_starts_with_dot(entry) && entry.file_type().is_file())
+            .filter_entry(|entry| !filename_starts_with_dot(entry))
             .filter_map(|r| r.ok())
+            .filter(|entry| entry.file_type().is_file())
         {
             let source = e.path().canonicalize().with_context(|| {
                 format!(
