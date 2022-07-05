@@ -74,7 +74,7 @@ impl AssetSourceDirectoryConfiguration {
             bail!("root_dir paramenter is expected to be canonical path")
         }
         let mut config_map = HashMap::new();
-        AssetConfigTreeNode::load(None, &root_dir, &mut config_map)?;
+        AssetConfigTreeNode::load(None, root_dir, &mut config_map)?;
 
         Ok(Self { config_map })
     }
