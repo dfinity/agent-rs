@@ -17,12 +17,20 @@ Added support for asset canister config files in `ic-assets`.
           "match": "*",
           "cache": {
               "max_age": 20
+          },
+          "headers": {
+              "X-Content-Type-Options": "nosniff"
           }
-      }
+      },
+      {
+          "match": "**/*",
+          "headers": null
+      },
   ]
   ```
 - works only during asset creation
 - the config file is being taken into account only when calling `ic_asset::sync` (i.e. `dfx deploy` or `icx-asset sync`)
+- `headers` from multiple applicable rules are being stacked/concatenated, unless `null` is specified, which resets/empties the headers. Both `"headers": {}` and absence of `headers` don't have any effect on end result.
 
 ## [0.18.0] - 2022-06-23
 
