@@ -12,7 +12,7 @@ use std::{
 
 const ASSETS_CONFIG_FILENAME: &str = ".ic-assets.json";
 
-pub(crate) type HeadersConfig = HashMap<String, Value>;
+pub(crate) type HeadersConfig = HashMap<String, String>;
 type ConfigMap = HashMap<PathBuf, Arc<AssetConfigTreeNode>>;
 
 #[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, Eq)]
@@ -119,7 +119,9 @@ where
 {
     match serde_json::value::Value::deserialize(deserializer)? {
         Value::Object(v) => Ok(Maybe::Value(
-            v.into_iter().collect::<HashMap<String, Value>>(),
+            v.into_iter()
+                .map(|(k, v)| (k, v.to_string()))
+                .collect::<HashMap<String, String>>(),
         )),
         Value::Null => Ok(Maybe::Null),
         _ => Err(serde::de::Error::custom(
@@ -418,20 +420,23 @@ mod with_tempdir {
             headers: Some(HashMap::from([
                 (
                     "x-content-type-options".to_string(),
-                    String("nosniff".to_string()),
+                    String("nosniff".to_string()).to_string(),
                 ),
                 (
                     "x-frame-options".to_string(),
-                    String("SAMEORIGIN".to_string()),
+                    String("SAMEORIGIN".to_string()).to_string(),
                 ),
-                ("Some-Other-Policy".to_string(), String("add".to_string())),
+                (
+                    "Some-Other-Policy".to_string(),
+                    String("add".to_string()).to_string(),
+                ),
                 (
                     "Content-Security-Policy".to_string(),
-                    String("delete".to_string()),
+                    String("delete".to_string()).to_string(),
                 ),
                 (
                     "x-xss-protection".to_string(),
-                    Number(serde_json::Number::from(1)),
+                    Number(serde_json::Number::from(1)).to_string(),
                 ),
             ])),
         };
