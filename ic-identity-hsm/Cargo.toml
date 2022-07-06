@@ -1,6 +1,6 @@
 [package]
 name = "ic-identity-hsm"
-version = "0.18.0"
+version = "0.19.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 description = "Identity implementation for HSM for the ic-agent package."
 homepage = "https://docs.rs/ic-identity-hsm"
@@ -16,7 +16,7 @@ rust-version = "1.58.1"
 
 [dependencies]
 hex = "0.4.2"
-ic-agent = { path = "../ic-agent", version = "0.18", features = [ "pem" ] }
+ic-agent = { path = "../ic-agent", version = "0.19", features = [ "pem" ] }
 num-bigint = "0.4.3"
 pkcs11 = "0.5.0"
 sha2 = "0.10"
