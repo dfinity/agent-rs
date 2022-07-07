@@ -40,15 +40,8 @@ Added support for asset canister config files in `ic-assets`.
           "match": "*",
           "cache": {
               "max_age": 20
-          },
-          "headers": {
-              "X-Content-Type-Options": "nosniff"
           }
-      },
-      {
-          "match": "**/*",
-          "headers": null
-      },
+      }
   ]
   ```
 - works only during asset creation
