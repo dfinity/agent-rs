@@ -57,6 +57,10 @@ fn filename_starts_with_dot(entry: &walkdir::DirEntry) -> bool {
         .unwrap_or(false)
 }
 
+fn is_exception(entry: &walkdir::DirEntry) -> bool {
+    entry.path().to_str().unwrap().contains(".well-known")
+}
+
 fn gather_asset_descriptors(dirs: &[&Path]) -> anyhow::Result<Vec<AssetDescriptor>> {
     let mut asset_descriptors: HashMap<String, AssetDescriptor> = HashMap::new();
     for dir in dirs {
@@ -70,7 +74,7 @@ fn gather_asset_descriptors(dirs: &[&Path]) -> anyhow::Result<Vec<AssetDescripto
         let mut asset_descriptors_interim = vec![];
         for e in WalkDir::new(&dir)
             .into_iter()
-            .filter_entry(|entry| !filename_starts_with_dot(entry))
+            .filter_entry(|entry| !filename_starts_with_dot(entry) || is_exception(entry))
             .filter_map(|r| r.ok())
             .filter(|entry| entry.file_type().is_file())
         {
@@ -123,4 +127,35 @@ fn assemble_synchronization_operations(
     set_encodings(&mut operations, project_assets);
 
     operations
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn get_test_assets_directory() -> PathBuf {
+        let crate_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        Path::new(&crate_root).join("tests").join("assets")
+    }
+
+    #[test]
+    fn hidden_dir_included() {
+        let example_assets_dir =
+            get_test_assets_directory().join("example_project_assets_with_hidden_dir_included");
+        let asset_descriptors = dbg!(gather_asset_descriptors(&[&example_assets_dir]).unwrap());
+        let expected: Vec<AssetDescriptor> = vec![];
+        assert_eq!(asset_descriptors, expected);
+        assert_ne!(asset_descriptors, expected);
+    }
+
+    #[test]
+    // #[ignore]
+    fn hidden_dir_not_included() {
+        let example_assets_dir =
+            get_test_assets_directory().join("example_project_assets_with_hidden_dir_not_included");
+        let asset_descriptors = dbg!(gather_asset_descriptors(&[&example_assets_dir]).unwrap());
+        let expected: Vec<AssetDescriptor> = vec![];
+        assert_eq!(asset_descriptors, expected);
+    }
 }
