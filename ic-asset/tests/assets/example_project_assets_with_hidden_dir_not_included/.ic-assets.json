@@ -1,0 +1,11 @@
+[
+  {
+    "match": "index.html",
+    "cache": {
+      "max_age": 100
+    },
+    "headers": {
+      "permissions-policy": "add"
+    }
+  }
+]
