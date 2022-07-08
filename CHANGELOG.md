@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Added support for configuring HTTP headers for assets in asset canister (via `.ic-assets.json` config file):
+- example of `.ic-assets.json` file format:
+  ```
+  [
+      {
+          "match": "*",
+          "cache": {
+              "max_age": 20
+          },
+          "headers": {
+              "X-Content-Type-Options": "nosniff"
+          }
+      },
+      {
+          "match": "**/*",
+          "headers": null
+      },
+  ]
+  ```
+- `headers` from multiple applicable rules are being stacked/concatenated, unless `null` is specified, which resets/empties the headers. Both `"headers": {}` and absence of `headers` don't have any effect on end result.
+
 ## [0.19.0] - 2022-07-06
 
 Added support for asset canister config files in `ic-assets`.
