@@ -10,7 +10,7 @@ use std::{
     sync::Arc,
 };
 
-const ASSETS_CONFIG_FILENAME: &str = ".ic-assets.json";
+pub(crate) const ASSETS_CONFIG_FILENAME: &str = ".ic-assets.json";
 
 pub(crate) type HeadersConfig = HashMap<String, String>;
 type ConfigMap = HashMap<PathBuf, Arc<AssetConfigTreeNode>>;

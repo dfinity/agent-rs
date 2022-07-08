@@ -1,7 +1,7 @@
 use crate::asset_canister::batch::{commit_batch, create_batch};
 use crate::asset_canister::list::list_assets;
 use crate::asset_canister::protocol::{AssetDetails, BatchOperationKind};
-use crate::asset_config::AssetSourceDirectoryConfiguration;
+use crate::asset_config::{AssetSourceDirectoryConfiguration, ASSETS_CONFIG_FILENAME};
 use crate::params::CanisterCallParams;
 
 use crate::operations::{
@@ -61,6 +61,11 @@ fn is_exception(entry: &walkdir::DirEntry) -> bool {
     entry.path().to_str().unwrap().contains(".well-known")
 }
 
+fn not_config_file(entry: &walkdir::DirEntry) -> bool {
+    let x = entry.file_name();
+    x != ASSETS_CONFIG_FILENAME
+}
+
 fn gather_asset_descriptors(dirs: &[&Path]) -> anyhow::Result<Vec<AssetDescriptor>> {
     let mut asset_descriptors: HashMap<String, AssetDescriptor> = HashMap::new();
     for dir in dirs {
@@ -76,7 +81,7 @@ fn gather_asset_descriptors(dirs: &[&Path]) -> anyhow::Result<Vec<AssetDescripto
             .into_iter()
             .filter_entry(|entry| !filename_starts_with_dot(entry) || is_exception(entry))
             .filter_map(|r| r.ok())
-            .filter(|entry| entry.file_type().is_file())
+            .filter(|entry| entry.file_type().is_file() && not_config_file(entry))
         {
             let source = e.path().canonicalize().with_context(|| {
                 format!(
