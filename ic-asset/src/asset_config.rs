@@ -27,6 +27,7 @@ struct AssetConfigRule {
     r#match: GlobMatcher,
     cache: Option<CacheConfig>,
     headers: Maybe<HeadersConfig>,
+    ignore_hidden: bool,
 }
 
 #[derive(Deserialize, Debug)]
@@ -46,6 +47,8 @@ fn fmt_glob_field(
 
 impl AssetConfigRule {
     fn applies(&self, canonical_path: &Path) -> bool {
+        // TODO: better dot files/dirs handling, awaiting upstream changes:
+        // https://github.com/BurntSushi/ripgrep/issues/2229
         self.r#match.is_match(canonical_path)
     }
 }
@@ -97,6 +100,27 @@ impl AssetSourceDirectoryConfiguration {
             })?
             .get_config(canonical_path))
     }
+
+    pub(crate) fn hidden_explicitly_included(&self, path: &Path) -> bool {
+        let canonical_path = path.canonicalize().unwrap();
+        let parent_dir = canonical_path
+            .parent()
+            .with_context(|| {
+                format!(
+                    "unable to get the parent directory for asset path: {:?}",
+                    canonical_path
+                )
+            })
+            .unwrap();
+        let failsafe = Arc::new(AssetConfigTreeNode {
+            parent: None,
+            rules: vec![],
+        });
+        self.config_map
+            .get(parent_dir)
+            .unwrap_or(&failsafe)
+            .is_included(&canonical_path)
+    }
 }
 
 #[derive(Deserialize)]
@@ -105,6 +129,7 @@ struct InterimAssetConfigRule {
     cache: Option<CacheConfig>,
     #[serde(default, deserialize_with = "deser_headers")]
     headers: Maybe<HeadersConfig>,
+    ignore_hidden: Option<bool>,
 }
 
 impl<T> Default for Maybe<T> {
@@ -136,6 +161,7 @@ impl AssetConfigRule {
             r#match,
             cache,
             headers,
+            ignore_hidden,
         }: InterimAssetConfigRule,
         config_file_parent_dir: &Path,
     ) -> anyhow::Result<Self> {
@@ -151,12 +177,13 @@ impl AssetConfigRule {
                     )
                 })?,
         )
-        .with_context(|| format!("{} is not a valid glob pattern", r#match))?
-        .compile_matcher();
+        .with_context(|| format!("{} is not a valid glob pattern", r#match))?.compile_matcher();
+
         Ok(Self {
             r#match: glob,
             cache,
             headers,
+            ignore_hidden: ignore_hidden.map_or(true, |v| v),
         })
     }
 }
@@ -187,10 +214,7 @@ impl AssetConfigTreeNode {
 
         let parent_ref = match parent {
             Some(p) if rules.is_empty() => p,
-            _ => {
-                let config_tree = Self { parent, rules };
-                Arc::new(config_tree)
-            }
+            _ => Arc::new(Self { parent, rules }),
         };
 
         configs.insert(dir.to_path_buf(), parent_ref.clone());
@@ -213,6 +237,18 @@ impl AssetConfigTreeNode {
             .iter()
             .filter(|rule| rule.applies(canonical_path))
             .fold(base_config, |acc, x| acc.merge(x))
+    }
+
+    fn is_included(&self, canonical_path: &Path) -> bool {
+        let included_in_parent = match &self.parent {
+            Some(parent) => parent.is_included(canonical_path),
+            None => false,
+        };
+        self.rules
+            .iter()
+            .filter(|rule| rule.applies(canonical_path))
+            .any(|rule| !rule.ignore_hidden)
+            || included_in_parent
     }
 }
 

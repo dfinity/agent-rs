@@ -49,21 +49,21 @@ pub async fn sync(
     Ok(())
 }
 
-fn filename_starts_with_dot(entry: &walkdir::DirEntry) -> bool {
-    entry
+fn doesnt_start_with_a_dot_or_explicitly_included(
+    entry: &walkdir::DirEntry,
+    config: &AssetSourceDirectoryConfiguration,
+) -> bool {
+    let starts_with_a_dot = entry
         .file_name()
         .to_str()
         .map(|s| s.starts_with('.'))
-        .unwrap_or(false)
-}
+        .unwrap_or(false);
 
-fn is_exception(entry: &walkdir::DirEntry) -> bool {
-    entry.path().to_str().unwrap().contains(".well-known")
-}
-
-fn not_config_file(entry: &walkdir::DirEntry) -> bool {
-    let x = entry.file_name();
-    x != ASSETS_CONFIG_FILENAME
+    if starts_with_a_dot {
+        config.hidden_explicitly_included(&entry.path())
+    } else {
+        true
+    }
 }
 
 fn gather_asset_descriptors(dirs: &[&Path]) -> anyhow::Result<Vec<AssetDescriptor>> {
@@ -79,9 +79,13 @@ fn gather_asset_descriptors(dirs: &[&Path]) -> anyhow::Result<Vec<AssetDescripto
         let mut asset_descriptors_interim = vec![];
         for e in WalkDir::new(&dir)
             .into_iter()
-            .filter_entry(|entry| !filename_starts_with_dot(entry) || is_exception(entry))
+            .filter_entry(|entry| {
+                doesnt_start_with_a_dot_or_explicitly_included(entry, &configuration)
+            })
             .filter_map(|r| r.ok())
-            .filter(|entry| entry.file_type().is_file() && not_config_file(entry))
+            .filter(|entry| {
+                entry.file_type().is_file() && entry.file_name() != ASSETS_CONFIG_FILENAME
+            })
         {
             let source = e.path().canonicalize().with_context(|| {
                 format!(
