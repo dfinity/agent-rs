@@ -60,7 +60,7 @@ fn doesnt_start_with_a_dot_or_explicitly_included(
         .unwrap_or(false);
 
     if starts_with_a_dot {
-        config.hidden_explicitly_included(&entry.path())
+        config.hidden_explicitly_included(entry.path())
     } else {
         true
     }
