@@ -147,7 +147,7 @@ mod test_gathering_asset_descriptors_with_tempdir {
     use std::{
         collections::HashMap,
         fs,
-        path::{Path, PathBuf},
+        path::{Path, PathBuf, MAIN_SEPARATOR},
     };
     use tempfile::{Builder, TempDir};
 
@@ -155,7 +155,7 @@ mod test_gathering_asset_descriptors_with_tempdir {
         fn default_from_path(assets_dir: &Path, relative_path: &str) -> Self {
             AssetDescriptor {
                 source: assets_dir.join(relative_path),
-                key: format!("/{}", relative_path),
+                key: format!("{}{}", MAIN_SEPARATOR, relative_path),
                 config: Default::default(),
             }
         }
