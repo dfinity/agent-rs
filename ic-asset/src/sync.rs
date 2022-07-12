@@ -49,7 +49,7 @@ pub async fn sync(
     Ok(())
 }
 
-fn doesnt_start_with_a_dot_or_explicitly_included(
+fn include_entry(
     entry: &walkdir::DirEntry,
     config: &AssetSourceDirectoryConfiguration,
 ) -> bool {
