@@ -147,15 +147,19 @@ mod test_gathering_asset_descriptors_with_tempdir {
     use std::{
         collections::HashMap,
         fs,
-        path::{Path, PathBuf, MAIN_SEPARATOR},
+        path::{Path, PathBuf},
     };
     use tempfile::{Builder, TempDir};
 
     impl AssetDescriptor {
         fn default_from_path(assets_dir: &Path, relative_path: &str) -> Self {
+            let relative_path = relative_path.split('/').collect::<Vec<_>>();
+            let relative_path = relative_path
+                .iter()
+                .fold(PathBuf::new(), |acc, x| acc.join(x));
             AssetDescriptor {
-                source: assets_dir.join(relative_path),
-                key: format!("{}{}", MAIN_SEPARATOR, relative_path),
+                source: assets_dir.join(&relative_path),
+                key: format!("/{}", relative_path.to_str().unwrap()),
                 config: Default::default(),
             }
         }
