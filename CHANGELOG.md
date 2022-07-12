@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Added support for configurable dot-directories and -files inclusion via `.ic-assets.json` config file:
+- example of `.ic-assets.json` file format:
+  ```
+  [
+      {
+          "match": ".*",
+          "cache": {
+              "max_age": 20
+          },
+          "headers": {
+              "X-Content-Type-Options": "nosniff"
+          },
+          "ignore_hidden": false
+      }
+  ]
+  ```
+- see [PR](https://github.com/dfinity/agent-rs/pull/361) and [tests](https://github.com/dfinity/agent-rs/blob/c77fe91bb1559c1398e885ebf2bbc4052768303d/ic-asset/src/sync.rs#L142) for more examples
+
 Added support for configuring HTTP headers for assets in asset canister (via `.ic-assets.json` config file):
 - example of `.ic-assets.json` file format:
   ```
