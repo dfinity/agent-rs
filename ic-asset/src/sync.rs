@@ -49,10 +49,7 @@ pub async fn sync(
     Ok(())
 }
 
-fn include_entry(
-    entry: &walkdir::DirEntry,
-    config: &AssetSourceDirectoryConfiguration,
-) -> bool {
+fn include_entry(entry: &walkdir::DirEntry, config: &AssetSourceDirectoryConfiguration) -> bool {
     let starts_with_a_dot = entry
         .file_name()
         .to_str()
@@ -79,7 +76,7 @@ fn gather_asset_descriptors(dirs: &[&Path]) -> anyhow::Result<Vec<AssetDescripto
         let mut asset_descriptors_interim = vec![];
         for e in WalkDir::new(&dir)
             .into_iter()
-            .filter_entry(|entry|include_entry(entry, &configuration))
+            .filter_entry(|entry| include_entry(entry, &configuration))
             .filter_map(|r| r.ok())
             .filter(|entry| {
                 entry.file_type().is_file() && entry.file_name() != ASSETS_CONFIG_FILENAME
