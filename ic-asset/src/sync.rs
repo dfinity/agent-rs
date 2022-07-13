@@ -576,6 +576,7 @@ mod test_gathering_asset_descriptors_with_tempdir {
         let mut expected_asset_descriptors = vec![
             AssetDescriptor::default_from_path(&assets_dir, "file"),
             AssetDescriptor::default_from_path(&assets_dir, ".hidden-dir-flat/.hfile"),
+            AssetDescriptor::default_from_path(&assets_dir, ".hidden-dir-flat/file"),
         ];
 
         expected_asset_descriptors.sort_by_key(|v| v.source.clone());
