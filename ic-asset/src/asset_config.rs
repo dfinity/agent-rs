@@ -90,7 +90,6 @@ impl AssetSourceDirectoryConfiguration {
                 canonical_path
             )
         })?;
-
         Ok(self
             .config_map
             .get(parent_dir)
