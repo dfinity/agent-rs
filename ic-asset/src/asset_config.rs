@@ -237,10 +237,8 @@ impl AssetConfig {
             (_, Maybe::Absent) => (),
         };
 
-        if self.ignore != Some(true) {
-            if other.ignore.is_some() {
-                self.ignore = other.ignore;
-            }
+        if self.ignore != Some(true) && other.ignore.is_some() {
+            self.ignore = other.ignore;
         }
         self
     }
