@@ -78,9 +78,9 @@ fn gather_asset_descriptors(dirs: &[&Path]) -> anyhow::Result<Vec<AssetDescripto
             .filter_entry(|entry| {
                 if let Ok(canonical_path) = &entry.path().canonicalize() {
                     let config = configuration
-                        .get_asset_config(&canonical_path)
+                        .get_asset_config(canonical_path)
                         .unwrap_or_default();
-                    include_entry(&entry, &config)
+                    include_entry(entry, &config)
                 } else {
                     false
                 }
