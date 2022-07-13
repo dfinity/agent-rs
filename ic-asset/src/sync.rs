@@ -583,7 +583,7 @@ mod test_gathering_asset_descriptors_with_tempdir {
     }
 
     #[test]
-    /// It is not possible to include a file if a parent directory of that file is excluded
+    /// It is not possible to include a file if its parent directory has been excluded
     fn impossible_to_reinclude_file_from_already_ignored_directory() {
         let files = HashMap::from([
             // additional, non-dot dirs and files
