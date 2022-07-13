@@ -189,7 +189,7 @@ mod test_gathering_asset_descriptors_with_tempdir {
                 self.key == other.key,
                 self.config.cache == other.config.cache,
                 self.config.headers == other.config.headers,
-                self.config.ignore.map_or(false, |v| v) == other.config.ignore.map_or(false, |v| v),
+                self.config.ignore.unwrap_or(false) == other.config.ignore.unwrap_or(false),
             ]
             .into_iter()
             .all(|v| v)
