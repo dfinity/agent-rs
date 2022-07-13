@@ -19,7 +19,7 @@ Added support for configurable dot-directories and -files inclusion via `.ic-ass
           "headers": {
               "X-Content-Type-Options": "nosniff"
           },
-          "ignore_hidden": false
+          "ignore": false
       }
   ]
   ```
