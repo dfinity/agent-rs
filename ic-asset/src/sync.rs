@@ -1,7 +1,7 @@
 use crate::asset_canister::batch::{commit_batch, create_batch};
 use crate::asset_canister::list::list_assets;
 use crate::asset_canister::protocol::{AssetDetails, BatchOperationKind};
-use crate::asset_config::{AssetSourceDirectoryConfiguration, ASSETS_CONFIG_FILENAME};
+use crate::asset_config::{AssetConfig, AssetSourceDirectoryConfiguration, ASSETS_CONFIG_FILENAME};
 use crate::params::CanisterCallParams;
 
 use crate::operations::{
@@ -49,17 +49,16 @@ pub async fn sync(
     Ok(())
 }
 
-fn include_entry(entry: &walkdir::DirEntry, config: &AssetSourceDirectoryConfiguration) -> bool {
+fn include_entry(entry: &walkdir::DirEntry, config: &AssetConfig) -> bool {
     let starts_with_a_dot = entry
         .file_name()
         .to_str()
         .map(|s| s.starts_with('.'))
         .unwrap_or(false);
 
-    if starts_with_a_dot {
-        config.hidden_explicitly_included(entry.path())
-    } else {
-        true
+    match (starts_with_a_dot, config.ignore) {
+        (dot, None) => !dot,
+        (_dot, Some(ignored)) => !ignored,
     }
 }
 
@@ -76,7 +75,16 @@ fn gather_asset_descriptors(dirs: &[&Path]) -> anyhow::Result<Vec<AssetDescripto
         let mut asset_descriptors_interim = vec![];
         for e in WalkDir::new(&dir)
             .into_iter()
-            .filter_entry(|entry| include_entry(entry, &configuration))
+            .filter_entry(|entry| {
+                if let Ok(canonical_path) = &entry.path().canonicalize() {
+                    let config = configuration
+                        .get_asset_config(&canonical_path)
+                        .unwrap_or_default();
+                    include_entry(&entry, &config)
+                } else {
+                    false
+                }
+            })
             .filter_map(|r| r.ok())
             .filter(|entry| {
                 entry.file_type().is_file() && entry.file_name() != ASSETS_CONFIG_FILENAME
@@ -163,7 +171,9 @@ mod test_gathering_asset_descriptors_with_tempdir {
                 .into_iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
                 .collect::<HeadersConfig>();
-            self.config.headers = Some(headers);
+            let mut h = self.config.headers.unwrap_or_default();
+            h.extend(headers);
+            self.config.headers = Some(h);
             self
         }
         fn with_cache(mut self, cache: CacheConfig) -> Self {
@@ -172,6 +182,19 @@ mod test_gathering_asset_descriptors_with_tempdir {
         }
     }
 
+    impl PartialEq for AssetDescriptor {
+        fn eq(&self, other: &Self) -> bool {
+            [
+                self.source == other.source,
+                self.key == other.key,
+                self.config.cache == other.config.cache,
+                self.config.headers == other.config.headers,
+                self.config.ignore.map_or(false, |v| v) == other.config.ignore.map_or(false, |v| v),
+            ]
+            .into_iter()
+            .all(|v| v)
+        }
+    }
     /// assets_tempdir directory structure:
     /// /assetsRAND5
     /// ├── .ic-assets.json
@@ -249,8 +272,8 @@ mod test_gathering_asset_descriptors_with_tempdir {
         let files = HashMap::from([(
             Path::new(".ic-assets.json").to_path_buf(),
             r#"[
-                    {"match": ".*", "ignore_hidden": false}
-                ]"#
+                {"match": ".*", "ignore": false}
+            ]"#
             .to_string(),
         )]);
 
@@ -283,7 +306,7 @@ mod test_gathering_asset_descriptors_with_tempdir {
         let files = HashMap::from([(
             Path::new(".ic-assets.json").to_path_buf(),
             r#"[
-                    {"match": ".*", "ignore_hidden": true}
+                    {"match": ".*", "ignore": true}
                 ]"#
             .to_string(),
         )]);
@@ -294,7 +317,7 @@ mod test_gathering_asset_descriptors_with_tempdir {
             vec![AssetDescriptor::default_from_path(&assets_dir, "file")];
         assert_eq!(asset_descriptors, expected_asset_descriptors);
 
-        // same but without the `ignore_hidden` flag (defaults to `true`)
+        // same but without the `ignore` flag (defaults to `true`)
         let files = HashMap::from([(
             Path::new(".ic-assets.json").to_path_buf(),
             r#"[
@@ -350,23 +373,23 @@ mod test_gathering_asset_descriptors_with_tempdir {
         let files = HashMap::from([(
             Path::new(".hidden-dir/.ic-assets.json").to_path_buf(),
             r#"[
-                    {"match": ".", "ignore_hidden": false},
-                    {"match": "?", "ignore_hidden": false},
-                    {"match": "*", "ignore_hidden": false},
-                    {"match": "**", "ignore_hidden": false},
-                    {"match": ".?", "ignore_hidden": false},
-                    {"match": ".*", "ignore_hidden": false},
-                    {"match": ".**", "ignore_hidden": false},
-                    {"match": "./*", "ignore_hidden": false},
-                    {"match": "./**", "ignore_hidden": false},
-                    {"match": "./**/*", "ignore_hidden": false},
-                    {"match": "./**/**", "ignore_hidden": false},
-                    {"match": "../*", "ignore_hidden": false},
-                    {"match": "../.*", "ignore_hidden": false},
-                    {"match": "../.**", "ignore_hidden": false},
-                    {"match": "../.**/*", "ignore_hidden": false},
-                    {"match": ".hfile", "ignore_hidden": false},
-                    {"match": "file", "ignore_hidden": false},
+                    {"match": ".", "ignore": false},
+                    {"match": "?", "ignore": false},
+                    {"match": "*", "ignore": false},
+                    {"match": "**", "ignore": false},
+                    {"match": ".?", "ignore": false},
+                    {"match": ".*", "ignore": false},
+                    {"match": ".**", "ignore": false},
+                    {"match": "./*", "ignore": false},
+                    {"match": "./**", "ignore": false},
+                    {"match": "./**/*", "ignore": false},
+                    {"match": "./**/**", "ignore": false},
+                    {"match": "../*", "ignore": false},
+                    {"match": "../.*", "ignore": false},
+                    {"match": "../.**", "ignore": false},
+                    {"match": "../.**/*", "ignore": false},
+                    {"match": ".hfile", "ignore": false},
+                    {"match": "file", "ignore": false},
                     {"match": "file"}
                 ]"#
             .to_string(),
@@ -390,13 +413,13 @@ mod test_gathering_asset_descriptors_with_tempdir {
         let files = HashMap::from([
             (
                 Path::new(".ic-assets.json").to_path_buf(),
-                r#"[{"match": ".hidden-dir", "ignore_hidden": false}]"#.to_string(),
+                r#"[{"match": ".hidden-dir", "ignore": false}]"#.to_string(),
             ),
             (
                 Path::new(".hidden-dir/.ic-assets.json").to_path_buf(),
                 r#"[
-                    {"match": ".hidden-dir-nested", "ignore_hidden": false},
-                    {"match": ".*", "ignore_hidden": false, "headers": {"A": "z"}},
+                    {"match": ".hidden-dir-nested", "ignore": false},
+                    {"match": ".*", "ignore": false, "headers": {"A": "z"}},
                     {"match": ".hfile", "headers": {"B": "y"}}
                 ]"#
                 .to_string(),
@@ -404,7 +427,7 @@ mod test_gathering_asset_descriptors_with_tempdir {
             (
                 Path::new(".hidden-dir/.hidden-dir-nested/.ic-assets.json").to_path_buf(),
                 r#"[
-                    {"match": "*", "ignore_hidden": false, "headers": {"C": "x"}},
+                    {"match": "*", "ignore": false, "headers": {"C": "x"}},
                     {"match": ".hfile", "headers": {"D": "w"}}
                 ]"#
                 .to_string(),
@@ -443,19 +466,59 @@ mod test_gathering_asset_descriptors_with_tempdir {
         let files = HashMap::from([
             (
                 Path::new(".ic-assets.json").to_path_buf(),
-                r#"[{"match": ".hidden-dir", "ignore_hidden": false}]"#.to_string(),
+                r#"[
+                    {"match": ".hidden-dir", "ignore": false},
+                    {"match": "file", "ignore": true}
+                ]"#
+                .to_string(),
             ),
             (
                 Path::new(".hidden-dir/.ic-assets.json").to_path_buf(),
                 r#"[
-                    {"match": ".hidden-dir-nested", "ignore_hidden": false}
+                    {"match": "file", "ignore": true},
+                    {"match": ".hidden-dir-nested", "ignore": false}
                 ]"#
                 .to_string(),
             ),
             (
                 Path::new(".hidden-dir/.hidden-dir-nested/.ic-assets.json").to_path_buf(),
                 r#"[
-                    {"match": ".hfile", "ignore_hidden": false, "headers": {"D": "w"}}
+                    {"match": "file", "ignore": true},
+                    {"match": ".hfile", "ignore": false, "headers": {"D": "w"}}
+                ]"#
+                .to_string(),
+            ),
+        ]);
+
+        let assets_temp_dir = create_temporary_assets_directory(files).unwrap();
+        let assets_dir = assets_temp_dir.path().canonicalize().unwrap();
+        let mut asset_descriptors = dbg!(gather_asset_descriptors(&[&assets_dir]).unwrap());
+
+        let mut expected_asset_descriptors = vec![AssetDescriptor::default_from_path(
+            &assets_dir,
+            ".hidden-dir/.hidden-dir-nested/.hfile",
+        )
+        .with_headers(HashMap::from([("D", "\"w\"")]))];
+
+        expected_asset_descriptors.sort_by_key(|v| v.source.clone());
+        asset_descriptors.sort_by_key(|v| v.source.clone());
+        assert_eq!(asset_descriptors, expected_asset_descriptors);
+    }
+
+    #[test]
+    fn include_all_files_except_one() {
+        let files = HashMap::from([
+            (
+                Path::new(".ic-assets.json").to_path_buf(),
+                r#"[
+                    {"match": ".*", "ignore": false}
+                ]"#
+                .to_string(),
+            ),
+            (
+                Path::new(".hidden-dir/.ic-assets.json").to_path_buf(),
+                r#"[
+                    {"match": "file", "ignore": true}
                 ]"#
                 .to_string(),
             ),
@@ -467,13 +530,15 @@ mod test_gathering_asset_descriptors_with_tempdir {
 
         let mut expected_asset_descriptors = vec![
             AssetDescriptor::default_from_path(&assets_dir, "file"),
-            AssetDescriptor::default_from_path(&assets_dir, ".hidden-dir/file"),
+            AssetDescriptor::default_from_path(&assets_dir, ".hfile"),
+            AssetDescriptor::default_from_path(&assets_dir, ".hidden-dir-flat/file"),
+            AssetDescriptor::default_from_path(&assets_dir, ".hidden-dir-flat/.hfile"),
+            AssetDescriptor::default_from_path(&assets_dir, ".hidden-dir/.hfile"),
             AssetDescriptor::default_from_path(&assets_dir, ".hidden-dir/.hidden-dir-nested/file"),
             AssetDescriptor::default_from_path(
                 &assets_dir,
                 ".hidden-dir/.hidden-dir-nested/.hfile",
-            )
-            .with_headers(HashMap::from([("D", "\"w\"")])),
+            ),
         ];
 
         expected_asset_descriptors.sort_by_key(|v| v.source.clone());
@@ -481,6 +546,156 @@ mod test_gathering_asset_descriptors_with_tempdir {
         assert_eq!(asset_descriptors, expected_asset_descriptors);
     }
 
-    // #[test]
-    // fn include_only_a_specific_dotfile() {}
+    #[test]
+    fn impossible_to_reinclude_already_ignored_file() {
+        let files = HashMap::from([
+            (
+                Path::new(".ic-assets.json").to_path_buf(),
+                r#"[
+                    {"match": ".hidden-dir-flat", "ignore": false},
+                    {"match": ".hidden-dir-flat/file", "ignore": true }
+
+                ]"#
+                .to_string(),
+            ),
+            (
+                Path::new(".hidden-dir-flat/.ic-assets.json").to_path_buf(),
+                r#"[
+                    {"match": "*", "ignore": false},
+                    {"match": "file", "ignore": false}
+                ]"#
+                .to_string(),
+            ),
+        ]);
+
+        let assets_temp_dir = create_temporary_assets_directory(files).unwrap();
+        let assets_dir = assets_temp_dir.path().canonicalize().unwrap();
+        let mut asset_descriptors = dbg!(gather_asset_descriptors(&[&assets_dir]).unwrap());
+
+        let mut expected_asset_descriptors = vec![
+            AssetDescriptor::default_from_path(&assets_dir, "file"),
+            AssetDescriptor::default_from_path(&assets_dir, ".hidden-dir-flat/.hfile"),
+        ];
+
+        expected_asset_descriptors.sort_by_key(|v| v.source.clone());
+        asset_descriptors.sort_by_key(|v| v.source.clone());
+        assert_eq!(asset_descriptors, expected_asset_descriptors);
+    }
+
+    #[test]
+    /// It is not possible to include a file if a parent directory of that file is excluded
+    fn impossible_to_reinclude_file_from_already_ignored_directory() {
+        let files = HashMap::from([
+            // additional, non-dot dirs and files
+            (Path::new("dir/file").to_path_buf(), "".to_string()),
+            (Path::new("anotherdir/file").to_path_buf(), "".to_string()),
+            (
+                Path::new("anotherdir/.ic-assets.json").to_path_buf(),
+                r#"[
+                    {"match": "file", "ignore": false}
+                ]"#
+                .to_string(),
+            ),
+            // end of additional, non-dot dirs and files
+            (
+                Path::new(".ic-assets.json").to_path_buf(),
+                r#"[
+                    {"match": "anotherdir", "ignore": true}
+                ]"#
+                .to_string(),
+            ),
+        ]);
+
+        let assets_temp_dir = create_temporary_assets_directory(files).unwrap();
+        let assets_dir = assets_temp_dir.path().canonicalize().unwrap();
+        let mut asset_descriptors = dbg!(gather_asset_descriptors(&[&assets_dir]).unwrap());
+
+        let mut expected_asset_descriptors = vec![
+            AssetDescriptor::default_from_path(&assets_dir, "file"),
+            AssetDescriptor::default_from_path(&assets_dir, "dir/file"),
+        ];
+
+        expected_asset_descriptors.sort_by_key(|v| v.source.clone());
+        asset_descriptors.sort_by_key(|v| v.source.clone());
+        assert_eq!(asset_descriptors, expected_asset_descriptors);
+    }
+
+    #[test]
+    fn bonanza() {
+        let files = HashMap::from([
+            // additional, non-dot dirs and files
+            (Path::new("dir/file").to_path_buf(), "".to_string()),
+            (
+                Path::new("dir/.ic-assets.json").to_path_buf(),
+                r#"[
+                    {"match": "file", "headers": { "Access-Control-Allow-Origin": "null" }}
+                ]"#
+                .to_string(),
+            ),
+            (Path::new("anotherdir/file").to_path_buf(), "".to_string()),
+            (
+                Path::new("anotherdir/.ic-assets.json").to_path_buf(),
+                r#"[
+                    {"match": "file", "cache": { "max_age": 42 }, "headers": null }
+                ]"#
+                .to_string(),
+            ),
+            // end of additional, non-dot dirs and files
+            (
+                Path::new(".ic-assets.json").to_path_buf(),
+                r#"[
+                    {"match": "*", "cache": { "max_age": 11 }, "headers": { "X-Content-Type-Options": "nosniff" } },
+                    {"match": "**/.hfile", "ignore": false, "headers": { "X-Content-Type-Options": "*" }},
+                    {"match": ".hidden-dir-flat", "ignore": false },
+                    {"match": ".hidden-dir", "ignore": false }
+
+                ]"#
+                .to_string(),
+            ),
+            (
+                Path::new(".hidden-dir-flat/.ic-assets.json").to_path_buf(),
+                r#"[
+                    {"match": "*", "ignore": false, "headers": {"Cross-Origin-Resource-Policy": "same-origin"}},
+                    {"match": ".hfile", "ignore": true}
+                ]"#
+                .to_string(),
+            ),
+        ]);
+
+        let assets_temp_dir = create_temporary_assets_directory(files).unwrap();
+        let assets_dir = assets_temp_dir.path().canonicalize().unwrap();
+        let mut asset_descriptors = gather_asset_descriptors(&[&assets_dir]).unwrap();
+
+        let mut expected_asset_descriptors = vec![
+            AssetDescriptor::default_from_path(&assets_dir, ".hfile")
+                .with_headers(HashMap::from([("X-Content-Type-Options", "\"*\"")]))
+                .with_cache(CacheConfig { max_age: Some(11) }),
+            AssetDescriptor::default_from_path(&assets_dir, ".hidden-dir/.hfile")
+                .with_headers(HashMap::from([("X-Content-Type-Options", "\"*\"")]))
+                .with_cache(CacheConfig { max_age: Some(11) }),
+            AssetDescriptor::default_from_path(&assets_dir, ".hidden-dir/file")
+                .with_headers(HashMap::from([("X-Content-Type-Options", "\"nosniff\"")]))
+                .with_cache(CacheConfig { max_age: Some(11) }),
+            AssetDescriptor::default_from_path(&assets_dir, ".hidden-dir-flat/file")
+                .with_headers(HashMap::from([("X-Content-Type-Options", "\"nosniff\"")]))
+                .with_headers(HashMap::from([(
+                    "Cross-Origin-Resource-Policy",
+                    "\"same-origin\"",
+                )]))
+                .with_cache(CacheConfig { max_age: Some(11) }),
+            AssetDescriptor::default_from_path(&assets_dir, "anotherdir/file")
+                .with_cache(CacheConfig { max_age: Some(42) }),
+            AssetDescriptor::default_from_path(&assets_dir, "dir/file")
+                .with_headers(HashMap::from([("X-Content-Type-Options", "\"nosniff\"")]))
+                .with_headers(HashMap::from([("Access-Control-Allow-Origin", "\"null\"")]))
+                .with_cache(CacheConfig { max_age: Some(11) }),
+            AssetDescriptor::default_from_path(&assets_dir, "file")
+                .with_cache(CacheConfig { max_age: Some(11) })
+                .with_headers(HashMap::from([("X-Content-Type-Options", "\"nosniff\"")])),
+        ];
+
+        expected_asset_descriptors.sort_by_key(|v| v.source.clone());
+        asset_descriptors.sort_by_key(|v| v.source.clone());
+        assert_eq!(dbg!(asset_descriptors), expected_asset_descriptors);
+    }
 }

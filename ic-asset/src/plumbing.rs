@@ -21,7 +21,7 @@ const MAX_COST_SINGLE_FILE_MB: usize = 45;
 
 const MAX_CHUNK_SIZE: usize = 1_900_000;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub(crate) struct AssetDescriptor {
     pub(crate) source: PathBuf,
     pub(crate) key: String,

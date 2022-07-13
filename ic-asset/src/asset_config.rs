@@ -27,7 +27,7 @@ struct AssetConfigRule {
     r#match: GlobMatcher,
     cache: Option<CacheConfig>,
     headers: Maybe<HeadersConfig>,
-    ignore_hidden: bool,
+    ignore: Option<bool>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -62,6 +62,7 @@ pub(crate) struct AssetSourceDirectoryConfiguration {
 pub(crate) struct AssetConfig {
     pub(crate) cache: Option<CacheConfig>,
     pub(crate) headers: Option<HeadersConfig>,
+    pub(crate) ignore: Option<bool>,
 }
 
 #[derive(Debug, Default)]
@@ -83,12 +84,16 @@ impl AssetSourceDirectoryConfiguration {
     }
 
     pub(crate) fn get_asset_config(&self, canonical_path: &Path) -> anyhow::Result<AssetConfig> {
-        let parent_dir = canonical_path.parent().with_context(|| {
-            format!(
-                "unable to get the parent directory for asset path: {:?}",
-                canonical_path
-            )
-        })?;
+        let parent_dir = if canonical_path.is_dir() {
+            canonical_path
+        } else {
+            canonical_path.parent().with_context(|| {
+                format!(
+                    "unable to get the parent directory for asset path: {:?}",
+                    canonical_path
+                )
+            })?
+        };
         Ok(self
             .config_map
             .get(parent_dir)
@@ -100,36 +105,16 @@ impl AssetSourceDirectoryConfiguration {
             })?
             .get_config(canonical_path))
     }
-
-    pub(crate) fn hidden_explicitly_included(&self, path: &Path) -> bool {
-        let canonical_path = path.canonicalize().unwrap();
-        let parent_dir = canonical_path
-            .parent()
-            .with_context(|| {
-                format!(
-                    "unable to get the parent directory for asset path: {:?}",
-                    canonical_path
-                )
-            })
-            .unwrap();
-        let failsafe = Arc::new(AssetConfigTreeNode {
-            parent: None,
-            rules: vec![],
-        });
-        self.config_map
-            .get(parent_dir)
-            .unwrap_or(&failsafe)
-            .is_included(&canonical_path)
-    }
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct InterimAssetConfigRule {
     r#match: String,
     cache: Option<CacheConfig>,
     #[serde(default, deserialize_with = "deser_headers")]
     headers: Maybe<HeadersConfig>,
-    ignore_hidden: Option<bool>,
+    ignore: Option<bool>,
 }
 
 impl<T> Default for Maybe<T> {
@@ -161,7 +146,7 @@ impl AssetConfigRule {
             r#match,
             cache,
             headers,
-            ignore_hidden,
+            ignore,
         }: InterimAssetConfigRule,
         config_file_parent_dir: &Path,
     ) -> anyhow::Result<Self> {
@@ -183,7 +168,7 @@ impl AssetConfigRule {
             r#match: glob,
             cache,
             headers,
-            ignore_hidden: ignore_hidden.map_or(true, |v| v),
+            ignore,
         })
     }
 }
@@ -219,7 +204,7 @@ impl AssetConfigTreeNode {
 
         configs.insert(dir.to_path_buf(), parent_ref.clone());
         for f in std::fs::read_dir(&dir)
-            .with_context(|| format!("Unable to read directory {}", &dir.to_str().unwrap()))?
+            .with_context(|| format!("Unable to read directory {}", &dir.display()))?
             .filter_map(|x| x.ok())
             .filter(|x| x.file_type().map_or_else(|_e| false, |ft| ft.is_dir()))
         {
@@ -238,18 +223,6 @@ impl AssetConfigTreeNode {
             .filter(|rule| rule.applies(canonical_path))
             .fold(base_config, |acc, x| acc.merge(x))
     }
-
-    fn is_included(&self, canonical_path: &Path) -> bool {
-        let included_in_parent = match &self.parent {
-            Some(parent) => parent.is_included(canonical_path),
-            None => false,
-        };
-        self.rules
-            .iter()
-            .filter(|rule| rule.applies(canonical_path))
-            .any(|rule| !rule.ignore_hidden)
-            || included_in_parent
-    }
 }
 
 impl AssetConfig {
@@ -263,6 +236,12 @@ impl AssetConfig {
             (_, Maybe::Null) => self.headers = None,
             (_, Maybe::Absent) => (),
         };
+
+        if self.ignore != Some(true) {
+            if other.ignore.is_some() {
+                self.ignore = other.ignore;
+            }
+        }
         self
     }
 }
@@ -475,6 +454,7 @@ mod with_tempdir {
                     Number(serde_json::Number::from(1)).to_string(),
                 ),
             ])),
+            ..Default::default()
         };
 
         assert_eq!(parsed_asset_config.cache, expected_asset_config.cache);
@@ -532,7 +512,8 @@ mod with_tempdir {
         let assets_temp_dir = create_temporary_assets_directory(cfg, 7).unwrap();
         let assets_dir = assets_temp_dir.path().canonicalize()?;
 
-        let assets_config = dbg!(AssetSourceDirectoryConfiguration::load(&assets_dir))?;
+        // let assets_config = dbg!(AssetSourceDirectoryConfiguration::load(&assets_dir))?;
+        let assets_config = AssetSourceDirectoryConfiguration::load(&assets_dir)?;
         for f in [
             "index.html",
             "js/index.js",
