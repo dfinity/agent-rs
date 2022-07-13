@@ -23,7 +23,7 @@ Added support for configurable dot-directories and -files inclusion via `.ic-ass
       }
   ]
   ```
-- see [PR](https://github.com/dfinity/agent-rs/pull/361) and [tests](https://github.com/dfinity/agent-rs/blob/c77fe91bb1559c1398e885ebf2bbc4052768303d/ic-asset/src/sync.rs#L142) for more examples
+- see [PR](https://github.com/dfinity/agent-rs/pull/361) and [tests](https://github.com/dfinity/agent-rs/blob/f8515d1d0825b47c8048f5528ac3b65018065779/ic-asset/src/sync.rs#L145) for more examples
 
 Added support for configuring HTTP headers for assets in asset canister (via `.ic-assets.json` config file):
 - example of `.ic-assets.json` file format:
