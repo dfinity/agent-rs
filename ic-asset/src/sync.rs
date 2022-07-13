@@ -548,7 +548,7 @@ mod test_gathering_asset_descriptors_with_tempdir {
     }
 
     #[test]
-    fn impossible_to_reinclude_already_ignored_file() {
+    fn possible_to_reinclude_previously_ignored_file() {
         let files = HashMap::from([
             (
                 Path::new(".ic-assets.json").to_path_buf(),
