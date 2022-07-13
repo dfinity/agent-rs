@@ -84,16 +84,13 @@ impl AssetSourceDirectoryConfiguration {
     }
 
     pub(crate) fn get_asset_config(&self, canonical_path: &Path) -> anyhow::Result<AssetConfig> {
-        let parent_dir = if canonical_path.is_dir() {
-            canonical_path
-        } else {
-            canonical_path.parent().with_context(|| {
-                format!(
-                    "unable to get the parent directory for asset path: {:?}",
-                    canonical_path
-                )
-            })?
-        };
+        let parent_dir = canonical_path.parent().with_context(|| {
+            format!(
+                "unable to get the parent directory for asset path: {:?}",
+                canonical_path
+            )
+        })?;
+
         Ok(self
             .config_map
             .get(parent_dir)
