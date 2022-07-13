@@ -506,8 +506,7 @@ mod with_tempdir {
         let assets_temp_dir = create_temporary_assets_directory(cfg, 7).unwrap();
         let assets_dir = assets_temp_dir.path().canonicalize()?;
 
-        // let assets_config = dbg!(AssetSourceDirectoryConfiguration::load(&assets_dir))?;
-        let assets_config = AssetSourceDirectoryConfiguration::load(&assets_dir)?;
+        let assets_config = dbg!(AssetSourceDirectoryConfiguration::load(&assets_dir))?;
         for f in [
             "index.html",
             "js/index.js",
