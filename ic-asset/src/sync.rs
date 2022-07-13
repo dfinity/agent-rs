@@ -363,6 +363,7 @@ mod test_gathering_asset_descriptors_with_tempdir {
         assert_eq!(asset_descriptors, expected_asset_descriptors);
     }
 
+    #[cfg(target_family = "unix")]
     #[test]
     /// Cannot include files inside hidden directory using only config file
     /// inside hidden directory. Hidden directory has to be first included in
