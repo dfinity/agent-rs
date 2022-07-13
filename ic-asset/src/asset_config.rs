@@ -10,7 +10,7 @@ use std::{
     sync::Arc,
 };
 
-const ASSETS_CONFIG_FILENAME: &str = ".ic-assets.json";
+pub(crate) const ASSETS_CONFIG_FILENAME: &str = ".ic-assets.json";
 
 pub(crate) type HeadersConfig = HashMap<String, String>;
 type ConfigMap = HashMap<PathBuf, Arc<AssetConfigTreeNode>>;
@@ -27,6 +27,7 @@ struct AssetConfigRule {
     r#match: GlobMatcher,
     cache: Option<CacheConfig>,
     headers: Maybe<HeadersConfig>,
+    ignore: Option<bool>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -46,6 +47,8 @@ fn fmt_glob_field(
 
 impl AssetConfigRule {
     fn applies(&self, canonical_path: &Path) -> bool {
+        // TODO: better dot files/dirs handling, awaiting upstream changes:
+        // https://github.com/BurntSushi/ripgrep/issues/2229
         self.r#match.is_match(canonical_path)
     }
 }
@@ -59,6 +62,7 @@ pub(crate) struct AssetSourceDirectoryConfiguration {
 pub(crate) struct AssetConfig {
     pub(crate) cache: Option<CacheConfig>,
     pub(crate) headers: Option<HeadersConfig>,
+    pub(crate) ignore: Option<bool>,
 }
 
 #[derive(Debug, Default)]
@@ -100,11 +104,13 @@ impl AssetSourceDirectoryConfiguration {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct InterimAssetConfigRule {
     r#match: String,
     cache: Option<CacheConfig>,
     #[serde(default, deserialize_with = "deser_headers")]
     headers: Maybe<HeadersConfig>,
+    ignore: Option<bool>,
 }
 
 impl<T> Default for Maybe<T> {
@@ -136,6 +142,7 @@ impl AssetConfigRule {
             r#match,
             cache,
             headers,
+            ignore,
         }: InterimAssetConfigRule,
         config_file_parent_dir: &Path,
     ) -> anyhow::Result<Self> {
@@ -151,12 +158,13 @@ impl AssetConfigRule {
                     )
                 })?,
         )
-        .with_context(|| format!("{} is not a valid glob pattern", r#match))?
-        .compile_matcher();
+        .with_context(|| format!("{} is not a valid glob pattern", r#match))?.compile_matcher();
+
         Ok(Self {
             r#match: glob,
             cache,
             headers,
+            ignore,
         })
     }
 }
@@ -187,15 +195,12 @@ impl AssetConfigTreeNode {
 
         let parent_ref = match parent {
             Some(p) if rules.is_empty() => p,
-            _ => {
-                let config_tree = Self { parent, rules };
-                Arc::new(config_tree)
-            }
+            _ => Arc::new(Self { parent, rules }),
         };
 
         configs.insert(dir.to_path_buf(), parent_ref.clone());
         for f in std::fs::read_dir(&dir)
-            .with_context(|| format!("Unable to read directory {}", &dir.to_str().unwrap()))?
+            .with_context(|| format!("Unable to read directory {}", &dir.display()))?
             .filter_map(|x| x.ok())
             .filter(|x| x.file_type().map_or_else(|_e| false, |ft| ft.is_dir()))
         {
@@ -227,6 +232,10 @@ impl AssetConfig {
             (_, Maybe::Null) => self.headers = None,
             (_, Maybe::Absent) => (),
         };
+
+        if other.ignore.is_some() {
+            self.ignore = other.ignore;
+        }
         self
     }
 }
@@ -439,6 +448,7 @@ mod with_tempdir {
                     Number(serde_json::Number::from(1)).to_string(),
                 ),
             ])),
+            ..Default::default()
         };
 
         assert_eq!(parsed_asset_config.cache, expected_asset_config.cache);
