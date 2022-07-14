@@ -16,7 +16,7 @@ rust-version = "1.58.1"
 
 [dependencies]
 anyhow = "1.0"
-candid = "0.7.14"
+candid = "0.7.15"
 flate2 = "1.0.22"
 futures = "0.3.21"
 futures-intrusive = "0.4.0"
@@ -24,7 +24,6 @@ garcon = { version = "0.2", features = ["async"] }
 globset = "0.4.9"
 hex = {version = "0.4.2", features = ["serde"] }
 ic-agent = { path = "../ic-agent", version = "0.19", features = [ "pem" ] }
-ic-types = "0.3.0"
 ic-utils = { path = "../ic-utils", version = "0.19" }
 mime = "0.3.16"
 mime_guess = "2.0.4"
