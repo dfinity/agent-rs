@@ -3,11 +3,14 @@
 
 pub use reqwest;
 
+use super::TransportFuture;
 use crate::{agent::agent_error::HttpErrorPayload, ic_types::Principal, AgentError, RequestId};
+#[cfg(not(target_family = "wasm"))]
 use futures_util::StreamExt;
+#[cfg(feature = "rustls")]
 use hyper_rustls::ConfigBuilderExt;
 use reqwest::Method;
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::sync::Arc;
 
 /// Implemented by the Agent environment to cache and update an HTTP Auth password.
 /// It returns a tuple of `(username, password)`.
@@ -41,6 +44,7 @@ const IC0_SUB_DOMAIN: &str = ".ic0.app";
 
 impl ReqwestHttpReplicaV2Transport {
     /// Creates a replica transport from a HTTP URL.
+    #[cfg(feature = "rustls")]
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
         let mut tls_config = rustls::ClientConfig::builder()
             .with_safe_defaults()
@@ -57,6 +61,12 @@ impl ReqwestHttpReplicaV2Transport {
                 .build()
                 .expect("Could not create HTTP client."),
         )
+    }
+
+    /// Creates a replica transport from a HTTP URL.
+    #[cfg(not(feature = "rustls"))]
+    pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
+        Self::create_with_client(url, reqwest::Client::new())
     }
 
     /// Creates a replica transport from a HTTP URL and a [`reqwest::Client`].
@@ -100,6 +110,7 @@ impl ReqwestHttpReplicaV2Transport {
     }
 
     /// Sets a max response body size limit
+    #[cfg(not(target_family = "wasm"))]
     pub fn with_max_response_body_size(self, max_response_body_size: usize) -> Self {
         ReqwestHttpReplicaV2Transport {
             max_response_body_size: Some(max_response_body_size),
@@ -160,24 +171,35 @@ impl ReqwestHttpReplicaV2Transport {
             return Err(AgentError::ResponseSizeExceededLimit());
         }
 
-        let mut body: Vec<u8> = response
-            .content_length()
-            .map_or_else(Vec::new, |n| Vec::with_capacity(n as usize));
+        #[cfg(not(target_family = "wasm"))]
+        let body = {
+            let mut body: Vec<u8> = response
+                .content_length()
+                .map_or_else(Vec::new, |n| Vec::with_capacity(n as usize));
 
-        let mut stream = response.bytes_stream();
+            let mut stream = response.bytes_stream();
 
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|x| AgentError::TransportError(Box::new(x)))?;
+            while let Some(chunk) = stream.next().await {
+                let chunk = chunk.map_err(|x| AgentError::TransportError(Box::new(x)))?;
 
-            // Size Check (Body Size)
-            if matches!(self
+                // Size Check (Body Size)
+                if matches!(self
                 .max_response_body_size, Some(size_limit) if body.len() + chunk.len() > size_limit)
-            {
-                return Err(AgentError::ResponseSizeExceededLimit());
-            }
+                {
+                    return Err(AgentError::ResponseSizeExceededLimit());
+                }
 
-            body.extend_from_slice(chunk.as_ref());
-        }
+                body.extend_from_slice(chunk.as_ref());
+            }
+            body
+        };
+
+        #[cfg(target_family = "wasm")]
+        let body = response
+            .bytes()
+            .await
+            .map_err(|x| AgentError::TransportError(Box::new(x)))?
+            .to_vec();
 
         Ok((http_status, response_headers, body))
     }
@@ -243,7 +265,7 @@ impl super::ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
         effective_canister_id: Principal,
         envelope: Vec<u8>,
         _request_id: RequestId,
-    ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
+    ) -> TransportFuture<'a, Result<(), AgentError>> {
         async fn run(
             s: &ReqwestHttpReplicaV2Transport,
             effective_canister_id: Principal,
@@ -261,7 +283,7 @@ impl super::ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
         &'a self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+    ) -> TransportFuture<'a, Result<Vec<u8>, AgentError>> {
         async fn run(
             s: &ReqwestHttpReplicaV2Transport,
             effective_canister_id: Principal,
@@ -278,7 +300,7 @@ impl super::ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
         &'a self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+    ) -> TransportFuture<'a, Result<Vec<u8>, AgentError>> {
         async fn run(
             s: &ReqwestHttpReplicaV2Transport,
             effective_canister_id: Principal,
@@ -291,9 +313,7 @@ impl super::ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
         Box::pin(run(self, effective_canister_id, envelope))
     }
 
-    fn status<'a>(
-        &'a self,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+    fn status<'a>(&'a self) -> TransportFuture<'a, Result<Vec<u8>, AgentError>> {
         async fn run(s: &ReqwestHttpReplicaV2Transport) -> Result<Vec<u8>, AgentError> {
             s.execute(Method::GET, "status", None).await
         }

@@ -23,13 +23,13 @@ garcon = { version = "0.2", features = ["async"] }
 hex = "0.4.0"
 http = "0.2.6"
 http-body = "0.4.5"
-hyper-rustls = { version = "0.23.0", features = [ "webpki-roots" ] }
+hyper-rustls = { version = "0.23.0", features = [ "webpki-roots" ], optional = true }
 ic-types = "0.4.0"
 k256 = { version = "0.11", features = ["pem"] }
 leb128 = "0.2.5"
 mime = "0.3.16"
 rand = "0.8.5"
-rustls = "0.20.4"
+rustls = { version = "0.20.4", optional = true }
 ring = { version = "0.16.11", features = ["std"] }
 serde = { version = "1.0.136", features = ["derive"] }
 serde_bytes = "0.11.2"
@@ -45,7 +45,7 @@ futures-util = "0.3.21"
 [dependencies.reqwest]
 version = "0.11.7"
 default-features = false
-features = [ "blocking", "json", "rustls-tls", "stream" ]
+features = [ "blocking", "json", "stream" ]
 optional = true
 
 [dependencies.pem]
@@ -60,5 +60,9 @@ serde_json = "1.0.79"
 tokio = { version = "1.17.0", features = ["full"] }
 
 [features]
-default = ["pem", "reqwest"]
+default = ["pem", "reqwest", "rustls"]
+rustls = ["dep:rustls", "dep:hyper-rustls", "reqwest?/rustls-tls"]
 ic_ref_tests = ["default"] # Used to separate integration tests for ic-ref which need a server running.
+
+[target.wasm32-unknown-unknown.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
