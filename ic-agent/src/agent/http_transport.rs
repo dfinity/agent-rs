@@ -260,12 +260,12 @@ impl ReqwestHttpReplicaV2Transport {
 }
 
 impl super::ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
-    fn call<'a>(
-        &'a self,
+    fn call(
+        &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
         _request_id: RequestId,
-    ) -> TransportFuture<'a, Result<(), AgentError>> {
+    ) -> TransportFuture<'_, Result<(), AgentError>> {
         async fn run(
             s: &ReqwestHttpReplicaV2Transport,
             effective_canister_id: Principal,
@@ -279,11 +279,11 @@ impl super::ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
         Box::pin(run(self, effective_canister_id, envelope))
     }
 
-    fn read_state<'a>(
-        &'a self,
+    fn read_state(
+        &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-    ) -> TransportFuture<'a, Result<Vec<u8>, AgentError>> {
+    ) -> TransportFuture<'_, Result<Vec<u8>, AgentError>> {
         async fn run(
             s: &ReqwestHttpReplicaV2Transport,
             effective_canister_id: Principal,
@@ -296,11 +296,11 @@ impl super::ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
         Box::pin(run(self, effective_canister_id, envelope))
     }
 
-    fn query<'a>(
-        &'a self,
+    fn query(
+        &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-    ) -> TransportFuture<'a, Result<Vec<u8>, AgentError>> {
+    ) -> TransportFuture<'_, Result<Vec<u8>, AgentError>> {
         async fn run(
             s: &ReqwestHttpReplicaV2Transport,
             effective_canister_id: Principal,
@@ -313,7 +313,7 @@ impl super::ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
         Box::pin(run(self, effective_canister_id, envelope))
     }
 
-    fn status<'a>(&'a self) -> TransportFuture<'a, Result<Vec<u8>, AgentError>> {
+    fn status(&self) -> TransportFuture<'_, Result<Vec<u8>, AgentError>> {
         async fn run(s: &ReqwestHttpReplicaV2Transport) -> Result<Vec<u8>, AgentError> {
             s.execute(Method::GET, "status", None).await
         }

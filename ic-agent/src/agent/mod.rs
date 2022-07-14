@@ -76,92 +76,92 @@ pub trait ReplicaV2Transport: Send + Sync {
     /// depends on the content of the envelope.
     ///
     /// This normally corresponds to the `/api/v2/canister/<effective_canister_id>/call` endpoint.
-    fn call<'a>(
-        &'a self,
+    fn call(
+        &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
         request_id: RequestId,
-    ) -> TransportFuture<'a, Result<(), AgentError>>;
+    ) -> TransportFuture<'_, Result<(), AgentError>>;
 
     /// Sends a synchronous request to a Replica. This call includes the body of the request message
     /// itself (envelope).
     ///
     /// This normally corresponds to the `/api/v2/canister/<effective_canister_id>/read_state` endpoint.
-    fn read_state<'a>(
-        &'a self,
+    fn read_state(
+        &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-    ) -> TransportFuture<'a, Result<Vec<u8>, AgentError>>;
+    ) -> TransportFuture<'_, Result<Vec<u8>, AgentError>>;
 
     /// Sends a synchronous request to a Replica. This call includes the body of the request message
     /// itself (envelope).
     ///
     /// This normally corresponds to the `/api/v2/canister/<effective_canister_id>/query` endpoint.
-    fn query<'a>(
-        &'a self,
+    fn query(
+        &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-    ) -> TransportFuture<'a, Result<Vec<u8>, AgentError>>;
+    ) -> TransportFuture<'_, Result<Vec<u8>, AgentError>>;
 
     /// Sends a status request to the Replica, returning whatever the replica returns.
     /// In the current spec v2, this is a CBOR encoded status message, but we are not
     /// making this API attach semantics to the response.
-    fn status<'a>(&'a self) -> TransportFuture<'a, Result<Vec<u8>, AgentError>>;
+    fn status(&self) -> TransportFuture<'_, Result<Vec<u8>, AgentError>>;
 }
 
 impl_debug_empty!(dyn ReplicaV2Transport);
 
 impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Box<I> {
-    fn call<'a>(
-        &'a self,
+    fn call(
+        &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
         request_id: RequestId,
-    ) -> TransportFuture<'a, Result<(), AgentError>> {
+    ) -> TransportFuture<'_, Result<(), AgentError>> {
         (**self).call(effective_canister_id, envelope, request_id)
     }
-    fn read_state<'a>(
-        &'a self,
+    fn read_state(
+        &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-    ) -> TransportFuture<'a, Result<Vec<u8>, AgentError>> {
+    ) -> TransportFuture<'_, Result<Vec<u8>, AgentError>> {
         (**self).read_state(effective_canister_id, envelope)
     }
-    fn query<'a>(
-        &'a self,
+    fn query(
+        &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-    ) -> TransportFuture<'a, Result<Vec<u8>, AgentError>> {
+    ) -> TransportFuture<'_, Result<Vec<u8>, AgentError>> {
         (**self).query(effective_canister_id, envelope)
     }
-    fn status<'a>(&'a self) -> TransportFuture<'a, Result<Vec<u8>, AgentError>> {
+    fn status(&self) -> TransportFuture<'_, Result<Vec<u8>, AgentError>> {
         (**self).status()
     }
 }
 impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Arc<I> {
-    fn call<'a>(
-        &'a self,
+    fn call(
+        &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
         request_id: RequestId,
-    ) -> TransportFuture<'a, Result<(), AgentError>> {
+    ) -> TransportFuture<'_, Result<(), AgentError>> {
         (**self).call(effective_canister_id, envelope, request_id)
     }
-    fn read_state<'a>(
-        &'a self,
+    fn read_state(
+        &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-    ) -> TransportFuture<'a, Result<Vec<u8>, AgentError>> {
+    ) -> TransportFuture<'_, Result<Vec<u8>, AgentError>> {
         (**self).read_state(effective_canister_id, envelope)
     }
-    fn query<'a>(
-        &'a self,
+    fn query(
+        &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-    ) -> TransportFuture<'a, Result<Vec<u8>, AgentError>> {
+    ) -> TransportFuture<'_, Result<Vec<u8>, AgentError>> {
         (**self).query(effective_canister_id, envelope)
     }
-    fn status<'a>(&'a self) -> TransportFuture<'a, Result<Vec<u8>, AgentError>> {
+    fn status(&self) -> TransportFuture<'_, Result<Vec<u8>, AgentError>> {
         (**self).status()
     }
 }
