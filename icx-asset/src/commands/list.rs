@@ -45,7 +45,7 @@ pub async fn list(canister: &Canister<'_>) -> Result {
             eprintln!(
                 "{:>20} {:>15} {:50} ({}, {})",
                 DateTime::<Local>::from(modified).format("%F %X"),
-                encoding.length.0.to_string(),
+                encoding.length.0,
                 entry.key,
                 entry.content_type,
                 encoding.content_encoding
