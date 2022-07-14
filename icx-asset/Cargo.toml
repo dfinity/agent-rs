@@ -18,7 +18,7 @@ rust-version = "1.58.1"
 
 [dependencies]
 anyhow = "1.0.34"
-candid = "0.7.14"
+candid = "0.7.15"
 chrono = "0.4.19"
 clap = { version = "3.0.14", features = ["derive", "cargo"] }
 delay = "0.3.1"
@@ -26,8 +26,8 @@ garcon = "0.2.2"
 humantime = "2.0.1"
 ic-agent = { path = "../ic-agent", version = "0.19" }
 ic-asset = { path = "../ic-asset", version = "0.19" }
-ic-types = "0.3.0"
 ic-utils = { path = "../ic-utils", version = "0.19" }
+ic-types = "0.4.0"
 libflate = "1.2.0"
 num-traits = "0.2"
 pem = "1.0.1"
