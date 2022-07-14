@@ -78,11 +78,11 @@ mod tests {
     fn test_query_serde() {
         let query = SignedQuery {
             ingress_expiry: 1,
-            sender: Principal::from_slice(&[0; 29]),
-            canister_id: Principal::from_slice(&[0; 29]),
+            sender: Principal::management_canister(),
+            canister_id: Principal::management_canister(),
             method_name: "greet".to_string(),
             arg: vec![0, 1],
-            effective_canister_id: Principal::from_slice(&[0; 29]),
+            effective_canister_id: Principal::management_canister(),
             signed_query: vec![0, 1, 2, 3],
         };
         let serialized = serde_json::to_string(&query).unwrap();
@@ -95,11 +95,11 @@ mod tests {
         let update = SignedUpdate {
             nonce: None,
             ingress_expiry: 1,
-            sender: Principal::from_slice(&[0; 29]),
-            canister_id: Principal::from_slice(&[0; 29]),
+            sender: Principal::management_canister(),
+            canister_id: Principal::management_canister(),
             method_name: "greet".to_string(),
             arg: vec![0, 1],
-            effective_canister_id: Principal::from_slice(&[0; 29]),
+            effective_canister_id: Principal::management_canister(),
             signed_update: vec![0, 1, 2, 3],
             request_id: RequestId::new(&[0; 32]),
         };
@@ -112,8 +112,8 @@ mod tests {
     fn test_request_status_serde() {
         let request_status = SignedRequestStatus {
             ingress_expiry: 1,
-            sender: Principal::from_slice(&[0; 29]),
-            effective_canister_id: Principal::from_slice(&[0; 29]),
+            sender: Principal::management_canister(),
+            effective_canister_id: Principal::management_canister(),
             request_id: RequestId::new(&[0; 32]),
             signed_request_status: vec![0, 1, 2, 3],
         };
