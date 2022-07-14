@@ -12,7 +12,7 @@ readme = "README.md"
 categories = ["api-bindings", "data-structures", "no-std"]
 keywords = ["internet-computer", "agent", "icp", "dfinity"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
-rust-version = "1.58.1"
+rust-version = "1.60.0"
 
 [dependencies]
 async-trait = "0.1.53"
@@ -39,7 +39,7 @@ simple_asn1 = "0.6.1"
 thiserror = "1.0.30"
 url = "2.1.0"
 pkcs8 = { version = "0.9", features = ["std"] }
-sec1 = { version = "0.3", features = ["pem"]}
+sec1 = { version = "0.3", features = ["pem"] }
 futures-util = "0.3.21"
 
 [dependencies.reqwest]
