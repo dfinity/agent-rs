@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Added support for configurable dot-directories and -files inclusion via `.ic-assets.json` config file:
+## [0.20.0] - 2022-07-14
+
+### Breaking change: Updated to ic-types 0.4.0
+
+* Remove `PrincipalInner`
+  * `Principal` directly holds `len` and `bytes` fields
+* `PrincipalError` enum has different set of variants reflecting changes in `from_text` logic.
+* `from_text` accepts input containing uppercase letters which results in Err before.
+* `from_text` verifies CRC32 check sequence
+
+### ic-asset
+
+Added support configurable inclusion and exclusion of files and directories (including dotfiles and dot directories), done via `.ic-assets.json` config file:
 - example of `.ic-assets.json` file format:
   ```
   [
@@ -48,6 +60,8 @@ Added support for configuring HTTP headers for assets in asset canister (via `.i
 
 ## [0.19.0] - 2022-07-06
 
+### ic-asset
+
 Added support for asset canister config files in `ic-assets`.
 - reads configuration from `.ic-assets.json` config files if placed inside assets directory, multiple config files can be used (nested in subdirectories)
 - runs successfully only if the config file is right format (valid JSON, valid glob pattern, JSON fields in correct format)
@@ -66,6 +80,8 @@ Added support for asset canister config files in `ic-assets`.
 - the config file is being taken into account only when calling `ic_asset::sync` (i.e. `dfx deploy` or `icx-asset sync`)
 
 ## [0.18.0] - 2022-06-23
+
+### ic-asset
 
 Breaking change: ic-asset::sync() now synchronizes from multiple source directories.
 
