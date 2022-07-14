@@ -1,6 +1,6 @@
 [package]
 name = "ic-agent"
-version = "0.19.0"
+version = "0.19.1"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2021"
 description = "Agent library to communicate with the Internet Computer, following the Public Specification."

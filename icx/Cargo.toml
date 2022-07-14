@@ -1,6 +1,6 @@
 [package]
 name = "icx"
-version = "0.19.0"
+version = "0.19.1"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2021"
 description = "CLI tool to call canisters on the Internet Computer."

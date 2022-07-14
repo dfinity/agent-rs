@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Added support for configurable dot-directories and -files inclusion via `.ic-assets.json` config file:
+## [0.19.1] - 2022-07-14
+
+Added support configurable inclusion and exclusion of files and directories (including dotfiles and dot directories), done via `.ic-assets.json` config file:
 - example of `.ic-assets.json` file format:
   ```
   [
