@@ -17,7 +17,7 @@ jobs:
             ghc: '8.10.7'
             spec: 'f771c6b3e7cdde413d3b960f63165c6ecf3e0b7c'
             os: ubuntu-latest
-            rust: '1.58.1'
+            rust: '1.60.0'
 
     steps:
       - uses: haskell/actions/setup@v1
