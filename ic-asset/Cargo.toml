@@ -39,3 +39,4 @@ derivative = "2.2.0"
 mockito = "0.31.0"
 proptest = "1.0.0"
 tempfile = "3.3.0"
+ic-agent = { path = "../ic-agent", features = ["pem", "reqwest", "rustls"] }
