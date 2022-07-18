@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ic-asset
+
+* Fixed custom configured HTTP headers - no longer is the header's value wrapped with double quotes.
+
 ## [0.20.0] - 2022-07-14
 
 ### Breaking change: Updated to ic-types 0.4.0
