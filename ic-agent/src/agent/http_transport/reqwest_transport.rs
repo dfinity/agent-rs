@@ -12,7 +12,11 @@ use reqwest::{
 use std::sync::Arc;
 
 use crate::{
-    agent::{agent_error::HttpErrorPayload, AgentFuture, ReplicaV2Transport},
+    agent::{
+        agent_error::HttpErrorPayload,
+        http_transport::{IC0_DOMAIN, IC0_SUB_DOMAIN},
+        AgentFuture, ReplicaV2Transport,
+    },
     ic_types::Principal,
     AgentError, RequestId,
 };
@@ -33,6 +37,17 @@ pub trait PasswordManager: Send + Sync {
     fn required(&self, url: &str) -> Result<(String, String), String>;
 }
 
+impl dyn PasswordManager {
+    fn get(&self, cached: bool, url: &str) -> Result<Option<(String, String)>, AgentError> {
+        if cached {
+            self.cached(url)
+        } else {
+            self.required(url).map(Some)
+        }
+        .map_err(AgentError::AuthenticationError)
+    }
+}
+
 impl_debug_empty!(dyn PasswordManager);
 
 /// A [ReplicaV2Transport] using Reqwest to make HTTP calls to the internet computer.
@@ -43,9 +58,6 @@ pub struct ReqwestHttpReplicaV2Transport {
     password_manager: Option<Arc<dyn PasswordManager>>,
     max_response_body_size: Option<usize>,
 }
-
-const IC0_DOMAIN: &str = "ic0.app";
-const IC0_SUB_DOMAIN: &str = ".ic0.app";
 
 impl ReqwestHttpReplicaV2Transport {
     /// Creates a replica transport from a HTTP URL.
@@ -90,10 +102,7 @@ impl ReqwestHttpReplicaV2Transport {
 
     /// Sets a password manager to use with HTTP authentication.
     pub fn with_password_manager<P: 'static + PasswordManager>(self, password_manager: P) -> Self {
-        ReqwestHttpReplicaV2Transport {
-            password_manager: Some(Arc::new(password_manager)),
-            ..self
-        }
+        self.with_arc_password_manager(Arc::new(password_manager))
     }
 
     /// Same as [`Self::with_password_manager`], but providing the Arc so one does not have to be created.
@@ -123,13 +132,7 @@ impl ReqwestHttpReplicaV2Transport {
         cached: bool,
     ) -> Result<(), AgentError> {
         if let Some(pm) = &self.password_manager {
-            let maybe_user_pass = if cached {
-                pm.cached(http_request.url().as_str())
-            } else {
-                pm.required(http_request.url().as_str()).map(Some)
-            };
-
-            if let Some((u, p)) = maybe_user_pass.map_err(AgentError::AuthenticationError)? {
+            if let Some((u, p)) = pm.get(cached, http_request.url().as_str())? {
                 let auth = base64::encode(&format!("{}:{}", u, p));
                 http_request
                     .headers_mut()
@@ -145,11 +148,7 @@ impl ReqwestHttpReplicaV2Transport {
     ) -> Result<(StatusCode, HeaderMap, Vec<u8>), AgentError> {
         let response = self
             .client
-            .execute(
-                http_request
-                    .try_clone()
-                    .expect("Could not clone a request."),
-            )
+            .execute(http_request)
             .await
             .map_err(|x| AgentError::TransportError(Box::new(x)))?;
 
