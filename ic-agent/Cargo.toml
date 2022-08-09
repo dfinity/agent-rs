@@ -28,6 +28,7 @@ ic-types = "0.4.0"
 k256 = { version = "0.11", features = ["pem"] }
 leb128 = "0.2.5"
 mime = "0.3.16"
+miracl_core_bls12381 = { version = "4.2.2", default-features = false, features = ["allow_alt_compress", "std"] }
 rand = "0.8.5"
 rustls = "0.20.4"
 ring = { version = "0.16.11", features = ["std"] }

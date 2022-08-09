@@ -944,6 +944,7 @@ dependencies = [
  "k256",
  "leb128",
  "mime",
+ "miracl_core_bls12381",
  "mockito",
  "pem",
  "pkcs8",
@@ -1348,6 +1349,12 @@ dependencies = [
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys",
 ]
+
+[[package]]
+name = "miracl_core_bls12381"
+version = "4.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d07cbe42e2a8dd41df582fb8e00fc24d920b5561cc301fcb6d14e2e0434b500f"
 
 [[package]]
 name = "mockito"

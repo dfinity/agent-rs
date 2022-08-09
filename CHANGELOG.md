@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Fixed custom configured HTTP headers - no longer is the header's value wrapped with double quotes.
 
+### ic-agent
+
+* Switched to `miracl_core_bls12381` crate for bls
+
+
 ## [0.20.0] - 2022-07-14
 
 ### Breaking change: Updated to ic-types 0.4.0
