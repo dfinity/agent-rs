@@ -260,14 +260,14 @@ impl ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
         envelope: Vec<u8>,
     ) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let endpoint = format!("canister/{}/read_state", effective_canister_id.to_text());
+            let endpoint = format!("canister/{effective_canister_id}/read_state");
             self.execute(Method::POST, &endpoint, Some(envelope)).await
         })
     }
 
     fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let endpoint = format!("canister/{}/query", effective_canister_id.to_text());
+            let endpoint = format!("canister/{effective_canister_id}/query");
             self.execute(Method::POST, &endpoint, Some(envelope)).await
         })
     }

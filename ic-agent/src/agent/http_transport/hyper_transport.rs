@@ -1,5 +1,5 @@
 //! A [ReplicaV2Transport] that connects using a hyper client.
-#![cfg(any(feature = "hyper", feature = "hyper_no_tls"))]
+#![cfg(any(feature = "hyper"))]
 
 use bytes::Bytes;
 use http::uri::{Authority, PathAndQuery};
@@ -10,8 +10,7 @@ use hyper::{
     header::CONTENT_TYPE,
     Body, Client, Method, Request, Uri,
 };
-#[cfg(feature = "hyper")]
-use hyper_tls::HttpsConnector;
+use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 use std::{any, error::Error};
 
 use crate::{
@@ -25,7 +24,6 @@ use crate::{
 };
 
 /// A [ReplicaV2Transport] using Reqwest to make HTTP calls to the internet computer.
-#[cfg(feature = "hyper")]
 #[derive(Debug)]
 pub struct HyperReplicaV2Transport<C = HttpsConnector<HttpConnector>, B = Body> {
     url: Uri,
@@ -33,25 +31,20 @@ pub struct HyperReplicaV2Transport<C = HttpsConnector<HttpConnector>, B = Body> 
     max_response_body_size: Option<usize>,
 }
 
-/// A [ReplicaV2Transport] using Reqwest to make HTTP calls to the internet computer.
-#[cfg(not(feature = "hyper"))]
-#[derive(Debug)]
-pub struct HyperReplicaV2Transport<C, B = Body> {
-    url: Uri,
-    client: Client<C, B>,
-    max_response_body_size: Option<usize>,
-}
-
-impl<C, B> HyperReplicaV2Transport<C, B>
+impl<B> HyperReplicaV2Transport<HttpsConnector<HttpConnector>, B>
 where
-    C: Clone + Connect + Default + Send + Sync + 'static,
     B: HttpBody + Send + From<Vec<u8>> + 'static,
     B::Data: Send,
-    B::Error: Error + Send + Sync + 'static,
-{
+    B::Error: Error + Send + Sync + 'static,{
     /// Creates a replica transport from a HTTP URL.
     pub fn create<U: Into<Uri>>(url: U) -> Result<Self, AgentError> {
-        Self::create_with_client(url, Client::builder().build(C::default()))
+        let connector = HttpsConnectorBuilder::new()
+            .with_webpki_roots()
+            .https_or_http()
+            .enable_http1()
+            .enable_http2()
+            .build();
+        Self::create_with_client(url, Client::builder().build(connector))
     }
 }
 
@@ -201,11 +194,7 @@ where
         _request_id: RequestId,
     ) -> AgentFuture<()> {
         Box::pin(async move {
-            let url = format!(
-                "{}/canister/{}/call",
-                self.url,
-                effective_canister_id.to_text()
-            );
+            let url = format!("{}/canister/{effective_canister_id}/call", self.url);
             self.request(Method::POST, url, Some(envelope)).await?;
             Ok(())
         })
@@ -217,22 +206,14 @@ where
         envelope: Vec<u8>,
     ) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let url = format!(
-                "{}/canister/{}/read_state",
-                self.url,
-                effective_canister_id.to_text()
-            );
+            let url = format!("{}/canister/{effective_canister_id}/read_state", self.url);
             self.request(Method::POST, url, Some(envelope)).await
         })
     }
 
     fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let url = format!(
-                "{}/canister/{}/query",
-                self.url,
-                effective_canister_id.to_text()
-            );
+            let url = format!("{}/canister/{effective_canister_id}/query", self.url);
             self.request(Method::POST, url, Some(envelope)).await
         })
     }

@@ -942,7 +942,6 @@ dependencies = [
  "http-body",
  "hyper",
  "hyper-rustls",
- "hyper-tls",
  "ic-types",
  "k256",
  "leb128",

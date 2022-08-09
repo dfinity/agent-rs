@@ -24,7 +24,7 @@ garcon = { version = "0.2", features = ["async"] }
 hex = "0.4.0"
 http = "0.2.6"
 http-body = "0.4.5"
-hyper-rustls = { version = "0.23.0", features = [ "webpki-roots" ] }
+hyper-rustls = { version = "0.23.0", features = [ "webpki-roots", "http2" ] }
 ic-types = "0.4.0"
 k256 = { version = "0.11", features = ["pem"] }
 leb128 = "0.2.5"
@@ -49,10 +49,6 @@ version = "0.14"
 features = ["client", "http2", "http1"]
 optional = true
 
-[dependencies.hyper-tls]
-version = "0.5"
-optional = true
-
 [dependencies.reqwest]
 version = "0.11.7"
 default-features = false
@@ -72,6 +68,4 @@ tokio = { version = "1.17.0", features = ["full"] }
 
 [features]
 default = ["pem", "reqwest"]
-hyper = ["hyper_no_tls", "dep:hyper-tls"]
-hyper_no_tls = ["dep:hyper"]
 ic_ref_tests = ["default"] # Used to separate integration tests for ic-ref which need a server running.
