@@ -3,13 +3,14 @@
 
 pub use reqwest;
 
+use std::sync::Arc;
+
 use futures_util::StreamExt;
 use hyper_rustls::ConfigBuilderExt;
 use reqwest::{
     header::{HeaderMap, AUTHORIZATION, CONTENT_TYPE},
     Body, Client, Method, Request, StatusCode, Url,
 };
-use std::sync::Arc;
 
 use crate::{
     agent::{
@@ -50,7 +51,7 @@ impl dyn PasswordManager {
 
 impl_debug_empty!(dyn PasswordManager);
 
-/// A [ReplicaV2Transport] using Reqwest to make HTTP calls to the internet computer.
+/// A [ReplicaV2Transport] using [reqwest] to make HTTP calls to the internet computer.
 #[derive(Debug)]
 pub struct ReqwestHttpReplicaV2Transport {
     url: Url,

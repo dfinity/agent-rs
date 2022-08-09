@@ -1,17 +1,18 @@
 //! A [ReplicaV2Transport] that connects using a hyper client.
 #![cfg(any(feature = "hyper"))]
 
+pub use hyper;
+
+use std::{any, error::Error, future::Future, marker::PhantomData, sync::atomic::AtomicPtr};
+
 use bytes::Bytes;
 use http::uri::{Authority, PathAndQuery};
 use http_body::{LengthLimitError, Limited};
 use hyper::{
-    body::HttpBody,
-    client::{connect::Connect, HttpConnector},
-    header::CONTENT_TYPE,
-    Body, Client, Method, Request, Uri,
+    body::HttpBody, client::HttpConnector, header::CONTENT_TYPE, service::Service, Body, Client,
+    Method, Request, Response, Uri,
 };
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-use std::{any, error::Error};
 
 use crate::{
     agent::{
@@ -23,19 +24,62 @@ use crate::{
     AgentError, RequestId,
 };
 
-/// A [ReplicaV2Transport] using Reqwest to make HTTP calls to the internet computer.
+/// A [ReplicaV2Transport] using [hyper] to make HTTP calls to the internet computer.
 #[derive(Debug)]
-pub struct HyperReplicaV2Transport<C = HttpsConnector<HttpConnector>, B = Body> {
+pub struct HyperReplicaV2Transport<B1, B2, S = Client<HttpsConnector<HttpConnector>, B1>> {
+    _marker: PhantomData<(AtomicPtr<B1>, AtomicPtr<B2>)>,
     url: Uri,
-    client: Client<C, B>,
     max_response_body_size: Option<usize>,
+    service: S,
 }
 
-impl<B> HyperReplicaV2Transport<HttpsConnector<HttpConnector>, B>
+/// Trait representing the contraints on [`HttpBody`] that [`HyperReplicaV2Transport`] requires
+pub trait HyperBody:
+    HttpBody<Data = Self::BodyData, Error = Self::BodyError> + Send + From<Vec<u8>> + 'static
+{
+    /// Values yielded by the `Body`.
+    type BodyData: Send;
+    /// The error type this `Body` might generate.
+    type BodyError: Error + Send + Sync + 'static;
+}
+
+impl<B> HyperBody for B
 where
     B: HttpBody + Send + From<Vec<u8>> + 'static,
     B::Data: Send,
-    B::Error: Error + Send + Sync + 'static,{
+    B::Error: Error + Send + Sync + 'static,
+{
+    type BodyData = B::Data;
+    type BodyError = B::Error;
+}
+
+/// Trait representing the contraints on [`Service`] that [`HyperReplicaV2Transport`] requires.
+pub trait HyperService<B1: HyperBody, B2: HyperBody>:
+    Send
+    + Sync
+    + Clone
+    + Service<
+        Request<B1>,
+        Response = Response<B2>,
+        Error = hyper::Error,
+        Future = Self::ServiceFuture,
+    >
+{
+    /// The future response value.
+    type ServiceFuture: Send + Future<Output = Result<Self::Response, Self::Error>>;
+}
+
+impl<B1, B2, S> HyperService<B1, B2> for S
+where
+    B1: HyperBody,
+    B2: HyperBody,
+    S: Send + Sync + Clone + Service<Request<B1>, Response = Response<B2>, Error = hyper::Error>,
+    S::Future: Send,
+{
+    type ServiceFuture = S::Future;
+}
+
+impl<B1: HyperBody> HyperReplicaV2Transport<B1, Body> {
     /// Creates a replica transport from a HTTP URL.
     pub fn create<U: Into<Uri>>(url: U) -> Result<Self, AgentError> {
         let connector = HttpsConnectorBuilder::new()
@@ -44,22 +88,18 @@ where
             .enable_http1()
             .enable_http2()
             .build();
-        Self::create_with_client(url, Client::builder().build(connector))
+        Self::create_with_service(url, Client::builder().build(connector))
     }
 }
 
-impl<C, B> HyperReplicaV2Transport<C, B>
+impl<B1, B2, S> HyperReplicaV2Transport<B1, B2, S>
 where
-    C: Clone + Connect + Send + Sync + 'static,
-    B: HttpBody + Send + From<Vec<u8>> + 'static,
-    B::Data: Send,
-    B::Error: Error + Send + Sync + 'static,
+    B1: HyperBody,
+    B2: HyperBody,
+    S: HyperService<B1, B2>,
 {
     /// Creates a replica transport from a HTTP URL and a [`reqwest::Client`].
-    pub fn create_with_client<U: Into<Uri>>(
-        url: U,
-        client: Client<C, B>,
-    ) -> Result<Self, AgentError> {
+    pub fn create_with_service<U: Into<Uri>>(url: U, service: S) -> Result<Self, AgentError> {
         // Parse the url
         let url = url.into();
         let mut parts = url.clone().into_parts();
@@ -100,8 +140,9 @@ where
             Uri::from_parts(parts).map_err(|_| AgentError::InvalidReplicaUrl(format!("{url}")))?;
 
         Ok(Self {
+            _marker: PhantomData,
             url: url,
-            client,
+            service,
             max_response_body_size: None,
         })
     }
@@ -145,7 +186,12 @@ where
             }
             AgentError::TransportError(Box::new(err))
         }
-        let response = self.client.request(http_request).await.map_err(map_error)?;
+        let response = self
+            .service
+            .clone()
+            .call(http_request)
+            .await
+            .map_err(map_error)?;
 
         let (parts, body) = response.into_parts();
         let body = if let Some(limit) = self.max_response_body_size {
@@ -180,12 +226,11 @@ where
     }
 }
 
-impl<C, B> ReplicaV2Transport for HyperReplicaV2Transport<C, B>
+impl<B1, B2, S> ReplicaV2Transport for HyperReplicaV2Transport<B1, B2, S>
 where
-    C: Clone + Connect + Send + Sync + 'static,
-    B: HttpBody + Send + From<Vec<u8>> + 'static,
-    B::Data: Send,
-    B::Error: Error + Send + Sync + 'static,
+    B1: HyperBody,
+    B2: HyperBody,
+    S: HyperService<B1, B2>,
 {
     fn call(
         &self,
@@ -236,7 +281,7 @@ mod test {
         fn test(base: &str, result: &str) {
             let client: Client<_> = Client::builder().build_http();
             let uri: Uri = base.parse().unwrap();
-            let t = HyperReplicaV2Transport::create_with_client(uri, client).unwrap();
+            let t = HyperReplicaV2Transport::create_with_service(uri, client).unwrap();
             assert_eq!(t.url, result, "{}", base);
         }
 
