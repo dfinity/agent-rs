@@ -26,7 +26,7 @@ use crate::{
 
 /// A [ReplicaV2Transport] using [hyper] to make HTTP calls to the internet computer.
 #[derive(Debug)]
-pub struct HyperReplicaV2Transport<B1, B2, S = Client<HttpsConnector<HttpConnector>, B1>> {
+pub struct HyperReplicaV2Transport<B1, B2 = Body, S = Client<HttpsConnector<HttpConnector>, B1>> {
     _marker: PhantomData<(AtomicPtr<B1>, AtomicPtr<B2>)>,
     url: Uri,
     max_response_body_size: Option<usize>,
@@ -79,7 +79,7 @@ where
     type ServiceFuture = S::Future;
 }
 
-impl<B1: HyperBody> HyperReplicaV2Transport<B1, Body> {
+impl<B1: HyperBody> HyperReplicaV2Transport<B1> {
     /// Creates a replica transport from a HTTP URL.
     pub fn create<U: Into<Uri>>(url: U) -> Result<Self, AgentError> {
         let connector = HttpsConnectorBuilder::new()
