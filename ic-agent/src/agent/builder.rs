@@ -30,7 +30,7 @@ impl AgentBuilder {
         self.with_arc_transport(Arc::new(transport))
     }
 
-    /// Same as [with_transport], but provides a `Arc` boxed implementation instead
+    /// Same as [Self::with_transport], but provides a `Arc` boxed implementation instead
     /// of a direct type.
     pub fn with_arc_transport(mut self, transport: Arc<dyn ReplicaV2Transport>) -> Self {
         self.config.transport = Some(transport);
@@ -42,7 +42,7 @@ impl AgentBuilder {
         self.with_nonce_generator(nonce_factory)
     }
 
-    /// Same as [with_nonce_factory], but for any `NonceGenerator` type
+    /// Same as [Self::with_nonce_factory], but for any `NonceGenerator` type
     pub fn with_nonce_generator<N: 'static + NonceGenerator>(
         self,
         nonce_factory: N,
@@ -50,7 +50,7 @@ impl AgentBuilder {
         self.with_arc_nonce_generator(Arc::new(nonce_factory))
     }
 
-    /// Same as [with_nonce_generator], but provides a `Arc` boxed implementation instead
+    /// Same as [Self::with_nonce_generator], but provides a `Arc` boxed implementation instead
     /// of a direct type.
     pub fn with_arc_nonce_generator(
         mut self,
@@ -68,13 +68,13 @@ impl AgentBuilder {
         self.with_arc_identity(Arc::new(identity))
     }
 
-    /// Same as [with_identity], but provides a boxed implementation instead
+    /// Same as [Self::with_identity], but provides a boxed implementation instead
     /// of a direct type.
     pub fn with_boxed_identity(self, identity: Box<dyn Identity>) -> Self {
         self.with_arc_identity(Arc::from(identity))
     }
 
-    /// Same as [with_identity], but provides a `Arc` boxed implementation instead
+    /// Same as [Self::with_identity], but provides a `Arc` boxed implementation instead
     /// of a direct type.
     pub fn with_arc_identity(mut self, identity: Arc<dyn Identity>) -> Self {
         self.config.identity = identity;

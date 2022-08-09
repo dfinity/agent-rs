@@ -55,6 +55,8 @@ const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 
 const IC_ROOT_KEY: &[u8; 133] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00\x81\x4c\x0e\x6e\xc7\x1f\xab\x58\x3b\x08\xbd\x81\x37\x3c\x25\x5c\x3c\x37\x1b\x2e\x84\x86\x3c\x98\xa4\xf1\xe0\x8b\x74\x23\x5d\x14\xfb\x5d\x9c\x0c\xd5\x46\xd9\x68\x5f\x91\x3a\x0c\x0b\x2c\xc5\x34\x15\x83\xbf\x4b\x43\x92\xe4\x67\xdb\x96\xd6\x5b\x9b\xb4\xcb\x71\x71\x12\xf8\x47\x2e\x0d\x5a\x4d\x14\x50\x5f\xfd\x74\x84\xb0\x12\x91\x09\x1c\x5f\x87\xb9\x88\x83\x46\x3f\x98\x09\x1a\x0b\xaa\xae";
 
+type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + Send + 'a>>;
+
 /// A facade that connects to a Replica and does requests. These requests can be of any type
 /// (does not have to be HTTP). This trait is to inverse the control from the Agent over its
 /// connection code, and to resolve any direct dependencies to tokio or HTTP code from this
@@ -69,98 +71,80 @@ pub trait ReplicaV2Transport: Send + Sync {
     /// depends on the content of the envelope.
     ///
     /// This normally corresponds to the `/api/v2/canister/<effective_canister_id>/call` endpoint.
-    fn call<'a>(
-        &'a self,
+    fn call(
+        &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
         request_id: RequestId,
-    ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>>;
+    ) -> AgentFuture<()>;
 
     /// Sends a synchronous request to a Replica. This call includes the body of the request message
     /// itself (envelope).
     ///
     /// This normally corresponds to the `/api/v2/canister/<effective_canister_id>/read_state` endpoint.
-    fn read_state<'a>(
-        &'a self,
+    fn read_state(
+        &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
+    ) -> AgentFuture<Vec<u8>>;
 
     /// Sends a synchronous request to a Replica. This call includes the body of the request message
     /// itself (envelope).
     ///
     /// This normally corresponds to the `/api/v2/canister/<effective_canister_id>/query` endpoint.
-    fn query<'a>(
-        &'a self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
+    fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>>;
 
     /// Sends a status request to the Replica, returning whatever the replica returns.
     /// In the current spec v2, this is a CBOR encoded status message, but we are not
     /// making this API attach semantics to the response.
-    fn status<'a>(
-        &'a self,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>>;
+    fn status(&self) -> AgentFuture<Vec<u8>>;
 }
 
 impl_debug_empty!(dyn ReplicaV2Transport);
 
 impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Box<I> {
-    fn call<'a>(
-        &'a self,
+    fn call(
+        &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
         request_id: RequestId,
-    ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
+    ) -> AgentFuture<()> {
         (**self).call(effective_canister_id, envelope, request_id)
     }
-    fn read_state<'a>(
-        &'a self,
+    fn read_state(
+        &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+    ) -> AgentFuture<Vec<u8>> {
         (**self).read_state(effective_canister_id, envelope)
     }
-    fn query<'a>(
-        &'a self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+    fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         (**self).query(effective_canister_id, envelope)
     }
-    fn status<'a>(
-        &'a self,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+    fn status(&self) -> AgentFuture<Vec<u8>> {
         (**self).status()
     }
 }
 impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Arc<I> {
-    fn call<'a>(
-        &'a self,
+    fn call(
+        &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
         request_id: RequestId,
-    ) -> Pin<Box<dyn Future<Output = Result<(), AgentError>> + Send + 'a>> {
+    ) -> AgentFuture<()> {
         (**self).call(effective_canister_id, envelope, request_id)
     }
-    fn read_state<'a>(
-        &'a self,
+    fn read_state(
+        &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+    ) -> AgentFuture<Vec<u8>> {
         (**self).read_state(effective_canister_id, envelope)
     }
-    fn query<'a>(
-        &'a self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+    fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         (**self).query(effective_canister_id, envelope)
     }
-    fn status<'a>(
-        &'a self,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
+    fn status(&self) -> AgentFuture<Vec<u8>> {
         (**self).status()
     }
 }
