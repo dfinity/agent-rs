@@ -659,7 +659,7 @@ impl<'a> ser::SerializeStructVariant for &'a mut RequestIdSerializer {
 
 /// Derive the request ID from a serializable data structure.
 ///
-/// See https://hydra.dfinity.systems//build/268411/download/1/dfinity/spec/public/index.html#api-request-id
+/// See <https://hydra.dfinity.systems//build/268411/download/1/dfinity/spec/public/index.html#api-request-id>
 ///
 /// # Warnings
 ///

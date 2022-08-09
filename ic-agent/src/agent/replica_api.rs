@@ -108,7 +108,7 @@ pub struct ReadStateResponse {
     pub certificate: Vec<u8>,
 }
 
-/// A `Certificate` as defined in https://smartcontracts.org/docs/interface-spec/index.html#_certificate
+/// A `Certificate` as defined in <https://smartcontracts.org/docs/interface-spec/index.html#_certificate>
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 pub struct Certificate<'a> {
     /// The hash tree.
