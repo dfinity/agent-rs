@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, fmt::Debug};
 pub enum Value {
     /// See [`Null`](serde_cbor::Value::Null).
     Null,
-    /// See [`String`](serde_cbor::Value::String).
+    /// See [`String`](serde_cbor::Value::Text).
     String(String),
     /// See [`Integer`](serde_cbor::Value::Integer).
     Integer(i64),
@@ -17,7 +17,7 @@ pub enum Value {
     Bool(bool),
     /// See [`Bytes`](serde_cbor::Value::Bytes).
     Bytes(Vec<u8>),
-    /// See [`Vec`](serde_cbor::Value::Vec).
+    /// See [`Vec`](serde_cbor::Value::Array).
     Vec(Vec<Value>),
     /// See [`Map`](serde_cbor::Value::Map).
     Map(BTreeMap<String, Box<Value>>),
@@ -38,7 +38,7 @@ impl std::fmt::Display for Value {
     }
 }
 
-/// The structure returned by [`ic_agent::Agent::status`], containing the information returned
+/// The structure returned by [`super::Agent::status`], containing the information returned
 /// by the status endpoint of a replica.
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq)]
 pub struct Status {
