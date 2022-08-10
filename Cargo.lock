@@ -939,6 +939,7 @@ dependencies = [
  "hex",
  "http",
  "http-body",
+ "hyper",
  "hyper-rustls",
  "ic-types",
  "k256",
