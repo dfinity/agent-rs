@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+* Set `default-features = false` for `ic-agent` interdependencies to reduce unused nested dependencies.
+
 ### ic-asset
 
 * Fixed custom configured HTTP headers - no longer is the header's value wrapped with double quotes.
