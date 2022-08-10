@@ -20,7 +20,6 @@ rust-version = "1.60.0"
 async-trait = "0.1.40"
 candid = "0.7.15"
 garcon = { version = "0.2", features = ["async"] }
-ic-agent = { path = "../ic-agent", version = "0.20", default-features = false }
 serde = "1.0.115"
 serde_bytes = "0.11"
 strum = "0.24"
@@ -32,10 +31,19 @@ leb128 = "0.2"
 semver = "1.0.7"
 once_cell = "1.10.0"
 
+[dependencies.ic-agent]
+version = "0.20"
+path = "../ic-agent"
+default-features = false
+
 [dev-dependencies]
-ic-agent = { path = "../ic-agent", version = "0.20", features = ["reqwest"] }
 ring = "0.16.11"
 tokio = { version = "1.14.0", features = ["full"] }
+
+[dev-dependencies.ic-agent]
+version = "0.20"
+path = "../ic-agent"
+features = ["reqwest"]
 
 [features]
 raw = []
