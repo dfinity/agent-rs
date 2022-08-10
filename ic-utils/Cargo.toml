@@ -20,7 +20,7 @@ rust-version = "1.60.0"
 async-trait = "0.1.40"
 candid = "0.7.15"
 garcon = { version = "0.2", features = ["async"] }
-ic-agent = { path = "../ic-agent", version = "0.20" }
+ic-agent = { path = "../ic-agent", version = "0.20", default-features = false }
 serde = "1.0.115"
 serde_bytes = "0.11"
 strum = "0.24"

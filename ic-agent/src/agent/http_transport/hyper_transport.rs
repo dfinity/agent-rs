@@ -5,12 +5,14 @@ pub use hyper;
 
 use std::{any, error::Error, future::Future, marker::PhantomData, sync::atomic::AtomicPtr};
 
-use bytes::Bytes;
 use http::uri::{Authority, PathAndQuery};
 use http_body::{LengthLimitError, Limited};
 use hyper::{
-    body::HttpBody, client::HttpConnector, header::CONTENT_TYPE, service::Service, Body, Client,
-    Method, Request, Response, Uri,
+    body::{Bytes, HttpBody},
+    client::HttpConnector,
+    header::CONTENT_TYPE,
+    service::Service,
+    Client, Method, Request, Response, Uri,
 };
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 
@@ -26,8 +28,8 @@ use crate::{
 
 /// A [ReplicaV2Transport] using [hyper] to make HTTP calls to the internet computer.
 #[derive(Debug)]
-pub struct HyperReplicaV2Transport<B1, B2 = Body, S = Client<HttpsConnector<HttpConnector>, B1>> {
-    _marker: PhantomData<(AtomicPtr<B1>, AtomicPtr<B2>)>,
+pub struct HyperReplicaV2Transport<B1, S = Client<HttpsConnector<HttpConnector>, B1>> {
+    _marker: PhantomData<AtomicPtr<B1>>,
     url: Uri,
     max_response_body_size: Option<usize>,
     service: S,
@@ -54,28 +56,31 @@ where
 }
 
 /// Trait representing the contraints on [`Service`] that [`HyperReplicaV2Transport`] requires.
-pub trait HyperService<B1: HyperBody, B2: HyperBody>:
+pub trait HyperService<B1: HyperBody>:
     Send
     + Sync
     + Clone
     + Service<
         Request<B1>,
-        Response = Response<B2>,
+        Response = Response<Self::ResponseBody>,
         Error = hyper::Error,
         Future = Self::ServiceFuture,
     >
 {
+    /// Values yielded in the `Body` of the `Response`.
+    type ResponseBody: HyperBody;
     /// The future response value.
     type ServiceFuture: Send + Future<Output = Result<Self::Response, Self::Error>>;
 }
 
-impl<B1, B2, S> HyperService<B1, B2> for S
+impl<B1, B2, S> HyperService<B1> for S
 where
     B1: HyperBody,
     B2: HyperBody,
     S: Send + Sync + Clone + Service<Request<B1>, Response = Response<B2>, Error = hyper::Error>,
     S::Future: Send,
 {
+    type ResponseBody = B2;
     type ServiceFuture = S::Future;
 }
 
@@ -92,13 +97,12 @@ impl<B1: HyperBody> HyperReplicaV2Transport<B1> {
     }
 }
 
-impl<B1, B2, S> HyperReplicaV2Transport<B1, B2, S>
+impl<B1, S> HyperReplicaV2Transport<B1, S>
 where
     B1: HyperBody,
-    B2: HyperBody,
-    S: HyperService<B1, B2>,
+    S: HyperService<B1>,
 {
-    /// Creates a replica transport from a HTTP URL and a [`reqwest::Client`].
+    /// Creates a replica transport from a HTTP URL and a [`HyperService`].
     pub fn create_with_service<U: Into<Uri>>(url: U, service: S) -> Result<Self, AgentError> {
         // Parse the url
         let url = url.into();
@@ -215,7 +219,7 @@ where
             Err(AgentError::HttpError(HttpErrorPayload {
                 status: status.into(),
                 content_type: headers
-                    .get(reqwest::header::CONTENT_TYPE)
+                    .get(CONTENT_TYPE)
                     .and_then(|value| value.to_str().ok())
                     .map(|x| x.to_string()),
                 content: body,
@@ -226,11 +230,10 @@ where
     }
 }
 
-impl<B1, B2, S> ReplicaV2Transport for HyperReplicaV2Transport<B1, B2, S>
+impl<B1, S> ReplicaV2Transport for HyperReplicaV2Transport<B1, S>
 where
     B1: HyperBody,
-    B2: HyperBody,
-    S: HyperService<B1, B2>,
+    S: HyperService<B1>,
 {
     fn call(
         &self,

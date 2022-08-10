@@ -933,7 +933,6 @@ dependencies = [
  "base32",
  "base64",
  "byteorder",
- "bytes",
  "candid",
  "futures-util",
  "garcon",
