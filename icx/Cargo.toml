@@ -25,7 +25,7 @@ clap = { version = "3.0.14", features = ["derive", "cargo"] }
 garcon = { version = "0.2.3", features = ["async"] }
 hex = "0.4.2"
 humantime = "2.0.1"
-ic-agent = { path = "../ic-agent", version = "0.20", default-features = false }
+ic-agent = { path = "../ic-agent", version = "0.20" }
 ic-utils = { path = "../ic-utils", version = "0.20" }
 pem = "1.0"
 ring = "0.16.11"
