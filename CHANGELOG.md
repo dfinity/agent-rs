@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ic-agent
 
 * Switched to `miracl_core_bls12381` crate for bls
-
+* Added new `hyper` transport `HyperReplicaV2Transport`
 
 ## [0.20.0] - 2022-07-14
 
