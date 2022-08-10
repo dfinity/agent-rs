@@ -7,7 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ic-asset
+
+* Fixed custom configured HTTP headers - no longer is the header's value wrapped with double quotes.
+
+### ic-agent
+
+* Switched to `miracl_core_bls12381` crate for bls
+* Added new `hyper` transport `HyperReplicaV2Transport`
+
+## [0.20.0] - 2022-07-14
+
+### Breaking change: Updated to ic-types 0.4.0
+
+* Remove `PrincipalInner`
+  * `Principal` directly holds `len` and `bytes` fields
+* `PrincipalError` enum has different set of variants reflecting changes in `from_text` logic.
+* `from_text` accepts input containing uppercase letters which results in Err before.
+* `from_text` verifies CRC32 check sequence
+
+### ic-asset
+
+Added support configurable inclusion and exclusion of files and directories (including dotfiles and dot directories), done via `.ic-assets.json` config file:
+- example of `.ic-assets.json` file format:
+  ```
+  [
+      {
+          "match": ".*",
+          "cache": {
+              "max_age": 20
+          },
+          "headers": {
+              "X-Content-Type-Options": "nosniff"
+          },
+          "ignore": false
+      }
+  ]
+  ```
+- see [PR](https://github.com/dfinity/agent-rs/pull/361) and [tests](https://github.com/dfinity/agent-rs/blob/f8515d1d0825b47c8048f5528ac3b65018065779/ic-asset/src/sync.rs#L145) for more examples
+
+Added support for configuring HTTP headers for assets in asset canister (via `.ic-assets.json` config file):
+- example of `.ic-assets.json` file format:
+  ```
+  [
+      {
+          "match": "*",
+          "cache": {
+              "max_age": 20
+          },
+          "headers": {
+              "X-Content-Type-Options": "nosniff"
+          }
+      },
+      {
+          "match": "**/*",
+          "headers": null
+      },
+  ]
+  ```
+- `headers` from multiple applicable rules are being stacked/concatenated, unless `null` is specified, which resets/empties the headers. Both `"headers": {}` and absence of `headers` don't have any effect on end result.
+
+## [0.19.0] - 2022-07-06
+
+### ic-asset
+
+Added support for asset canister config files in `ic-assets`.
+- reads configuration from `.ic-assets.json` config files if placed inside assets directory, multiple config files can be used (nested in subdirectories)
+- runs successfully only if the config file is right format (valid JSON, valid glob pattern, JSON fields in correct format)
+- example of `.ic-assets.json` file format:
+  ```
+  [
+      {
+          "match": "*",
+          "cache": {
+              "max_age": 20
+          }
+      }
+  ]
+  ```
+- works only during asset creation
+- the config file is being taken into account only when calling `ic_asset::sync` (i.e. `dfx deploy` or `icx-asset sync`)
+
 ## [0.18.0] - 2022-06-23
+
+### ic-asset
 
 Breaking change: ic-asset::sync() now synchronizes from multiple source directories.
 

@@ -659,7 +659,7 @@ impl<'a> ser::SerializeStructVariant for &'a mut RequestIdSerializer {
 
 /// Derive the request ID from a serializable data structure.
 ///
-/// See https://hydra.dfinity.systems//build/268411/download/1/dfinity/spec/public/index.html#api-request-id
+/// See <https://hydra.dfinity.systems//build/268411/download/1/dfinity/spec/public/index.html#api-request-id>
 ///
 /// # Warnings
 ///
@@ -708,7 +708,7 @@ mod tests {
         // Hash taken from the example on the public spec.
         let request_id = to_request_id(&data).unwrap();
         assert_eq!(
-            hex::encode(request_id.0.to_vec()),
+            hex::encode(request_id.0),
             "8781291c347db32a9d8c10eb62b710fce5a93be676474c42babc74c51858f94b"
         );
     }
@@ -736,7 +736,7 @@ mod tests {
         // Hash taken from the example on the public spec.
         let request_id = to_request_id(&data).unwrap();
         assert_eq!(
-            hex::encode(request_id.0.to_vec()),
+            hex::encode(request_id.0),
             "8781291c347db32a9d8c10eb62b710fce5a93be676474c42babc74c51858f94b"
         );
     }
@@ -764,7 +764,7 @@ mod tests {
 
         let request_id = to_request_id(&data).unwrap();
         assert_eq!(
-            hex::encode(request_id.0.to_vec()),
+            hex::encode(request_id.0),
             "97d6f297aea699aec85d3377c7643ea66db810aba5c4372fbc2082c999f452dc"
         );
 
@@ -793,7 +793,7 @@ mod tests {
 
         let request_id = to_request_id(&data).unwrap();
         assert_eq!(
-            hex::encode(request_id.0.to_vec()),
+            hex::encode(request_id.0),
             "99daa8c80a61e87ac1fdf9dd49e39963bfe4dafb2a45095ebf4cad72d916d5be"
         );
 
@@ -824,7 +824,7 @@ mod tests {
 
         let request_id = to_request_id(&data).unwrap();
         assert_eq!(
-            hex::encode(request_id.0.to_vec()),
+            hex::encode(request_id.0),
             "ea01a9c3d3830db108e0a87995ea0d4183dc9c6e51324e9818fced5c57aa64f5"
         );
 

@@ -1,3 +1,4 @@
+use crate::asset_config::HeadersConfig;
 use candid::{CandidType, Nat};
 use serde::Deserialize;
 
@@ -67,6 +68,10 @@ pub struct CreateAssetArguments {
     pub key: String,
     /// The MIME type of this asset
     pub content_type: String,
+    /// The cache HTTP header Time To Live parameter
+    pub max_age: Option<u64>,
+    /// The HTTP headers
+    pub headers: Option<HeadersConfig>,
 }
 
 /// Set the data for a particular content encoding for the given asset.

@@ -116,9 +116,7 @@
 #[macro_use]
 mod macros;
 
-#[allow(clippy::all)]
-#[allow(dead_code)]
-mod bls;
+pub use miracl_core_bls12381 as bls;
 
 pub mod agent;
 pub mod export;

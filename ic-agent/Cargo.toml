@@ -1,6 +1,6 @@
 [package]
 name = "ic-agent"
-version = "0.18.0"
+version = "0.20.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2021"
 description = "Agent library to communicate with the Internet Computer, following the Public Specification."
@@ -12,7 +12,7 @@ readme = "README.md"
 categories = ["api-bindings", "data-structures", "no-std"]
 keywords = ["internet-computer", "agent", "icp", "dfinity"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
-rust-version = "1.58.1"
+rust-version = "1.60.0"
 
 [dependencies]
 async-trait = "0.1.53"
@@ -23,11 +23,12 @@ garcon = { version = "0.2", features = ["async"] }
 hex = "0.4.0"
 http = "0.2.6"
 http-body = "0.4.5"
-hyper-rustls = { version = "0.23.0", features = [ "webpki-roots" ] }
-ic-types = "0.3.0"
+hyper-rustls = { version = "0.23.0", features = [ "webpki-roots", "http2" ] }
+ic-types = "0.4.0"
 k256 = { version = "0.11", features = ["pem"] }
 leb128 = "0.2.5"
 mime = "0.3.16"
+miracl_core_bls12381 = { version = "4.2.2", default-features = false, features = ["allow_alt_compress", "std"] }
 rand = "0.8.5"
 rustls = "0.20.4"
 ring = { version = "0.16.11", features = ["std"] }
@@ -39,8 +40,13 @@ simple_asn1 = "0.6.1"
 thiserror = "1.0.30"
 url = "2.1.0"
 pkcs8 = { version = "0.9", features = ["std"] }
-sec1 = { version = "0.3", features = ["pem"]}
+sec1 = { version = "0.3", features = ["pem"] }
 futures-util = "0.3.21"
+
+[dependencies.hyper]
+version = "0.14"
+features = ["client", "http2", "http1"]
+optional = true
 
 [dependencies.reqwest]
 version = "0.11.7"
@@ -53,7 +59,7 @@ version = "1.0"
 optional = true
 
 [dev-dependencies]
-candid = "0.7.14"
+candid = "0.7.15"
 mockito = "0.31.0"
 proptest = "1.0.0"
 serde_json = "1.0.79"

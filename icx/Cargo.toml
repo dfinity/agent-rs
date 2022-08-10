@@ -1,6 +1,6 @@
 [package]
 name = "icx"
-version = "0.18.0"
+version = "0.20.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2021"
 description = "CLI tool to call canisters on the Internet Computer."
@@ -12,7 +12,7 @@ readme = "README.md"
 categories = ["command-line-interface", "web-programming::http-client"]
 keywords = ["internet-computer", "agent", "icp", "dfinity", "call"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
-rust-version = "1.58.1"
+rust-version = "1.60.0"
 
 [[bin]]
 name = "icx"
@@ -20,13 +20,13 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { version = "1.0", features = ["backtrace"] }
-candid = "0.7.14"
+candid = "0.7.15"
 clap = { version = "3.0.14", features = ["derive", "cargo"] }
 garcon = { version = "0.2.3", features = ["async"] }
 hex = "0.4.2"
 humantime = "2.0.1"
-ic-agent = { path = "../ic-agent", version = "0.18" }
-ic-utils = { path = "../ic-utils", version = "0.18" }
+ic-agent = { path = "../ic-agent", version = "0.20" }
+ic-utils = { path = "../ic-utils", version = "0.20" }
 pem = "1.0"
 ring = "0.16.11"
 serde = "1.0.115"

@@ -1,6 +1,6 @@
 [package]
 name = "ic-identity-hsm"
-version = "0.18.0"
+version = "0.20.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 description = "Identity implementation for HSM for the ic-agent package."
 homepage = "https://docs.rs/ic-identity-hsm"
@@ -12,11 +12,11 @@ readme = "README.md"
 categories = ["api-bindings", "data-structures", "no-std"]
 keywords = ["internet-computer", "agent", "utility", "icp", "dfinity"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
-rust-version = "1.58.1"
+rust-version = "1.60.0"
 
 [dependencies]
 hex = "0.4.2"
-ic-agent = { path = "../ic-agent", version = "0.18", features = [ "pem" ] }
+ic-agent = { path = "../ic-agent", version = "0.20", features = [ "pem" ] }
 num-bigint = "0.4.3"
 pkcs11 = "0.5.0"
 sha2 = "0.10"

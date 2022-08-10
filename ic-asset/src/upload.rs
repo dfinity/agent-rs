@@ -1,11 +1,12 @@
 use crate::asset_canister::batch::{commit_batch, create_batch};
 use crate::asset_canister::list::list_assets;
 use crate::asset_canister::protocol::{AssetDetails, BatchOperationKind};
+use crate::asset_config::AssetConfig;
 use crate::operations::{
     create_new_assets, delete_incompatible_assets, set_encodings, unset_obsolete_encodings,
 };
 use crate::params::CanisterCallParams;
-use crate::plumbing::{make_project_assets, AssetLocation, ProjectAsset};
+use crate::plumbing::{make_project_assets, AssetDescriptor, ProjectAsset};
 use ic_utils::Canister;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -17,11 +18,12 @@ pub async fn upload(
     timeout: Duration,
     files: HashMap<String, PathBuf>,
 ) -> anyhow::Result<()> {
-    let asset_locations: Vec<AssetLocation> = files
+    let asset_descriptors: Vec<AssetDescriptor> = files
         .iter()
-        .map(|x| AssetLocation {
+        .map(|x| AssetDescriptor {
             source: x.1.clone(),
             key: x.0.clone(),
+            config: AssetConfig::default(),
         })
         .collect();
 
@@ -38,7 +40,7 @@ pub async fn upload(
     let project_assets = make_project_assets(
         &canister_call_params,
         &batch_id,
-        asset_locations,
+        asset_descriptors,
         &container_assets,
     )
     .await?;
