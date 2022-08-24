@@ -23,7 +23,6 @@ futures-intrusive = "0.4.0"
 garcon = { version = "0.2", features = ["async"] }
 globset = "0.4.9"
 hex = {version = "0.4.2", features = ["serde"] }
-ic-agent = { path = "../ic-agent", version = "0.20", features = [ "pem" ] }
 ic-utils = { path = "../ic-utils", version = "0.20" }
 mime = "0.3.16"
 mime_guess = "2.0.4"
@@ -35,7 +34,14 @@ sha2 = "0.10"
 walkdir = "2.2.9"
 derivative = "2.2.0"
 
+[dependencies.ic-agent]
+version = "0.20"
+path = "../ic-agent"
+features = ["pem"]
+default-features = false
+
 [dev-dependencies]
+ic-agent = { path = "../ic-agent", version = "0.20" }
 mockito = "0.31.0"
 proptest = "1.0.0"
 tempfile = "3.3.0"
