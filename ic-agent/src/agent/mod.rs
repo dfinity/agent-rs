@@ -1195,7 +1195,8 @@ impl<'agent> UpdateBuilder<'agent> {
         // When calling provisional_create_canister_with_cycles, every effective_canister_id is valid.
         // Therefore we need to disable the check for valid canister_ranges in the certificate validation.
         // More info: https://docs.dfinity.systems/spec/public/#http-effective-canister-id
-        let disable_range_check = method_name == "provisional_create_canister_with_cycles";
+        let disable_range_check = false;
+        //method_name == "provisional_create_canister_with_cycles";
         Self {
             agent,
             effective_canister_id: canister_id,
