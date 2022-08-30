@@ -231,7 +231,8 @@ checksum = "ec8a7b6a70fde80372154c65702f00a0f56f3e1c36abbc6c440484be248856db"
 [[package]]
 name = "candid"
 version = "0.7.16"
-source = "git+https://github.com/mraszyk/candid#45dcbc2f066f1bee685f21d542206d73b773aa94"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7e4287605536419ac6ce9d76d3aa5733677ca8c7c2891079b2c71a345cc17a3"
 dependencies = [
  "anyhow",
  "binread",
@@ -257,7 +258,8 @@ dependencies = [
 [[package]]
 name = "candid_derive"
 version = "0.4.5"
-source = "git+https://github.com/mraszyk/candid#45dcbc2f066f1bee685f21d542206d73b773aa94"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e02c03c4d547674a3f3f3109538fb49871fbe636216daa019f06a62faca9061"
 dependencies = [
  "lazy_static",
  "proc-macro2",
@@ -294,9 +296,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.2.18"
+version = "3.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b15f2ea93df33549dbe2e8eecd1ca55269d63ae0b3ba1f55db030817d1c2867f"
+checksum = "68d43934757334b5c0519ff882e1ab9647ac0258b47c24c4f490d78e42697fd5"
 dependencies = [
  "atty",
  "bitflags",
@@ -1030,8 +1032,9 @@ dependencies = [
 
 [[package]]
 name = "ic-types"
-version = "0.4.1"
-source = "git+https://github.com/mraszyk/ic-types#7089df8566604ff2f5e27a0ac11a66bdcb0c1915"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0a7d9569a4c91d5c9c202c1666f799a9761bab70a2b59464ee78c45b005e47b8"
 dependencies = [
  "crc32fast",
  "data-encoding",

@@ -18,7 +18,7 @@ rust-version = "1.60.0"
 
 [dependencies]
 anyhow = "1.0.34"
-candid = { version = "0.7.16", git = "https://github.com/mraszyk/candid" }
+candid = "0.7.16"
 chrono = "0.4.19"
 clap = { version = "3.0.14", features = ["derive", "cargo"] }
 delay = "0.3.1"

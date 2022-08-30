@@ -20,7 +20,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { version = "1.0", features = ["backtrace"] }
-candid = { version = "0.7.16", git = "https://github.com/mraszyk/candid" }
+candid = "0.7.16"
 clap = { version = "3.0.14", features = ["derive", "cargo"] }
 garcon = { version = "0.2.3", features = ["async"] }
 hex = "0.4.2"

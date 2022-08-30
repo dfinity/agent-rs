@@ -16,7 +16,7 @@ rust-version = "1.60.0"
 
 [dependencies]
 anyhow = "1.0"
-candid = { version = "0.7.16", git = "https://github.com/mraszyk/candid" }
+candid = "0.7.16"
 flate2 = "1.0.22"
 futures = "0.3.21"
 futures-intrusive = "0.4.0"
