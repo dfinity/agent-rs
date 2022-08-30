@@ -740,13 +740,10 @@ impl Agent {
         &self,
         canister_id: Principal,
         path: &str,
-        disable_range_check: bool,
     ) -> Result<Vec<u8>, AgentError> {
         let paths: Vec<Vec<Label>> = vec![vec!["canister".into(), canister_id.into(), path.into()]];
 
-        let cert = self
-            .read_state_raw(paths, canister_id, disable_range_check)
-            .await?;
+        let cert = self.read_state_raw(paths, canister_id, false).await?;
 
         lookup_canister_info(cert, canister_id, path)
     }
@@ -756,7 +753,6 @@ impl Agent {
         &self,
         canister_id: Principal,
         path: &str,
-        disable_range_check: bool,
     ) -> Result<Vec<u8>, AgentError> {
         let paths: Vec<Vec<Label>> = vec![vec![
             "canister".into(),
@@ -765,9 +761,7 @@ impl Agent {
             path.into(),
         ]];
 
-        let cert = self
-            .read_state_raw(paths, canister_id, disable_range_check)
-            .await?;
+        let cert = self.read_state_raw(paths, canister_id, false).await?;
 
         lookup_canister_metadata(cert, canister_id, path)
     }
@@ -797,7 +791,6 @@ impl Agent {
         request_id: &RequestId,
         effective_canister_id: Principal,
         signed_request_status: Vec<u8>,
-        disable_range_check: bool,
     ) -> Result<RequestStatusResponse, AgentError> {
         let _envelope: Envelope<ReadStateContent> =
             serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
@@ -807,7 +800,7 @@ impl Agent {
 
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
-        self.verify(&cert, effective_canister_id, disable_range_check)?;
+        self.verify(&cert, effective_canister_id, false)?;
         lookup_request_status(cert, request_id)
     }
 
