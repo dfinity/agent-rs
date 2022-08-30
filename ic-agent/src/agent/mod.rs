@@ -245,7 +245,7 @@ pub struct Agent {
 
 #[derive(CandidType, Deserialize)]
 struct CreateCanisterResult {
-  canister_id: candid::Principal,
+  canister_id: Principal,
 }
 
 impl fmt::Debug for Agent {
@@ -629,7 +629,6 @@ impl Agent {
 
         if disable_range_check {
           let paths = cert.tree.list_paths();
-          //let paths: Vec<Vec<Label> > = vec![];
           let rs: Label = "request_status".into();
           let t: Label = "time".into();
           let mut rid: Option<Label> = None;
@@ -657,7 +656,7 @@ impl Agent {
                 let reply: &[u8] = lookup_value(&cert, p).unwrap();
                 match Decode!(reply, CreateCanisterResult) {
                   Ok(reply) => {
-                    self.check_delegation(&cert.delegation, Principal::from_slice(reply.canister_id.as_slice()), false)?;
+                    self.check_delegation(&cert.delegation, reply.canister_id, false)?;
                   },
                   Err(_) => {
                     return Err(AgentError::CertificateVerificationFailed());
