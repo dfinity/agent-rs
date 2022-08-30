@@ -627,6 +627,9 @@ impl Agent {
         msg.extend_from_slice(IC_STATE_ROOT_DOMAIN_SEPARATOR);
         msg.extend_from_slice(&root_hash);
 
+        let mut effective_canister_id = effective_canister_id;
+        let mut disable_range_check = disable_range_check;
+
         if disable_range_check {
             let paths = cert.tree.list_paths();
             let rs: Label = "request_status".into();
@@ -667,7 +670,13 @@ impl Agent {
                         let reply: &[u8] = lookup_value(cert, p).unwrap();
                         match Decode!(reply, CreateCanisterResult) {
                             Ok(reply) => {
-                                self.check_delegation(&cert.delegation, reply.canister_id, false)?;
+                                effective_canister_id = reply.canister_id;
+                                disable_range_check = false;
+                                self.check_delegation(
+                                    &cert.delegation,
+                                    effective_canister_id,
+                                    false,
+                                )?;
                             }
                             Err(_) => {
                                 return Err(AgentError::CertificateVerificationFailed());
