@@ -30,7 +30,7 @@ use crate::{
     to_request_id, RequestId,
 };
 use garcon::Waiter;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use status::Status;
 
 use crate::{
@@ -49,6 +49,7 @@ use std::{
     task::{Context, Poll},
     time::Duration,
 };
+use candid::{CandidType, Decode};
 
 const IC_REQUEST_DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
@@ -240,6 +241,11 @@ pub struct Agent {
     ingress_expiry_duration: Duration,
     root_key: Arc<RwLock<Option<Vec<u8>>>>,
     transport: Arc<dyn ReplicaV2Transport>,
+}
+
+#[derive(CandidType, Deserialize)]
+struct CreateCanisterResult {
+  canister_id: candid::Principal,
 }
 
 impl fmt::Debug for Agent {
@@ -620,6 +626,47 @@ impl Agent {
         let mut msg = vec![];
         msg.extend_from_slice(IC_STATE_ROOT_DOMAIN_SEPARATOR);
         msg.extend_from_slice(&root_hash);
+
+        if disable_range_check {
+          let paths = cert.tree.list_paths();
+          //let paths: Vec<Vec<Label> > = vec![];
+          let rs: Label = "request_status".into();
+          let t: Label = "time".into();
+          let mut rid: Option<Label> = None;
+          for p in paths {
+            if !(p[0] == rs || p == vec![t.clone()]) {
+              return Err(AgentError::CertificateVerificationFailed());
+            }
+            if p[0] == rs {
+              if p.len() != 3 {
+                return Err(AgentError::CertificateVerificationFailed());
+              }
+              match rid.clone() {
+                None => {rid = Some(p[1].clone());},
+                Some(rid) => {
+                  if rid != p[1] {
+                    return Err(AgentError::CertificateVerificationFailed());
+                  }
+                }
+              }
+              let codes: Vec<Label> = vec!["status", "reply", "reject_code", "reject_message", "error_code"].iter().map(|s| s.into()).collect();
+              if !codes.contains(&p[2]) {
+                return Err(AgentError::CertificateVerificationFailed());
+              }
+              if p[2] == "reply".into() {
+                let reply: &[u8] = lookup_value(&cert, p).unwrap();
+                match Decode!(reply, CreateCanisterResult) {
+                  Ok(reply) => {
+                    self.check_delegation(&cert.delegation, Principal::from_slice(reply.canister_id.as_slice()), false)?;
+                  },
+                  Err(_) => {
+                    return Err(AgentError::CertificateVerificationFailed());
+                  }
+                }
+              }
+            }
+          }
+        }
 
         let der_key =
             self.check_delegation(&cert.delegation, effective_canister_id, disable_range_check)?;
