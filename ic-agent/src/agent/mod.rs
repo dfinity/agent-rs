@@ -650,7 +650,7 @@ impl Agent {
                             }
                         }
                     }
-                    let codes: Vec<Label> = vec![
+                    if vec![
                         "status",
                         "reply",
                         "reject_code",
@@ -659,12 +659,12 @@ impl Agent {
                     ]
                     .iter()
                     .map(|s| s.into())
-                    .collect();
-                    if !codes.contains(&p[2]) {
+                    .all(|s: Label| s != p[2])
+                    {
                         return Err(AgentError::CertificateVerificationFailed());
                     }
                     if p[2] == "reply".into() {
-                        let reply: &[u8] = lookup_value(&cert, p).unwrap();
+                        let reply: &[u8] = lookup_value(cert, p).unwrap();
                         match Decode!(reply, CreateCanisterResult) {
                             Ok(reply) => {
                                 self.check_delegation(&cert.delegation, reply.canister_id, false)?;
