@@ -30,7 +30,7 @@ use crate::{
     to_request_id, RequestId,
 };
 use garcon::Waiter;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use status::Status;
 
 use crate::{
@@ -40,6 +40,7 @@ use crate::{
     },
     bls::bls12381::bls,
 };
+use candid::{CandidType, Decode};
 use std::{
     convert::TryFrom,
     fmt,
@@ -49,7 +50,6 @@ use std::{
     task::{Context, Poll},
     time::Duration,
 };
-use candid::{CandidType, Decode};
 
 const IC_REQUEST_DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
@@ -245,7 +245,7 @@ pub struct Agent {
 
 #[derive(CandidType, Deserialize)]
 struct CreateCanisterResult {
-  canister_id: Principal,
+    canister_id: Principal,
 }
 
 impl fmt::Debug for Agent {
@@ -628,43 +628,54 @@ impl Agent {
         msg.extend_from_slice(&root_hash);
 
         if disable_range_check {
-          let paths = cert.tree.list_paths();
-          let rs: Label = "request_status".into();
-          let t: Label = "time".into();
-          let mut rid: Option<Label> = None;
-          for p in paths {
-            if !(p[0] == rs || p == vec![t.clone()]) {
-              return Err(AgentError::CertificateVerificationFailed());
-            }
-            if p[0] == rs {
-              if p.len() != 3 {
-                return Err(AgentError::CertificateVerificationFailed());
-              }
-              match rid.clone() {
-                None => {rid = Some(p[1].clone());},
-                Some(rid) => {
-                  if rid != p[1] {
+            let paths = cert.tree.list_paths();
+            let rs: Label = "request_status".into();
+            let t: Label = "time".into();
+            let mut rid: Option<Label> = None;
+            for p in paths {
+                if !(p[0] == rs || p == vec![t.clone()]) {
                     return Err(AgentError::CertificateVerificationFailed());
-                  }
                 }
-              }
-              let codes: Vec<Label> = vec!["status", "reply", "reject_code", "reject_message", "error_code"].iter().map(|s| s.into()).collect();
-              if !codes.contains(&p[2]) {
-                return Err(AgentError::CertificateVerificationFailed());
-              }
-              if p[2] == "reply".into() {
-                let reply: &[u8] = lookup_value(&cert, p).unwrap();
-                match Decode!(reply, CreateCanisterResult) {
-                  Ok(reply) => {
-                    self.check_delegation(&cert.delegation, reply.canister_id, false)?;
-                  },
-                  Err(_) => {
-                    return Err(AgentError::CertificateVerificationFailed());
-                  }
+                if p[0] == rs {
+                    if p.len() != 3 {
+                        return Err(AgentError::CertificateVerificationFailed());
+                    }
+                    match rid.clone() {
+                        None => {
+                            rid = Some(p[1].clone());
+                        }
+                        Some(rid) => {
+                            if rid != p[1] {
+                                return Err(AgentError::CertificateVerificationFailed());
+                            }
+                        }
+                    }
+                    let codes: Vec<Label> = vec![
+                        "status",
+                        "reply",
+                        "reject_code",
+                        "reject_message",
+                        "error_code",
+                    ]
+                    .iter()
+                    .map(|s| s.into())
+                    .collect();
+                    if !codes.contains(&p[2]) {
+                        return Err(AgentError::CertificateVerificationFailed());
+                    }
+                    if p[2] == "reply".into() {
+                        let reply: &[u8] = lookup_value(&cert, p).unwrap();
+                        match Decode!(reply, CreateCanisterResult) {
+                            Ok(reply) => {
+                                self.check_delegation(&cert.delegation, reply.canister_id, false)?;
+                            }
+                            Err(_) => {
+                                return Err(AgentError::CertificateVerificationFailed());
+                            }
+                        }
+                    }
                 }
-              }
             }
-          }
         }
 
         let der_key =
@@ -1241,7 +1252,8 @@ impl<'agent> UpdateBuilder<'agent> {
         // When calling provisional_create_canister_with_cycles on the Management Canister, every effective_canister_id is valid.
         // Therefore we need to disable the check for valid canister_ranges in the certificate validation.
         // More info: https://docs.dfinity.systems/spec/public/#http-effective-canister-id
-        let disable_range_check = canister_id == Principal::management_canister() && method_name == "provisional_create_canister_with_cycles";
+        let disable_range_check = canister_id == Principal::management_canister()
+            && method_name == "provisional_create_canister_with_cycles";
         Self {
             agent,
             effective_canister_id: canister_id,
