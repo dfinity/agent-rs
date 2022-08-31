@@ -629,7 +629,8 @@ impl Agent {
         let mut effective_canister_id = effective_canister_id;
         let mut disable_range_check = disable_range_check;
 
-        if disable_range_check && !delegation {
+        let contains_delegations = cert.delegation.is_some();
+        if disable_range_check && contains_delegations && !delegation {
             let paths = cert.tree.list_paths();
             let rs: Label = "request_status".into();
             let t: Label = "time".into();
