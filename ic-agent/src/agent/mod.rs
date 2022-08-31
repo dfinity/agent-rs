@@ -612,13 +612,12 @@ impl Agent {
         })
     }
 
-    /// Verify a certificate, checking delegation if present.
-    /// Only passes if the certificate also has authority over the canister.
-    pub fn verify(
+    fn verify_impl(
         &self,
         cert: &Certificate,
         effective_canister_id: Principal,
         disable_range_check: bool,
+        delegation: bool
     ) -> Result<(), AgentError> {
         let sig = &cert.signature;
 
@@ -630,7 +629,7 @@ impl Agent {
         let mut effective_canister_id = effective_canister_id;
         let mut disable_range_check = disable_range_check;
 
-        if disable_range_check {
+        if disable_range_check && !delegation {
             let paths = cert.tree.list_paths();
             let rs: Label = "request_status".into();
             let t: Label = "time".into();
@@ -698,6 +697,17 @@ impl Agent {
         }
     }
 
+    /// Verify a certificate, checking delegation if present.
+    /// Only passes if the certificate also has authority over the canister.
+    pub fn verify(
+        &self,
+        cert: &Certificate,
+        effective_canister_id: Principal,
+        disable_range_check: bool,
+    ) -> Result<(), AgentError> {
+        self.verify_impl(cert, effective_canister_id, disable_range_check, false)
+    }
+
     fn check_delegation(
         &self,
         delegation: &Option<Delegation>,
@@ -709,7 +719,7 @@ impl Agent {
             Some(delegation) => {
                 let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;
-                self.verify(&cert, effective_canister_id, disable_range_check)?;
+                self.verify_impl(&cert, effective_canister_id, disable_range_check, true)?;
                 let canister_range_lookup = [
                     "subnet".into(),
                     delegation.subnet_id.clone().into(),
