@@ -285,6 +285,18 @@ impl Agent {
         self.transport = Arc::new(transport);
     }
 
+    /// Set the identity provider for signing messages.
+    ///
+    /// NOTE: if you change the identity while having update calls in
+    /// flight, you will not be able to [Agent::poll] the status of these
+    /// messages.
+    pub fn set_identity<I>(&mut self, identity: I)
+    where
+        I: 'static + Identity,
+    {
+        self.identity = Arc::new(identity);
+    }
+
     /// By default, the agent is configured to talk to the main Internet Computer, and verifies
     /// responses using a hard-coded public key.
     ///

@@ -1,3 +1,4 @@
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -17,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Switched to `miracl_core_bls12381` crate for bls
 * Added new `hyper` transport `HyperReplicaV2Transport`
+* Added Agent::set_identity method (#379)
 * Fix effective canister id checks in certificate verification to match Interface Spec.
 
 ## [0.20.0] - 2022-07-14
