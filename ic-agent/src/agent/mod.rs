@@ -617,7 +617,7 @@ impl Agent {
         cert: &Certificate,
         effective_canister_id: Principal,
         disable_range_check: bool,
-        delegation: bool
+        delegation: bool,
     ) -> Result<(), AgentError> {
         let sig = &cert.signature;
 
