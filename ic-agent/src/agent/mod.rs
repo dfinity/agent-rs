@@ -660,8 +660,7 @@ impl Agent {
                         "error_code",
                     ]
                     .iter()
-                    .map(|s| s.into())
-                    .all(|s: Label| s != p[2])
+                    .all(|s| p[2] != s.into())
                     {
                         return Err(AgentError::CertificateVerificationFailed());
                     }
