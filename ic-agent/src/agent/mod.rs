@@ -652,7 +652,7 @@ impl Agent {
                     return Err(AgentError::CertificateVerificationFailed());
                 }
                 if p[0] == rs {
-                    if p.len() != 3 {
+                    if p.len() < 2 {
                         return Err(AgentError::CertificateVerificationFailed());
                     }
                     match rid.clone() {
@@ -665,19 +665,7 @@ impl Agent {
                             }
                         }
                     }
-                    if vec![
-                        "status",
-                        "reply",
-                        "reject_code",
-                        "reject_message",
-                        "error_code",
-                    ]
-                    .iter()
-                    .all(|s| p[2] != s.into())
-                    {
-                        return Err(AgentError::CertificateVerificationFailed());
-                    }
-                    if p[2] == "reply".into() {
+                    if p.len() == 3 && p[2] == "reply".into() {
                         let reply: &[u8] = lookup_value(cert, p).unwrap();
                         match Decode!(reply, CreateCanisterResult) {
                             Ok(reply) => {
