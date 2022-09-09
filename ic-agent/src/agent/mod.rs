@@ -624,12 +624,37 @@ impl Agent {
         })
     }
 
+    /// Verify a certificate, checking delegation if present, according to Interface Spec:
+    /// If this certificate includes subnet delegations (possibly nested),
+    /// then the effective_canister_id must be included in each delegation's canister id range, unless
+    ///   - the effective_canister_id is that of the Management Canister (aaaaa-aa),
+    ///   - all requested paths have /time or /request_status/<request_id> as prefix
+    ///     where the (single) original request referenced by <request_id> is an update call to
+    ///     the Management Canister (aaaaa-aa) and the method name is provisional_create_canister_with_cycles, and
+    ///   - whenever the certificate contains the path /request_status/<request_id>/reply,
+    ///     then its value is a Candid-encoded record with a canister_id field of type principal and
+    ///     the canister_id must be included in each delegation's canister id range.
+    ///
+    /// The argument disable_range_check should only be set to true if
+    /// the effective_canister_id is that of the Management Canister (aaaaa-aa) and the certificate is the response
+    /// to a read_state request for the status of an update call to the method provisional_create_canister_with_cycles
+    /// of the Management Canister (aaaaa-aa) or contained in subnet delegations of such a response.
+    /// In this case, if the certificate contains subnet delegations, the function verify_impl checks that
+    ///   - all paths contained in the certificate have /time or
+    ///     /request_status/<request_id> as prefix for a single <request_id> and
+    ///   - whenever the certificate contains the path /request_status/<request_id>/reply,
+    ///     then its value is a Candid-encoded record with a canister_id field of type principal and
+    ///     the canister_id must be included in each delegation's canister id range.
+    ///
+    /// The argument is_delegation should only be set to true if this certificate is part of subnet delegations
+    /// in which case the above two checks are skipped (they are only supposed to hold for the outermost certificate,
+    /// not for the certificates contained in subnet delegations of the outermost certificate).
     fn verify_impl(
         &self,
         cert: &Certificate,
         effective_canister_id: Principal,
         disable_range_check: bool,
-        delegation: bool,
+        is_delegation: bool,
     ) -> Result<(), AgentError> {
         let sig = &cert.signature;
 
@@ -638,21 +663,21 @@ impl Agent {
         msg.extend_from_slice(IC_STATE_ROOT_DOMAIN_SEPARATOR);
         msg.extend_from_slice(&root_hash);
 
-        let mut effective_canister_id = effective_canister_id;
-        let mut disable_range_check = disable_range_check;
-
         let contains_delegations = cert.delegation.is_some();
-        if disable_range_check && contains_delegations && !delegation {
+        if disable_range_check && contains_delegations && !is_delegation {
             let paths = cert.tree.list_paths();
-            let rs: Label = "request_status".into();
             let t: Label = "time".into();
+            let rs: Label = "request_status".into();
+            // rid contains <request_id> from paths /request_status/<request_id> if present in the certificate
             let mut rid: Option<Label> = None;
             for p in paths {
-                if !(p[0] == rs || p == vec![t.clone()]) {
+                if !(p == vec![t.clone()] || p[0] == rs) {
+                    // the path has neither the form /time nor /request_status/*
                     return Err(AgentError::CertificateVerificationFailed());
                 }
                 if p[0] == rs {
                     if p.len() < 2 {
+                        // the path is /request_status which is invalid
                         return Err(AgentError::CertificateVerificationFailed());
                     }
                     match rid.clone() {
@@ -661,21 +686,17 @@ impl Agent {
                         }
                         Some(rid) => {
                             if rid != p[1] {
+                                // the certificate contains paths /request_status/<request_id> for two distinct <request_id>'s
                                 return Err(AgentError::CertificateVerificationFailed());
                             }
                         }
                     }
                     if p.len() == 3 && p[2] == "reply".into() {
+                        // the path is /request_status/<request_id>/reply
                         let reply: &[u8] = lookup_value(cert, p).unwrap();
                         match Decode!(reply, CreateCanisterResult) {
                             Ok(reply) => {
-                                effective_canister_id = reply.canister_id;
-                                disable_range_check = false;
-                                self.check_delegation(
-                                    &cert.delegation,
-                                    effective_canister_id,
-                                    false,
-                                )?;
+                                self.check_delegation(&cert.delegation, reply.canister_id, false)?;
                             }
                             Err(_) => {
                                 return Err(AgentError::CertificateVerificationFailed());
@@ -801,6 +822,7 @@ impl Agent {
         request_id: &RequestId,
         effective_canister_id: Principal,
         signed_request_status: Vec<u8>,
+        disable_range_check: bool,
     ) -> Result<RequestStatusResponse, AgentError> {
         let _envelope: Envelope<ReadStateContent> =
             serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
@@ -810,7 +832,7 @@ impl Agent {
 
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
-        self.verify(&cert, effective_canister_id, false)?;
+        self.verify(&cert, effective_canister_id, disable_range_check)?;
         lookup_request_status(cert, request_id)
     }
 
