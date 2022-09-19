@@ -1,3 +1,4 @@
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -7,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+* Set `default-features = false` for `ic-agent` interdependencies to reduce unused nested dependencies.
+
 ### ic-asset
 
 * Fixed custom configured HTTP headers - no longer is the header's value wrapped with double quotes.
@@ -15,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Switched to `miracl_core_bls12381` crate for bls
 * Added new `hyper` transport `HyperReplicaV2Transport`
+* Added Agent::set_identity method (#379)
 
 ## [0.20.0] - 2022-07-14
 

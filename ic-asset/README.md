@@ -1,4 +1,3 @@
-`ic-asset` is a library for manipulating assets in an asset canister.
+# Notice
 
-## Useful links
-
+The `ic-asset` crate has been moved to the [sdk](https://github.com/dfinity/sdk) repo.
