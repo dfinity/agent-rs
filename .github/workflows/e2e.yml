@@ -47,7 +47,7 @@ jobs:
           fi
 
       - name: 'Run tests'
-        run: bats e2e/bash/icx-asset.bash e2e/bash/icx-asset-upload.bash
+        run: bats e2e/bash/icx.bash 
 
   aggregate:
     name: e2e:required
