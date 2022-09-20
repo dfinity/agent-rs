@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ic-agent
 
-* Switched to `miracl_core_bls12381` crate for bls
+* Switched to `ic-verify-bls-signature` crate for verify BLS signatures
 * Added new `hyper` transport `HyperReplicaV2Transport`
 * Added Agent::set_identity method (#379)
 

@@ -35,10 +35,9 @@ use status::Status;
 
 use crate::{
     agent::response_authentication::{
-        extract_der, initialize_bls, lookup_canister_info, lookup_canister_metadata,
+        extract_der, lookup_canister_info, lookup_canister_metadata,
         lookup_request_status, lookup_value,
     },
-    bls::bls12381::bls,
 };
 use std::{
     convert::TryFrom,
@@ -259,8 +258,6 @@ impl Agent {
 
     /// Create an instance of an [`Agent`].
     pub fn new(config: agent_config::AgentConfig) -> Result<Agent, AgentError> {
-        initialize_bls()?;
-
         Ok(Agent {
             nonce_factory: config.nonce_factory,
             identity: config.identity,
@@ -636,12 +633,9 @@ impl Agent {
         let der_key =
             self.check_delegation(&cert.delegation, effective_canister_id, disable_range_check)?;
         let key = extract_der(der_key)?;
-        let result = bls::core_verify(sig, &*msg, &*key);
-        if result != bls::BLS_OK {
-            Err(AgentError::CertificateVerificationFailed())
-        } else {
-            Ok(())
-        }
+
+        ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
+            .map_err(|_| AgentError::CertificateVerificationFailed())
     }
 
     fn check_delegation(
