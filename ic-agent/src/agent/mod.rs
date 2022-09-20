@@ -33,11 +33,9 @@ use garcon::Waiter;
 use serde::Serialize;
 use status::Status;
 
-use crate::{
-    agent::response_authentication::{
-        extract_der, lookup_canister_info, lookup_canister_metadata,
-        lookup_request_status, lookup_value,
-    },
+use crate::agent::response_authentication::{
+    extract_der, lookup_canister_info, lookup_canister_metadata, lookup_request_status,
+    lookup_value,
 };
 use std::{
     convert::TryFrom,
