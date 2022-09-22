@@ -78,7 +78,7 @@ pub(crate) fn lookup_request_status(
     ];
     match certificate.tree.lookup_path(&path_status) {
         LookupResult::Absent => Ok(RequestStatusResponse::Unknown),
-        LookupResult::Unknown => Err(LookupPathUnknown(path_status.into())),
+        LookupResult::Unknown => Ok(RequestStatusResponse::Unknown),
         LookupResult::Found(status) => match from_utf8(status)? {
             "done" => Ok(RequestStatusResponse::Done),
             "processing" => Ok(RequestStatusResponse::Processing),
