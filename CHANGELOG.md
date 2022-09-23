@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Switched to `ic-verify-bls-signature` crate for verify BLS signatures
 * Added new `hyper` transport `HyperReplicaV2Transport`
 * Added Agent::set_identity method (#379)
+* Updated lookup_request_status method to handle proofs of absent paths in certificates.
 
 ## [0.20.0] - 2022-07-14
 
