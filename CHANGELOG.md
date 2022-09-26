@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Added Agent::set_identity method (#379)
 * Updated lookup_request_status method to handle proofs of absent paths in certificates.
 
+### ic-utils
+
+* Make it possible to specify effective canister id in CreateCanisterBuilder
+
 ## [0.20.0] - 2022-07-14
 
 ### Breaking change: Updated to ic-types 0.4.0
