@@ -90,7 +90,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
     {
         match effective_canister_id.try_into() {
             Ok(effective_canister_id) => Self {
-                effective_canister_id: effective_canister_id,
+                effective_canister_id,
                 ..self
             },
             Err(_) => self,
