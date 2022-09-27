@@ -43,6 +43,7 @@ pub struct CanisterSettings {
 #[derive(Debug)]
 pub struct CreateCanisterBuilder<'agent, 'canister: 'agent> {
     canister: &'canister Canister<'agent>,
+    effective_canister_id: Principal,
     controllers: Option<Result<Vec<Principal>, AgentError>>,
     compute_allocation: Option<Result<ComputeAllocation, AgentError>>,
     memory_allocation: Option<Result<MemoryAllocation, AgentError>>,
@@ -56,6 +57,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
     pub fn builder(canister: &'canister Canister<'agent>) -> Self {
         Self {
             canister,
+            effective_canister_id: Principal::management_canister(),
             controllers: None,
             compute_allocation: None,
             memory_allocation: None,
@@ -77,6 +79,21 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             is_provisional_create: true,
             amount,
             ..self
+        }
+    }
+
+    /// Pass in an effective canister id for the update call.
+    pub fn with_effective_canister_id<C, E>(self, effective_canister_id: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<Principal, Error = E>,
+    {
+        match effective_canister_id.try_into() {
+            Ok(effective_canister_id) => Self {
+                effective_canister_id,
+                ..self
+            },
+            Err(_) => self,
         }
     }
 
@@ -240,6 +257,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             self.canister
                 .update_(MgmtMethod::ProvisionalCreateCanisterWithCycles.as_ref())
                 .with_arg(in_arg)
+                .with_effective_canister_id(self.effective_canister_id)
         } else {
             self.canister
                 .update_(MgmtMethod::CreateCanister.as_ref())
@@ -249,6 +267,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     memory_allocation,
                     freezing_threshold,
                 })
+                .with_effective_canister_id(self.effective_canister_id)
         };
 
         Ok(async_builder
