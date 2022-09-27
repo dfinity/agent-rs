@@ -8,7 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.1] - 2022-09-27
+
 * Set `default-features = false` for `ic-agent` interdependencies to reduce unused nested dependencies.
+* Bump `candid` to `0.7.18`.
 
 ### ic-asset
 

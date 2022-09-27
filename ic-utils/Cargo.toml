@@ -1,6 +1,6 @@
 [package]
 name = "ic-utils"
-version = "0.20.0"
+version = "0.20.1"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2021"
 description = "Collection of utilities for Rust, on top of ic-agent, to communicate with the Internet Computer, following the Public Specification."
@@ -18,7 +18,7 @@ rust-version = "1.60.0"
 
 [dependencies]
 async-trait = "0.1.40"
-candid = "0.7.15"
+candid = "0.7.18"
 garcon = { version = "0.2", features = ["async"] }
 ic-agent = { path = "../ic-agent", version = "0.20", default-features = false }
 serde = "1.0.115"
