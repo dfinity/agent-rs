@@ -229,9 +229,9 @@ checksum = "c4872d67bab6358e59559027aa3b9157c53d9358c51423c17554809a8858e0f8"
 
 [[package]]
 name = "candid"
-version = "0.7.17"
+version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5e129401e8480393ca7060debaf75e07f0b150aa05ef043325515f5353ced57"
+checksum = "d510cc32b8b991acc955dd3d5e0cb6f404069d1dccd9203ee90f5865557c9165"
 dependencies = [
  "anyhow",
  "binread",
@@ -860,7 +860,7 @@ dependencies = [
 
 [[package]]
 name = "ic-agent"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "async-trait",
  "base32",
@@ -901,7 +901,7 @@ dependencies = [
 
 [[package]]
 name = "ic-identity-hsm"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "hex",
  "ic-agent",
@@ -929,7 +929,7 @@ dependencies = [
 
 [[package]]
 name = "ic-utils"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "async-trait",
  "candid",
@@ -963,7 +963,7 @@ dependencies = [
 
 [[package]]
 name = "icx"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "candid",
@@ -983,7 +983,7 @@ dependencies = [
 
 [[package]]
 name = "icx-cert"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "base64",

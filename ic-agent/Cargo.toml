@@ -1,6 +1,6 @@
 [package]
 name = "ic-agent"
-version = "0.20.0"
+version = "0.20.1"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2021"
 description = "Agent library to communicate with the Internet Computer, following the Public Specification."
@@ -59,7 +59,7 @@ version = "1.0"
 optional = true
 
 [dev-dependencies]
-candid = "0.7.17"
+candid = "0.7.18"
 mockito = "0.31.0"
 proptest = "1.0.0"
 serde_json = "1.0.79"

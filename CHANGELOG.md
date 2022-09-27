@@ -8,7 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.1] - 2022-09-27
+
 * Set `default-features = false` for `ic-agent` interdependencies to reduce unused nested dependencies.
+* Bump `candid` to `0.7.18`.
 
 ### ic-asset
 
@@ -25,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Make it possible to specify effective canister id in CreateCanisterBuilder
 
-## [0.20.0] - 2022-07-14
+## [0.20.1] - 2022-07-14
 
 ### Breaking change: Updated to ic-types 0.4.0
 
