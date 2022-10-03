@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use chrono::TimeZone;
-use ic_agent::ic_types::{hash_tree::LookupResult, HashTree};
+use ic_agent::hash_tree::{LookupResult, HashTree};
 use reqwest::header;
 use serde::{de::DeserializeOwned, Deserialize};
 use sha2::Digest;
