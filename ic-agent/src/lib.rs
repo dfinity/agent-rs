@@ -118,6 +118,7 @@ mod macros;
 
 pub mod agent;
 pub mod export;
+pub mod hash_tree;
 pub mod identity;
 pub mod request_id;
 
@@ -127,5 +128,3 @@ pub use agent::{
 };
 pub use identity::{Identity, Signature};
 pub use request_id::{to_request_id, RequestId, RequestIdError};
-
-pub use ic_types::hash_tree;

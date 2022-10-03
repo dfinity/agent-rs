@@ -26,7 +26,6 @@ http = "0.2.6"
 http-body = "0.4.5"
 hyper-rustls = { version = "0.23.0", features = [ "webpki-roots", "http2" ] }
 ic-verify-bls-signature = "0.1"
-ic-types = "0.6.0"
 k256 = { version = "0.11", features = ["pem"] }
 leb128 = "0.2.5"
 mime = "0.3.16"

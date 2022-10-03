@@ -876,7 +876,6 @@ dependencies = [
  "http-body",
  "hyper",
  "hyper-rustls",
- "ic-types",
  "ic-verify-bls-signature",
  "k256",
  "leb128",
@@ -912,18 +911,6 @@ dependencies = [
  "sha2 0.10.2",
  "simple_asn1",
  "thiserror",
-]
-
-[[package]]
-name = "ic-types"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55f71819838e87d73ff0bf7baf5dae44ba28e24eec4da68ed072e52ba16750d9"
-dependencies = [
- "hex",
- "serde",
- "serde_bytes",
- "sha2 0.10.2",
 ]
 
 [[package]]
