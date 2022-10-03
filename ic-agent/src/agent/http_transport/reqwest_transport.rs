@@ -18,7 +18,7 @@ use crate::{
         http_transport::{IC0_DOMAIN, IC0_SUB_DOMAIN},
         AgentFuture, ReplicaV2Transport,
     },
-    ic_types::Principal,
+    export::Principal,
     AgentError, RequestId,
 };
 

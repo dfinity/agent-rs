@@ -1,4 +1,4 @@
-use crate::{ic_types::Principal, AgentError, RequestId};
+use crate::{export::Principal, AgentError, RequestId};
 
 use crate::{
     agent::{replica_api::Certificate, Replied, RequestStatusResponse},
