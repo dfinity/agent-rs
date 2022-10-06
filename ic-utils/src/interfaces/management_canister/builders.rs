@@ -82,7 +82,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         }
     }
 
-    /// Pass in an effective canister id for the call.
+    /// Pass in an effective canister id for the update call.
     pub fn with_effective_canister_id<C, E>(self, effective_canister_id: C) -> Self
     where
         E: std::fmt::Display,
@@ -90,7 +90,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
     {
         match effective_canister_id.try_into() {
             Ok(effective_canister_id) => Self {
-                effective_canister_id: effective_canister_id,
+                effective_canister_id,
                 ..self
             },
             Err(_) => self,

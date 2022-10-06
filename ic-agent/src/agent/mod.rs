@@ -165,7 +165,7 @@ pub enum PollResult {
 /// ```ignore
 /// # // This test is ignored because it requires an ic to be running. We run these
 /// # // in the ic-ref workflow.
-/// use ic_agent::{Agent, ic_types::Principal};
+/// use ic_agent::{Agent, export::Principal};
 /// use candid::{Encode, Decode, CandidType, Nat};
 /// use serde::Deserialize;
 ///

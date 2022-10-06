@@ -2,7 +2,7 @@ use crate::call::{AsyncCaller, SyncCaller};
 use candid::utils::ArgumentEncoder;
 use candid::{parser::value::IDLValue, ser::IDLBuilder, utils::ArgumentDecoder, CandidType};
 use garcon::Waiter;
-use ic_agent::{ic_types::Principal, Agent, AgentError, RequestId};
+use ic_agent::{export::Principal, Agent, AgentError, RequestId};
 use std::convert::TryInto;
 use std::fmt;
 use thiserror::Error;
