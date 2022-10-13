@@ -651,7 +651,7 @@ impl Agent {
                 let canister_range = lookup_value(&cert, canister_range_lookup)?;
                 let ranges: Vec<(Principal, Principal)> =
                     serde_cbor::from_slice(canister_range).map_err(AgentError::InvalidCborData)?;
-                if principal_is_within_ranges(&effective_canister_id, &ranges[..])
+                if !principal_is_within_ranges(&effective_canister_id, &ranges[..])
                 {
                     // the certificate is not authorized to answer calls for this canister
                     return Err(AgentError::CertificateNotAuthorized());
