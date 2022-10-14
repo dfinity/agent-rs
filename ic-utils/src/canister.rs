@@ -118,9 +118,7 @@ impl<'agent> Canister<'agent> {
     where
         W: Waiter,
     {
-        self.agent
-            .wait(request_id, self.canister_id, waiter)
-            .await
+        self.agent.wait(request_id, self.canister_id, waiter).await
     }
 
     /// Creates a copy of this canister, changing the canister ID to the provided principal.

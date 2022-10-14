@@ -145,7 +145,7 @@ where
 
         Ok(Self {
             _marker: PhantomData,
-            url: url,
+            url,
             service,
             max_response_body_size: None,
         })

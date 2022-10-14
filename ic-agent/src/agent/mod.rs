@@ -554,10 +554,7 @@ impl Agent {
         waiter.start();
         let mut request_accepted = false;
         loop {
-            match self
-                .poll(&request_id, effective_canister_id)
-                .await?
-            {
+            match self.poll(&request_id, effective_canister_id).await? {
                 PollResult::Submitted => {}
                 PollResult::Accepted => {
                     if !request_accepted {
@@ -624,8 +621,7 @@ impl Agent {
         msg.extend_from_slice(IC_STATE_ROOT_DOMAIN_SEPARATOR);
         msg.extend_from_slice(&root_hash);
 
-        let der_key =
-            self.check_delegation(&cert.delegation, effective_canister_id)?;
+        let der_key = self.check_delegation(&cert.delegation, effective_canister_id)?;
         let key = extract_der(der_key)?;
 
         ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
@@ -651,8 +647,7 @@ impl Agent {
                 let canister_range = lookup_value(&cert, canister_range_lookup)?;
                 let ranges: Vec<(Principal, Principal)> =
                     serde_cbor::from_slice(canister_range).map_err(AgentError::InvalidCborData)?;
-                if !principal_is_within_ranges(&effective_canister_id, &ranges[..])
-                {
+                if !principal_is_within_ranges(&effective_canister_id, &ranges[..]) {
                     // the certificate is not authorized to answer calls for this canister
                     return Err(AgentError::CertificateNotAuthorized());
                 }
@@ -675,9 +670,7 @@ impl Agent {
     ) -> Result<Vec<u8>, AgentError> {
         let paths: Vec<Vec<Label>> = vec![vec!["canister".into(), canister_id.into(), path.into()]];
 
-        let cert = self
-            .read_state_raw(paths, canister_id)
-            .await?;
+        let cert = self.read_state_raw(paths, canister_id).await?;
 
         lookup_canister_info(cert, canister_id, path)
     }
@@ -695,9 +688,7 @@ impl Agent {
             path.into(),
         ]];
 
-        let cert = self
-            .read_state_raw(paths, canister_id)
-            .await?;
+        let cert = self.read_state_raw(paths, canister_id).await?;
 
         lookup_canister_metadata(cert, canister_id, path)
     }
@@ -711,9 +702,7 @@ impl Agent {
         let paths: Vec<Vec<Label>> =
             vec![vec!["request_status".into(), request_id.to_vec().into()]];
 
-        let cert = self
-            .read_state_raw(paths, effective_canister_id)
-            .await?;
+        let cert = self.read_state_raw(paths, effective_canister_id).await?;
 
         lookup_request_status(cert, request_id)
     }
@@ -1151,11 +1140,7 @@ impl UpdateCall<'_> {
             let request_id = _self.request_id.await?;
             _self
                 .agent
-                .wait(
-                    request_id,
-                    _self.effective_canister_id,
-                    waiter,
-                )
+                .wait(request_id, _self.effective_canister_id, waiter)
                 .await
         }
         Box::pin(run(self, waiter))
