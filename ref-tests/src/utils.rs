@@ -12,6 +12,10 @@ const HSM_SLOT_INDEX: &str = "HSM_SLOT_INDEX";
 const HSM_KEY_ID: &str = "HSM_KEY_ID";
 const HSM_PIN: &str = "HSM_PIN";
 
+pub fn get_effective_canister_id() -> Principal {
+    Principal::from_text("sehci-oaaaa-aaaaa-aaaaa-c").unwrap()
+}
+
 pub fn create_waiter() -> Delay {
     Delay::builder()
         .throttle(std::time::Duration::from_secs(5))
@@ -137,6 +141,7 @@ pub async fn create_universal_canister(agent: &Agent) -> Result<Principal, Box<d
     let (canister_id,) = ic00
         .create_canister()
         .as_provisional_create_with_amount(None)
+        .with_effective_canister_id(get_effective_canister_id())
         .call_and_wait(create_waiter())
         .await?;
 
@@ -172,6 +177,7 @@ pub async fn create_wallet_canister(
     let (canister_id,) = ic00
         .create_canister()
         .as_provisional_create_with_amount(cycles)
+        .with_effective_canister_id(get_effective_canister_id())
         .with_memory_allocation(
             MemoryAllocation::try_from(8000000000_u64)
                 .expect("Memory allocation must be between 0 and 2^48 (i.e 256TB), inclusively."),

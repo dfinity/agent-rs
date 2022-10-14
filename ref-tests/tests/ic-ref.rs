@@ -51,6 +51,7 @@ mod management_canister {
         },
         Argument,
     };
+    use ref_tests::get_effective_canister_id;
     use ref_tests::{
         create_agent, create_basic_identity, create_secp256k1_identity, create_waiter, with_agent,
         with_wallet_canister,
@@ -62,6 +63,7 @@ mod management_canister {
         use super::{create_waiter, with_agent};
         use ic_agent::{export::Principal, AgentError};
         use ic_utils::interfaces::ManagementCanister;
+        use ref_tests::get_effective_canister_id;
         use std::str::FromStr;
 
         #[ignore]
@@ -73,6 +75,7 @@ mod management_canister {
                 let _ = ic00
                     .create_canister()
                     .as_provisional_create_with_amount(None)
+                    .with_effective_canister_id(get_effective_canister_id())
                     .call_and_wait(create_waiter())
                     .await?;
 
@@ -111,12 +114,14 @@ mod management_canister {
     #[ignore]
     #[test]
     fn management() {
+        use ref_tests::get_effective_canister_id;
         with_agent(|agent| async move {
             let ic00 = ManagementCanister::create(&agent);
 
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
                 .call_and_wait(create_waiter())
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
@@ -198,6 +203,7 @@ mod management_canister {
             let (canister_id_2,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
                 .call_and_wait(create_waiter())
                 .await?;
 
@@ -211,6 +217,7 @@ mod management_canister {
             let (canister_id_3,) = other_ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
                 .call_and_wait(create_waiter())
                 .await?;
 
@@ -266,6 +273,7 @@ mod management_canister {
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None) // ok
+                .with_effective_canister_id(get_effective_canister_id())
                 //.with_canister_id("aaaaa-aa")
                 .with_controller(agent_principal)
                 .with_controller(other_agent_principal)
@@ -363,6 +371,7 @@ mod management_canister {
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
                 .call_and_wait(create_waiter())
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
@@ -532,6 +541,7 @@ mod management_canister {
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
                 .call_and_wait(create_waiter())
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
@@ -640,6 +650,7 @@ mod management_canister {
             let (canister_id_1,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
                 .call_and_wait(create_waiter())
                 .await?;
             let result = ic00
@@ -654,6 +665,7 @@ mod management_canister {
             let (canister_id_2,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(Some(amount))
+                .with_effective_canister_id(get_effective_canister_id())
                 .call_and_wait(create_waiter())
                 .await?;
             let result = ic00
@@ -806,6 +818,7 @@ mod extras {
         call::AsyncCall,
         interfaces::{management_canister::builders::ComputeAllocation, ManagementCanister},
     };
+    use ref_tests::get_effective_canister_id;
     use ref_tests::{create_waiter, with_agent};
 
     #[ignore]
@@ -817,6 +830,7 @@ mod extras {
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
+                .with_effective_canister_id(get_effective_canister_id())
                 .with_compute_allocation(1_u64)
                 .with_memory_allocation(1024 * 1024_u64)
                 .with_freezing_threshold(1_000_000_u64)
@@ -850,6 +864,7 @@ mod extras {
             assert!(ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
                 .with_memory_allocation(1u64 << 50)
                 .call_and_wait(create_waiter())
                 .await
@@ -858,6 +873,7 @@ mod extras {
             let (_,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
                 .with_memory_allocation(10 * 1024 * 1024u64)
                 .call_and_wait(create_waiter())
                 .await?;
@@ -878,6 +894,7 @@ mod extras {
             let (_,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
                 .with_compute_allocation(ca)
                 .call_and_wait(create_waiter())
                 .await?;
@@ -895,6 +912,7 @@ mod extras {
             assert!(ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
                 .with_freezing_threshold(2u128.pow(70))
                 .call_and_wait(create_waiter())
                 .await
