@@ -212,7 +212,10 @@ pub enum PollResult {
 ///
 ///   // Create a call to the management canister to create a new canister ID,
 ///   // and wait for a result.
+///   // The effective canister id must belong to the canister ranges of the subnet at which the canister is created.
+///   let effective_canister_id = Principal::from_text("sehci-oaaaa-aaaaa-aaaaa-c").unwrap();
 ///   let response = agent.update(&management_canister_id, "provisional_create_canister_with_cycles")
+///     .with_effective_canister_id(effective_canister_id)
 ///     .with_arg(&Encode!(&Argument { amount: None })?)
 ///     .call_and_wait(waiter)
 ///     .await?;
@@ -516,10 +519,9 @@ impl Agent {
         &self,
         request_id: &RequestId,
         effective_canister_id: Principal,
-        disable_range_check: bool,
     ) -> Result<PollResult, AgentError> {
         match self
-            .request_status_raw(request_id, effective_canister_id, disable_range_check)
+            .request_status_raw(request_id, effective_canister_id)
             .await?
         {
             RequestStatusResponse::Unknown => Ok(PollResult::Submitted),
@@ -550,16 +552,12 @@ impl Agent {
         &self,
         request_id: RequestId,
         effective_canister_id: Principal,
-        disable_range_check: bool,
         mut waiter: W,
     ) -> Result<Vec<u8>, AgentError> {
         waiter.start();
         let mut request_accepted = false;
         loop {
-            match self
-                .poll(&request_id, effective_canister_id, disable_range_check)
-                .await?
-            {
+            match self.poll(&request_id, effective_canister_id).await? {
                 PollResult::Submitted => {}
                 PollResult::Accepted => {
                     if !request_accepted {
@@ -591,7 +589,6 @@ impl Agent {
         &self,
         paths: Vec<Vec<Label>>,
         effective_canister_id: Principal,
-        disable_range_check: bool,
     ) -> Result<Certificate<'_>, AgentError> {
         let request = self.read_state_content(paths)?;
         let serialized_bytes = sign_request(&request, self.identity.clone())?;
@@ -601,7 +598,7 @@ impl Agent {
             .await?;
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
-        self.verify(&cert, effective_canister_id, disable_range_check)?;
+        self.verify(&cert, effective_canister_id)?;
         Ok(cert)
     }
 
@@ -619,7 +616,6 @@ impl Agent {
         &self,
         cert: &Certificate,
         effective_canister_id: Principal,
-        disable_range_check: bool,
     ) -> Result<(), AgentError> {
         let sig = &cert.signature;
 
@@ -628,8 +624,7 @@ impl Agent {
         msg.extend_from_slice(IC_STATE_ROOT_DOMAIN_SEPARATOR);
         msg.extend_from_slice(&root_hash);
 
-        let der_key =
-            self.check_delegation(&cert.delegation, effective_canister_id, disable_range_check)?;
+        let der_key = self.check_delegation(&cert.delegation, effective_canister_id)?;
         let key = extract_der(der_key)?;
 
         ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
@@ -640,14 +635,13 @@ impl Agent {
         &self,
         delegation: &Option<Delegation>,
         effective_canister_id: Principal,
-        disable_range_check: bool,
     ) -> Result<Vec<u8>, AgentError> {
         match delegation {
             None => self.read_root_key(),
             Some(delegation) => {
                 let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;
-                self.verify(&cert, effective_canister_id, disable_range_check)?;
+                self.verify(&cert, effective_canister_id)?;
                 let canister_range_lookup = [
                     "subnet".into(),
                     delegation.subnet_id.clone().into(),
@@ -656,9 +650,7 @@ impl Agent {
                 let canister_range = lookup_value(&cert, canister_range_lookup)?;
                 let ranges: Vec<(Principal, Principal)> =
                     serde_cbor::from_slice(canister_range).map_err(AgentError::InvalidCborData)?;
-                if !disable_range_check
-                    && !principal_is_within_ranges(&effective_canister_id, &ranges[..])
-                {
+                if !principal_is_within_ranges(&effective_canister_id, &ranges[..]) {
                     // the certificate is not authorized to answer calls for this canister
                     return Err(AgentError::CertificateNotAuthorized());
                 }
@@ -678,13 +670,10 @@ impl Agent {
         &self,
         canister_id: Principal,
         path: &str,
-        disable_range_check: bool,
     ) -> Result<Vec<u8>, AgentError> {
         let paths: Vec<Vec<Label>> = vec![vec!["canister".into(), canister_id.into(), path.into()]];
 
-        let cert = self
-            .read_state_raw(paths, canister_id, disable_range_check)
-            .await?;
+        let cert = self.read_state_raw(paths, canister_id).await?;
 
         lookup_canister_info(cert, canister_id, path)
     }
@@ -694,7 +683,6 @@ impl Agent {
         &self,
         canister_id: Principal,
         path: &str,
-        disable_range_check: bool,
     ) -> Result<Vec<u8>, AgentError> {
         let paths: Vec<Vec<Label>> = vec![vec![
             "canister".into(),
@@ -703,9 +691,7 @@ impl Agent {
             path.into(),
         ]];
 
-        let cert = self
-            .read_state_raw(paths, canister_id, disable_range_check)
-            .await?;
+        let cert = self.read_state_raw(paths, canister_id).await?;
 
         lookup_canister_metadata(cert, canister_id, path)
     }
@@ -715,14 +701,11 @@ impl Agent {
         &self,
         request_id: &RequestId,
         effective_canister_id: Principal,
-        disable_range_check: bool,
     ) -> Result<RequestStatusResponse, AgentError> {
         let paths: Vec<Vec<Label>> =
             vec![vec!["request_status".into(), request_id.to_vec().into()]];
 
-        let cert = self
-            .read_state_raw(paths, effective_canister_id, disable_range_check)
-            .await?;
+        let cert = self.read_state_raw(paths, effective_canister_id).await?;
 
         lookup_request_status(cert, request_id)
     }
@@ -735,7 +718,6 @@ impl Agent {
         request_id: &RequestId,
         effective_canister_id: Principal,
         signed_request_status: Vec<u8>,
-        disable_range_check: bool,
     ) -> Result<RequestStatusResponse, AgentError> {
         let _envelope: Envelope<ReadStateContent> =
             serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
@@ -745,7 +727,7 @@ impl Agent {
 
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
-        self.verify(&cert, effective_canister_id, disable_range_check)?;
+        self.verify(&cert, effective_canister_id)?;
         lookup_request_status(cert, request_id)
     }
 
@@ -1128,7 +1110,6 @@ pub struct UpdateCall<'agent> {
     agent: &'agent Agent,
     request_id: Pin<Box<dyn Future<Output = Result<RequestId, AgentError>> + Send + 'agent>>,
     effective_canister_id: Principal,
-    disable_range_check: bool,
 }
 
 impl fmt::Debug for UpdateCall<'_> {
@@ -1162,12 +1143,7 @@ impl UpdateCall<'_> {
             let request_id = _self.request_id.await?;
             _self
                 .agent
-                .wait(
-                    request_id,
-                    _self.effective_canister_id,
-                    _self.disable_range_check,
-                    waiter,
-                )
+                .wait(request_id, _self.effective_canister_id, waiter)
                 .await
         }
         Box::pin(run(self, waiter))
@@ -1190,7 +1166,6 @@ pub struct UpdateBuilder<'agent> {
     pub arg: Vec<u8>,
     /// The Unix timestamp that the request will expire at.
     pub ingress_expiry_datetime: Option<u64>,
-    disable_range_check: bool,
 }
 
 impl<'agent> UpdateBuilder<'agent> {
@@ -1199,7 +1174,6 @@ impl<'agent> UpdateBuilder<'agent> {
         // When calling provisional_create_canister_with_cycles, every effective_canister_id is valid.
         // Therefore we need to disable the check for valid canister_ranges in the certificate validation.
         // More info: https://docs.dfinity.systems/spec/public/#http-effective-canister-id
-        let disable_range_check = method_name == "provisional_create_canister_with_cycles";
         Self {
             agent,
             effective_canister_id: canister_id,
@@ -1207,7 +1181,6 @@ impl<'agent> UpdateBuilder<'agent> {
             method_name,
             arg: vec![],
             ingress_expiry_datetime: None,
-            disable_range_check,
         }
     }
 
@@ -1275,7 +1248,6 @@ impl<'agent> UpdateBuilder<'agent> {
             agent: self.agent,
             request_id: Box::pin(request_id_future),
             effective_canister_id: self.effective_canister_id,
-            disable_range_check: self.disable_range_check,
         }
     }
 
