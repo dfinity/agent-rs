@@ -1171,9 +1171,6 @@ pub struct UpdateBuilder<'agent> {
 impl<'agent> UpdateBuilder<'agent> {
     /// Creates a new query builder with an agent for a particular canister method.
     pub fn new(agent: &'agent Agent, canister_id: Principal, method_name: String) -> Self {
-        // When calling provisional_create_canister_with_cycles, every effective_canister_id is valid.
-        // Therefore we need to disable the check for valid canister_ranges in the certificate validation.
-        // More info: https://docs.dfinity.systems/spec/public/#http-effective-canister-id
         Self {
             agent,
             effective_canister_id: canister_id,
