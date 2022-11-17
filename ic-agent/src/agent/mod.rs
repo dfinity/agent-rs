@@ -1124,17 +1124,11 @@ impl Future for UpdateCall<'_> {
     }
 }
 impl<'a> UpdateCall<'a> {
-    fn and_wait(
-        self,
-    ) -> Pin<Box<dyn core::future::Future<Output = Result<Vec<u8>, AgentError>> + Send + 'a>> {
-        async fn run(_self: UpdateCall<'_>) -> Result<Vec<u8>, AgentError> {
-            let request_id = _self.request_id.await?;
-            _self
-                .agent
-                .wait(request_id, _self.effective_canister_id)
-                .await
-        }
-        Box::pin(run(self))
+    async fn and_wait(self) -> Result<Vec<u8>, AgentError> {
+        let request_id = self.request_id.await?;
+        self.agent
+            .wait(request_id, self.effective_canister_id)
+            .await
     }
 }
 /// An Update Request Builder.
