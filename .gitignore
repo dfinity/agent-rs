@@ -1,7 +1,7 @@
 .DS_Store
 
 /.vscode/
-/.idea/
+.idea/
 
 # will have compiled files and executables
 /target/

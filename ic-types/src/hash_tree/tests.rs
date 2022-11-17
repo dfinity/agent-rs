@@ -43,6 +43,7 @@ fn spec_example() {
     );
 
     // Check CBOR serialization.
+    #[cfg(feature = "serde")]
     assert_eq!(
         hex::encode(serde_cbor::to_vec(&tree).unwrap()),
         "8301830183024161830183018302417882034568656c6c6f810083024179820345776f726c6483024162820344676f6f648301830241638100830241648203476d6f726e696e67"

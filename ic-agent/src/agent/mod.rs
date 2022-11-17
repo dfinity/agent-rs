@@ -21,15 +21,14 @@ mod agent_test;
 
 use crate::{
     agent::replica_api::{
-        CallRequestContent, Certificate, Delegation, Envelope, QueryContent, ReadStateContent,
-        ReadStateResponse,
+        CallRequestContent, Envelope, QueryContent, ReadStateContent, ReadStateResponse,
     },
     export::Principal,
-    hash_tree::Label,
     identity::Identity,
     to_request_id, RequestId,
 };
 use garcon::Waiter;
+use ic_types::{Certificate, Delegation, Label};
 use serde::Serialize;
 use status::Status;
 

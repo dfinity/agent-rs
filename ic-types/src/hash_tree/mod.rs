@@ -1,4 +1,4 @@
-//! cf https://sdk.dfinity.org/docs/interface-spec/index.html#certification-encoding
+//! cf <https://sdk.dfinity.org/docs/interface-spec/index.html#certification-encoding>
 
 use hex::FromHexError;
 use sha2::Digest;
@@ -7,9 +7,10 @@ use std::borrow::Cow;
 /// Sha256 Digest: 32 bytes
 pub type Sha256Digest = [u8; 32];
 
-#[derive(Clone, Hash, Ord, PartialOrd, Eq, PartialEq, serde::Deserialize)]
-#[serde(from = "&serde_bytes::Bytes")]
-#[serde(into = "&serde_bytes::ByteBuf")]
+#[derive(Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(from = "&serde_bytes::Bytes"))]
+#[cfg_attr(feature = "serde", serde(into = "&serde_bytes::ByteBuf"))]
 /// For labeled [HashTreeNode]
 pub struct Label(Vec<u8>);
 
@@ -20,6 +21,7 @@ impl Label {
     }
 }
 
+#[cfg(feature = "serde")]
 impl From<Label> for serde_bytes::ByteBuf {
     fn from(label: Label) -> serde_bytes::ByteBuf {
         serde_bytes::ByteBuf::from(label.as_bytes().to_vec())
@@ -63,6 +65,7 @@ impl std::fmt::Debug for Label {
     }
 }
 
+#[cfg(feature = "serde")]
 impl serde::Serialize for Label {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         if serializer.is_human_readable() {
@@ -131,6 +134,7 @@ impl<'a> From<HashTree<'a>> for HashTreeNode<'a> {
     }
 }
 
+#[cfg(feature = "serde")]
 impl serde::Serialize for HashTree<'_> {
     fn serialize<S>(
         &self,
@@ -143,6 +147,7 @@ impl serde::Serialize for HashTree<'_> {
     }
 }
 
+#[cfg(feature = "serde")]
 impl<'de> serde::Deserialize<'de> for HashTree<'_> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -225,7 +230,7 @@ enum LookupLabelResult<'node> {
 
 /// A Node in the HashTree.
 #[derive(Clone, PartialEq, Eq)]
-pub(crate) enum HashTreeNode<'a> {
+pub enum HashTreeNode<'a> {
     Empty(),
     Fork(Box<(HashTreeNode<'a>, HashTreeNode<'a>)>),
     Labeled(Cow<'a, Label>, Box<HashTreeNode<'a>>),
@@ -429,6 +434,7 @@ impl<'a> HashTreeNode<'a> {
     }
 }
 
+#[cfg(feature = "serde")]
 impl serde::Serialize for HashTreeNode<'_> {
     // Serialize a `MixedHashTree` per the CDDL of the public spec.
     // See https://docs.dfinity.systems/public/certificates.cddl
@@ -478,6 +484,7 @@ impl serde::Serialize for HashTreeNode<'_> {
     }
 }
 
+#[cfg(feature = "serde")]
 impl<'de, 'tree: 'de> serde::Deserialize<'de> for HashTreeNode<'tree> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

@@ -8,9 +8,9 @@ use crate::{
         Status,
     },
     export::Principal,
-    hash_tree::Label,
     Agent, AgentError,
 };
+use ic_types::Label;
 use mockito::mock;
 use std::collections::BTreeMap;
 

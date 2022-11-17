@@ -1,0 +1,35 @@
+[package]
+name = "ic-types"
+version = "0.22.0"
+description = "Identity implementation for HSM for the ic-agent package."
+homepage = "https://docs.rs/ic-types"
+documentation = "https://docs.rs/ic-types"
+repository = "https://github.com/dfinity/agent-rs"
+edition = "2021"
+license = "Apache-2.0"
+readme = "README.md"
+categories = ["api-bindings", "data-structures", "no-std"]
+keywords = ["internet-computer", "agent", "utility", "icp", "dfinity"]
+include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
+rust-version = "1.60.0"
+
+[dependencies]
+hex = "0.4.3"
+sha2 = "0.10.1"
+
+[dev-dependencies]
+serde = { version = "1.0.133", features = ["derive"] }
+serde_cbor = "0.11.2"
+
+[dependencies.serde]
+version = "1.0.115"
+features = ["derive"]
+optional = true
+
+[dependencies.serde_bytes]
+version = "0.11.5"
+optional = true
+
+[features]
+# Default features include serde support.
+default = ['serde', 'serde_bytes']

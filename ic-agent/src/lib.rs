@@ -121,13 +121,12 @@ mod macros;
 
 pub mod agent;
 pub mod export;
-pub mod hash_tree;
 pub mod identity;
 pub mod request_id;
 
 pub use agent::{
-    agent_error, agent_error::AgentError, replica_api::Certificate,
-    response_authentication::lookup_value, Agent, NonceFactory, NonceGenerator,
+    agent_error, agent_error::AgentError, response_authentication::lookup_value, Agent,
+    NonceFactory, NonceGenerator,
 };
 pub use identity::{Identity, Signature};
 pub use request_id::{to_request_id, RequestId, RequestIdError};
