@@ -1,4 +1,3 @@
-use garcon::Delay;
 use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
 use ic_agent::identity::Secp256k1Identity;
 use ic_agent::{export::Principal, identity::BasicIdentity, Agent, Identity};
@@ -14,12 +13,6 @@ const HSM_PIN: &str = "HSM_PIN";
 
 pub fn get_effective_canister_id() -> Principal {
     Principal::from_text("sehci-oaaaa-aaaaa-aaaaa-c").unwrap()
-}
-
-pub fn create_waiter() -> Delay {
-    Delay::builder()
-        .throttle(std::time::Duration::from_secs(5))
-        .build()
 }
 
 pub async fn create_identity() -> Result<Box<dyn Identity>, String> {
@@ -142,12 +135,12 @@ pub async fn create_universal_canister(agent: &Agent) -> Result<Principal, Box<d
         .create_canister()
         .as_provisional_create_with_amount(None)
         .with_effective_canister_id(get_effective_canister_id())
-        .call_and_wait(create_waiter())
+        .call_and_wait()
         .await?;
 
     ic00.install_code(&canister_id, &canister_wasm)
         .with_raw_arg(vec![])
-        .call_and_wait(create_waiter())
+        .call_and_wait()
         .await?;
 
     Ok(canister_id)
@@ -182,12 +175,12 @@ pub async fn create_wallet_canister(
             MemoryAllocation::try_from(8000000000_u64)
                 .expect("Memory allocation must be between 0 and 2^48 (i.e 256TB), inclusively."),
         )
-        .call_and_wait(create_waiter())
+        .call_and_wait()
         .await?;
 
     ic00.install_code(&canister_id, &canister_wasm)
         .with_raw_arg(vec![])
-        .call_and_wait(create_waiter())
+        .call_and_wait()
         .await?;
 
     Ok(canister_id)

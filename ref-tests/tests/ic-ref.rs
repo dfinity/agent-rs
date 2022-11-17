@@ -53,14 +53,14 @@ mod management_canister {
     };
     use ref_tests::get_effective_canister_id;
     use ref_tests::{
-        create_agent, create_basic_identity, create_secp256k1_identity, create_waiter, with_agent,
+        create_agent, create_basic_identity, create_secp256k1_identity, with_agent,
         with_wallet_canister,
     };
     use sha2::{Digest, Sha256};
     use std::collections::HashSet;
 
     mod create_canister {
-        use super::{create_waiter, with_agent};
+        use super::with_agent;
         use ic_agent::{export::Principal, AgentError};
         use ic_utils::interfaces::ManagementCanister;
         use ref_tests::get_effective_canister_id;
@@ -76,7 +76,7 @@ mod management_canister {
                     .create_canister()
                     .as_provisional_create_with_amount(None)
                     .with_effective_canister_id(get_effective_canister_id())
-                    .call_and_wait(create_waiter())
+                    .call_and_wait()
                     .await?;
 
                 Ok(())
@@ -96,7 +96,7 @@ mod management_canister {
                             .unwrap(),
                         &canister_wasm,
                     )
-                    .call_and_wait(create_waiter())
+                    .call_and_wait()
                     .await;
 
                 let payload_content =
@@ -122,21 +122,21 @@ mod management_canister {
                 .create_canister()
                 .as_provisional_create_with_amount(None)
                 .with_effective_canister_id(get_effective_canister_id())
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
 
             // Install once.
             ic00.install_code(&canister_id, &canister_wasm)
                 .with_mode(InstallMode::Install)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             // Re-install should fail.
             let result = ic00
                 .install_code(&canister_id, &canister_wasm)
                 .with_mode(InstallMode::Install)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await;
 
             assert!(matches!(result, Err(AgentError::ReplicaError { .. })));
@@ -144,7 +144,7 @@ mod management_canister {
             // Reinstall should succeed.
             ic00.install_code(&canister_id, &canister_wasm)
                 .with_mode(InstallMode::Reinstall)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             // Each agent has their own identity.
@@ -158,35 +158,35 @@ mod management_canister {
             let result = other_ic00
                 .install_code(&canister_id, &canister_wasm)
                 .with_mode(InstallMode::Reinstall)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await;
             assert!(matches!(result, Err(AgentError::HttpError(..))));
 
             // Upgrade should succeed.
             ic00.install_code(&canister_id, &canister_wasm)
                 .with_mode(InstallMode::Upgrade)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             // Upgrade with another agent should fail.
             let result = other_ic00
                 .install_code(&canister_id, &canister_wasm)
                 .with_mode(InstallMode::Upgrade)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await;
             assert!(matches!(result, Err(AgentError::HttpError(..))));
 
             // Change controller.
             ic00.update_settings(&canister_id)
                 .with_controller(other_agent_principal)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             // Change controller with wrong controller should fail
             let result = ic00
                 .update_settings(&canister_id)
                 .with_controller(other_agent_principal)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await;
             assert!(matches!(result, Err(AgentError::HttpError(payload))
                 if String::from_utf8(payload.content.clone()).expect("Expected utf8")
@@ -196,7 +196,7 @@ mod management_canister {
             other_ic00
                 .install_code(&canister_id, &canister_wasm)
                 .with_mode(InstallMode::Reinstall)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             // Reinstall on empty should succeed.
@@ -204,13 +204,13 @@ mod management_canister {
                 .create_canister()
                 .as_provisional_create_with_amount(None)
                 .with_effective_canister_id(get_effective_canister_id())
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             // Reinstall over empty canister
             ic00.install_code(&canister_id_2, &canister_wasm)
                 .with_mode(InstallMode::Reinstall)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             // Create an empty canister
@@ -218,13 +218,13 @@ mod management_canister {
                 .create_canister()
                 .as_provisional_create_with_amount(None)
                 .with_effective_canister_id(get_effective_canister_id())
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             // Check status for empty canister
             let result = other_ic00
                 .canister_status(&canister_id_3)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
             assert_eq!(result.0.status, CanisterStatus::Running);
             assert_eq!(result.0.settings.controllers.len(), 1);
@@ -235,13 +235,13 @@ mod management_canister {
             other_ic00
                 .install_code(&canister_id_3, &canister_wasm)
                 .with_mode(InstallMode::Install)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             // Check status after installing wasm and validate module_hash
             let result = other_ic00
                 .canister_status(&canister_id_3)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
             let sha256_digest = Sha256::digest(&canister_wasm);
             assert_eq!(result.0.module_hash, Some(sha256_digest.to_vec()));
@@ -277,14 +277,11 @@ mod management_canister {
                 //.with_canister_id("aaaaa-aa")
                 .with_controller(agent_principal)
                 .with_controller(other_agent_principal)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             // Controllers should be able to fetch the canister status.
-            let result = ic00
-                .canister_status(&canister_id)
-                .call_and_wait(create_waiter())
-                .await?;
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(result.0.settings.controllers.len(), 2);
             let actual = result
                 .0
@@ -301,7 +298,7 @@ mod management_canister {
 
             let result = other_ic00
                 .canister_status(&canister_id)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
             assert_eq!(result.0.settings.controllers.len(), 2);
             let actual = result
@@ -320,24 +317,21 @@ mod management_canister {
             // Set new controller
             ic00.update_settings(&canister_id)
                 .with_controller(secp256k1_principal)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             // Only that controller can get canister status
-            let result = ic00
-                .canister_status(&canister_id)
-                .call_and_wait(create_waiter())
-                .await;
+            let result = ic00.canister_status(&canister_id).call_and_wait().await;
             assert_err_or_reject(result, vec![3, 5]);
             let result = other_ic00
                 .canister_status(&canister_id)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await;
             assert_err_or_reject(result, vec![3, 5]);
 
             let result = secp256k1_ic00
                 .canister_status(&canister_id)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
             assert_eq!(result.0.settings.controllers.len(), 1);
             assert_eq!(result.0.settings.controllers[0], secp256k1_principal);
@@ -372,45 +366,32 @@ mod management_canister {
                 .create_canister()
                 .as_provisional_create_with_amount(None)
                 .with_effective_canister_id(get_effective_canister_id())
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
 
             // Install once.
             ic00.install_code(&canister_id, &canister_wasm)
                 .with_mode(InstallMode::Install)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             // A newly installed canister should be running
-            let result = ic00
-                .canister_status(&canister_id)
-                .call_and_wait(create_waiter())
-                .await;
+            let result = ic00.canister_status(&canister_id).call_and_wait().await;
             assert_eq!(result?.0.status, CanisterStatus::Running);
 
             // Stop should succeed.
-            ic00.stop_canister(&canister_id)
-                .call_and_wait(create_waiter())
-                .await?;
+            ic00.stop_canister(&canister_id).call_and_wait().await?;
 
             // Canister should be stopped
-            let result = ic00
-                .canister_status(&canister_id)
-                .call_and_wait(create_waiter())
-                .await;
+            let result = ic00.canister_status(&canister_id).call_and_wait().await;
             assert_eq!(result?.0.status, CanisterStatus::Stopped);
 
             // Another stop is a noop
-            ic00.stop_canister(&canister_id)
-                .call_and_wait(create_waiter())
-                .await?;
+            ic00.stop_canister(&canister_id).call_and_wait().await?;
 
             // Can't call update on a stopped canister
-            let result = agent
-                .update(&canister_id, "update")
-                .call_and_wait(create_waiter())
-                .await;
+            let result = agent.update(&canister_id, "update").call_and_wait().await;
             assert!(matches!(result, Err(AgentError::HttpError(payload))
                 if String::from_utf8(payload.content.clone()).expect("Expected utf8") == *"canister is stopped"));
 
@@ -428,26 +409,18 @@ mod management_canister {
             // Upgrade should succeed
             ic00.install_code(&canister_id, &canister_wasm)
                 .with_mode(InstallMode::Upgrade)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             // Start should succeed.
-            ic00.start_canister(&canister_id)
-                .call_and_wait(create_waiter())
-                .await?;
+            ic00.start_canister(&canister_id).call_and_wait().await?;
 
             // Canister should be running
-            let result = ic00
-                .canister_status(&canister_id)
-                .call_and_wait(create_waiter())
-                .await;
+            let result = ic00.canister_status(&canister_id).call_and_wait().await;
             assert_eq!(result?.0.status, CanisterStatus::Running);
 
             // Can call update
-            let result = agent
-                .update(&canister_id, "update")
-                .call_and_wait(create_waiter())
-                .await;
+            let result = agent.update(&canister_id, "update").call_and_wait().await;
             assert!(matches!(result, Err(AgentError::ReplicaError {
                     reject_code: 3,
                     reject_message,
@@ -465,32 +438,20 @@ mod management_canister {
                 }) if reject_message == "query method does not exist"));
 
             // Another start is a noop
-            ic00.start_canister(&canister_id)
-                .call_and_wait(create_waiter())
-                .await?;
+            ic00.start_canister(&canister_id).call_and_wait().await?;
 
             // Delete a running canister should fail.
-            let result = ic00
-                .delete_canister(&canister_id)
-                .call_and_wait(create_waiter())
-                .await;
+            let result = ic00.delete_canister(&canister_id).call_and_wait().await;
             assert!(matches!(result, Err(AgentError::ReplicaError { .. })));
 
             // Stop should succeed.
-            ic00.stop_canister(&canister_id)
-                .call_and_wait(create_waiter())
-                .await?;
+            ic00.stop_canister(&canister_id).call_and_wait().await?;
 
             // Delete a stopped canister succeeds.
-            ic00.delete_canister(&canister_id)
-                .call_and_wait(create_waiter())
-                .await?;
+            ic00.delete_canister(&canister_id).call_and_wait().await?;
 
             // Cannot call update
-            let result = agent
-                .update(&canister_id, "update")
-                .call_and_wait(create_waiter())
-                .await;
+            let result = agent.update(&canister_id, "update").call_and_wait().await;
             assert!(matches!(result, Err(AgentError::HttpError(payload))
                 if String::from_utf8(payload.content.clone()).expect("Expected utf8")
                     == format!("canister no longer exists: {}", canister_id.to_text())));
@@ -508,10 +469,7 @@ mod management_canister {
                     == format!("canister no longer exists: {}", canister_id.to_text())));
 
             // Cannot query canister status
-            let result = ic00
-                .canister_status(&canister_id)
-                .call_and_wait(create_waiter())
-                .await;
+            let result = ic00.canister_status(&canister_id).call_and_wait().await;
             assert!(match result {
                 Err(AgentError::HttpError(payload))
                     if String::from_utf8(payload.content.clone()).expect("Expected utf8")
@@ -522,10 +480,7 @@ mod management_canister {
             });
 
             // Delete a deleted canister should fail.
-            let result = ic00
-                .delete_canister(&canister_id)
-                .call_and_wait(create_waiter())
-                .await;
+            let result = ic00.delete_canister(&canister_id).call_and_wait().await;
             assert!(matches!(result, Err(AgentError::HttpError(payload))
                 if String::from_utf8(payload.content.clone()).expect("Expected utf8")
                     == format!("canister no longer exists: {}", canister_id.to_text())));
@@ -542,14 +497,14 @@ mod management_canister {
                 .create_canister()
                 .as_provisional_create_with_amount(None)
                 .with_effective_canister_id(get_effective_canister_id())
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
 
             // Install once.
             ic00.install_code(&canister_id, &canister_wasm)
                 .with_mode(InstallMode::Install)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             // Create another agent with different identity.
@@ -561,17 +516,14 @@ mod management_canister {
             // Start as a wrong controller should fail.
             let result = other_ic00
                 .start_canister(&canister_id)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await;
             assert!(matches!(result, Err(AgentError::HttpError(payload))
                 if String::from_utf8(payload.content.clone()).expect("Expected utf8")
                     == *"Wrong sender"));
 
             // Stop as a wrong controller should fail.
-            let result = other_ic00
-                .stop_canister(&canister_id)
-                .call_and_wait(create_waiter())
-                .await;
+            let result = other_ic00.stop_canister(&canister_id).call_and_wait().await;
             assert!(matches!(result, Err(AgentError::HttpError(payload))
                 if String::from_utf8(payload.content.clone()).expect("Expected utf8")
                     == *"Wrong sender"));
@@ -579,7 +531,7 @@ mod management_canister {
             // Get canister status as a wrong controller should fail.
             let result = other_ic00
                 .canister_status(&canister_id)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await;
             assert!(matches!(result, Err(AgentError::HttpError(payload))
                 if String::from_utf8(payload.content.clone()).expect("Expected utf8")
@@ -588,7 +540,7 @@ mod management_canister {
             // Delete as a wrong controller should fail.
             let result = other_ic00
                 .delete_canister(&canister_id)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await;
             assert!(matches!(result, Err(AgentError::HttpError(payload))
                 if String::from_utf8(payload.content.clone()).expect("Expected utf8")
@@ -626,7 +578,7 @@ mod management_canister {
 
             let (create_result,): (CreateResult,) = wallet
                 .call(Principal::management_canister(), "create_canister", args, 0)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
             let canister_id = create_result.canister_id;
 
@@ -639,7 +591,7 @@ mod management_canister {
 
             let (result,): (StatusCallResult,) = wallet
                 .call(Principal::management_canister(), "canister_status", args, 0)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             assert_eq!(result.cycles, 0_u64);
@@ -651,12 +603,9 @@ mod management_canister {
                 .create_canister()
                 .as_provisional_create_with_amount(None)
                 .with_effective_canister_id(get_effective_canister_id())
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
-            let result = ic00
-                .canister_status(&canister_id_1)
-                .call_and_wait(create_waiter())
-                .await?;
+            let result = ic00.canister_status(&canister_id_1).call_and_wait().await?;
             assert_eq!(result.0.cycles, default_canister_balance);
 
             // cycle balance should be amount specified to
@@ -666,12 +615,9 @@ mod management_canister {
                 .create_canister()
                 .as_provisional_create_with_amount(Some(amount))
                 .with_effective_canister_id(get_effective_canister_id())
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
-            let result = ic00
-                .canister_status(&canister_id_2)
-                .call_and_wait(create_waiter())
-                .await?;
+            let result = ic00.canister_status(&canister_id_2).call_and_wait().await?;
             assert_eq!(result.0.cycles, amount);
 
             Ok(())
@@ -690,7 +636,7 @@ mod management_canister {
                     Argument::default(),
                     0,
                 )
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
             let (rand_2,): (Vec<u8>,) = wallet
                 .call(
@@ -699,7 +645,7 @@ mod management_canister {
                     Argument::default(),
                     0,
                 )
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
             let (rand_3,): (Vec<u8>,) = wallet
                 .call(
@@ -708,7 +654,7 @@ mod management_canister {
                     Argument::default(),
                     0,
                 )
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             assert_eq!(rand_1.len(), 32);
@@ -739,7 +685,7 @@ mod management_canister {
 mod simple_calls {
     use crate::universal_canister::payload;
     use ic_agent::AgentError;
-    use ref_tests::{create_waiter, with_universal_canister};
+    use ref_tests::with_universal_canister;
 
     #[ignore]
     #[test]
@@ -749,7 +695,7 @@ mod simple_calls {
             let result = agent
                 .update(&canister_id, "update")
                 .with_arg(&arg)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             assert_eq!(result.as_slice(), b"hello");
@@ -781,7 +727,7 @@ mod simple_calls {
             let result = agent
                 .update(&canister_id, "non_existent_method")
                 .with_arg(&arg)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await;
 
             assert!(matches!(
@@ -819,7 +765,7 @@ mod extras {
         interfaces::{management_canister::builders::ComputeAllocation, ManagementCanister},
     };
     use ref_tests::get_effective_canister_id;
-    use ref_tests::{create_waiter, with_agent};
+    use ref_tests::with_agent;
 
     #[ignore]
     #[test]
@@ -834,13 +780,10 @@ mod extras {
                 .with_compute_allocation(1_u64)
                 .with_memory_allocation(1024 * 1024_u64)
                 .with_freezing_threshold(1_000_000_u64)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
-            let result = ic00
-                .canister_status(&canister_id)
-                .call_and_wait(create_waiter())
-                .await?;
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(result.0.settings.compute_allocation, Nat::from(1_u64));
             assert_eq!(
                 result.0.settings.memory_allocation,
@@ -866,7 +809,7 @@ mod extras {
                 .as_provisional_create_with_amount(None)
                 .with_effective_canister_id(get_effective_canister_id())
                 .with_memory_allocation(1u64 << 50)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await
                 .is_err());
 
@@ -875,7 +818,7 @@ mod extras {
                 .as_provisional_create_with_amount(None)
                 .with_effective_canister_id(get_effective_canister_id())
                 .with_memory_allocation(10 * 1024 * 1024u64)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             Ok(())
@@ -896,7 +839,7 @@ mod extras {
                 .as_provisional_create_with_amount(None)
                 .with_effective_canister_id(get_effective_canister_id())
                 .with_compute_allocation(ca)
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
 
             Ok(())
@@ -914,7 +857,7 @@ mod extras {
                 .as_provisional_create_with_amount(None)
                 .with_effective_canister_id(get_effective_canister_id())
                 .with_freezing_threshold(2u128.pow(70))
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await
                 .is_err());
 

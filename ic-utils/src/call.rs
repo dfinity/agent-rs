@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use candid::{decode_args, decode_one, utils::ArgumentDecoder, CandidType};
-use garcon::Waiter;
 use ic_agent::{agent::UpdateBuilder, export::Principal, Agent, AgentError, RequestId};
 use serde::de::DeserializeOwned;
 use std::fmt;
@@ -51,9 +50,7 @@ where
 
     /// Execute the call, and wait for an answer using a [Waiter] strategy. The return
     /// type is encoded in the trait.
-    async fn call_and_wait<W>(self, mut waiter: W) -> Result<Out, AgentError>
-    where
-        W: Waiter;
+    async fn call_and_wait(self) -> Result<Out, AgentError>;
 
     /// Apply a transformation function after the call has been successful. The transformation
     /// is applied with the result.
@@ -90,11 +87,6 @@ where
     ///     .with_interface(interfaces::ManagementCanister)
     ///     .build()?;
     ///
-    ///   let waiter = garcon::Delay::builder()
-    ///     .throttle(std::time::Duration::from_millis(500))
-    ///     .timeout(std::time::Duration::from_secs(60 * 5))
-    ///     .build();
-    ///
     ///   // Create a canister, then call the management canister to install a base canister
     ///   // WASM. This is to show how this API would be used, but is probably not a good
     ///   // real use case.
@@ -104,10 +96,10 @@ where
     ///       management_canister
     ///         .install_code(&canister_id, canister_wasm)
     ///         .build()
-    ///         .call_and_wait(waiter)
+    ///         .call_and_wait()
     ///         .await
     ///     })
-    ///     .call_and_wait(waiter.clone())
+    ///     .call_and_wait()
     ///     .await?;
     ///
     ///   let result = Decode!(response.as_slice(), CreateCanisterResult)?;
@@ -227,24 +219,20 @@ where
     }
 
     /// See [`AsyncCall::call_and_wait`].
-    pub async fn call_and_wait<W>(self, waiter: W) -> Result<Out, AgentError>
-    where
-        W: Waiter,
-    {
+    pub async fn call_and_wait(self) -> Result<Out, AgentError> {
         self.build_call()?
-            .call_and_wait(waiter)
+            .call_and_wait()
             .await
             .and_then(|r| decode_args(&r).map_err(|e| AgentError::CandidError(Box::new(e))))
     }
 
     /// Equivalent to calling [`AsyncCall::call_and_wait`] with the expected return type `(T,)`.
-    pub async fn call_and_wait_one<W, T>(self, waiter: W) -> Result<T, AgentError>
+    pub async fn call_and_wait_one<T>(self) -> Result<T, AgentError>
     where
-        W: Waiter,
         T: DeserializeOwned + CandidType,
     {
         self.build_call()?
-            .call_and_wait(waiter)
+            .call_and_wait()
             .await
             .and_then(|r| decode_one(&r).map_err(|e| AgentError::CandidError(Box::new(e))))
     }
@@ -267,11 +255,8 @@ where
     async fn call(self) -> Result<RequestId, AgentError> {
         self.call().await
     }
-    async fn call_and_wait<W>(self, waiter: W) -> Result<Out, AgentError>
-    where
-        W: Waiter,
-    {
-        self.call_and_wait(waiter).await
+    async fn call_and_wait(self) -> Result<Out, AgentError> {
+        self.call_and_wait().await
     }
 }
 
@@ -332,11 +317,8 @@ where
         self.inner.call().await
     }
     /// See [`AsyncCall::call_and_wait`].
-    pub async fn call_and_wait<W>(self, waiter: W) -> Result<Out2, AgentError>
-    where
-        W: Waiter,
-    {
-        let v = self.inner.call_and_wait(waiter).await?;
+    pub async fn call_and_wait(self) -> Result<Out2, AgentError> {
+        let v = self.inner.call_and_wait().await?;
 
         let f = (self.and_then)(v);
 
@@ -380,11 +362,8 @@ where
         self.call().await
     }
 
-    async fn call_and_wait<W>(self, waiter: W) -> Result<Out2, AgentError>
-    where
-        W: Waiter,
-    {
-        self.call_and_wait(waiter).await
+    async fn call_and_wait(self) -> Result<Out2, AgentError> {
+        self.call_and_wait().await
     }
 }
 
@@ -442,11 +421,8 @@ where
     }
 
     /// See [`AsyncCall::call_and_wait`].
-    pub async fn call_and_wait<W>(self, waiter: W) -> Result<Out2, AgentError>
-    where
-        W: Waiter,
-    {
-        let v = self.inner.call_and_wait(waiter).await?;
+    pub async fn call_and_wait(self) -> Result<Out2, AgentError> {
+        let v = self.inner.call_and_wait().await?;
         Ok((self.map)(v))
     }
 
@@ -485,10 +461,7 @@ where
         self.call().await
     }
 
-    async fn call_and_wait<W>(self, waiter: W) -> Result<Out2, AgentError>
-    where
-        W: Waiter,
-    {
-        self.call_and_wait(waiter).await
+    async fn call_and_wait(self) -> Result<Out2, AgentError> {
+        self.call_and_wait().await
     }
 }

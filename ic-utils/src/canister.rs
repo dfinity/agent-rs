@@ -1,7 +1,6 @@
 use crate::call::{AsyncCaller, SyncCaller};
 use candid::utils::ArgumentEncoder;
 use candid::{parser::value::IDLValue, ser::IDLBuilder, utils::ArgumentDecoder, CandidType};
-use garcon::Waiter;
 use ic_agent::{export::Principal, Agent, AgentError, RequestId};
 use std::convert::TryInto;
 use std::fmt;
@@ -110,15 +109,11 @@ impl<'agent> Canister<'agent> {
     }
 
     /// Call request_status on the RequestId in a loop and return the response as a byte vector.
-    pub async fn wait<'canister: 'agent, W>(
+    pub async fn wait<'canister: 'agent>(
         &'canister self,
         request_id: RequestId,
-        waiter: W,
-    ) -> Result<Vec<u8>, AgentError>
-    where
-        W: Waiter,
-    {
-        self.agent.wait(request_id, self.canister_id, waiter).await
+    ) -> Result<Vec<u8>, AgentError> {
+        self.agent.wait(request_id, self.canister_id).await
     }
 
     /// Creates a copy of this canister, changing the canister ID to the provided principal.
@@ -411,7 +406,6 @@ mod tests {
     #[tokio::test]
     async fn simple() {
         use super::Canister;
-        use garcon::Delay;
 
         let rng = ring::rand::SystemRandom::new();
         let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
@@ -439,13 +433,13 @@ mod tests {
 
         let (new_canister_id,) = management_canister
             .create_canister()
-            .call_and_wait(Delay::throttle(std::time::Duration::from_secs(1)))
+            .call_and_wait()
             .await
             .unwrap();
 
         let (status,) = management_canister
             .canister_status(&new_canister_id)
-            .call_and_wait(Delay::throttle(std::time::Duration::from_secs(1)))
+            .call_and_wait()
             .await
             .unwrap();
 
@@ -454,7 +448,7 @@ mod tests {
         let canister_wasm = b"\0asm\x01\0\0\0";
         management_canister
             .install_code(&new_canister_id, canister_wasm)
-            .call_and_wait(Delay::throttle(std::time::Duration::from_secs(1)))
+            .call_and_wait()
             .await
             .unwrap();
 
@@ -467,7 +461,7 @@ mod tests {
         assert!(canister
             .update_("hello")
             .build::<()>()
-            .call_and_wait(Delay::throttle(std::time::Duration::from_secs(1)))
+            .call_and_wait()
             .await
             .is_err());
     }

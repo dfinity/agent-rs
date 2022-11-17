@@ -19,10 +19,6 @@ pub enum AgentError {
     #[error("The request timed out.")]
     TimeoutWaitingForResponse(),
 
-    /// The waiter was restarted without being started first.
-    #[error("The waiter was restarted without being started first.")]
-    WaiterRestartError(),
-
     /// An error occurred when signing with the identity.
     #[error("Identity had a signing error: {0}")]
     SigningError(String),

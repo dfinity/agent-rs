@@ -13,9 +13,9 @@ use ic_utils::{
     Argument, Canister,
 };
 use ref_tests::{
-    create_agent, create_basic_identity, create_universal_canister, create_waiter,
-    create_wallet_canister, get_wallet_wasm_from_env, universal_canister::payload,
-    with_universal_canister, with_wallet_canister,
+    create_agent, create_basic_identity, create_universal_canister, create_wallet_canister,
+    get_wallet_wasm_from_env, universal_canister::payload, with_universal_canister,
+    with_wallet_canister,
 };
 
 #[ignore]
@@ -29,7 +29,7 @@ fn basic_expiry() {
             .update(&canister_id, "update")
             .with_arg(&arg)
             .expire_after(std::time::Duration::from_secs(120))
-            .call_and_wait(create_waiter())
+            .call_and_wait()
             .await?;
 
         assert_eq!(result.as_slice(), b"hello");
@@ -39,7 +39,7 @@ fn basic_expiry() {
             .update(&canister_id, "update")
             .with_arg(&arg)
             .expire_after(std::time::Duration::from_secs(0))
-            .call_and_wait(create_waiter())
+            .call_and_wait()
             .await;
 
         match result.unwrap_err() {
@@ -51,7 +51,7 @@ fn basic_expiry() {
             .update(&canister_id, "update")
             .with_arg(&arg)
             .expire_after(std::time::Duration::from_secs(120))
-            .call_and_wait(create_waiter())
+            .call_and_wait()
             .await?;
 
         assert_eq!(result.as_slice(), b"hello");
@@ -94,9 +94,7 @@ fn canister_reject_call() {
         let bob =
             WalletCanister::create(&agent, create_wallet_canister(&agent, None).await?).await?;
 
-        let result = alice
-            .wallet_send(*bob.canister_id_(), 1_000_000, create_waiter())
-            .await;
+        let result = alice.wallet_send(*bob.canister_id_(), 1_000_000).await;
 
         assert_eq!(
             result,
@@ -129,7 +127,7 @@ fn wallet_canister_forward() {
 
         let (result,): (String,) = wallet
             .call(universal_id, "update", args, 0)
-            .call_and_wait(create_waiter())
+            .call_and_wait()
             .await
             .unwrap();
 
@@ -145,7 +143,7 @@ fn wallet_canister_create_and_install() {
         let wallet = WalletCanister::create(&agent, wallet_id).await?;
 
         let create_result = wallet
-            .wallet_create_canister(1_000_000, None, None, None, None, create_waiter())
+            .wallet_create_canister(1_000_000, None, None, None, None)
             .await?;
 
         #[derive(CandidType)]
@@ -167,7 +165,7 @@ fn wallet_canister_create_and_install() {
 
         wallet
             .call64(Principal::management_canister(), "install_code", args, 0)
-            .call_and_wait(create_waiter())
+            .call_and_wait()
             .await?;
 
         Ok(())
@@ -185,7 +183,7 @@ fn wallet_create_and_set_controller() {
         // store the wasm into the wallet
         wallet
             .wallet_store_wallet_wasm(wallet_wasm)
-            .call_and_wait(create_waiter())
+            .call_and_wait()
             .await?;
 
         // controller
@@ -203,7 +201,6 @@ fn wallet_create_and_set_controller() {
                 None,
                 None,
                 None,
-                create_waiter(),
             )
             .await?;
 
@@ -251,19 +248,12 @@ fn wallet_create_wallet() {
         // store the wasm into the wallet
         wallet
             .wallet_store_wallet_wasm(wallet_wasm)
-            .call_and_wait(create_waiter())
+            .call_and_wait()
             .await?;
 
         // create a child wallet
         let child_create_res = wallet
-            .wallet_create_wallet(
-                1_000_000_000_000_u128,
-                None,
-                None,
-                None,
-                None,
-                create_waiter(),
-            )
+            .wallet_create_wallet(1_000_000_000_000_u128, None, None, None, None)
             .await?;
 
         eprintln!(
@@ -278,7 +268,7 @@ fn wallet_create_wallet() {
                 Argument::default(),
                 0,
             )
-            .call_and_wait(create_waiter())
+            .call_and_wait()
             .await?;
 
         eprintln!(
@@ -290,14 +280,7 @@ fn wallet_create_wallet() {
         // create a second child wallet
         //
         let child_two_create_res = wallet
-            .wallet_create_wallet(
-                2_100_000_000_000_u128,
-                None,
-                None,
-                None,
-                None,
-                create_waiter(),
-            )
+            .wallet_create_wallet(2_100_000_000_000_u128, None, None, None, None)
             .await?;
 
         eprintln!(
@@ -312,7 +295,7 @@ fn wallet_create_wallet() {
                     Argument::default(),
                     0,
                 )
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
         eprintln!(
             "Child wallet two cycle balance: {}",
@@ -355,7 +338,7 @@ fn wallet_create_wallet() {
                     args,
                     0,
                 )
-                .call_and_wait(create_waiter())
+                .call_and_wait()
                 .await?;
         let grandchild_create_res = grandchild_create_res?;
 
@@ -389,9 +372,7 @@ fn wallet_canister_funds() {
         let alice_previous_balance = alice.wallet_balance().await?;
         let bob_previous_balance = bob.wallet_balance().await?;
 
-        alice
-            .wallet_send(*bob.canister_id_(), 1_000_000, create_waiter())
-            .await?;
+        alice.wallet_send(*bob.canister_id_(), 1_000_000).await?;
 
         let bob_balance = bob.wallet_balance().await?;
 
@@ -427,10 +408,7 @@ fn wallet_helper_functions() {
 
         let wallet_name = "Alice".to_string();
 
-        wallet
-            .set_name(wallet_name.clone())
-            .call_and_wait(create_waiter())
-            .await?;
+        wallet.set_name(wallet_name.clone()).call_and_wait().await?;
         let (name,) = wallet.name().call().await?;
         assert_eq!(name, Some(wallet_name));
 
@@ -446,7 +424,7 @@ fn wallet_helper_functions() {
 
         wallet
             .add_controller(other_agent_principal)
-            .call_and_wait(create_waiter())
+            .call_and_wait()
             .await?;
 
         let (controller_list,) = wallet.get_controllers().call().await?;
@@ -460,7 +438,7 @@ fn wallet_helper_functions() {
 
         wallet
             .remove_controller(other_agent_principal)
-            .call_and_wait(create_waiter())
+            .call_and_wait()
             .await?;
 
         let (controller_list,) = wallet.get_controllers().call().await?;
