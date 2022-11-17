@@ -66,6 +66,7 @@ serde_json = "1.0.79"
 tokio = { version = "1.17.0", features = ["full"] }
 
 [features]
-default = ["pem", "reqwest", "dep:hyper-rustls"]
+default = ["pem", "reqwest"]
+reqwest = ["dep:reqwest", "dep:hyper-rustls"]
 hyper = ["dep:hyper", "dep:hyper-rustls"]
 ic_ref_tests = ["default"] # Used to separate integration tests for ic-ref which need a server running.
