@@ -5,7 +5,6 @@ use crate::{
 };
 use async_trait::async_trait;
 use candid::{CandidType, Deserialize, Nat};
-use garcon::Waiter;
 use ic_agent::{export::Principal, AgentError, RequestId};
 use std::str::FromStr;
 
@@ -281,11 +280,8 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
     }
 
     /// Make a call. This is equivalent to the [AsyncCall::call_and_wait].
-    pub async fn call_and_wait<W>(self, waiter: W) -> Result<(Principal,), AgentError>
-    where
-        W: Waiter,
-    {
-        self.build()?.call_and_wait(waiter).await
+    pub async fn call_and_wait(self) -> Result<(Principal,), AgentError> {
+        self.build()?.call_and_wait().await
     }
 }
 
@@ -297,11 +293,8 @@ impl<'agent, 'canister: 'agent> AsyncCall<(Principal,)>
         self.build()?.call().await
     }
 
-    async fn call_and_wait<W>(self, waiter: W) -> Result<(Principal,), AgentError>
-    where
-        W: Waiter,
-    {
-        self.build()?.call_and_wait(waiter).await
+    async fn call_and_wait(self) -> Result<(Principal,), AgentError> {
+        self.build()?.call_and_wait().await
     }
 }
 
@@ -421,11 +414,8 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
     }
 
     /// Make a call. This is equivalent to the [AsyncCall::call_and_wait].
-    pub async fn call_and_wait<W>(self, waiter: W) -> Result<(), AgentError>
-    where
-        W: Waiter,
-    {
-        self.build()?.call_and_wait(waiter).await
+    pub async fn call_and_wait(self) -> Result<(), AgentError> {
+        self.build()?.call_and_wait().await
     }
 }
 
@@ -435,11 +425,8 @@ impl<'agent, 'canister: 'agent> AsyncCall<()> for InstallCodeBuilder<'agent, 'ca
         self.build()?.call().await
     }
 
-    async fn call_and_wait<W>(self, waiter: W) -> Result<(), AgentError>
-    where
-        W: Waiter,
-    {
-        self.build()?.call_and_wait(waiter).await
+    async fn call_and_wait(self) -> Result<(), AgentError> {
+        self.build()?.call_and_wait().await
     }
 }
 
@@ -633,11 +620,8 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
     }
 
     /// Make a call. This is equivalent to the [AsyncCall::call_and_wait].
-    pub async fn call_and_wait<W>(self, waiter: W) -> Result<(), AgentError>
-    where
-        W: Waiter,
-    {
-        self.build()?.call_and_wait(waiter).await
+    pub async fn call_and_wait(self) -> Result<(), AgentError> {
+        self.build()?.call_and_wait().await
     }
 }
 
@@ -647,10 +631,7 @@ impl<'agent, 'canister: 'agent> AsyncCall<()> for UpdateCanisterBuilder<'agent, 
         self.build()?.call().await
     }
 
-    async fn call_and_wait<W>(self, waiter: W) -> Result<(), AgentError>
-    where
-        W: Waiter,
-    {
-        self.build()?.call_and_wait(waiter).await
+    async fn call_and_wait(self) -> Result<(), AgentError> {
+        self.build()?.call_and_wait().await
     }
 }

@@ -15,7 +15,6 @@ use crate::{
 };
 use async_trait::async_trait;
 use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize, Nat};
-use garcon::{Delay, Waiter};
 use ic_agent::{export::Principal, Agent, AgentError, RequestId};
 use once_cell::sync::Lazy;
 use semver::{Version, VersionReq};
@@ -116,12 +115,9 @@ where
         self.build()?.call().await
     }
 
-    /// Calls the forwarded canister call on the wallet canister, and waits for the result. Equivalent to `.build().call_and_wait(waiter)`.
-    pub async fn call_and_wait<W>(self, waiter: W) -> Result<Out, AgentError>
-    where
-        W: Waiter,
-    {
-        self.build()?.call_and_wait(waiter).await
+    /// Calls the forwarded canister call on the wallet canister, and waits for the result. Equivalent to `.build().call_and_wait()`.
+    pub async fn call_and_wait(self) -> Result<Out, AgentError> {
+        self.build()?.call_and_wait().await
     }
 }
 
@@ -134,11 +130,8 @@ where
         self.call().await
     }
 
-    async fn call_and_wait<W>(self, waiter: W) -> Result<Out, AgentError>
-    where
-        W: Waiter,
-    {
-        self.call_and_wait(waiter).await
+    async fn call_and_wait(self) -> Result<Out, AgentError> {
+        self.call_and_wait().await
     }
 }
 
@@ -604,11 +597,10 @@ impl<'agent> WalletCanister<'agent> {
         &'canister self,
         destination: Principal,
         amount: u128,
-        waiter: Delay,
     ) -> Result<(), AgentError> {
         if self.version_supports_u128_cycles() {
             self.wallet_send128(destination, amount)
-                .call_and_wait(waiter)
+                .call_and_wait()
                 .await?
         } else {
             let amount = u64::try_from(amount).map_err(|_| {
@@ -617,7 +609,7 @@ impl<'agent> WalletCanister<'agent> {
                 )
             })?;
             self.wallet_send64(destination, amount)
-                .call_and_wait(waiter)
+                .call_and_wait()
                 .await?
         }
         .0
@@ -730,7 +722,6 @@ impl<'agent> WalletCanister<'agent> {
         compute_allocation: Option<ComputeAllocation>,
         memory_allocation: Option<MemoryAllocation>,
         freezing_threshold: Option<FreezingThreshold>,
-        waiter: Delay,
     ) -> Result<CreateResult, AgentError> {
         if self.version_supports_u128_cycles() {
             self.wallet_create_canister128(
@@ -740,7 +731,7 @@ impl<'agent> WalletCanister<'agent> {
                 memory_allocation,
                 freezing_threshold,
             )
-            .call_and_wait(waiter)
+            .call_and_wait()
             .await?
         } else {
             let cycles = u64::try_from(cycles).map_err(|_| {
@@ -756,7 +747,7 @@ impl<'agent> WalletCanister<'agent> {
                     memory_allocation,
                     freezing_threshold,
                 )
-                .call_and_wait(waiter)
+                .call_and_wait()
                 .await?
             } else {
                 let controller: Option<Principal> = match &controllers {
@@ -777,7 +768,7 @@ impl<'agent> WalletCanister<'agent> {
                     memory_allocation,
                     freezing_threshold,
                 )
-                .call_and_wait(waiter)
+                .call_and_wait()
                 .await?
             }
         }
@@ -877,7 +868,6 @@ impl<'agent> WalletCanister<'agent> {
         compute_allocation: Option<ComputeAllocation>,
         memory_allocation: Option<MemoryAllocation>,
         freezing_threshold: Option<FreezingThreshold>,
-        waiter: Delay,
     ) -> Result<CreateResult, AgentError> {
         if self.version_supports_u128_cycles() {
             self.wallet_create_wallet128(
@@ -887,7 +877,7 @@ impl<'agent> WalletCanister<'agent> {
                 memory_allocation,
                 freezing_threshold,
             )
-            .call_and_wait(waiter)
+            .call_and_wait()
             .await?
         } else {
             let cycles = u64::try_from(cycles).map_err(|_| {
@@ -903,7 +893,7 @@ impl<'agent> WalletCanister<'agent> {
                     memory_allocation,
                     freezing_threshold,
                 )
-                .call_and_wait(waiter)
+                .call_and_wait()
                 .await?
             } else {
                 let controller: Option<Principal> = match &controllers {
@@ -920,7 +910,7 @@ impl<'agent> WalletCanister<'agent> {
                     memory_allocation,
                     freezing_threshold,
                 )
-                .call_and_wait(waiter)
+                .call_and_wait()
                 .await?
             }
         }
