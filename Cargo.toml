@@ -4,7 +4,7 @@ members = [
     "icx-cert",
     "ic-identity-hsm",
     "ic-utils",
-    "ic-types",
+    "ic-certification",
     "icx",
     "ref-tests"
 ]

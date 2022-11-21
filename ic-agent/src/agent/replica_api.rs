@@ -1,8 +1,8 @@
 use crate::export::Principal;
-use ic_types::Label;
+use ic_certification::Label;
 use serde::{Deserialize, Serialize};
 
-pub use ic_types::{Certificate, Delegation};
+pub use ic_certification::{Certificate, Delegation};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]

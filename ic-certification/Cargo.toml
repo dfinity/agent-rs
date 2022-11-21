@@ -1,9 +1,9 @@
 [package]
-name = "ic-types"
+name = "ic-certification"
 version = "0.22.0"
 description = "Types related to the Internet Computer Public Specification."
-homepage = "https://docs.rs/ic-types"
-documentation = "https://docs.rs/ic-types"
+homepage = "https://docs.rs/ic-certification"
+documentation = "https://docs.rs/ic-certification"
 repository = "https://github.com/dfinity/agent-rs"
 edition = "2021"
 license = "Apache-2.0"

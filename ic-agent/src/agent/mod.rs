@@ -28,7 +28,7 @@ use crate::{
     to_request_id, RequestId,
 };
 use garcon::Waiter;
-use ic_types::{Certificate, Delegation, Label};
+use ic_certification::{Certificate, Delegation, Label};
 use serde::Serialize;
 use status::Status;
 

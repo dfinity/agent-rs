@@ -10,7 +10,7 @@ use crate::{
     export::Principal,
     Agent, AgentError,
 };
-use ic_types::Label;
+use ic_certification::Label;
 use mockito::mock;
 use std::collections::BTreeMap;
 
