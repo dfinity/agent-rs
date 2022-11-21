@@ -19,7 +19,6 @@ rust-version = "1.60.0"
 [dependencies]
 async-trait = "0.1.40"
 candid = "0.8.0"
-garcon = { version = "0.2", features = ["async"] }
 ic-agent = { path = "../ic-agent", version = "0.22", default-features = false }
 serde = "1.0.115"
 serde_bytes = "0.11"

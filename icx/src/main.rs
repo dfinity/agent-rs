@@ -21,7 +21,10 @@ use ic_utils::interfaces::management_canister::{
     MgmtMethod,
 };
 use ring::signature::Ed25519KeyPair;
-use std::{collections::VecDeque, convert::TryFrom, io::BufRead, path::PathBuf, str::FromStr};
+use std::{
+    collections::VecDeque, convert::TryFrom, io::BufRead, path::PathBuf, str::FromStr,
+    time::Duration,
+};
 
 const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
 
@@ -381,23 +384,22 @@ async fn main() -> Result<()> {
                             builder.expire_after(d);
                         }
 
-                        eprint!(".");
+                        let printer = async {
+                            loop {
+                                eprint!(".");
+                                tokio::time::sleep(Duration::from_secs(1)).await;
+                            }
+                        };
                         let result = builder
                             .with_arg(arg)
                             .with_effective_canister_id(effective_canister_id)
-                            .call_and_wait(
-                                garcon::Delay::builder()
-                                    .exponential_backoff(std::time::Duration::from_secs(1), 1.1)
-                                    .side_effect(|| {
-                                        eprint!(".");
-                                        Ok(())
-                                    })
-                                    .timeout(std::time::Duration::from_secs(60 * 5))
-                                    .build(),
-                            )
-                            .await;
+                            .call_and_wait();
+                        let result = tokio::select!(
+                            Ok(unreachable) = tokio::spawn(printer) => unreachable,
+                            res = tokio::time::timeout(Duration::from_secs(5 * 60), result) => res,
+                        );
                         eprintln!();
-                        result
+                        result.unwrap_or(Err(AgentError::TimeoutWaitingForResponse()))
                     }
                     SubCommand::Query(_) => {
                         let mut builder = agent.query(&t.canister_id, &t.method_name);

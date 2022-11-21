@@ -12,6 +12,7 @@ pub mod signed;
 pub mod status;
 pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
+use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
 pub use builder::AgentBuilder;
 pub use nonce::{NonceFactory, NonceGenerator};
 pub use response::{Replied, RequestStatusResponse};
@@ -27,7 +28,6 @@ use crate::{
     identity::Identity,
     to_request_id, RequestId,
 };
-use garcon::Waiter;
 use ic_certification::{Certificate, Delegation, Label};
 use serde::Serialize;
 use status::Status;
@@ -204,11 +204,6 @@ pub enum PollResult {
 ///   agent.fetch_root_key().await?;
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 ///
-///   let waiter = garcon::Delay::builder()
-///     .throttle(std::time::Duration::from_millis(500))
-///     .timeout(std::time::Duration::from_secs(60 * 5))
-///     .build();
-///
 ///   // Create a call to the management canister to create a new canister ID,
 ///   // and wait for a result.
 ///   // The effective canister id must belong to the canister ranges of the subnet at which the canister is created.
@@ -216,7 +211,7 @@ pub enum PollResult {
 ///   let response = agent.update(&management_canister_id, "provisional_create_canister_with_cycles")
 ///     .with_effective_canister_id(effective_canister_id)
 ///     .with_arg(&Encode!(&Argument { amount: None })?)
-///     .call_and_wait(waiter)
+///     .call_and_wait()
 ///     .await?;
 ///
 ///   let result = Decode!(response.as_slice(), CreateCanisterResult)?;
@@ -547,13 +542,16 @@ impl Agent {
     }
 
     /// Call request_status on the RequestId in a loop and return the response as a byte vector.
-    pub async fn wait<W: Waiter>(
+    pub async fn wait(
         &self,
         request_id: RequestId,
         effective_canister_id: Principal,
-        mut waiter: W,
     ) -> Result<Vec<u8>, AgentError> {
-        waiter.start();
+        let mut retry_policy = ExponentialBackoffBuilder::new()
+            .with_initial_interval(Duration::from_millis(200))
+            .with_max_interval(Duration::from_secs(1))
+            .with_multiplier(1.4)
+            .build();
         let mut request_accepted = false;
         loop {
             match self.poll(&request_id, effective_canister_id).await? {
@@ -565,21 +563,19 @@ impl Agent {
                         // and we generally cannot know how long that will take.
                         // State transitions between Received and Processing may be
                         // instantaneous. Therefore, once we know the request is accepted,
-                        // we should restart the waiter so the request does not time out.
+                        // we should restart the backoff so the request does not time out.
 
-                        waiter
-                            .restart()
-                            .map_err(|_| AgentError::WaiterRestartError())?;
+                        retry_policy.reset();
                         request_accepted = true;
                     }
                 }
                 PollResult::Completed(result) => return Ok(result),
             };
 
-            waiter
-                .async_wait()
-                .await
-                .map_err(|_| AgentError::TimeoutWaitingForResponse())?;
+            match retry_policy.next_backoff() {
+                Some(duration) => tokio::time::sleep(duration).await,
+                None => return Err(AgentError::TimeoutWaitingForResponse()),
+            }
         }
     }
 
@@ -1126,26 +1122,12 @@ impl Future for UpdateCall<'_> {
         self.request_id.as_mut().poll(cx)
     }
 }
-impl UpdateCall<'_> {
-    fn and_wait<'out, W>(
-        self,
-        waiter: W,
-    ) -> Pin<Box<dyn core::future::Future<Output = Result<Vec<u8>, AgentError>> + Send + 'out>>
-    where
-        Self: 'out,
-        W: Waiter + 'out,
-    {
-        async fn run<W>(_self: UpdateCall<'_>, waiter: W) -> Result<Vec<u8>, AgentError>
-        where
-            W: Waiter,
-        {
-            let request_id = _self.request_id.await?;
-            _self
-                .agent
-                .wait(request_id, _self.effective_canister_id, waiter)
-                .await
-        }
-        Box::pin(run(self, waiter))
+impl<'a> UpdateCall<'a> {
+    async fn and_wait(self) -> Result<Vec<u8>, AgentError> {
+        let request_id = self.request_id.await?;
+        self.agent
+            .wait(request_id, self.effective_canister_id)
+            .await
     }
 }
 /// An Update Request Builder.
@@ -1226,8 +1208,8 @@ impl<'agent> UpdateBuilder<'agent> {
 
     /// Make an update call. This will call request_status on the RequestId in a loop and return
     /// the response as a byte vector.
-    pub async fn call_and_wait<W: Waiter>(&self, waiter: W) -> Result<Vec<u8>, AgentError> {
-        self.call().and_wait(waiter).await
+    pub async fn call_and_wait(&self) -> Result<Vec<u8>, AgentError> {
+        self.call().and_wait().await
     }
 
     /// Make an update call. This will return a RequestId.

@@ -98,6 +98,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
+name = "backoff"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b62ddb9cb1ec0a098ad4bbf9344d0713fa193ae1a80af55febcff2627b6a00c1"
+dependencies = [
+ "getrandom",
+ "instant",
+ "rand",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -669,15 +680,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "garcon"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e83fb8961dcd3c26123863998521ae4d07e5e5aa8fb50b503380448f2e0ea069"
-dependencies = [
- "futures-util",
-]
-
-[[package]]
 name = "generic-array"
 version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -888,12 +890,12 @@ name = "ic-agent"
 version = "0.22.0"
 dependencies = [
  "async-trait",
+ "backoff",
  "base32",
  "base64",
  "byteorder",
  "candid",
  "futures-util",
- "garcon",
  "hex",
  "http",
  "http-body",
@@ -954,7 +956,6 @@ version = "0.22.0"
 dependencies = [
  "async-trait",
  "candid",
- "garcon",
  "ic-agent",
  "leb128",
  "num-bigint 0.4.3",
@@ -989,7 +990,6 @@ dependencies = [
  "anyhow",
  "candid",
  "clap",
- "garcon",
  "hex",
  "humantime",
  "ic-agent",
@@ -1719,7 +1719,6 @@ name = "ref-tests"
 version = "0.0.0"
 dependencies = [
  "candid",
- "garcon",
  "ic-agent",
  "ic-identity-hsm",
  "ic-utils",
