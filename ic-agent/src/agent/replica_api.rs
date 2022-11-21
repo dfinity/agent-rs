@@ -2,6 +2,8 @@ use crate::export::Principal;
 use ic_types::Label;
 use serde::{Deserialize, Serialize};
 
+pub use ic_types::{Certificate, Delegation};
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct Envelope<T: Serialize> {
