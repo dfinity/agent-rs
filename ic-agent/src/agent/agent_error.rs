@@ -1,6 +1,7 @@
 //! Errors that can occur when using the replica agent.
 
-use crate::{agent::status::Status, hash_tree::Label, RequestIdError};
+use crate::{agent::status::Status, RequestIdError};
+use ic_certification::Label;
 use leb128::read;
 use std::{
     fmt::{Debug, Display, Formatter},

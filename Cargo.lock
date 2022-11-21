@@ -901,6 +901,7 @@ dependencies = [
  "http-body",
  "hyper",
  "hyper-rustls",
+ "ic-certification",
  "ic-verify-bls-signature",
  "k256",
  "leb128",
@@ -923,6 +924,17 @@ dependencies = [
  "thiserror",
  "tokio",
  "url",
+]
+
+[[package]]
+name = "ic-certification"
+version = "0.22.0"
+dependencies = [
+ "hex",
+ "serde",
+ "serde_bytes",
+ "serde_cbor",
+ "sha2 0.10.6",
 ]
 
 [[package]]
@@ -1000,6 +1012,7 @@ dependencies = [
  "clap",
  "hex",
  "ic-agent",
+ "ic-certification",
  "leb128",
  "reqwest",
  "serde",
