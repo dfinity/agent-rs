@@ -1,6 +1,6 @@
 [package]
 name = "ic-agent"
-version = "0.22.0"
+version = "0.23.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2021"
 description = "Agent library to communicate with the Internet Computer, following the Public Specification."
@@ -43,7 +43,7 @@ tokio = { version = "1.21.2", features = ["time"] }
 url = "2.1.0"
 pkcs8 = { version = "0.9", features = ["std"] }
 sec1 = { version = "0.3", features = ["pem"] }
-ic-certification = { path = "../ic-certification", version = "0.22" }
+ic-certification = { path = "../ic-certification", version = "0.23" }
 
 [dependencies.hyper]
 version = "0.14"
