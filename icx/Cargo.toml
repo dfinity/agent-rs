@@ -30,5 +30,5 @@ pem = "1.0"
 ring = "0.16.11"
 serde = "1.0.115"
 serde_json = "1.0.57"
-tokio = { version = "1.8.1", features = ["full"] }
+tokio = { version = "1.23.1", features = ["full"] }
 thiserror = "1.0.24"
