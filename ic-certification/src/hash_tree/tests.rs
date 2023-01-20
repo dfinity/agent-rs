@@ -1,12 +1,24 @@
 #![cfg(test)]
+
 use crate::hash_tree::{
-    empty, fork, label, leaf, pruned, pruned_from_hex, HashTree, Label, LookupResult,
+    empty, fork, label, leaf, pruned, pruned_from_hex, HashTree, HashTreeNode, Label, LookupResult,
+    SubtreeLookupResult,
 };
+use std::borrow::Cow;
 
 fn lookup_path<'a, P: AsRef<[&'static str]>>(tree: &'a HashTree<'a>, path: P) -> LookupResult<'a> {
     let path: Vec<Label> = path.as_ref().iter().map(|l| l.into()).collect();
 
     tree.lookup_path(&path)
+}
+
+fn lookup_subtree<'a, P: AsRef<[&'static str]>>(
+    tree: &'a HashTree<'a>,
+    path: P,
+) -> SubtreeLookupResult<'a> {
+    let path: Vec<Label> = path.as_ref().iter().map(|l| l.into()).collect();
+
+    tree.lookup_subtree(&path)
 }
 
 #[test]
@@ -291,4 +303,220 @@ fn can_lookup_paths_8() {
     assert_eq!(tree.lookup_path(&["label 4".into()]), LookupResult::Absent);
     assert_eq!(tree.lookup_path(&["label 5".into()]), LookupResult::Absent);
     assert_eq!(tree.lookup_path(&["label 6".into()]), LookupResult::Unknown);
+}
+
+#[test]
+fn can_lookup_subtrees_1() {
+    use HashTreeNode::*;
+    use SubtreeLookupResult::*;
+
+    let tree = fork(
+        label("label 1", empty()),
+        fork(
+            pruned([1; 32]),
+            fork(
+                label("label 3", leaf(vec![1, 2, 3, 4, 5, 6])),
+                label("label 5", empty()),
+            ),
+        ),
+    );
+
+    assert_eq!(lookup_subtree(&tree, &["label 0"]), Absent);
+    assert_eq!(lookup_subtree(&tree, &["label 1"]), Found(&Empty()));
+    assert_eq!(lookup_subtree(&tree, &["label 2"]), Unknown);
+    assert_eq!(
+        lookup_subtree(&tree, &["label 3"]),
+        Found(&Leaf(Cow::Owned(vec![1, 2, 3, 4, 5, 6])))
+    );
+    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(&Empty()));
+    assert_eq!(lookup_subtree(&tree, &["label 6"]), Absent);
+}
+
+#[test]
+fn can_lookup_subtrees_2() {
+    use HashTreeNode::*;
+    use SubtreeLookupResult::*;
+
+    let tree = fork(
+        label("label 1", empty()),
+        fork(
+            fork(
+                label("label 3", leaf(vec![1, 2, 3, 4, 5, 6])),
+                label("label 5", empty()),
+            ),
+            pruned([1; 32]),
+        ),
+    );
+
+    assert_eq!(lookup_subtree(&tree, &["label 0"]), Absent);
+    assert_eq!(lookup_subtree(&tree, &["label 1"]), Found(&Empty()));
+    assert_eq!(lookup_subtree(&tree, &["label 2"]), Absent);
+    assert_eq!(
+        lookup_subtree(&tree, &["label 3"]),
+        Found(&Leaf(Cow::Owned(vec![1, 2, 3, 4, 5, 6])))
+    );
+    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(&Empty()));
+    assert_eq!(lookup_subtree(&tree, &["label 6"]), Unknown);
+}
+
+#[test]
+fn can_lookup_subtrees_3() {
+    use HashTreeNode::*;
+    use SubtreeLookupResult::*;
+
+    let tree = fork(
+        pruned([0; 32]),
+        fork(
+            pruned([1; 32]),
+            fork(
+                label("label 3", leaf(vec![1, 2, 3, 4, 5, 6])),
+                label("label 5", empty()),
+            ),
+        ),
+    );
+
+    assert_eq!(lookup_subtree(&tree, &["label 2"]), Unknown);
+    assert_eq!(
+        lookup_subtree(&tree, &["label 3"]),
+        Found(&Leaf(Cow::Owned(vec![1, 2, 3, 4, 5, 6])))
+    );
+    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(&Empty()));
+    assert_eq!(lookup_subtree(&tree, &["label 6"]), Absent);
+}
+
+#[test]
+fn can_lookup_subtrees_4() {
+    use HashTreeNode::*;
+    use SubtreeLookupResult::*;
+
+    let tree = fork(
+        pruned([0; 32]),
+        fork(
+            fork(
+                label("label 3", leaf(vec![1, 2, 3, 4, 5, 6])),
+                label("label 5", empty()),
+            ),
+            pruned([1; 32]),
+        ),
+    );
+
+    assert_eq!(lookup_subtree(&tree, &["label 2"]), Unknown);
+    assert_eq!(
+        lookup_subtree(&tree, &["label 3"]),
+        Found(&Leaf(Cow::Owned(vec![1, 2, 3, 4, 5, 6])))
+    );
+    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(&Empty()));
+    assert_eq!(lookup_subtree(&tree, &["label 6"]), Unknown);
+}
+
+#[test]
+fn can_lookup_subtrees_5() {
+    use HashTreeNode::*;
+    use SubtreeLookupResult::*;
+
+    let tree = fork(
+        fork(
+            pruned([1; 32]),
+            fork(
+                label("label 3", leaf(vec![1, 2, 3, 4, 5, 6])),
+                label("label 5", empty()),
+            ),
+        ),
+        label("label 7", empty()),
+    );
+
+    assert_eq!(lookup_subtree(&tree, &["label 2"]), Unknown);
+    assert_eq!(
+        lookup_subtree(&tree, &["label 3"]),
+        Found(&Leaf(Cow::Owned(vec![1, 2, 3, 4, 5, 6])))
+    );
+    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(&Empty()));
+    assert_eq!(lookup_subtree(&tree, &["label 6"]), Absent);
+    assert_eq!(lookup_subtree(&tree, &["label 7"]), Found(&Empty()));
+    assert_eq!(lookup_subtree(&tree, &["label 8"]), Absent);
+}
+
+#[test]
+fn can_lookup_subtrees_6() {
+    use HashTreeNode::*;
+    use SubtreeLookupResult::*;
+
+    let tree = fork(
+        fork(
+            fork(
+                label("label 3", leaf(vec![1, 2, 3, 4, 5, 6])),
+                label("label 5", empty()),
+            ),
+            pruned([1; 32]),
+        ),
+        label("label 7", empty()),
+    );
+
+    assert_eq!(lookup_subtree(&tree, &["label 2"]), Absent);
+    assert_eq!(
+        lookup_subtree(&tree, &["label 3"]),
+        Found(&Leaf(Cow::Owned(vec![1, 2, 3, 4, 5, 6])))
+    );
+    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(&Empty()));
+    assert_eq!(lookup_subtree(&tree, &["label 6"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, &["label 7"]), Found(&Empty()));
+    assert_eq!(lookup_subtree(&tree, &["label 8"]), Absent);
+}
+
+#[test]
+fn can_lookup_subtrees_7() {
+    use HashTreeNode::*;
+    use SubtreeLookupResult::*;
+
+    let tree = fork(
+        fork(
+            pruned([1; 32]),
+            fork(
+                label("label 3", leaf(vec![1, 2, 3, 4, 5, 6])),
+                label("label 5", empty()),
+            ),
+        ),
+        pruned([0; 32]),
+    );
+
+    assert_eq!(lookup_subtree(&tree, &["label 2"]), Unknown);
+    assert_eq!(
+        lookup_subtree(&tree, &["label 3"]),
+        Found(&Leaf(Cow::Owned(vec![1, 2, 3, 4, 5, 6])))
+    );
+    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(&Empty()));
+    assert_eq!(lookup_subtree(&tree, &["label 6"]), Unknown);
+}
+
+#[test]
+fn can_lookup_subtrees_8() {
+    use HashTreeNode::*;
+    use SubtreeLookupResult::*;
+
+    let tree = fork(
+        fork(
+            fork(
+                label("label 3", leaf(vec![1, 2, 3, 4, 5, 6])),
+                label("label 5", empty()),
+            ),
+            pruned([1; 32]),
+        ),
+        pruned([0; 32]),
+    );
+
+    assert_eq!(lookup_subtree(&tree, &["label 2"]), Absent);
+    assert_eq!(
+        lookup_subtree(&tree, &["label 3"]),
+        Found(&Leaf(Cow::Owned(vec![1, 2, 3, 4, 5, 6])))
+    );
+    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(&Empty()));
+    assert_eq!(lookup_subtree(&tree, &["label 6"]), Unknown);
 }

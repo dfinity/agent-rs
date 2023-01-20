@@ -93,6 +93,20 @@ pub enum LookupResult<'tree> {
     Error,
 }
 
+/// A result of looking up for a subtree.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum SubtreeLookupResult<'tree> {
+    /// The subtree at the provided path is guaranteed to be absent in the original state tree.
+    Absent,
+
+    /// This partial view does not include information about this path, and the original
+    /// tree may or may note include a subtree at this path.
+    Unknown,
+
+    /// The subtree was found at the provided path.
+    Found(&'tree HashTreeNode<'tree>),
+}
+
 /// A HashTree representing a full tree.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct HashTree<'a> {
@@ -114,6 +128,15 @@ impl<'a> HashTree<'a> {
         P: IntoIterator<Item = &'p Label>,
     {
         self.root.lookup_path(&mut path.into_iter())
+    }
+
+    /// Given a (verified) tree, the client can fetch the subtree at a given path, which is a
+    /// sequence of labels (blobs).
+    pub fn lookup_subtree<'p, P>(&self, path: P) -> SubtreeLookupResult<'_>
+    where
+        P: IntoIterator<Item = &'p Label>,
+    {
+        self.root.lookup_subtree(&mut path.into_iter())
     }
 
     /// List all paths in the [HashTree]
@@ -414,6 +437,25 @@ impl<'a> HashTreeNode<'a> {
 
             (Some(LLR::Unknown), _) => Unknown,
             (Some(LLR::Absent | LLR::Greater | LLR::Less), _) => Absent,
+        }
+    }
+
+    /// Lookup a subtree at the provided path.
+    /// If the tree definitely does not contain the label, this will return [SubtreeLookupResult::Absent].
+    /// If the tree has pruned sections that might contain the path, this will return [SubtreeLookupResult::Unknown].
+    /// If the provided path is found, this will return [SubtreeLookupResult::Found] with the node that was found at that path.
+    ///
+    /// This assumes a sorted hash tree, which is what the spec says the system should return.
+    /// It will stop when it finds a label that's greater than the one being looked for.
+    fn lookup_subtree(&self, path: &mut dyn Iterator<Item = &Label>) -> SubtreeLookupResult<'_> {
+        use LookupLabelResult as LLR;
+        use SubtreeLookupResult::*;
+
+        match path.next().map(|segment| self.lookup_label(segment)) {
+            Some(LLR::Found(node)) => node.lookup_subtree(path),
+            Some(LLR::Unknown) => Unknown,
+            Some(LLR::Absent | LLR::Greater | LLR::Less) => Absent,
+            None => Found(self),
         }
     }
 
