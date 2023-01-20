@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Add `lookup_subtree` method to HashTree & HashTreeNode to allow for subtree lookups
+
 ## [0.23.0] - 2022-12-01
 
 * Remove `garcon` from API. Callers can remove the dependency and any usages of it; all waiting functions no longer take a waiter parameter.
