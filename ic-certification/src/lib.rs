@@ -5,7 +5,7 @@
 
 pub mod hash_tree;
 #[doc(inline)]
-pub use hash_tree::{HashTree, Label, LookupResult};
+pub use hash_tree::{HashTree, Label, LookupResult, SubtreeLookupResult};
 
 pub mod certificate;
 #[doc(inline)]
