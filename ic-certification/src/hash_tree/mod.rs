@@ -104,7 +104,7 @@ pub enum SubtreeLookupResult<'tree> {
     Unknown,
 
     /// The subtree was found at the provided path.
-    Found(&'tree HashTreeNode<'tree>),
+    Found(HashTree<'tree>),
 }
 
 /// A HashTree representing a full tree.
@@ -455,7 +455,9 @@ impl<'a> HashTreeNode<'a> {
             Some(LLR::Found(node)) => node.lookup_subtree(path),
             Some(LLR::Unknown) => Unknown,
             Some(LLR::Absent | LLR::Greater | LLR::Less) => Absent,
-            None => Found(self),
+            None => Found(HashTree {
+                root: self.to_owned(),
+            }),
         }
     }
 
