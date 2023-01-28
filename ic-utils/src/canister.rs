@@ -1,6 +1,6 @@
 use crate::call::{AsyncCaller, SyncCaller};
 use candid::utils::ArgumentEncoder;
-use candid::{parser::value::IDLValue, ser::IDLBuilder, utils::ArgumentDecoder, CandidType};
+use candid::{ser::IDLBuilder, types::value::IDLValue, utils::ArgumentDecoder, CandidType};
 use ic_agent::{export::Principal, Agent, AgentError, RequestId};
 use std::convert::TryInto;
 use std::fmt;

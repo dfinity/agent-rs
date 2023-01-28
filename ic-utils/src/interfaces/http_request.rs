@@ -5,11 +5,11 @@ use crate::{
     Canister,
 };
 use candid::{
-    parser::{
-        types::FuncMode,
+    types::{
+        reference::FuncVisitor,
         value::{IDLValue, IDLValueVisitor},
+        Compound, FuncMode, Function, Serializer, Type, TypeInner,
     },
-    types::{reference::FuncVisitor, Compound, Function, Serializer, Type},
     CandidType, Deserialize, Func,
 };
 use ic_agent::{export::Principal, Agent};
@@ -61,7 +61,7 @@ impl<'a, H: Clone + ExactSizeIterator<Item = HeaderField<'a>>> From<H> for Heade
 
 impl<'a, H: Clone + ExactSizeIterator<Item = HeaderField<'a>>> CandidType for Headers<H> {
     fn _ty() -> Type {
-        Type::Vec(Box::new(HeaderField::ty()))
+        TypeInner::Vec(HeaderField::ty()).into()
     }
     fn idl_serialize<S: Serializer>(&self, serializer: S) -> Result<(), S::Error> {
         let mut ser = serializer.serialize_vec(self.0.len())?;
@@ -240,7 +240,7 @@ pub struct HttpRequestStreamingCallbackAny(pub Func);
 
 impl CandidType for HttpRequestStreamingCallbackAny {
     fn _ty() -> Type {
-        Type::Reserved
+        TypeInner::Reserved.into()
     }
     fn idl_serialize<S: Serializer>(&self, _serializer: S) -> Result<(), S::Error> {
         // We cannot implement serialize, since our type must be `Reserved` in order to accept anything.
@@ -276,11 +276,12 @@ pub struct HttpRequestStreamingCallback<ArgToken = self::ArgToken>(
 
 impl<ArgToken: CandidType> CandidType for HttpRequestStreamingCallback<ArgToken> {
     fn _ty() -> Type {
-        Type::Func(Function {
+        TypeInner::Func(Function {
             modes: vec![FuncMode::Query],
             args: vec![ArgToken::ty()],
             rets: vec![StreamingCallbackHttpResponse::<ArgToken>::ty()],
         })
+        .into()
     }
     fn idl_serialize<S: Serializer>(&self, serializer: S) -> Result<(), S::Error> {
         self.0.idl_serialize(serializer)
@@ -334,7 +335,7 @@ pub struct Token(pub IDLValue);
 
 impl CandidType for Token {
     fn _ty() -> Type {
-        Type::Reserved
+        TypeInner::Reserved.into()
     }
     fn idl_serialize<S: Serializer>(&self, _serializer: S) -> Result<(), S::Error> {
         // We cannot implement serialize, since our type must be `Reserved` in order to accept anything.
@@ -358,7 +359,7 @@ pub struct ArgToken;
 
 impl CandidType for ArgToken {
     fn _ty() -> Type {
-        Type::Empty
+        TypeInner::Empty.into()
     }
     fn idl_serialize<S: Serializer>(&self, _serializer: S) -> Result<(), S::Error> {
         // We cannot implement serialize, since our type must be `Empty` in order to accept anything.
