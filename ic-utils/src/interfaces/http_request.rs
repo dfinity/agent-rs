@@ -8,7 +8,7 @@ use candid::{
     types::{
         reference::FuncVisitor,
         value::{IDLValue, IDLValueVisitor},
-        Compound, FuncMode, Function, Serializer, Type, TypeInner,
+        Compound, Serializer, Type, TypeInner,
     },
     CandidType, Deserialize, Func,
 };
@@ -276,12 +276,7 @@ pub struct HttpRequestStreamingCallback<ArgToken = self::ArgToken>(
 
 impl<ArgToken: CandidType> CandidType for HttpRequestStreamingCallback<ArgToken> {
     fn _ty() -> Type {
-        TypeInner::Func(Function {
-            modes: vec![FuncMode::Query],
-            args: vec![ArgToken::ty()],
-            rets: vec![StreamingCallbackHttpResponse::<ArgToken>::ty()],
-        })
-        .into()
+        candid::func!((ArgToken) -> (StreamingCallbackHttpResponse::<ArgToken>) query)
     }
     fn idl_serialize<S: Serializer>(&self, serializer: S) -> Result<(), S::Error> {
         self.0.idl_serialize(serializer)
