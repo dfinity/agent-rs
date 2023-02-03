@@ -499,7 +499,7 @@ mod test {
         StreamingCallbackHttpResponse, StreamingStrategy, Token,
     };
     use candid::{
-        parser::value::{IDLField, IDLValue},
+        types::value::{IDLField, IDLValue},
         CandidType, Decode, Deserialize, Encode,
     };
     use serde::de::DeserializeOwned;
