@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 * Add `lookup_subtree` method to HashTree & HashTreeNode to allow for subtree lookups
+* Derive `Clone` on `Certificate` and `Delegation` structs
 
 ## [0.23.0] - 2022-12-01
 

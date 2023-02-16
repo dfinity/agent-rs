@@ -1,7 +1,7 @@
 use crate::HashTree;
 
 /// A `Certificate` as defined in <https://internetcomputer.org/docs/current/references/ic-interface-spec/#certificate>
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Certificate<'a> {
     /// The hash tree.
@@ -17,7 +17,7 @@ pub struct Certificate<'a> {
 }
 
 /// A `Delegation` as defined in <https://internetcomputer.org/docs/current/references/ic-interface-spec/#certification-delegation>
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Delegation {
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
