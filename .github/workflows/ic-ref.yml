@@ -72,7 +72,7 @@ jobs:
         run: |
           cd cycles-wallet/
           sh ./wallet/build.sh
-          cp wallet/target/wasm32-unknown-unknown/release/wallet-opt.wasm $HOME/wallet.wasm
+          cp target/wasm32-unknown-unknown/release/wallet-opt.wasm $HOME/wallet.wasm
 
       - name: Build ic-hs
         run: |
