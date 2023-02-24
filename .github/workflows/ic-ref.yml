@@ -33,9 +33,9 @@ jobs:
           ref: ${{ matrix.spec }}
       - uses: actions/checkout@v2
         with:
-          repository: 'dfinity/wallet-rs'
-          path: wallet-rs
-          ref: 9ef38bb7cd0fe17cda749bf8e9bbec5723da0e95
+          repository: 'dfinity/cycles-wallet'
+          path: cycles-wallet
+          ref: 89df7966379351d7a82796f64214a744f65960fd
 
       - name: Cache ~/.cabal/store
         uses: actions/cache@v2
@@ -82,9 +82,9 @@ jobs:
           cargo build --target wasm32-unknown-unknown --release
           cp target/wasm32-unknown-unknown/release/universal_canister.wasm $HOME/canister.wasm
 
-      - name: Build wallet canister
+      - name: Build cycles-wallet canister
         run: |
-          cd wallet-rs/
+          cd cycles-wallet/
           sh ./wallet/build.sh
           cp wallet/target/wasm32-unknown-unknown/release/wallet-opt.wasm $HOME/wallet.wasm
 
