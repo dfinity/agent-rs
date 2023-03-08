@@ -107,15 +107,15 @@ pub fn pprint(url: String, accept_encodings: Option<Vec<String>>) -> Result<()> 
     let cert: ReplicaCertificate = parse_base64_cbor(structured_header.certificate)?;
 
     println!("STATUS: {}", status);
-    println!("ROOT HASH: {}", hex::encode(&cert.tree.digest()));
+    println!("ROOT HASH: {}", hex::encode(cert.tree.digest()));
     if let Some(content_encoding) = content_encoding {
         println!("CONTENT-ENCODING: {}", content_encoding.to_str().unwrap());
     }
     println!(
         "DATA HASH: {}",
-        hex::encode(&sha2::Sha256::digest(data.as_ref()))
+        hex::encode(sha2::Sha256::digest(data.as_ref()))
     );
-    println!("TREE HASH: {}", hex::encode(&tree.digest()));
+    println!("TREE HASH: {}", hex::encode(tree.digest()));
     println!("SIGNATURE: {}", hex::encode(cert.signature.as_ref()));
     if let LookupResult::Found(mut date_bytes) = cert.tree.lookup_path(&["time".into()]) {
         let timestamp_nanos = leb128::read::unsigned(&mut date_bytes)

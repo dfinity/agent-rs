@@ -495,7 +495,7 @@ impl<'a> ser::SerializeSeq for &'a mut RequestIdSerializer {
         self.element_encoder = prev_encoder.take();
         match &mut self.element_encoder {
             Some(Hasher::Value(hasher)) => {
-                hasher.update(&hash);
+                hasher.update(hash);
                 Ok(())
             }
             _ => Err(RequestIdError::InvalidState),

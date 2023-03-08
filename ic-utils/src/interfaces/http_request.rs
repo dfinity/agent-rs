@@ -355,7 +355,7 @@ impl<'de> Deserialize<'de> for Token {
 }
 
 /// A marker type to match unconstrained callback arguments
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub struct ArgToken;
 
 impl CandidType for ArgToken {

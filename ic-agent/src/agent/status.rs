@@ -98,8 +98,8 @@ fn cbor_value_to_value(value: &serde_cbor::Value) -> Result<Value, ()> {
             let mut map = BTreeMap::new();
             for (key, value) in m.iter() {
                 let k = match key {
-                    serde_cbor::Value::Text(t) => (t.to_owned()),
-                    serde_cbor::Value::Integer(i) => (i.to_string()),
+                    serde_cbor::Value::Text(t) => t.to_owned(),
+                    serde_cbor::Value::Integer(i) => i.to_string(),
                     _ => return Err(()),
                 };
                 let v = Box::new(cbor_value_to_value(value)?);

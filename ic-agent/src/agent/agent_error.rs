@@ -212,7 +212,7 @@ impl HttpErrorPayload {
             "Http Error: status {}, content type {:?}, content: {}",
             http::StatusCode::from_u16(self.status)
                 .map_or_else(|_| format!("{}", self.status), |code| format!("{}", code)),
-            self.content_type.clone().unwrap_or_else(|| "".to_string()),
+            self.content_type.clone().unwrap_or_default(),
             String::from_utf8(self.content.clone()).unwrap_or_else(|_| format!(
                 "(unable to decode content as UTF-8: {:?})",
                 self.content
