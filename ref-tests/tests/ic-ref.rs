@@ -398,7 +398,7 @@ mod management_canister {
             // Can't call query on a stopped canister
             let result = agent
                 .query(&canister_id, "query")
-                .with_arg(&[])
+                .with_arg([])
                 .call()
                 .await;
             assert!(matches!(result, Err(AgentError::ReplicaError {
@@ -429,7 +429,7 @@ mod management_canister {
             // Can call query
             let result = agent
                 .query(&canister_id, "query")
-                .with_arg(&[])
+                .with_arg([])
                 .call()
                 .await;
             assert!(matches!(result, Err(AgentError::ReplicaError {
@@ -459,7 +459,7 @@ mod management_canister {
             // Cannot call query
             let result = agent
                 .query(&canister_id, "query")
-                .with_arg(&[])
+                .with_arg([])
                 .call()
                 .await;
             assert!(matches!(result, Err(AgentError::ReplicaError {

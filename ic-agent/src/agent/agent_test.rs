@@ -147,7 +147,7 @@ fn call_error() -> Result<(), AgentError> {
     let result = runtime.block_on(async {
         agent
             .update(&Principal::management_canister(), "greet")
-            .with_arg(&[])
+            .with_arg([])
             .call()
             .await
     });
@@ -366,7 +366,7 @@ fn check_subnet_range_with_valid_range() {
         "/api/v2/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
     )
     .with_status(200)
-    .with_body(&REQ_WITH_DELEGATED_CERT_RESPONSE)
+    .with_body(REQ_WITH_DELEGATED_CERT_RESPONSE)
     .create();
     let agent = Agent::builder()
         .with_transport(ReqwestHttpReplicaV2Transport::create(&mockito::server_url()).unwrap())
@@ -400,7 +400,7 @@ fn check_subnet_range_with_unauthorized_range() {
         "/api/v2/canister/ryjl3-tyaaa-aaaaa-aaaba-cai/read_state",
     )
     .with_status(200)
-    .with_body(&REQ_WITH_DELEGATED_CERT_RESPONSE)
+    .with_body(REQ_WITH_DELEGATED_CERT_RESPONSE)
     .create();
     let agent = Agent::builder()
         .with_transport(ReqwestHttpReplicaV2Transport::create(&mockito::server_url()).unwrap())
@@ -432,7 +432,7 @@ fn check_subnet_range_with_pruned_range() {
         "/api/v2/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
     )
     .with_status(200)
-    .with_body(&PRUNED_SUBNET)
+    .with_body(PRUNED_SUBNET)
     .create();
     let agent = Agent::builder()
         .with_transport(ReqwestHttpReplicaV2Transport::create(&mockito::server_url()).unwrap())
