@@ -126,7 +126,7 @@ pub async fn create_universal_canister(agent: &Agent) -> Result<Principal, Box<d
     let canister_wasm = if !canister_path.exists() {
         panic!("Could not find the universal canister WASM file.");
     } else {
-        std::fs::read(&canister_path).expect("Could not read file.")
+        std::fs::read(canister_path).expect("Could not read file.")
     };
 
     let ic00 = ManagementCanister::create(agent);
@@ -155,7 +155,7 @@ pub fn get_wallet_wasm_from_env() -> Vec<u8> {
     if !canister_path.exists() {
         panic!("Could not find the wallet canister WASM file.");
     } else {
-        std::fs::read(&canister_path).expect("Could not read file.")
+        std::fs::read(canister_path).expect("Could not read file.")
     }
 }
 

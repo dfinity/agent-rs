@@ -344,7 +344,7 @@ fn get_object_handle_for_key(
     ctx.find_objects_init(session_handle, &attributes)?;
     let object_handles = ctx.find_objects(session_handle, 1)?;
     let object_handle = *object_handles
-        .get(0)
+        .first()
         .ok_or(HardwareIdentityError::KeyNotFound)?;
     ctx.find_objects_final(session_handle)?;
     Ok(object_handle)

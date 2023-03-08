@@ -191,7 +191,7 @@ fn blob_from_arguments(
 
     match arg_type {
         ArgType::Raw => {
-            let bytes = hex::decode(&arguments.unwrap_or(""))
+            let bytes = hex::decode(arguments.unwrap_or(""))
                 .context("Argument is not a valid hex string")?;
             Ok(bytes)
         }

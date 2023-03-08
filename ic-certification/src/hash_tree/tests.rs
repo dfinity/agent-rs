@@ -26,7 +26,7 @@ fn works_with_simple_tree() {
         label("label 1", empty()),
         fork(
             pruned(*b"\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01"),
-            leaf(&[1u8, 2, 3, 4, 5, 6]),
+            leaf([1u8, 2, 3, 4, 5, 6]),
         ),
     );
 
@@ -319,16 +319,16 @@ fn can_lookup_subtrees_1() {
         ),
     );
 
-    assert_eq!(lookup_subtree(&tree, &["label 0"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 1"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 2"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 0"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 1"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 2"]), Unknown);
     assert_eq!(
-        lookup_subtree(&tree, &["label 3"]),
+        lookup_subtree(&tree, ["label 3"]),
         Found(leaf(vec![1, 2, 3, 4, 5, 6]))
     );
-    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 6"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 5"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 6"]), Absent);
 }
 
 #[test]
@@ -346,16 +346,16 @@ fn can_lookup_subtrees_2() {
         ),
     );
 
-    assert_eq!(lookup_subtree(&tree, &["label 0"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 1"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 2"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 0"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 1"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 2"]), Absent);
     assert_eq!(
-        lookup_subtree(&tree, &["label 3"]),
+        lookup_subtree(&tree, ["label 3"]),
         Found(leaf(vec![1, 2, 3, 4, 5, 6]))
     );
-    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 6"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 5"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 6"]), Unknown);
 }
 
 #[test]
@@ -373,14 +373,14 @@ fn can_lookup_subtrees_3() {
         ),
     );
 
-    assert_eq!(lookup_subtree(&tree, &["label 2"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 2"]), Unknown);
     assert_eq!(
-        lookup_subtree(&tree, &["label 3"]),
+        lookup_subtree(&tree, ["label 3"]),
         Found(leaf(vec![1, 2, 3, 4, 5, 6]))
     );
-    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 6"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 5"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 6"]), Absent);
 }
 
 #[test]
@@ -398,14 +398,14 @@ fn can_lookup_subtrees_4() {
         ),
     );
 
-    assert_eq!(lookup_subtree(&tree, &["label 2"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 2"]), Unknown);
     assert_eq!(
-        lookup_subtree(&tree, &["label 3"]),
+        lookup_subtree(&tree, ["label 3"]),
         Found(leaf(vec![1, 2, 3, 4, 5, 6]))
     );
-    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 6"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 5"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 6"]), Unknown);
 }
 
 #[test]
@@ -423,16 +423,16 @@ fn can_lookup_subtrees_5() {
         label("label 7", empty()),
     );
 
-    assert_eq!(lookup_subtree(&tree, &["label 2"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 2"]), Unknown);
     assert_eq!(
-        lookup_subtree(&tree, &["label 3"]),
+        lookup_subtree(&tree, ["label 3"]),
         Found(leaf(vec![1, 2, 3, 4, 5, 6]))
     );
-    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 6"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 7"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 8"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 5"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 6"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 7"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 8"]), Absent);
 }
 
 #[test]
@@ -450,16 +450,16 @@ fn can_lookup_subtrees_6() {
         label("label 7", empty()),
     );
 
-    assert_eq!(lookup_subtree(&tree, &["label 2"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 2"]), Absent);
     assert_eq!(
-        lookup_subtree(&tree, &["label 3"]),
+        lookup_subtree(&tree, ["label 3"]),
         Found(leaf(vec![1, 2, 3, 4, 5, 6]))
     );
-    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 6"]), Unknown);
-    assert_eq!(lookup_subtree(&tree, &["label 7"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 8"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 5"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 6"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 7"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 8"]), Absent);
 }
 
 #[test]
@@ -477,14 +477,14 @@ fn can_lookup_subtrees_7() {
         pruned([0; 32]),
     );
 
-    assert_eq!(lookup_subtree(&tree, &["label 2"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 2"]), Unknown);
     assert_eq!(
-        lookup_subtree(&tree, &["label 3"]),
+        lookup_subtree(&tree, ["label 3"]),
         Found(leaf(vec![1, 2, 3, 4, 5, 6]))
     );
-    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 6"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 5"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 6"]), Unknown);
 }
 
 #[test]
@@ -502,12 +502,12 @@ fn can_lookup_subtrees_8() {
         pruned([0; 32]),
     );
 
-    assert_eq!(lookup_subtree(&tree, &["label 2"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 2"]), Absent);
     assert_eq!(
-        lookup_subtree(&tree, &["label 3"]),
+        lookup_subtree(&tree, ["label 3"]),
         Found(leaf(vec![1, 2, 3, 4, 5, 6]))
     );
-    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 6"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 5"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 6"]), Unknown);
 }
