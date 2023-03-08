@@ -396,11 +396,7 @@ mod management_canister {
                 if String::from_utf8(payload.content.clone()).expect("Expected utf8") == *"canister is stopped"));
 
             // Can't call query on a stopped canister
-            let result = agent
-                .query(&canister_id, "query")
-                .with_arg([])
-                .call()
-                .await;
+            let result = agent.query(&canister_id, "query").with_arg([]).call().await;
             assert!(matches!(result, Err(AgentError::ReplicaError {
                     reject_code: 5,
                     reject_message,
@@ -427,11 +423,7 @@ mod management_canister {
                 }) if reject_message == "method does not exist: update"));
 
             // Can call query
-            let result = agent
-                .query(&canister_id, "query")
-                .with_arg([])
-                .call()
-                .await;
+            let result = agent.query(&canister_id, "query").with_arg([]).call().await;
             assert!(matches!(result, Err(AgentError::ReplicaError {
                     reject_code: 3,
                     reject_message,
@@ -457,11 +449,7 @@ mod management_canister {
                     == format!("canister no longer exists: {}", canister_id.to_text())));
 
             // Cannot call query
-            let result = agent
-                .query(&canister_id, "query")
-                .with_arg([])
-                .call()
-                .await;
+            let result = agent.query(&canister_id, "query").with_arg([]).call().await;
             assert!(matches!(result, Err(AgentError::ReplicaError {
                     reject_code: 3,
                     reject_message,
