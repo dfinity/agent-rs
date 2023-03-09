@@ -207,7 +207,7 @@ pub enum PollResult {
 ///   // Create a call to the management canister to create a new canister ID,
 ///   // and wait for a result.
 ///   // The effective canister id must belong to the canister ranges of the subnet at which the canister is created.
-///   let effective_canister_id = Principal::from_text("sehci-oaaaa-aaaaa-aaaaa-c").unwrap();
+///   let effective_canister_id = Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap();
 ///   let response = agent.update(&management_canister_id, "provisional_create_canister_with_cycles")
 ///     .with_effective_canister_id(effective_canister_id)
 ///     .with_arg(&Encode!(&Argument { amount: None })?)
