@@ -14,8 +14,7 @@ jobs:
         build: [linux-stable]
         include:
           - build: linux-stable
-            ghc: "8.10.7"
-            spec: "f771c6b3e7cdde413d3b960f63165c6ecf3e0b7c"
+            ic-hs-ref: "3d71032e"
             os: ubuntu-latest
             rust: "1.65.0"
 
@@ -23,35 +22,16 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 16
-      - uses: haskell/actions/setup@v1
-        with:
-          ghc-version: ${{ matrix.ghc }}
+
       - uses: actions/checkout@v2
         with:
           path: main
-      - uses: actions/checkout@v2
-        with:
-          repository: "dfinity/ic-hs"
-          path: ic-hs
-          ref: ${{ matrix.spec }}
+
       - uses: actions/checkout@v2
         with:
           repository: "dfinity/cycles-wallet"
           path: cycles-wallet
           ref: 89df7966379351d7a82796f64214a744f65960fd
-
-      - name: Cache ~/.cabal/store
-        uses: actions/cache@v2
-        with:
-          path: |
-            ~/.cabal/store
-          key: cabal-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('ic-hs/cabal.project', 'ic-hs/cabal.project.freeze') }}
-          restore-keys: cabal-${{ runner.os }}-${{ matrix.ghc }}-
-
-      - uses: actions/setup-haskell@v1.1.3
-        with:
-          ghc-version: ${{ matrix.ghc }}
-          cabal-version: "3.2"
 
       - name: Cargo cache
         uses: actions/cache@v2
@@ -74,21 +54,16 @@ jobs:
           sh ./wallet/build.sh
           cp target/wasm32-unknown-unknown/release/wallet-opt.wasm $HOME/wallet.wasm
 
-      - name: Build ic-hs
+      - name: Download ic-ref and universal-canister
         run: |
-          ghc --version
-          cabal --version
-          ghc-${{ matrix.ghc }} --version
+          wget https://download.dfinity.systems/ic-ref/ic-ref-0.0.1-${{ matrix.ic-hs-ref }}-x86_64-linux.tar.gz
+          tar -xvf ic-ref-0.0.1-${{ matrix.ic-hs-ref }}-x86_64-linux.tar.gz ic-ref
           mkdir -p $HOME/bin
-          cd ic-hs
-          cabal update
-          cabal install exe:ic-ref -w ghc-${{ matrix.ghc }} --overwrite-policy=always  --installdir=$HOME/bin
+          mv ic-ref $HOME/bin/ic-ref
 
-      - name: Build universal-canister
-        run: |
-          cd ic-hs/universal-canister
-          cargo build --target wasm32-unknown-unknown --release
-          cp target/wasm32-unknown-unknown/release/universal_canister.wasm $HOME/canister.wasm
+          wget https://download.dfinity.systems/ic-ref/ic-ref-test-0.0.1-${{ matrix.ic-hs-ref }}-x86_64-linux.tar.gz
+          tar -xvf ic-ref-test-0.0.1-${{ matrix.ic-hs-ref }}-x86_64-linux.tar.gz test-data/universal-canister.wasm
+          mv test-data/universal-canister.wasm $HOME/canister.wasm
 
       - name: Run Integration Tests
         run: |
