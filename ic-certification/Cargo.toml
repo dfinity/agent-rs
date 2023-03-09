@@ -14,20 +14,20 @@ keywords = ["internet-computer", "agent", "utility", "icp", "dfinity"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
-hex = "0.4.3"
-sha2 = "0.10.1"
+hex = { workspace = true }
+sha2 = { workspace = true }
 
 [dev-dependencies]
-serde = { version = "1.0.133", features = ["derive"] }
-serde_cbor = "0.11.2"
+serde = { workspace = true, features = ["derive"] }
+serde_cbor = { workspace = true }
 
 [dependencies.serde]
-version = "1.0.115"
+workspace = true
 features = ["derive"]
 optional = true
 
 [dependencies.serde_bytes]
-version = "0.11.5"
+workspace = true
 optional = true
 
 [features]
