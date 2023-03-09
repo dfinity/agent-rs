@@ -1,33 +1,33 @@
 [package]
 name = "ic-certification"
-version = "0.23.0"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+rust-version.workspace = true
 description = "Types related to the Internet Computer Public Specification."
-homepage = "https://docs.rs/ic-certification"
 documentation = "https://docs.rs/ic-certification"
-repository = "https://github.com/dfinity/agent-rs"
-edition = "2021"
-license = "Apache-2.0"
 readme = "README.md"
 categories = ["api-bindings", "data-structures", "no-std"]
 keywords = ["internet-computer", "agent", "utility", "icp", "dfinity"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
-rust-version = "1.60.0"
 
 [dependencies]
-hex = "0.4.3"
-sha2 = "0.10.1"
+hex = { workspace = true }
+sha2 = { workspace = true }
 
 [dev-dependencies]
-serde = { version = "1.0.133", features = ["derive"] }
-serde_cbor = "0.11.2"
+serde = { workspace = true, features = ["derive"] }
+serde_cbor = { workspace = true }
 
 [dependencies.serde]
-version = "1.0.115"
+workspace = true
 features = ["derive"]
 optional = true
 
 [dependencies.serde_bytes]
-version = "0.11.5"
+workspace = true
 optional = true
 
 [features]
