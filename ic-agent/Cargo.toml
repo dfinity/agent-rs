@@ -1,18 +1,18 @@
 [package]
 name = "ic-agent"
-version = "0.23.0"
-authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+rust-version.workspace = true
 description = "Agent library to communicate with the Internet Computer, following the Public Specification."
 homepage = "https://docs.rs/ic-agent"
 documentation = "https://docs.rs/ic-agent"
-repository = "https://github.com/dfinity/agent-rs"
-license = "Apache-2.0"
 readme = "README.md"
 categories = ["api-bindings", "data-structures", "no-std"]
 keywords = ["internet-computer", "agent", "icp", "dfinity"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
-rust-version = "1.60.0"
 
 [dependencies]
 async-trait = "0.1.53"

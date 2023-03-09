@@ -1,18 +1,18 @@
 [package]
 name = "icx"
-version = "0.23.0"
-authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+rust-version.workspace = true
 description = "CLI tool to call canisters on the Internet Computer."
 homepage = "https://docs.rs/icx"
 documentation = "https://docs.rs/icx"
-repository = "https://github.com/dfinity/agent-rs"
-license = "Apache-2.0"
 readme = "README.md"
 categories = ["command-line-interface", "web-programming::http-client"]
 keywords = ["internet-computer", "agent", "icp", "dfinity", "call"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
-rust-version = "1.60.0"
 
 [[bin]]
 name = "icx"
