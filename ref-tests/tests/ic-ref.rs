@@ -392,8 +392,10 @@ mod management_canister {
 
             // Can't call update on a stopped canister
             let result = agent.update(&canister_id, "update").call_and_wait().await;
-            assert!(matches!(result, Err(AgentError::HttpError(payload))
-                if String::from_utf8(payload.content.clone()).expect("Expected utf8") == *"canister is stopped"));
+            assert!(matches!(result, Err(AgentError::ReplicaError {
+                reject_code: 5,
+                reject_message,
+            }) if reject_message == "canister is not running"));
 
             // Can't call query on a stopped canister
             let result = agent.query(&canister_id, "query").with_arg([]).call().await;
