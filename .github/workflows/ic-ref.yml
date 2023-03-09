@@ -27,12 +27,6 @@ jobs:
         with:
           path: main
 
-      - uses: actions/checkout@v2
-        with:
-          repository: "dfinity/cycles-wallet"
-          path: cycles-wallet
-          ref: 89df7966379351d7a82796f64214a744f65960fd
-
       - name: Cargo cache
         uses: actions/cache@v2
         with:
@@ -48,11 +42,10 @@ jobs:
           rustup default ${{ matrix.rust }}
           rustup target add wasm32-unknown-unknown
 
-      - name: Build cycles-wallet canister
+      - name: Download cycles-wallet canister
         run: |
-          cd cycles-wallet/
-          sh ./wallet/build.sh
-          cp target/wasm32-unknown-unknown/release/wallet-opt.wasm $HOME/wallet.wasm
+          wget https://github.com/dfinity/cycles-wallet/releases/download/20230308/wallet.wasm
+          mv wallet.wasm $HOME/wallet.wasm
 
       - name: Download ic-ref and universal-canister
         run: |
@@ -122,6 +115,7 @@ jobs:
           killall ic-ref
         env:
           RUST_BACKTRACE: 1
+
   aggregate:
     name: ic-ref:required
     runs-on: ubuntu-latest
