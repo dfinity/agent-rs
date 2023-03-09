@@ -30,5 +30,5 @@ pem = "1.0"
 ring = { workspace = true }
 serde = { workspace = true }
 serde_json = "1.0.57"
-tokio = { version = "1.8.1", features = ["full"] }
+tokio = { version = "1.24.2", features = ["full"] }
 thiserror = { workspace = true }
