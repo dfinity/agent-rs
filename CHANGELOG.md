@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.23.1] - 2023-03-09
+
 * Add `lookup_subtree` method to HashTree & HashTreeNode to allow for subtree lookups.
 * Derive `Clone` on `Certificate` and `Delegation` structs.
 * Add certificate version to http_request canister interface.
