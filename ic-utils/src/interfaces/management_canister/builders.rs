@@ -84,7 +84,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
     }
 
     /// Specify the canister id.
-    /// 
+    ///
     /// The effective_canister_id will also be set with the same value so that ic-ref can determine
     /// the target subnet of this request. The replica implementation ignores it.
     pub fn as_provisional_create_with_specified_id(self, specified_id: Principal) -> Self {
