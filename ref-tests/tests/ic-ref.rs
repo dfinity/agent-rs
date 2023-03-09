@@ -750,6 +750,7 @@ mod simple_calls {
 
 mod extras {
     use candid::Nat;
+    use ic_agent::{export::Principal, AgentError};
     use ic_utils::{
         call::AsyncCall,
         interfaces::{management_canister::builders::ComputeAllocation, ManagementCanister},
@@ -850,6 +851,39 @@ mod extras {
                 .call_and_wait()
                 .await
                 .is_err());
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn specified_id() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+            let specified_id = Principal::from_text("iimsn-6yaaa-aaaaa-afiaa-cai").unwrap(); // [42, 0] should be large enough
+            assert_eq!(
+                ic00.create_canister()
+                    .as_provisional_create_with_specified_id(specified_id)
+                    .with_effective_canister_id(get_effective_canister_id())
+                    .call_and_wait()
+                    .await
+                    .unwrap()
+                    .0,
+                specified_id
+            );
+
+            // create again with the same id should error
+            let result = ic00
+                .create_canister()
+                .as_provisional_create_with_specified_id(specified_id)
+                .with_effective_canister_id(get_effective_canister_id())
+                .call_and_wait()
+                .await;
+            assert!(matches!(result, Err(AgentError::ReplicaError {
+                    reject_code: 3,
+                    reject_message,
+                }) if reject_message == "The specified_id of the created canister is already in use."));
 
             Ok(())
         })

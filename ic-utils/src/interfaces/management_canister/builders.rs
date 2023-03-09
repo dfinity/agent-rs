@@ -49,6 +49,7 @@ pub struct CreateCanisterBuilder<'agent, 'canister: 'agent> {
     freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
     is_provisional_create: bool,
     amount: Option<u128>,
+    specified_id: Option<Principal>,
 }
 
 impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
@@ -63,6 +64,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             freezing_threshold: None,
             is_provisional_create: false,
             amount: None,
+            specified_id: None,
         }
     }
 
@@ -77,6 +79,15 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         Self {
             is_provisional_create: true,
             amount,
+            ..self
+        }
+    }
+
+    /// Specify the canister id.
+    pub fn as_provisional_create_with_specified_id(self, specified_id: Principal) -> Self {
+        Self {
+            is_provisional_create: true,
+            specified_id: Some(specified_id),
             ..self
         }
     }
@@ -243,6 +254,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             struct In {
                 amount: Option<Nat>,
                 settings: CanisterSettings,
+                specified_id: Option<Principal>,
             }
             let in_arg = In {
                 amount: self.amount.map(Nat::from),
@@ -252,6 +264,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     memory_allocation,
                     freezing_threshold,
                 },
+                specified_id: self.specified_id,
             };
             self.canister
                 .update_(MgmtMethod::ProvisionalCreateCanisterWithCycles.as_ref())
