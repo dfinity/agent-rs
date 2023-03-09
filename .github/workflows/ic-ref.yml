@@ -15,6 +15,7 @@ jobs:
         include:
           - build: linux-stable
             ic-hs-ref: "3d71032e"
+            wallet-tag: "20230308"
             os: ubuntu-latest
             rust: "1.65.0"
 
@@ -44,7 +45,7 @@ jobs:
 
       - name: Download cycles-wallet canister
         run: |
-          wget https://github.com/dfinity/cycles-wallet/releases/download/20230308/wallet.wasm
+          wget https://github.com/dfinity/cycles-wallet/releases/download/${{ matrix.wallet-tag }}/wallet.wasm
           mv wallet.wasm $HOME/wallet.wasm
 
       - name: Download ic-ref and universal-canister
