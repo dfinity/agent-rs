@@ -12,7 +12,7 @@ const HSM_KEY_ID: &str = "HSM_KEY_ID";
 const HSM_PIN: &str = "HSM_PIN";
 
 pub fn get_effective_canister_id() -> Principal {
-    Principal::from_text("sehci-oaaaa-aaaaa-aaaaa-c").unwrap()
+    Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap()
 }
 
 pub async fn create_identity() -> Result<Box<dyn Identity>, String> {
