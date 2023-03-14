@@ -90,7 +90,7 @@
 //! # });
 //! ```
 //! For more information about the Agent interface used in this example, see the
-//! [Agent](https://agent-rust.netlify.app/ic_agent/struct.agent) documentation.
+//! [Agent] documentation.
 //!
 //! ## References
 //! For an introduction to the Internet Computer and the DFINITY Canister SDK,
