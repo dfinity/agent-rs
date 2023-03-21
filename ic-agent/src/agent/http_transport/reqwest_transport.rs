@@ -6,6 +6,7 @@ pub use reqwest;
 use std::sync::Arc;
 
 use futures_util::StreamExt;
+#[cfg(not(target_family = "wasm"))]
 use hyper_rustls::ConfigBuilderExt;
 use reqwest::{
     header::{HeaderMap, AUTHORIZATION, CONTENT_TYPE},
@@ -62,6 +63,7 @@ pub struct ReqwestHttpReplicaV2Transport {
 
 impl ReqwestHttpReplicaV2Transport {
     /// Creates a replica transport from a HTTP URL.
+    #[cfg(not(target_family = "wasm"))]
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
         let mut tls_config = rustls::ClientConfig::builder()
             .with_safe_defaults()
@@ -78,6 +80,12 @@ impl ReqwestHttpReplicaV2Transport {
                 .build()
                 .expect("Could not create HTTP client."),
         )
+    }
+
+    /// Creates a replica transport from a HTTP URL.
+    #[cfg(target_family = "wasm")]
+    pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
+        Self::create_with_client(url, Client::new())
     }
 
     /// Creates a replica transport from a HTTP URL and a [`reqwest::Client`].
