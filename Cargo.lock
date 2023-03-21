@@ -887,7 +887,7 @@ dependencies = [
 
 [[package]]
 name = "ic-agent"
-version = "0.23.1"
+version = "0.23.2"
 dependencies = [
  "async-trait",
  "backoff",
@@ -928,7 +928,7 @@ dependencies = [
 
 [[package]]
 name = "ic-certification"
-version = "0.23.1"
+version = "0.23.2"
 dependencies = [
  "hex",
  "serde",
@@ -939,7 +939,7 @@ dependencies = [
 
 [[package]]
 name = "ic-identity-hsm"
-version = "0.23.1"
+version = "0.23.2"
 dependencies = [
  "hex",
  "ic-agent",
@@ -952,7 +952,7 @@ dependencies = [
 
 [[package]]
 name = "ic-utils"
-version = "0.23.1"
+version = "0.23.2"
 dependencies = [
  "async-trait",
  "candid",
@@ -985,7 +985,7 @@ dependencies = [
 
 [[package]]
 name = "icx"
-version = "0.23.1"
+version = "0.23.2"
 dependencies = [
  "anyhow",
  "candid",
@@ -1004,7 +1004,7 @@ dependencies = [
 
 [[package]]
 name = "icx-cert"
-version = "0.23.1"
+version = "0.23.2"
 dependencies = [
  "anyhow",
  "base64",
