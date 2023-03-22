@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.23.2] - 2023-04-21
+
+* Expose the root key to clients through `read_root_key`
+
 ## [0.23.1] - 2023-03-09
 
 * Add `lookup_subtree` method to HashTree & HashTreeNode to allow for subtree lookups.

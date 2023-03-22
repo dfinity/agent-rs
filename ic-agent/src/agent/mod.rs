@@ -321,7 +321,8 @@ impl Agent {
         Ok(())
     }
 
-    fn read_root_key(&self) -> Result<Vec<u8>, AgentError> {
+    /// Return the root key currently in use.
+    pub fn read_root_key(&self) -> Result<Vec<u8>, AgentError> {
         if let Ok(read_lock) = self.root_key.read() {
             if let Some(root_key) = read_lock.clone() {
                 Ok(root_key)
