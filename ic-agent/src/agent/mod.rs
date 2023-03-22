@@ -338,14 +338,20 @@ impl Agent {
         let permitted_drift = Duration::from_secs(60);
         (self
             .ingress_expiry_duration
-            .as_nanos()
-            .saturating_add(
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("Time wrapped around.")
-                    .as_nanos(),
-            )
-            .saturating_sub(permitted_drift.as_nanos())) as u64
+            .saturating_add({
+                #[cfg(not(target_family = "wasm"))]
+                {
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .expect("Time wrapped around.")
+                }
+                #[cfg(target_family = "wasm")]
+                {
+                    Duration::from_nanos((js_sys::Date::now() * 1_000_000.) as _)
+                }
+            })
+            .saturating_sub(permitted_drift))
+        .as_nanos() as u64
     }
 
     /// Return the principal of the identity.
