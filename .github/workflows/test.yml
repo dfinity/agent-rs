@@ -52,7 +52,7 @@ jobs:
       - name: Run Tests (WASM)
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
-          wasm-pack test --chrome --headless ic-agent
+          CARGO_TARGET_DIR=../target/wasm wasm-pack test --chrome --headless ic-agent
 
       - name: Purge for OSX
         if: matrix.os == 'macos-latest'
