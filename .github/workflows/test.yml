@@ -32,7 +32,7 @@ jobs:
           rustup target add wasm32-unknown-unknown
       
       - name: Install wasm-pack
-        if: ${{ matrix.os == 'ubuntu-latest '}}
+        if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
