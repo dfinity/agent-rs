@@ -1,6 +1,7 @@
 // Disable these tests without the reqwest feature.
-#![cfg(all(feature = "reqwest", not(target_family = "wasm")))]
+#![cfg(feature = "reqwest")]
 
+use self::mock::{assert_mock, mock};
 use crate::{
     agent::{
         http_transport::ReqwestHttpReplicaV2Transport,
@@ -11,27 +12,32 @@ use crate::{
     Agent, AgentError,
 };
 use ic_certification::Label;
-use mockito::Server;
 use std::collections::BTreeMap;
+#[cfg(target_family = "wasm")]
+use wasm_bindgen_test::wasm_bindgen_test;
 
-#[tokio::test]
+#[cfg(target_family = "wasm")]
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn query() -> Result<(), AgentError> {
     let blob = Vec::from("Hello World");
     let response = QueryResponse::Replied {
         reply: CallReply { arg: blob.clone() },
     };
 
-    let mut server = Server::new_async().await;
-    let query_mock = server
-        .mock("POST", "/api/v2/canister/aaaaa-aa/query")
-        .with_status(200)
-        .with_header("content-type", "application/cbor")
-        .with_body(serde_cbor::to_vec(&response)?)
-        .create_async()
-        .await;
+    let (query_mock, url) = mock(
+        "POST",
+        "/api/v2/canister/aaaaa-aa/query",
+        200,
+        serde_cbor::to_vec(&response)?,
+        Some("application/cbor"),
+    )
+    .await;
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url())?)
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&url)?)
         .build()?;
     let result = agent
         .query_raw(
@@ -43,23 +49,20 @@ async fn query() -> Result<(), AgentError> {
         )
         .await;
 
-    query_mock.assert_async().await;
+    assert_mock(query_mock).await;
 
     assert_eq!(result?, blob);
 
     Ok(())
 }
 
-#[tokio::test]
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn query_error() -> Result<(), AgentError> {
-    let mut server = Server::new_async().await;
-    let query_mock = server
-        .mock("POST", "/api/v2/canister/aaaaa-aa/query")
-        .with_status(500)
-        .create_async()
-        .await;
+    let (query_mock, url) =
+        mock("POST", "/api/v2/canister/aaaaa-aa/query", 500, vec![], None).await;
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url())?)
+        .with_transport(ReqwestHttpReplicaV2Transport::create(url)?)
         .build()?;
 
     let result = agent
@@ -72,31 +75,32 @@ async fn query_error() -> Result<(), AgentError> {
         )
         .await;
 
-    query_mock.assert_async().await;
+    assert_mock(query_mock).await;
 
     assert!(result.is_err());
 
     Ok(())
 }
 
-#[tokio::test]
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn query_rejected() -> Result<(), AgentError> {
     let response: QueryResponse = QueryResponse::Rejected {
         reject_code: 1234,
         reject_message: "Rejected Message".to_string(),
     };
 
-    let mut server = Server::new_async().await;
-    let query_mock = server
-        .mock("POST", "/api/v2/canister/aaaaa-aa/query")
-        .with_status(200)
-        .with_header("content-type", "application/cbor")
-        .with_body(serde_cbor::to_vec(&response)?)
-        .create_async()
-        .await;
+    let (query_mock, url) = mock(
+        "POST",
+        "/api/v2/canister/aaaaa-aa/query",
+        200,
+        serde_cbor::to_vec(&response)?,
+        Some("application/cbor"),
+    )
+    .await;
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url())?)
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&url)?)
         .build()?;
 
     let result = agent
@@ -109,7 +113,7 @@ async fn query_rejected() -> Result<(), AgentError> {
         )
         .await;
 
-    query_mock.assert_async().await;
+    assert_mock(query_mock).await;
 
     match result {
         Err(AgentError::ReplicaError {
@@ -125,17 +129,13 @@ async fn query_rejected() -> Result<(), AgentError> {
     Ok(())
 }
 
-#[tokio::test]
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn call_error() -> Result<(), AgentError> {
-    let mut server = Server::new_async().await;
-    let call_mock = server
-        .mock("POST", "/api/v2/canister/aaaaa-aa/call")
-        .with_status(500)
-        .create_async()
-        .await;
+    let (call_mock, url) = mock("POST", "/api/v2/canister/aaaaa-aa/call", 500, vec![], None).await;
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url())?)
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&url)?)
         .build()?;
 
     let result = agent
@@ -144,14 +144,15 @@ async fn call_error() -> Result<(), AgentError> {
         .call()
         .await;
 
-    call_mock.assert_async().await;
+    assert_mock(call_mock).await;
 
     assert!(result.is_err());
 
     Ok(())
 }
 
-#[tokio::test]
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn status() -> Result<(), AgentError> {
     let ic_api_version = "1.2.3".to_string();
     let mut map = BTreeMap::new();
@@ -160,26 +161,28 @@ async fn status() -> Result<(), AgentError> {
         serde_cbor::Value::Text(ic_api_version.clone()),
     );
     let response = serde_cbor::Value::Map(map);
-    let mut server = Server::new_async().await;
-    let read_mock = server
-        .mock("GET", "/api/v2/status")
-        .with_status(200)
-        .with_body(serde_cbor::to_vec(&response)?)
-        .create_async()
-        .await;
+    let (read_mock, url) = mock(
+        "GET",
+        "/api/v2/status",
+        200,
+        serde_cbor::to_vec(&response)?,
+        Some("application/cbor"),
+    )
+    .await;
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url())?)
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&url)?)
         .build()?;
     let result = agent.status().await;
 
-    read_mock.assert_async().await;
+    assert_mock(read_mock).await;
     assert!(matches!(result, Ok(Status { ic_api_version: v, .. }) if v == ic_api_version));
 
     Ok(())
 }
 
-#[tokio::test]
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn status_okay() -> Result<(), AgentError> {
     let mut map = BTreeMap::new();
     map.insert(
@@ -187,27 +190,29 @@ async fn status_okay() -> Result<(), AgentError> {
         serde_cbor::Value::Text("1.2.3".to_owned()),
     );
     let response = serde_cbor::Value::Map(map);
-    let mut server = Server::new_async().await;
-    let read_mock = server
-        .mock("GET", "/api/v2/status")
-        .with_status(200)
-        .with_body(serde_cbor::to_vec(&response)?)
-        .create_async()
-        .await;
+    let (read_mock, url) = mock(
+        "GET",
+        "/api/v2/status",
+        200,
+        serde_cbor::to_vec(&response)?,
+        Some("application/cbor"),
+    )
+    .await;
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url())?)
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&url)?)
         .build()?;
     let result = agent.status().await;
 
-    read_mock.assert_async().await;
+    assert_mock(read_mock).await;
 
     assert!(result.is_ok());
 
     Ok(())
 }
 
-#[tokio::test]
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 // test that the agent (re)tries to reach the server.
 // We spawn an agent that waits 400ms between requests, and times out after 600ms. The agent is
 // expected to hit the server at ~ 0ms and ~ 400 ms, and then shut down at 600ms, so we check that
@@ -215,15 +220,10 @@ async fn status_okay() -> Result<(), AgentError> {
 async fn status_error() -> Result<(), AgentError> {
     // This mock is never asserted as we don't know (nor do we need to know) how many times
     // it is called.
-    let mut server = Server::new_async().await;
-    let _read_mock = server
-        .mock("GET", "/api/v2/status")
-        .with_status(500)
-        .create_async()
-        .await;
+    let (_read_mock, url) = mock("GET", "/api/v2/status", 500, vec![], None).await;
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url())?)
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&url)?)
         .build()?;
     let result = agent.status().await;
 
@@ -351,22 +351,21 @@ const PRUNED_SUBNET: [u8; 1064] = [
     178, 247, 106, 100, 101, 108, 101, 103, 97, 116, 105, 111, 110, 246,
 ];
 
-#[tokio::test]
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 // asserts that a delegated certificate with correct /subnet/<subnetid>/canister_ranges
 // passes the certificate verification
 async fn check_subnet_range_with_valid_range() {
-    let mut server = Server::new_async().await;
-    let _read_mock = server
-        .mock(
-            "POST",
-            "/api/v2/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
-        )
-        .with_status(200)
-        .with_body(REQ_WITH_DELEGATED_CERT_RESPONSE)
-        .create_async()
-        .await;
+    let (_read_mock, url) = mock(
+        "POST",
+        "/api/v2/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
+        200,
+        REQ_WITH_DELEGATED_CERT_RESPONSE.into(),
+        Some("application/cbor"),
+    )
+    .await;
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url()).unwrap())
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&url).unwrap())
         .build()
         .unwrap();
     let _result = agent
@@ -381,25 +380,24 @@ async fn check_subnet_range_with_valid_range() {
         .expect("read state failed");
 }
 
-#[tokio::test]
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 // asserts that a delegated certificate with /subnet/<subnetid>/canister_ranges that don't include
 // the canister gets rejected by the cert verification because the subnet is not authorized to
 // respond to requests for this canister. We do this by using a correct response but serving it
 // for the wrong canister, which a malicious node might do.
 async fn check_subnet_range_with_unauthorized_range() {
     let wrong_canister = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai").unwrap();
-    let mut server = Server::new_async().await;
-    let _read_mock = server
-        .mock(
-            "POST",
-            "/api/v2/canister/ryjl3-tyaaa-aaaaa-aaaba-cai/read_state",
-        )
-        .with_status(200)
-        .with_body(REQ_WITH_DELEGATED_CERT_RESPONSE)
-        .create_async()
-        .await;
+    let (_read_mock, url) = mock(
+        "POST",
+        "/api/v2/canister/ryjl3-tyaaa-aaaaa-aaaba-cai/read_state",
+        200,
+        REQ_WITH_DELEGATED_CERT_RESPONSE.into(),
+        Some("application/cbor"),
+    )
+    .await;
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url()).unwrap())
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&url).unwrap())
         .build()
         .unwrap();
     let result = agent
@@ -414,24 +412,23 @@ async fn check_subnet_range_with_unauthorized_range() {
     assert_eq!(result, Err(AgentError::CertificateNotAuthorized()));
 }
 
-#[tokio::test]
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 // asserts that a delegated certificate with pruned/removed /subnet/<subnetid>/canister_ranges
 // gets rejected by the cert verification. We do this by using a correct response that has
 // the leaf manually pruned
 async fn check_subnet_range_with_pruned_range() {
     let canister = Principal::from_text("ivg37-qiaaa-aaaab-aaaga-cai").unwrap();
-    let mut server = Server::new_async().await;
-    let _read_mock = server
-        .mock(
-            "POST",
-            "/api/v2/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
-        )
-        .with_status(200)
-        .with_body(PRUNED_SUBNET)
-        .create_async()
-        .await;
+    let (_read_mock, url) = mock(
+        "POST",
+        "/api/v2/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
+        200,
+        PRUNED_SUBNET.into(),
+        Some("application/cbor"),
+    )
+    .await;
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url()).unwrap())
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&url).unwrap())
         .build()
         .unwrap();
     let result = agent
@@ -444,4 +441,116 @@ async fn check_subnet_range_with_pruned_range() {
         )
         .await;
     assert!(result.is_err());
+}
+
+#[cfg(not(target_family = "wasm"))]
+mod mock {
+
+    use mockito::{Mock, Server, ServerGuard};
+
+    pub async fn mock(
+        method: &str,
+        path: &str,
+        status_code: u16,
+        body: Vec<u8>,
+        content_type: Option<&str>,
+    ) -> ((ServerGuard, Mock), String) {
+        let mut server = Server::new_async().await;
+        let mut mock = server
+            .mock(method, path)
+            .with_status(status_code as _)
+            .with_body(body);
+        if let Some(content_type) = content_type {
+            mock = mock.with_header("Content-Type", content_type);
+        }
+        let mock = mock.create_async().await;
+        let url = server.url();
+        ((server, mock), url)
+    }
+
+    pub async fn assert_mock((_, mock): (ServerGuard, Mock)) {
+        mock.assert_async().await;
+    }
+}
+
+#[cfg(target_family = "wasm")]
+mod mock {
+    use js_sys::*;
+    use reqwest::Client;
+    use serde::Serialize;
+    use std::collections::HashMap;
+    use wasm_bindgen::{prelude::*, JsCast};
+    use wasm_bindgen_futures::JsFuture;
+    use web_sys::*;
+
+    #[wasm_bindgen(module = "/http_mock_service_worker.js")]
+    extern "C" {}
+
+    #[derive(Debug, Serialize)]
+    struct MockConfig {
+        pub kind: String,
+        pub method: String,
+        pub path: String,
+        pub nonce: String,
+        pub status_code: u16,
+        pub headers: Option<HashMap<String, String>>,
+        pub body: Vec<u8>,
+    }
+
+    pub async fn mock(
+        method: &str,
+        path: &str,
+        status_code: u16,
+        body: Vec<u8>,
+        content_type: Option<&str>,
+    ) -> (String, String) {
+        let swc = window().unwrap().navigator().service_worker();
+        let registration: ServiceWorkerRegistration =
+            JsFuture::from(swc.register("/http_mock_service_worker.js"))
+                .await
+                .unwrap()
+                .unchecked_into();
+        JsFuture::from(swc.ready().unwrap()).await.unwrap();
+        let sw = registration.active().unwrap();
+        let mut nonce = [0; 16];
+        getrandom::getrandom(&mut nonce).unwrap();
+        let nonce = hex::encode(nonce);
+        let config = MockConfig {
+            kind: "config".into(),
+            nonce: nonce.clone(),
+            method: method.into(),
+            path: path.into(),
+            status_code,
+            body,
+            headers: content_type.map(|c| HashMap::from([("Content-Type".into(), c.into())])),
+        };
+        if sw.state() == ServiceWorkerState::Activating {
+            JsFuture::from(Promise::new(&mut |rs, _| sw.set_onstatechange(Some(&rs))))
+                .await
+                .unwrap();
+        }
+        Client::new()
+            .post("http://mock_configure")
+            .json(&config)
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap();
+        (nonce.clone(), format!("http://mock_{}/", nonce))
+    }
+
+    pub async fn assert_mock(nonce: String) {
+        let hits = Client::new()
+            .get(&format!("http://mock_assert/{}", nonce))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
+        assert!(hits.parse::<i32>().unwrap() >= 1);
+    }
 }

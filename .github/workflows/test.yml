@@ -29,6 +29,12 @@ jobs:
         run: |
           rustup update ${{ matrix.rust }} --no-self-update
           rustup default ${{ matrix.rust }}
+          rustup target add wasm32-unknown-unknown
+      
+      - name: Install wasm-pack
+        if: ${{ matrix.os == 'ubuntu-latest '}}
+        run: |
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - name: Run Tests
         shell: bash
@@ -42,6 +48,11 @@ jobs:
           done
         env:
           RUST_BACKTRACE: 1
+      
+      - name: Run Tests (WASM)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          wasm-pack test --chrome --headless ic-agent
 
       - name: Purge for OSX
         if: matrix.os == 'macos-latest'
