@@ -51,7 +51,11 @@ const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 
 const IC_ROOT_KEY: &[u8; 133] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00\x81\x4c\x0e\x6e\xc7\x1f\xab\x58\x3b\x08\xbd\x81\x37\x3c\x25\x5c\x3c\x37\x1b\x2e\x84\x86\x3c\x98\xa4\xf1\xe0\x8b\x74\x23\x5d\x14\xfb\x5d\x9c\x0c\xd5\x46\xd9\x68\x5f\x91\x3a\x0c\x0b\x2c\xc5\x34\x15\x83\xbf\x4b\x43\x92\xe4\x67\xdb\x96\xd6\x5b\x9b\xb4\xcb\x71\x71\x12\xf8\x47\x2e\x0d\x5a\x4d\x14\x50\x5f\xfd\x74\x84\xb0\x12\x91\x09\x1c\x5f\x87\xb9\x88\x83\x46\x3f\x98\x09\x1a\x0b\xaa\xae";
 
+#[cfg(not(target_family = "wasm"))]
 type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + Send + 'a>>;
+
+#[cfg(target_family = "wasm")]
+type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + 'a>>;
 
 /// A facade that connects to a Replica and does requests. These requests can be of any type
 /// (does not have to be HTTP). This trait is to inverse the control from the Agent over its
@@ -335,14 +339,20 @@ impl Agent {
         let permitted_drift = Duration::from_secs(60);
         (self
             .ingress_expiry_duration
-            .as_nanos()
-            .saturating_add(
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("Time wrapped around.")
-                    .as_nanos(),
-            )
-            .saturating_sub(permitted_drift.as_nanos())) as u64
+            .saturating_add({
+                #[cfg(not(target_family = "wasm"))]
+                {
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .expect("Time wrapped around.")
+                }
+                #[cfg(target_family = "wasm")]
+                {
+                    Duration::from_nanos((js_sys::Date::now() * 1_000_000.) as _)
+                }
+            })
+            .saturating_sub(permitted_drift))
+        .as_nanos() as u64
     }
 
     /// Return the principal of the identity.
@@ -574,7 +584,25 @@ impl Agent {
             };
 
             match retry_policy.next_backoff() {
+                #[cfg(not(target_family = "wasm"))]
                 Some(duration) => tokio::time::sleep(duration).await,
+                #[cfg(target_family = "wasm")]
+                Some(duration) => {
+                    wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |rs, rj| {
+                        if let Err(e) = web_sys::window()
+                            .expect("global window unavailable")
+                            .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                &rs,
+                                duration.as_millis() as _,
+                            )
+                        {
+                            use wasm_bindgen::UnwrapThrowExt;
+                            rj.call1(&rj, &e).unwrap_throw();
+                        }
+                    }))
+                    .await
+                    .expect("unable to setTimeout");
+                }
                 None => return Err(AgentError::TimeoutWaitingForResponse()),
             }
         }
@@ -1104,7 +1132,7 @@ impl<'agent> QueryBuilder<'agent> {
 /// An in-flight canister update call. Useful primarily as a `Future`.
 pub struct UpdateCall<'agent> {
     agent: &'agent Agent,
-    request_id: Pin<Box<dyn Future<Output = Result<RequestId, AgentError>> + Send + 'agent>>,
+    request_id: AgentFuture<'agent, RequestId>,
     effective_canister_id: Principal,
 }
 

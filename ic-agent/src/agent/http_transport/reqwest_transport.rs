@@ -6,6 +6,7 @@ pub use reqwest;
 use std::sync::Arc;
 
 use futures_util::StreamExt;
+#[cfg(not(target_family = "wasm"))]
 use hyper_rustls::ConfigBuilderExt;
 use reqwest::{
     header::{HeaderMap, AUTHORIZATION, CONTENT_TYPE},
@@ -62,6 +63,7 @@ pub struct ReqwestHttpReplicaV2Transport {
 
 impl ReqwestHttpReplicaV2Transport {
     /// Creates a replica transport from a HTTP URL.
+    #[cfg(not(target_family = "wasm"))]
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
         let mut tls_config = rustls::ClientConfig::builder()
             .with_safe_defaults()
@@ -78,6 +80,12 @@ impl ReqwestHttpReplicaV2Transport {
                 .build()
                 .expect("Could not create HTTP client."),
         )
+    }
+
+    /// Creates a replica transport from a HTTP URL.
+    #[cfg(target_family = "wasm")]
+    pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
+        Self::create_with_client(url, Client::new())
     }
 
     /// Creates a replica transport from a HTTP URL and a [`reqwest::Client`].
@@ -280,9 +288,15 @@ impl ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
 
 #[cfg(test)]
 mod test {
+    #[cfg(target_family = "wasm")]
+    use wasm_bindgen_test::wasm_bindgen_test;
+    #[cfg(target_family = "wasm")]
+    wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
     use super::ReqwestHttpReplicaV2Transport;
 
-    #[test]
+    #[cfg_attr(not(target_family = "wasm"), test)]
+    #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
     fn redirect() {
         fn test(base: &str, result: &str) {
             let t = ReqwestHttpReplicaV2Transport::create(base).unwrap();
