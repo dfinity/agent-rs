@@ -1,5 +1,5 @@
 // Disable these tests without the reqwest feature.
-#![cfg(feature = "reqwest")]
+#![cfg(all(feature = "reqwest", not(target_family = "wasm")))]
 
 use crate::{
     agent::{
@@ -11,111 +11,105 @@ use crate::{
     Agent, AgentError,
 };
 use ic_certification::Label;
-use mockito::mock;
+use mockito::Server;
 use std::collections::BTreeMap;
 
-#[test]
-fn query() -> Result<(), AgentError> {
+#[tokio::test]
+async fn query() -> Result<(), AgentError> {
     let blob = Vec::from("Hello World");
     let response = QueryResponse::Replied {
         reply: CallReply { arg: blob.clone() },
     };
 
-    let query_mock = mock("POST", "/api/v2/canister/aaaaa-aa/query")
+    let mut server = Server::new_async().await;
+    let query_mock = server
+        .mock("POST", "/api/v2/canister/aaaaa-aa/query")
         .with_status(200)
         .with_header("content-type", "application/cbor")
         .with_body(serde_cbor::to_vec(&response)?)
-        .create();
+        .create_async()
+        .await;
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(
-            &mockito::server_url(),
-        )?)
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url())?)
         .build()?;
-    let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-    let result = runtime.block_on(async {
-        agent
-            .query_raw(
-                &Principal::management_canister(),
-                Principal::management_canister(),
-                "main",
-                &[],
-                None,
-            )
-            .await
-    });
+    let result = agent
+        .query_raw(
+            &Principal::management_canister(),
+            Principal::management_canister(),
+            "main",
+            &[],
+            None,
+        )
+        .await;
 
-    query_mock.assert();
+    query_mock.assert_async().await;
 
     assert_eq!(result?, blob);
 
     Ok(())
 }
 
-#[test]
-fn query_error() -> Result<(), AgentError> {
-    let query_mock = mock("POST", "/api/v2/canister/aaaaa-aa/query")
+#[tokio::test]
+async fn query_error() -> Result<(), AgentError> {
+    let mut server = Server::new_async().await;
+    let query_mock = server
+        .mock("POST", "/api/v2/canister/aaaaa-aa/query")
         .with_status(500)
-        .create();
+        .create_async()
+        .await;
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(
-            &mockito::server_url(),
-        )?)
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url())?)
         .build()?;
-    let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
 
-    let result = runtime.block_on(async {
-        agent
-            .query_raw(
-                &Principal::management_canister(),
-                Principal::management_canister(),
-                "greet",
-                &[],
-                None,
-            )
-            .await
-    });
+    let result = agent
+        .query_raw(
+            &Principal::management_canister(),
+            Principal::management_canister(),
+            "greet",
+            &[],
+            None,
+        )
+        .await;
 
-    query_mock.assert();
+    query_mock.assert_async().await;
 
     assert!(result.is_err());
 
     Ok(())
 }
 
-#[test]
-fn query_rejected() -> Result<(), AgentError> {
+#[tokio::test]
+async fn query_rejected() -> Result<(), AgentError> {
     let response: QueryResponse = QueryResponse::Rejected {
         reject_code: 1234,
         reject_message: "Rejected Message".to_string(),
     };
 
-    let query_mock = mock("POST", "/api/v2/canister/aaaaa-aa/query")
+    let mut server = Server::new_async().await;
+    let query_mock = server
+        .mock("POST", "/api/v2/canister/aaaaa-aa/query")
         .with_status(200)
         .with_header("content-type", "application/cbor")
         .with_body(serde_cbor::to_vec(&response)?)
-        .create();
+        .create_async()
+        .await;
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(
-            &mockito::server_url(),
-        )?)
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url())?)
         .build()?;
-    let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
 
-    let result = runtime.block_on(async {
-        agent
-            .query_raw(
-                &Principal::management_canister(),
-                Principal::management_canister(),
-                "greet",
-                &[],
-                None,
-            )
-            .await
-    });
+    let result = agent
+        .query_raw(
+            &Principal::management_canister(),
+            Principal::management_canister(),
+            "greet",
+            &[],
+            None,
+        )
+        .await;
 
-    query_mock.assert();
+    query_mock.assert_async().await;
 
     match result {
         Err(AgentError::ReplicaError {
@@ -131,36 +125,34 @@ fn query_rejected() -> Result<(), AgentError> {
     Ok(())
 }
 
-#[test]
-fn call_error() -> Result<(), AgentError> {
-    let call_mock = mock("POST", "/api/v2/canister/aaaaa-aa/call")
+#[tokio::test]
+async fn call_error() -> Result<(), AgentError> {
+    let mut server = Server::new_async().await;
+    let call_mock = server
+        .mock("POST", "/api/v2/canister/aaaaa-aa/call")
         .with_status(500)
-        .create();
+        .create_async()
+        .await;
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(
-            &mockito::server_url(),
-        )?)
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url())?)
         .build()?;
 
-    let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-    let result = runtime.block_on(async {
-        agent
-            .update(&Principal::management_canister(), "greet")
-            .with_arg([])
-            .call()
-            .await
-    });
+    let result = agent
+        .update(&Principal::management_canister(), "greet")
+        .with_arg([])
+        .call()
+        .await;
 
-    call_mock.assert();
+    call_mock.assert_async().await;
 
     assert!(result.is_err());
 
     Ok(())
 }
 
-#[test]
-fn status() -> Result<(), AgentError> {
+#[tokio::test]
+async fn status() -> Result<(), AgentError> {
     let ic_api_version = "1.2.3".to_string();
     let mut map = BTreeMap::new();
     map.insert(
@@ -168,70 +160,72 @@ fn status() -> Result<(), AgentError> {
         serde_cbor::Value::Text(ic_api_version.clone()),
     );
     let response = serde_cbor::Value::Map(map);
-    let read_mock = mock("GET", "/api/v2/status")
+    let mut server = Server::new_async().await;
+    let read_mock = server
+        .mock("GET", "/api/v2/status")
         .with_status(200)
         .with_body(serde_cbor::to_vec(&response)?)
-        .create();
+        .create_async()
+        .await;
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(
-            &mockito::server_url(),
-        )?)
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url())?)
         .build()?;
-    let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-    let result = runtime.block_on(async { agent.status().await });
+    let result = agent.status().await;
 
-    read_mock.assert();
+    read_mock.assert_async().await;
     assert!(matches!(result, Ok(Status { ic_api_version: v, .. }) if v == ic_api_version));
 
     Ok(())
 }
 
-#[test]
-fn status_okay() -> Result<(), AgentError> {
+#[tokio::test]
+async fn status_okay() -> Result<(), AgentError> {
     let mut map = BTreeMap::new();
     map.insert(
         serde_cbor::Value::Text("ic_api_version".to_owned()),
         serde_cbor::Value::Text("1.2.3".to_owned()),
     );
     let response = serde_cbor::Value::Map(map);
-    let read_mock = mock("GET", "/api/v2/status")
+    let mut server = Server::new_async().await;
+    let read_mock = server
+        .mock("GET", "/api/v2/status")
         .with_status(200)
         .with_body(serde_cbor::to_vec(&response)?)
-        .create();
+        .create_async()
+        .await;
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(
-            &mockito::server_url(),
-        )?)
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url())?)
         .build()?;
-    let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-    let result = runtime.block_on(agent.status());
+    let result = agent.status().await;
 
-    read_mock.assert();
+    read_mock.assert_async().await;
 
     assert!(result.is_ok());
 
     Ok(())
 }
 
-#[test]
+#[tokio::test]
 // test that the agent (re)tries to reach the server.
 // We spawn an agent that waits 400ms between requests, and times out after 600ms. The agent is
 // expected to hit the server at ~ 0ms and ~ 400 ms, and then shut down at 600ms, so we check that
 // the server got two requests.
-fn status_error() -> Result<(), AgentError> {
+async fn status_error() -> Result<(), AgentError> {
     // This mock is never asserted as we don't know (nor do we need to know) how many times
     // it is called.
-    let _read_mock = mock("GET", "/api/v2/status").with_status(500).create();
+    let mut server = Server::new_async().await;
+    let _read_mock = server
+        .mock("GET", "/api/v2/status")
+        .with_status(500)
+        .create_async()
+        .await;
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(
-            &mockito::server_url(),
-        )?)
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url())?)
         .build()?;
-    let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-    let result = runtime.block_on(async { agent.status().await });
+    let result = agent.status().await;
 
     assert!(result.is_err());
 
@@ -357,98 +351,97 @@ const PRUNED_SUBNET: [u8; 1064] = [
     178, 247, 106, 100, 101, 108, 101, 103, 97, 116, 105, 111, 110, 246,
 ];
 
-#[test]
+#[tokio::test]
 // asserts that a delegated certificate with correct /subnet/<subnetid>/canister_ranges
 // passes the certificate verification
-fn check_subnet_range_with_valid_range() {
-    let _read_mock = mock(
-        "POST",
-        "/api/v2/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
-    )
-    .with_status(200)
-    .with_body(REQ_WITH_DELEGATED_CERT_RESPONSE)
-    .create();
+async fn check_subnet_range_with_valid_range() {
+    let mut server = Server::new_async().await;
+    let _read_mock = server
+        .mock(
+            "POST",
+            "/api/v2/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
+        )
+        .with_status(200)
+        .with_body(REQ_WITH_DELEGATED_CERT_RESPONSE)
+        .create_async()
+        .await;
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&mockito::server_url()).unwrap())
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url()).unwrap())
         .build()
         .unwrap();
-    let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-    let _result = runtime
-        .block_on(async {
-            agent
-                .read_state_raw(
-                    vec![REQ_WITH_DELEGATED_CERT_PATH
-                        .iter()
-                        .map(Label::from)
-                        .collect()],
-                    Principal::from_text(REQ_WITH_DELEGATED_CERT_CANISTER).unwrap(),
-                )
-                .await
-        })
+    let _result = agent
+        .read_state_raw(
+            vec![REQ_WITH_DELEGATED_CERT_PATH
+                .iter()
+                .map(Label::from)
+                .collect()],
+            Principal::from_text(REQ_WITH_DELEGATED_CERT_CANISTER).unwrap(),
+        )
+        .await
         .expect("read state failed");
 }
 
-#[test]
+#[tokio::test]
 // asserts that a delegated certificate with /subnet/<subnetid>/canister_ranges that don't include
 // the canister gets rejected by the cert verification because the subnet is not authorized to
 // respond to requests for this canister. We do this by using a correct response but serving it
 // for the wrong canister, which a malicious node might do.
-fn check_subnet_range_with_unauthorized_range() {
+async fn check_subnet_range_with_unauthorized_range() {
     let wrong_canister = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai").unwrap();
-    let _read_mock = mock(
-        "POST",
-        "/api/v2/canister/ryjl3-tyaaa-aaaaa-aaaba-cai/read_state",
-    )
-    .with_status(200)
-    .with_body(REQ_WITH_DELEGATED_CERT_RESPONSE)
-    .create();
+    let mut server = Server::new_async().await;
+    let _read_mock = server
+        .mock(
+            "POST",
+            "/api/v2/canister/ryjl3-tyaaa-aaaaa-aaaba-cai/read_state",
+        )
+        .with_status(200)
+        .with_body(REQ_WITH_DELEGATED_CERT_RESPONSE)
+        .create_async()
+        .await;
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&mockito::server_url()).unwrap())
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url()).unwrap())
         .build()
         .unwrap();
-    let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-    let result = runtime.block_on(async {
-        agent
-            .read_state_raw(
-                vec![REQ_WITH_DELEGATED_CERT_PATH
-                    .iter()
-                    .map(Label::from)
-                    .collect()],
-                wrong_canister,
-            )
-            .await
-    });
+    let result = agent
+        .read_state_raw(
+            vec![REQ_WITH_DELEGATED_CERT_PATH
+                .iter()
+                .map(Label::from)
+                .collect()],
+            wrong_canister,
+        )
+        .await;
     assert_eq!(result, Err(AgentError::CertificateNotAuthorized()));
 }
 
-#[test]
+#[tokio::test]
 // asserts that a delegated certificate with pruned/removed /subnet/<subnetid>/canister_ranges
 // gets rejected by the cert verification. We do this by using a correct response that has
 // the leaf manually pruned
-fn check_subnet_range_with_pruned_range() {
+async fn check_subnet_range_with_pruned_range() {
     let canister = Principal::from_text("ivg37-qiaaa-aaaab-aaaga-cai").unwrap();
-    let _read_mock = mock(
-        "POST",
-        "/api/v2/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
-    )
-    .with_status(200)
-    .with_body(PRUNED_SUBNET)
-    .create();
+    let mut server = Server::new_async().await;
+    let _read_mock = server
+        .mock(
+            "POST",
+            "/api/v2/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
+        )
+        .with_status(200)
+        .with_body(PRUNED_SUBNET)
+        .create_async()
+        .await;
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&mockito::server_url()).unwrap())
+        .with_transport(ReqwestHttpReplicaV2Transport::create(&server.url()).unwrap())
         .build()
         .unwrap();
-    let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-    let result = runtime.block_on(async {
-        agent
-            .read_state_raw(
-                vec![REQ_WITH_DELEGATED_CERT_PATH
-                    .iter()
-                    .map(Label::from)
-                    .collect()],
-                canister,
-            )
-            .await
-    });
+    let result = agent
+        .read_state_raw(
+            vec![REQ_WITH_DELEGATED_CERT_PATH
+                .iter()
+                .map(Label::from)
+                .collect()],
+            canister,
+        )
+        .await;
     assert!(result.is_err());
 }

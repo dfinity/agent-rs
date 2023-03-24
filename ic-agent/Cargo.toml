@@ -75,10 +75,11 @@ web-sys = { version = "0.3", features = ["Window"] }
 time = { version = "0.3", features = ["wasm-bindgen"] }
 
 [dev-dependencies]
-mockito = "0.31.0"
-proptest = "1.0.0"
 serde_json = "1.0.79"
+
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 tokio = { version = "1.24.2", features = ["full"] }
+mockito = "1"
 
 [features]
 default = ["pem", "reqwest"]
