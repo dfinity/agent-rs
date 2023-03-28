@@ -1,4 +1,4 @@
-//! A [ReplicaV2Transport] that connects using a reqwest client.
+//! A [`Transport`] that connects using a [`reqwest`] client.
 #![cfg(feature = "reqwest")]
 
 pub use reqwest;
@@ -16,7 +16,7 @@ use crate::{
     agent::{
         agent_error::HttpErrorPayload,
         http_transport::{IC0_DOMAIN, IC0_SUB_DOMAIN},
-        AgentFuture, ReplicaV2Transport,
+        AgentFuture, Transport,
     },
     export::Principal,
     AgentError, RequestId,
@@ -51,16 +51,19 @@ impl dyn PasswordManager {
 
 impl_debug_empty!(dyn PasswordManager);
 
-/// A [ReplicaV2Transport] using [reqwest] to make HTTP calls to the internet computer.
+/// A [`Transport`] using [`reqwest`] to make HTTP calls to the Internet Computer.
 #[derive(Debug)]
-pub struct ReqwestHttpReplicaV2Transport {
+pub struct ReqwestTransport {
     url: Url,
     client: Client,
     password_manager: Option<Arc<dyn PasswordManager>>,
     max_response_body_size: Option<usize>,
 }
 
-impl ReqwestHttpReplicaV2Transport {
+#[doc(hidden)]
+pub use ReqwestTransport as ReqwestHttpReplicaV2Transport; // remove after 0.24
+
+impl ReqwestTransport {
     /// Creates a replica transport from a HTTP URL.
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
         let mut tls_config = rustls::ClientConfig::builder()
@@ -108,7 +111,7 @@ impl ReqwestHttpReplicaV2Transport {
 
     /// Same as [`Self::with_password_manager`], but providing the Arc so one does not have to be created.
     pub fn with_arc_password_manager(self, password_manager: Arc<dyn PasswordManager>) -> Self {
-        ReqwestHttpReplicaV2Transport {
+        ReqwestTransport {
             password_manager: Some(password_manager),
             ..self
         }
@@ -116,7 +119,7 @@ impl ReqwestHttpReplicaV2Transport {
 
     /// Sets a max response body size limit
     pub fn with_max_response_body_size(self, max_response_body_size: usize) -> Self {
-        ReqwestHttpReplicaV2Transport {
+        ReqwestTransport {
             max_response_body_size: Some(max_response_body_size),
             ..self
         }
@@ -240,7 +243,7 @@ impl ReqwestHttpReplicaV2Transport {
     }
 }
 
-impl ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
+impl Transport for ReqwestTransport {
     fn call(
         &self,
         effective_canister_id: Principal,
@@ -280,12 +283,12 @@ impl ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
 
 #[cfg(test)]
 mod test {
-    use super::ReqwestHttpReplicaV2Transport;
+    use super::ReqwestTransport;
 
     #[test]
     fn redirect() {
         fn test(base: &str, result: &str) {
-            let t = ReqwestHttpReplicaV2Transport::create(base).unwrap();
+            let t = ReqwestTransport::create(base).unwrap();
             assert_eq!(t.url.as_str(), result, "{}", base);
         }
 

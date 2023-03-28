@@ -119,11 +119,14 @@ pub mod export;
 pub mod identity;
 pub mod request_id;
 
+#[doc(inline)]
 pub use agent::{
     agent_error, agent_error::AgentError, response_authentication::lookup_value, Agent,
     NonceFactory, NonceGenerator,
 };
+#[doc(inline)]
 pub use identity::{Identity, Signature};
+#[doc(inline)]
 pub use request_id::{to_request_id, RequestId, RequestIdError};
 
 // Re-export from ic_certification for backward compatibility.

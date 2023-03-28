@@ -62,7 +62,7 @@ type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + S
 /// feature flag `reqwest`. This might be deprecated in the future.
 ///
 /// Any error returned by these methods will bubble up to the code that called the [Agent].
-pub trait ReplicaV2Transport: Send + Sync {
+pub trait Transport: Send + Sync {
     /// Sends an asynchronous request to a Replica. The Request ID is non-mutable and
     /// depends on the content of the envelope.
     ///
@@ -96,9 +96,12 @@ pub trait ReplicaV2Transport: Send + Sync {
     fn status(&self) -> AgentFuture<Vec<u8>>;
 }
 
-impl_debug_empty!(dyn ReplicaV2Transport);
+#[doc(hidden)]
+pub use Transport as ReplicaV2Transport; // remove after 0.24
 
-impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Box<I> {
+impl_debug_empty!(dyn Transport);
+
+impl<I: Transport + ?Sized> Transport for Box<I> {
     fn call(
         &self,
         effective_canister_id: Principal,
@@ -121,7 +124,7 @@ impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Box<I> {
         (**self).status()
     }
 }
-impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Arc<I> {
+impl<I: Transport + ?Sized> Transport for Arc<I> {
     fn call(
         &self,
         effective_canister_id: Principal,
@@ -233,7 +236,7 @@ pub struct Agent {
     identity: Arc<dyn Identity>,
     ingress_expiry_duration: Duration,
     root_key: Arc<RwLock<Option<Vec<u8>>>>,
-    transport: Arc<dyn ReplicaV2Transport>,
+    transport: Arc<dyn Transport>,
 }
 
 impl fmt::Debug for Agent {
@@ -267,7 +270,7 @@ impl Agent {
     }
 
     /// Set the transport of the [`Agent`].
-    pub fn set_transport<F: 'static + ReplicaV2Transport>(&mut self, transport: F) {
+    pub fn set_transport<F: 'static + Transport>(&mut self, transport: F) {
         self.transport = Arc::new(transport);
     }
 

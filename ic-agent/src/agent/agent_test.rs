@@ -3,7 +3,7 @@
 
 use crate::{
     agent::{
-        http_transport::ReqwestHttpReplicaV2Transport,
+        http_transport::ReqwestTransport,
         replica_api::{CallReply, QueryResponse},
         Status,
     },
@@ -28,9 +28,7 @@ fn query() -> Result<(), AgentError> {
         .create();
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(
-            &mockito::server_url(),
-        )?)
+        .with_transport(ReqwestTransport::create(&mockito::server_url())?)
         .build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async {
@@ -58,9 +56,7 @@ fn query_error() -> Result<(), AgentError> {
         .with_status(500)
         .create();
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(
-            &mockito::server_url(),
-        )?)
+        .with_transport(ReqwestTransport::create(&mockito::server_url())?)
         .build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
 
@@ -97,9 +93,7 @@ fn query_rejected() -> Result<(), AgentError> {
         .create();
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(
-            &mockito::server_url(),
-        )?)
+        .with_transport(ReqwestTransport::create(&mockito::server_url())?)
         .build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
 
@@ -138,9 +132,7 @@ fn call_error() -> Result<(), AgentError> {
         .create();
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(
-            &mockito::server_url(),
-        )?)
+        .with_transport(ReqwestTransport::create(&mockito::server_url())?)
         .build()?;
 
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
@@ -174,9 +166,7 @@ fn status() -> Result<(), AgentError> {
         .create();
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(
-            &mockito::server_url(),
-        )?)
+        .with_transport(ReqwestTransport::create(&mockito::server_url())?)
         .build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async { agent.status().await });
@@ -201,9 +191,7 @@ fn status_okay() -> Result<(), AgentError> {
         .create();
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(
-            &mockito::server_url(),
-        )?)
+        .with_transport(ReqwestTransport::create(&mockito::server_url())?)
         .build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(agent.status());
@@ -226,9 +214,7 @@ fn status_error() -> Result<(), AgentError> {
     let _read_mock = mock("GET", "/api/v2/status").with_status(500).create();
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(
-            &mockito::server_url(),
-        )?)
+        .with_transport(ReqwestTransport::create(&mockito::server_url())?)
         .build()?;
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
     let result = runtime.block_on(async { agent.status().await });
@@ -369,7 +355,7 @@ fn check_subnet_range_with_valid_range() {
     .with_body(REQ_WITH_DELEGATED_CERT_RESPONSE)
     .create();
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&mockito::server_url()).unwrap())
+        .with_transport(ReqwestTransport::create(&mockito::server_url()).unwrap())
         .build()
         .unwrap();
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
@@ -403,7 +389,7 @@ fn check_subnet_range_with_unauthorized_range() {
     .with_body(REQ_WITH_DELEGATED_CERT_RESPONSE)
     .create();
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&mockito::server_url()).unwrap())
+        .with_transport(ReqwestTransport::create(&mockito::server_url()).unwrap())
         .build()
         .unwrap();
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
@@ -435,7 +421,7 @@ fn check_subnet_range_with_pruned_range() {
     .with_body(PRUNED_SUBNET)
     .create();
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&mockito::server_url()).unwrap())
+        .with_transport(ReqwestTransport::create(&mockito::server_url()).unwrap())
         .build()
         .unwrap();
     let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");

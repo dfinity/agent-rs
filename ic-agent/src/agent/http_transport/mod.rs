@@ -1,16 +1,24 @@
-//! [super::ReplicaV2Transport] implementations.
+//! [`Transport`](super::Transport) implementations.
 
 #[cfg(feature = "reqwest")]
 pub mod reqwest_transport;
 
 #[cfg(feature = "reqwest")]
-pub use reqwest_transport::*;
+#[doc(inline)]
+pub use reqwest_transport::ReqwestTransport;
+#[cfg(feature = "reqwest")]
+#[doc(hidden)]
+pub use reqwest_transport::*; // remove after 0.24
 
 #[cfg(feature = "hyper")]
 pub mod hyper_transport;
 
 #[cfg(feature = "hyper")]
-pub use hyper_transport::*;
+#[doc(inline)]
+pub use hyper_transport::HyperTransport;
+#[cfg(feature = "hyper")]
+#[doc(hidden)]
+pub use hyper_transport::*; // remove after 0.24
 
 #[allow(dead_code)]
 const IC0_DOMAIN: &str = "ic0.app";

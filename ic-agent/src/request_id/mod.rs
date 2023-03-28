@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, iter::Extend, str::FromStr};
 
 pub mod error;
+#[doc(inline)]
 pub use error::RequestIdError;
 
 /// Type alias for a sha256 result (ie. a u256).
