@@ -27,10 +27,13 @@ jobs:
           rustup update ${{ matrix.rust }} --no-self-update
           rustup component add clippy
           rustup default ${{ matrix.rust }}
+          rustup target add wasm32-unknown-unknown
       - name: Run Lint
         run: cargo clippy --verbose --tests --benches -- -D clippy::all
         env:
           RUST_BACKTRACE: 1
+      - name: Run Lint (WASM)
+        run: CARGO_TARGET_DIR=target/wasm cargo clippy --target wasm32-unknown-unknown -p ic-agent -p ic-utils --verbose -- -D clippy::all
   aggregate:
     name: lint:required
     runs-on: ubuntu-latest

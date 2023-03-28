@@ -111,6 +111,9 @@
     rustdoc::private_intra_doc_links
 )]
 
+#[cfg(all(feature = "hyper", target_family = "wasm"))]
+compile_error!("Feature `hyper` cannot be used from WASM.");
+
 #[macro_use]
 mod macros;
 
