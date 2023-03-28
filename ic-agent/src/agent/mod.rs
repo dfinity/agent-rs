@@ -97,7 +97,7 @@ pub trait Transport: Send + Sync {
 }
 
 #[doc(hidden)]
-pub use Transport as ReplicaV2Transport; // remove after 0.24
+pub use Transport as ReplicaV2Transport; // deprecate after 0.24
 
 impl_debug_empty!(dyn Transport);
 

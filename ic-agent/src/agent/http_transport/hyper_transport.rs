@@ -36,7 +36,7 @@ pub struct HyperTransport<B1, S = Client<HttpsConnector<HttpConnector>, B1>> {
 }
 
 #[doc(hidden)]
-pub use HyperTransport as HyperReplicaV2Transport; // remove after 0.24
+pub use HyperTransport as HyperReplicaV2Transport; // deprecate after 0.24
 
 /// Trait representing the contraints on [`HttpBody`] that [`HyperTransport`] requires
 pub trait HyperBody:

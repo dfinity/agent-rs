@@ -8,7 +8,7 @@ pub mod reqwest_transport;
 pub use reqwest_transport::ReqwestTransport;
 #[cfg(feature = "reqwest")]
 #[doc(hidden)]
-pub use reqwest_transport::*; // remove after 0.24
+pub use reqwest_transport::*; // deprecate after 0.24
 
 #[cfg(feature = "hyper")]
 pub mod hyper_transport;
@@ -18,7 +18,7 @@ pub mod hyper_transport;
 pub use hyper_transport::HyperTransport;
 #[cfg(feature = "hyper")]
 #[doc(hidden)]
-pub use hyper_transport::*; // remove after 0.24
+pub use hyper_transport::*; // deprecate after 0.24
 
 #[allow(dead_code)]
 const IC0_DOMAIN: &str = "ic0.app";
