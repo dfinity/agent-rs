@@ -4,7 +4,7 @@
 use self::mock::{assert_mock, mock};
 use crate::{
     agent::{
-        http_transport::ReqwestHttpReplicaV2Transport,
+        http_transport::ReqwestTransport,
         replica_api::{CallReply, QueryResponse},
         Status,
     },
@@ -37,7 +37,7 @@ async fn query() -> Result<(), AgentError> {
     .await;
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&url)?)
+        .with_transport(ReqwestTransport::create(&url)?)
         .build()?;
     let result = agent
         .query_raw(
@@ -62,7 +62,7 @@ async fn query_error() -> Result<(), AgentError> {
     let (query_mock, url) =
         mock("POST", "/api/v2/canister/aaaaa-aa/query", 500, vec![], None).await;
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(url)?)
+        .with_transport(ReqwestTransport::create(url)?)
         .build()?;
 
     let result = agent
@@ -100,7 +100,7 @@ async fn query_rejected() -> Result<(), AgentError> {
     .await;
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&url)?)
+        .with_transport(ReqwestTransport::create(&url)?)
         .build()?;
 
     let result = agent
@@ -135,7 +135,7 @@ async fn call_error() -> Result<(), AgentError> {
     let (call_mock, url) = mock("POST", "/api/v2/canister/aaaaa-aa/call", 500, vec![], None).await;
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&url)?)
+        .with_transport(ReqwestTransport::create(&url)?)
         .build()?;
 
     let result = agent
@@ -171,7 +171,7 @@ async fn status() -> Result<(), AgentError> {
     .await;
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&url)?)
+        .with_transport(ReqwestTransport::create(&url)?)
         .build()?;
     let result = agent.status().await;
 
@@ -200,7 +200,7 @@ async fn status_okay() -> Result<(), AgentError> {
     .await;
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&url)?)
+        .with_transport(ReqwestTransport::create(&url)?)
         .build()?;
     let result = agent.status().await;
 
@@ -223,7 +223,7 @@ async fn status_error() -> Result<(), AgentError> {
     let (_read_mock, url) = mock("GET", "/api/v2/status", 500, vec![], None).await;
 
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&url)?)
+        .with_transport(ReqwestTransport::create(&url)?)
         .build()?;
     let result = agent.status().await;
 
@@ -365,7 +365,7 @@ async fn check_subnet_range_with_valid_range() {
     )
     .await;
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&url).unwrap())
+        .with_transport(ReqwestTransport::create(&url).unwrap())
         .build()
         .unwrap();
     let _result = agent
@@ -397,7 +397,7 @@ async fn check_subnet_range_with_unauthorized_range() {
     )
     .await;
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&url).unwrap())
+        .with_transport(ReqwestTransport::create(&url).unwrap())
         .build()
         .unwrap();
     let result = agent
@@ -428,7 +428,7 @@ async fn check_subnet_range_with_pruned_range() {
     )
     .await;
     let agent = Agent::builder()
-        .with_transport(ReqwestHttpReplicaV2Transport::create(&url).unwrap())
+        .with_transport(ReqwestTransport::create(&url).unwrap())
         .build()
         .unwrap();
     let result = agent

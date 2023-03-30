@@ -15,6 +15,7 @@ pub enum RequestIdFromStringError {
 }
 
 /// An error during the calculation of the RequestId.
+///
 /// Since we use serde for serializing a data type into a hash, this has to support traits that
 /// serde expects, such as Display
 #[derive(Error, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
