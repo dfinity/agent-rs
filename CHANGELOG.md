@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 * Support WASM targets in the browser via `wasm-bindgen`
+* Do not send `certificate_version` on HTTP Update requests
 
 ## [0.23.2] - 2023-04-21
 
