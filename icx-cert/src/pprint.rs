@@ -77,6 +77,7 @@ pub fn pprint(url: String, accept_encodings: Option<Vec<String>>) -> Result<()> 
             client
         };
         client
+            .user_agent("icx-cert")
             .build()?
             .get(url)
             .send()
