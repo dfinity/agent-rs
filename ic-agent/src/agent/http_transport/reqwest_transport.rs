@@ -19,6 +19,7 @@ use crate::{
         http_transport::{IC0_DOMAIN, IC0_SUB_DOMAIN},
         AgentFuture, Transport,
     },
+    agent_error::ReplicaError,
     export::Principal,
     AgentError, RequestId,
 };
@@ -236,7 +237,18 @@ impl ReqwestTransport {
             }
         }
 
-        if status.is_client_error() || status.is_server_error() {
+        // status == OK means we have an error message in the response of the body.
+        if status == StatusCode::OK {
+            let cbor_decoded_body: Result<ReplicaError, serde_cbor::Error> =
+                serde_cbor::from_slice(&body);
+
+            let agent_error = match cbor_decoded_body {
+                Ok(replica_error) => AgentError::ReplicaErrorV2((replica_error)),
+                Err(cbor_error) => AgentError::InvalidCborData(cbor_error),
+            };
+
+            Err(agent_error)
+        } else if status.is_client_error() || status.is_server_error() {
             Err(AgentError::HttpError(HttpErrorPayload {
                 status: status.into(),
                 content_type: headers
