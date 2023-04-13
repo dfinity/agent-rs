@@ -204,7 +204,7 @@ impl ReqwestTransport {
         endpoint: &str,
         body: Option<Vec<u8>>,
     ) -> Result<Vec<u8>, AgentError> {
-        let url = self.url.join(endpoint)?;
+        let url = self.url.join(&endpoint)?;
         let mut http_request = Request::new(method, url);
         http_request
             .headers_mut()
@@ -237,8 +237,9 @@ impl ReqwestTransport {
             }
         }
 
-        // status == OK means we have an error message in the response of the body.
-        if status == StatusCode::OK {
+        // status == OK means we have an error message for calls
+        // see https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call
+        if status == StatusCode::OK && endpoint.ends_with("call") {
             let cbor_decoded_body: Result<ReplicaError, serde_cbor::Error> =
                 serde_cbor::from_slice(&body);
 
