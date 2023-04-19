@@ -1,4 +1,4 @@
-use super::replica_api::RejectedResponse;
+use super::replica_api::RejectResponse;
 
 /// The response of /api/v2/canister/<effective_canister_id>/read_state with "request_status" request type.
 ///
@@ -17,7 +17,7 @@ pub enum RequestStatusResponse {
         reply: Replied,
     },
     /// The request has been rejected.
-    Rejected(RejectedResponse),
+    Rejected(RejectResponse),
     /// The call has been completed, and it has been long enough that the reply/reject data has been purged, but the call has not expired yet.
     Done,
 }

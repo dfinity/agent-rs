@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_test::wasm_bindgen_test;
 
-use super::replica_api::RejectedResponse;
+use super::replica_api::RejectResponse;
 
 #[cfg(target_family = "wasm")]
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -87,7 +87,7 @@ async fn query_error() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn query_rejected() -> Result<(), AgentError> {
-    let response: QueryResponse = QueryResponse::Rejected(RejectedResponse {
+    let response: QueryResponse = QueryResponse::Rejected(RejectResponse {
         reject_code: RejectCode::DestinationInvalid,
         reject_message: "Rejected Message".to_string(),
         error_code: None,

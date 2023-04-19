@@ -17,7 +17,7 @@ use crate::{
     agent::{
         agent_error::HttpErrorPayload,
         http_transport::{IC0_DOMAIN, IC0_SUB_DOMAIN},
-        replica_api::RejectedResponse,
+        replica_api::RejectResponse,
         AgentFuture, Transport,
     },
     export::Principal,
@@ -240,7 +240,7 @@ impl ReqwestTransport {
         // status == OK means we have an error message for calls
         // see https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call
         if status == StatusCode::OK && endpoint.ends_with("call") {
-            let cbor_decoded_body: Result<RejectedResponse, serde_cbor::Error> =
+            let cbor_decoded_body: Result<RejectResponse, serde_cbor::Error> =
                 serde_cbor::from_slice(&body);
 
             let agent_error = match cbor_decoded_body {

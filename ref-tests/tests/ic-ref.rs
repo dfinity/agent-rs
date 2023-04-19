@@ -39,7 +39,7 @@ fn spec_compliance_claimed() {
 mod management_canister {
     use candid::CandidType;
     use ic_agent::{
-        agent::{RejectCode, RejectedResponse},
+        agent::{RejectCode, RejectResponse},
         export::Principal,
         AgentError,
     };
@@ -356,7 +356,7 @@ mod management_canister {
     ) {
         for expected_rc in &allowed_reject_codes {
             if matches!(result,
-                Err(AgentError::ReplicaError(RejectedResponse {
+                Err(AgentError::ReplicaError(RejectResponse {
                 reject_code,
                 ..
             })) if reject_code == *expected_rc)
@@ -408,7 +408,7 @@ mod management_canister {
             // Can't call update on a stopped canister
             let result = agent.update(&canister_id, "update").call_and_wait().await;
             assert!(
-                matches!(result, Err(AgentError::ReplicaError(RejectedResponse{
+                matches!(result, Err(AgentError::ReplicaError(RejectResponse{
                 reject_code: RejectCode::CanisterError,
                 reject_message,
                 error_code: None
@@ -418,7 +418,7 @@ mod management_canister {
             // Can't call query on a stopped canister
             let result = agent.query(&canister_id, "query").with_arg([]).call().await;
             assert!(
-                matches!(result, Err(AgentError::ReplicaError(RejectedResponse{
+                matches!(result, Err(AgentError::ReplicaError(RejectResponse{
                 reject_code: RejectCode::CanisterError,
                 reject_message,
                 error_code: None
@@ -441,7 +441,7 @@ mod management_canister {
             // Can call update
             let result = agent.update(&canister_id, "update").call_and_wait().await;
             assert!(
-                matches!(result, Err(AgentError::ReplicaError(RejectedResponse{
+                matches!(result, Err(AgentError::ReplicaError(RejectResponse{
                 reject_code: RejectCode::DestinationInvalid,
                 reject_message,
                 error_code: None
@@ -451,7 +451,7 @@ mod management_canister {
             // Can call query
             let result = agent.query(&canister_id, "query").with_arg([]).call().await;
             assert!(
-                matches!(result, Err(AgentError::ReplicaError(RejectedResponse{
+                matches!(result, Err(AgentError::ReplicaError(RejectResponse{
                 reject_code: RejectCode::DestinationInvalid,
                 reject_message,
                 error_code: None
@@ -480,7 +480,7 @@ mod management_canister {
             // Cannot call query
             let result = agent.query(&canister_id, "query").with_arg([]).call().await;
             assert!(
-                matches!(result, Err(AgentError::ReplicaError(RejectedResponse{
+                matches!(result, Err(AgentError::ReplicaError(RejectResponse{
                 reject_code: RejectCode::DestinationInvalid,
                 reject_message,
                 error_code: None
@@ -705,7 +705,7 @@ mod management_canister {
 mod simple_calls {
     use crate::universal_canister::payload;
     use ic_agent::{
-        agent::{RejectCode, RejectedResponse},
+        agent::{RejectCode, RejectResponse},
         AgentError,
     };
     use ref_tests::with_universal_canister;
@@ -755,7 +755,7 @@ mod simple_calls {
 
             assert!(matches!(
                 result,
-                Err(AgentError::ReplicaError(RejectedResponse {
+                Err(AgentError::ReplicaError(RejectResponse {
                     reject_code: RejectCode::DestinationInvalid,
                     ..
                 }))
@@ -777,7 +777,7 @@ mod simple_calls {
 
             assert!(matches!(
                 result,
-                Err(AgentError::ReplicaError(RejectedResponse {
+                Err(AgentError::ReplicaError(RejectResponse {
                     reject_code: RejectCode::DestinationInvalid,
                     ..
                 }))
@@ -790,7 +790,7 @@ mod simple_calls {
 mod extras {
     use candid::Nat;
     use ic_agent::{
-        agent::{RejectCode, RejectedResponse},
+        agent::{RejectCode, RejectResponse},
         export::Principal,
         AgentError,
     };
@@ -925,7 +925,7 @@ mod extras {
                 .await;
 
             assert!(matches!(result,
-                    Err(AgentError::ReplicaError(RejectedResponse {
+                    Err(AgentError::ReplicaError(RejectResponse {
                     reject_code: RejectCode::DestinationInvalid,
                     reject_message,
                     ..

@@ -9,7 +9,7 @@ use std::{
 };
 use thiserror::Error;
 
-use super::replica_api::RejectedResponse;
+use super::replica_api::RejectResponse;
 
 /// An error that occurred when using the agent.
 #[derive(Error, Debug)]
@@ -51,8 +51,8 @@ pub enum AgentError {
     PrincipalError(#[from] crate::export::PrincipalError),
 
     /// The replica rejected the message.
-    #[error("Got a replica error: {0}")]
-    ReplicaError(RejectedResponse),
+    #[error("The replica returned a replica error: {0}")]
+    ReplicaError(RejectResponse),
 
     /// The replica returned an HTTP error.
     #[error("The replica returned an HTTP Error: {0}")]
@@ -190,7 +190,7 @@ impl PartialEq for AgentError {
     }
 }
 
-impl Display for RejectedResponse {
+impl Display for RejectResponse {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         f.write_fmt(format_args!(
             "Replica Error: reject code {:?}, reject message {}, error code {}",

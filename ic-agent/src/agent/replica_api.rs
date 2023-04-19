@@ -146,12 +146,12 @@ pub enum QueryResponse {
     #[serde(rename = "replied")]
     Replied { reply: CallReply },
     #[serde(rename = "rejected")]
-    Rejected(RejectedResponse),
+    Rejected(RejectResponse),
 }
 
 /// An HTTP error from the replica.
 #[derive(Debug, Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq)]
-pub struct RejectedResponse {
+pub struct RejectResponse {
     /// The [reject code](https://smartcontracts.org/docs/interface-spec/index.html#reject-codes) returned by the replica.
     pub reject_code: RejectCode,
     /// The rejection message.

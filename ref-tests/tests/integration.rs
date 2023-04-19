@@ -18,7 +18,7 @@ use ref_tests::{
     with_wallet_canister,
 };
 
-use ic_agent::agent::{RejectCode, RejectedResponse};
+use ic_agent::agent::{RejectCode, RejectResponse};
 
 #[ignore]
 #[test]
@@ -100,7 +100,7 @@ fn canister_reject_call() {
 
         assert_eq!(
             result,
-            Err(AgentError::ReplicaError(RejectedResponse {
+            Err(AgentError::ReplicaError(RejectResponse {
                 reject_code: RejectCode::DestinationInvalid,
                 reject_message: "method does not exist: wallet_send".to_string(),
                 error_code: None
