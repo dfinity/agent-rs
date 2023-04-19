@@ -9,9 +9,7 @@ use std::{
 };
 use thiserror::Error;
 
-use serde::Deserialize;
-
-use super::replica_api::{self, ReplicaError};
+use super::replica_api::RejectedResponse;
 
 /// An error that occurred when using the agent.
 #[derive(Error, Debug)]
@@ -54,7 +52,7 @@ pub enum AgentError {
 
     /// The replica rejected the message.
     #[error("Got a replica error: {0}")]
-    ReplicaError(ReplicaError),
+    ReplicaError(RejectedResponse),
 
     /// The replica returned an HTTP error.
     #[error("The replica returned an HTTP Error: {0}")]
@@ -192,23 +190,18 @@ impl PartialEq for AgentError {
     }
 }
 
-// impl Debug for ReplicaError {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-//         self.fmt_human_readable(f)
-//     }
-// }
-
-impl Display for ReplicaError {
+impl Display for RejectedResponse {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        self.fmt_human_readable(f)
+        f.write_fmt(format_args!(
+            "Replica Error: reject code {:?}, reject message {}, error code {}",
+            self.reject_code, self.reject_message, self.reject_message,
+        ))
     }
 }
 
-impl ReplicaError {
-    fn fmt_human_readable(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        todo!()
-    }
-}
+// impl Display for RejectCode {
+
+// }
 
 /// A HTTP error from the replica.
 pub struct HttpErrorPayload {

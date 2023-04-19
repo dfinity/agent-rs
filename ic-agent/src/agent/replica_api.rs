@@ -1,4 +1,4 @@
-use crate::export::Principal;
+use crate::{export::Principal, AgentError};
 use ic_certification::Label;
 use serde::{Deserialize, Serialize};
 
@@ -146,12 +146,12 @@ pub enum QueryResponse {
     #[serde(rename = "replied")]
     Replied { reply: CallReply },
     #[serde(rename = "rejected")]
-    Rejected(ReplicaError),
+    Rejected(RejectedResponse),
 }
 
 /// An HTTP error from the replica.
 #[derive(Debug, Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq)]
-pub struct ReplicaError {
+pub struct RejectedResponse {
     /// The [reject code](https://smartcontracts.org/docs/interface-spec/index.html#reject-codes) returned by the replica.
     pub reject_code: RejectCode,
     /// The rejection message.
@@ -179,4 +179,22 @@ pub enum RejectCode {
     CanisterReject = 4,
     /// Canister error (e.g., trap, no response)
     CanisterError = 5,
+}
+
+impl TryFrom<u64> for RejectCode {
+    type Error = AgentError;
+
+    fn try_from(value: u64) -> Result<Self, AgentError> {
+        match value {
+            1 => Ok(RejectCode::SysFatal),
+            2 => Ok(RejectCode::SysTransient),
+            3 => Ok(RejectCode::DestinationInvalid),
+            4 => Ok(RejectCode::CanisterReject),
+            5 => Ok(RejectCode::CanisterError),
+            _ => Err(AgentError::MessageError(format!(
+                "Received an invalid reject code {}",
+                value
+            ))),
+        }
+    }
 }

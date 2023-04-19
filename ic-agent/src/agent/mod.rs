@@ -15,6 +15,7 @@ pub use agent_error::AgentError;
 use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
 pub use builder::AgentBuilder;
 pub use nonce::{NonceFactory, NonceGenerator};
+pub use replica_api::{RejectCode, RejectedResponse};
 pub use response::{Replied, RequestStatusResponse};
 
 #[cfg(test)]

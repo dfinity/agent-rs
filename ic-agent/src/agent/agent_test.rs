@@ -12,12 +12,11 @@ use crate::{
     Agent, AgentError,
 };
 use ic_certification::Label;
-use sha2::digest::typenum::{assert_type, assert_type_eq};
 use std::collections::BTreeMap;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_test::wasm_bindgen_test;
 
-use super::replica_api::ReplicaError;
+use super::replica_api::RejectedResponse;
 
 #[cfg(target_family = "wasm")]
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -88,7 +87,7 @@ async fn query_error() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn query_rejected() -> Result<(), AgentError> {
-    let response: QueryResponse = QueryResponse::Rejected(ReplicaError {
+    let response: QueryResponse = QueryResponse::Rejected(RejectedResponse {
         reject_code: RejectCode::DestinationInvalid,
         reject_message: "Rejected Message".to_string(),
         error_code: None,
