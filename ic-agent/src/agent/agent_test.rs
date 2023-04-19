@@ -5,16 +5,19 @@ use self::mock::{assert_mock, mock};
 use crate::{
     agent::{
         http_transport::ReqwestTransport,
-        replica_api::{CallReply, QueryResponse},
+        replica_api::{CallReply, QueryResponse, RejectCode},
         Status,
     },
     export::Principal,
     Agent, AgentError,
 };
 use ic_certification::Label;
+use sha2::digest::typenum::{assert_type, assert_type_eq};
 use std::collections::BTreeMap;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_test::wasm_bindgen_test;
+
+use super::replica_api::ReplicaError;
 
 #[cfg(target_family = "wasm")]
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -85,10 +88,11 @@ async fn query_error() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn query_rejected() -> Result<(), AgentError> {
-    let response: QueryResponse = QueryResponse::Rejected {
-        reject_code: 1234,
+    let response: QueryResponse = QueryResponse::Rejected(ReplicaError {
+        reject_code: RejectCode::DestinationInvalid,
         reject_message: "Rejected Message".to_string(),
-    };
+        error_code: None,
+    });
 
     let (query_mock, url) = mock(
         "POST",
@@ -116,12 +120,9 @@ async fn query_rejected() -> Result<(), AgentError> {
     assert_mock(query_mock).await;
 
     match result {
-        Err(AgentError::ReplicaError {
-            reject_code: code,
-            reject_message: msg,
-        }) => {
-            assert_eq!(code, 1234);
-            assert_eq!(msg, "Rejected Message");
+        Err(AgentError::ReplicaError(replica_error)) => {
+            assert_eq!(replica_error.reject_code, RejectCode::DestinationInvalid);
+            assert_eq!(replica_error.reject_message, "Rejected Message");
         }
         result => unreachable!("{:?}", result),
     }
@@ -150,6 +151,30 @@ async fn call_error() -> Result<(), AgentError> {
 
     Ok(())
 }
+
+// #[cfg_attr(not(target_family = "wasm"), tokio::test)]
+// #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+// async fn call_error_in_body() -> Result<(), AgentError> {
+//     let (call_mock, url) = mock("POST", "/api/v2/canister/aaaaa-aa/call", 200, vec![], None).await;
+
+//     let agent = Agent::builder()
+//         .with_transport(ReqwestTransport::create(&url)?)
+//         .build()?;
+
+//     let result = agent
+//         .update(&Principal::management_canister(), "greet")
+//         .with_arg([])
+//         .call()
+//         .await;
+
+//     assert_mock(call_mock).await;
+
+//     let error = result.unwrap_err();
+//     // assert_type_eq!(AgentError::ReplicaErrorV2, error.type)
+//     // assert!(result.is_err_and(|error| error.to));
+
+//     // Ok(())
+// }
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]

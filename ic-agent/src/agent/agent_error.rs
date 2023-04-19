@@ -11,6 +11,8 @@ use thiserror::Error;
 
 use serde::Deserialize;
 
+use super::replica_api::{self, ReplicaError};
+
 /// An error that occurred when using the agent.
 #[derive(Error, Debug)]
 pub enum AgentError {
@@ -51,17 +53,8 @@ pub enum AgentError {
     PrincipalError(#[from] crate::export::PrincipalError),
 
     /// The replica rejected the message.
-    #[error(r#"The Replica returned an error: code {reject_code}, message: "{reject_message}""#)]
-    ReplicaError {
-        /// The [reject code](https://smartcontracts.org/docs/interface-spec/index.html#reject-codes) returned by the replica.
-        reject_code: u64,
-        /// The rejection message.
-        reject_message: String,
-    },
-
-    /// The replica rejected the message.
     #[error("Got a replica error: {0}")]
-    ReplicaErrorV2(ReplicaError),
+    ReplicaError(ReplicaError),
 
     /// The replica returned an HTTP error.
     #[error("The replica returned an HTTP Error: {0}")]
@@ -199,60 +192,21 @@ impl PartialEq for AgentError {
     }
 }
 
-/// Reject codes are integers that canisters should pass to msg.reject
-/// system API calls. These errors are designed for programmatic error
-/// handling, not for end-users. They are also used for classification
-/// of user-facing errors.
-///
-/// See https://sdk.dfinity.org/docs/interface-spec/index.html#reject-codes
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deserialize)]
-pub enum RejectCode {
-    /// Fatal system error, retry unlikely to be useful
-    SysFatal = 1,
-    /// Transient system error, retry might be possible.
-    SysTransient = 2,
-    /// Invalid destination (e.g. canister/account does not exist)
-    DestinationInvalid = 3,
-    /// Explicit reject by the canister.
-    CanisterReject = 4,
-    /// Canister error (e.g., trap, no response)
-    CanisterError = 5,
-}
-
-/// An HTTP error from the replica.
-#[derive(Deserialize)]
-pub struct ReplicaError {
-    /// The [reject code](https://smartcontracts.org/docs/interface-spec/index.html#reject-codes) returned by the replica.
-    reject_code: u64,
-    /// The rejection message.
-    reject_message: String,
-
-    /// The optional [error code](https://smartcontracts.org/docs/interface-spec/index.html#error-codes) returned by the replica.
-    #[serde(default)]
-    error_code: Option<String>,
-}
-
-impl ReplicaError {
-    fn fmt_human_readable(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        // No matter content_type is TEXT or not,
-        // always try to parse it as a String.
-        // When fail, print the raw byte array
-
-        // TODO: Implement this
-
-        unimplemented!()
-    }
-}
-
-impl Debug for ReplicaError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        self.fmt_human_readable(f)
-    }
-}
+// impl Debug for ReplicaError {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+//         self.fmt_human_readable(f)
+//     }
+// }
 
 impl Display for ReplicaError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         self.fmt_human_readable(f)
+    }
+}
+
+impl ReplicaError {
+    fn fmt_human_readable(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        todo!()
     }
 }
 

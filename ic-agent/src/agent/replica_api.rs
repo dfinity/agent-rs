@@ -146,8 +146,37 @@ pub enum QueryResponse {
     #[serde(rename = "replied")]
     Replied { reply: CallReply },
     #[serde(rename = "rejected")]
-    Rejected {
-        reject_code: u64,
-        reject_message: String,
-    },
+    Rejected(ReplicaError),
+}
+
+/// An HTTP error from the replica.
+#[derive(Debug, Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq)]
+pub struct ReplicaError {
+    /// The [reject code](https://smartcontracts.org/docs/interface-spec/index.html#reject-codes) returned by the replica.
+    pub reject_code: RejectCode,
+    /// The rejection message.
+    pub reject_message: String,
+    /// The optional [error code](https://smartcontracts.org/docs/interface-spec/index.html#error-codes) returned by the replica.
+    #[serde(default)]
+    pub error_code: Option<String>,
+}
+
+/// Reject codes are integers that canisters should pass to msg.reject
+/// system API calls. These errors are designed for programmatic error
+/// handling, not for end-users. They are also used for classification
+/// of user-facing errors.
+///
+/// See https://sdk.dfinity.org/docs/interface-spec/index.html#reject-codes
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deserialize, Serialize, Ord, PartialOrd)]
+pub enum RejectCode {
+    /// Fatal system error, retry unlikely to be useful
+    SysFatal = 1,
+    /// Transient system error, retry might be possible.
+    SysTransient = 2,
+    /// Invalid destination (e.g. canister/account does not exist)
+    DestinationInvalid = 3,
+    /// Explicit reject by the canister.
+    CanisterReject = 4,
+    /// Canister error (e.g., trap, no response)
+    CanisterError = 5,
 }
