@@ -199,10 +199,6 @@ impl Display for RejectResponse {
     }
 }
 
-// impl Display for RejectCode {
-
-// }
-
 /// A HTTP error from the replica.
 pub struct HttpErrorPayload {
     /// The HTTP status code.
