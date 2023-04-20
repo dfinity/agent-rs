@@ -237,7 +237,7 @@ impl ReqwestTransport {
             }
         }
 
-        // status == OK means we have an error message for calls
+        // status == OK means we have an error message for call requests
         // see https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call
         if status == StatusCode::OK && endpoint.ends_with("call") {
             let cbor_decoded_body: Result<RejectResponse, serde_cbor::Error> =
