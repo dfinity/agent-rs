@@ -422,8 +422,9 @@ mod management_canister {
                 matches!(result, Err(AgentError::ReplicaError(RejectResponse{
                 reject_code: RejectCode::CanisterError,
                 reject_message,
-                error_code: None
-            })) if reject_message == "canister is stopped")
+                error_code,
+            })) if reject_message == "canister is stopped"
+                && error_code == Some("ICHS0004".to_string()))
             );
 
             // Upgrade should succeed
