@@ -204,7 +204,7 @@ impl ReqwestTransport {
         endpoint: &str,
         body: Option<Vec<u8>>,
     ) -> Result<Vec<u8>, AgentError> {
-        let url = self.url.join(&endpoint)?;
+        let url = self.url.join(endpoint)?;
         let mut http_request = Request::new(method, url);
         http_request
             .headers_mut()

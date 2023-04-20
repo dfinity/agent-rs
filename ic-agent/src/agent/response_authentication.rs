@@ -103,7 +103,7 @@ pub(crate) fn lookup_reject_code(
     let code = lookup_value(certificate, path)?;
     let mut readable = code;
     let code_digit = leb128::read::unsigned(&mut readable)?;
-    Ok(RejectCode::try_from(code_digit)?)
+    RejectCode::try_from(code_digit)
 }
 
 pub(crate) fn lookup_reject_message(
