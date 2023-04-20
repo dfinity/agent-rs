@@ -163,6 +163,7 @@ pub struct RejectResponse {
 
 /// See the [interface spec](https://smartcontracts.org/docs/interface-spec/index.html#reject-codes).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deserialize, Serialize, Ord, PartialOrd)]
+#[repr(u8)]
 pub enum RejectCode {
     /// Fatal system error, retry unlikely to be useful
     SysFatal = 1,
