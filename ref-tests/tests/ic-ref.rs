@@ -417,6 +417,7 @@ mod management_canister {
 
             // Can't call query on a stopped canister
             let result = agent.query(&canister_id, "query").with_arg([]).call().await;
+            println!("{:?}", result);
             assert!(
                 matches!(result, Err(AgentError::ReplicaError(RejectResponse{
                 reject_code: RejectCode::CanisterError,
