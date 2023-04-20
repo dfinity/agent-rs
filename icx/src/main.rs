@@ -567,11 +567,11 @@ async fn main() -> Result<()> {
                         print_idl_blob(&blob, &ArgType::Idl, &None)
                             .context("Failed to print request_status result")?;
                     }
-                    agent::RequestStatusResponse::Rejected(replica_eror) => {
+                    agent::RequestStatusResponse::Rejected(replica_error) => {
                         bail!(
                             r#"The Replica returned an error: code {:?}, message: "{}""#,
-                            replica_eror.reject_code,
-                            replica_eror.reject_message
+                            replica_error.reject_code,
+                            replica_error.reject_message
                         );
                     }
                     _ => bail!("Can't get valid status of the request.",),
