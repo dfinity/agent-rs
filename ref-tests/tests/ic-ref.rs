@@ -409,8 +409,9 @@ mod management_canister {
             let result = agent.update(&canister_id, "update").call_and_wait().await;
             assert!(
                 matches!(result, Err(AgentError::ReplicaError(RejectResponse{
+                reject_code: RejectCode::CanisterError,
                 reject_message,
-                ..
+                error_code: None
             })) if reject_message == "canister is not running")
             );
 
@@ -418,8 +419,9 @@ mod management_canister {
             let result = agent.query(&canister_id, "query").with_arg([]).call().await;
             assert!(
                 matches!(result, Err(AgentError::ReplicaError(RejectResponse{
+                reject_code: RejectCode::CanisterError,
                 reject_message,
-                ..
+                error_code: None
             })) if reject_message == "canister is stopped")
             );
 
@@ -440,8 +442,9 @@ mod management_canister {
             let result = agent.update(&canister_id, "update").call_and_wait().await;
             assert!(
                 matches!(result, Err(AgentError::ReplicaError(RejectResponse{
+                reject_code: RejectCode::DestinationInvalid,
                 reject_message,
-                ..
+                error_code: None
             })) if reject_message == "method does not exist: update")
             );
 
@@ -449,8 +452,9 @@ mod management_canister {
             let result = agent.query(&canister_id, "query").with_arg([]).call().await;
             assert!(
                 matches!(result, Err(AgentError::ReplicaError(RejectResponse{
+                reject_code: RejectCode::DestinationInvalid,
                 reject_message,
-                ..
+                error_code: None
             })) if reject_message == "query method does not exist")
             );
 
@@ -922,6 +926,7 @@ mod extras {
 
             assert!(matches!(result,
                     Err(AgentError::ReplicaError(RejectResponse {
+                    reject_code: RejectCode::DestinationInvalid,
                     reject_message,
                     ..
                 })) if reject_message == "The specified_id of the created canister is already in use."));
