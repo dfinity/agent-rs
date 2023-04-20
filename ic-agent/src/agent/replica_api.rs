@@ -3,6 +3,7 @@ use ic_certification::Label;
 use serde::{Deserialize, Serialize};
 
 pub use ic_certification::{Certificate, Delegation};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -162,7 +163,9 @@ pub struct RejectResponse {
 }
 
 /// See the [interface spec](https://smartcontracts.org/docs/interface-spec/index.html#reject-codes).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deserialize, Serialize, Ord, PartialOrd)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr, Ord, PartialOrd,
+)]
 #[repr(u8)]
 pub enum RejectCode {
     /// Fatal system error, retry unlikely to be useful
