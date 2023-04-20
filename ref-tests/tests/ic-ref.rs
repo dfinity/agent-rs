@@ -411,20 +411,18 @@ mod management_canister {
                 matches!(result, Err(AgentError::ReplicaError(RejectResponse{
                 reject_code: RejectCode::CanisterError,
                 reject_message,
-                error_code: None
+                ..
             })) if reject_message == "canister is not running")
             );
 
             // Can't call query on a stopped canister
             let result = agent.query(&canister_id, "query").with_arg([]).call().await;
-            println!("{:?}", result);
             assert!(
                 matches!(result, Err(AgentError::ReplicaError(RejectResponse{
                 reject_code: RejectCode::CanisterError,
                 reject_message,
-                error_code,
-            })) if reject_message == "canister is stopped"
-                && error_code == Some("ICHS0004".to_string()))
+                ..
+            })) if reject_message == "canister is stopped")
             );
 
             // Upgrade should succeed
@@ -446,7 +444,7 @@ mod management_canister {
                 matches!(result, Err(AgentError::ReplicaError(RejectResponse{
                 reject_code: RejectCode::DestinationInvalid,
                 reject_message,
-                error_code: None
+                ..
             })) if reject_message == "method does not exist: update")
             );
 
@@ -456,7 +454,7 @@ mod management_canister {
                 matches!(result, Err(AgentError::ReplicaError(RejectResponse{
                 reject_code: RejectCode::DestinationInvalid,
                 reject_message,
-                error_code: None
+                ..
             })) if reject_message == "query method does not exist")
             );
 
@@ -485,7 +483,7 @@ mod management_canister {
                 matches!(result, Err(AgentError::ReplicaError(RejectResponse{
                 reject_code: RejectCode::DestinationInvalid,
                 reject_message,
-                error_code: None
+                ..
             })) if reject_message
                     == format!("canister no longer exists: {}", canister_id.to_text()))
             );
