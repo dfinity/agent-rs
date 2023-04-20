@@ -149,7 +149,7 @@ pub enum QueryResponse {
     Rejected(RejectResponse),
 }
 
-/// An HTTP error from the replica.
+/// An IC execution error received from the replica.
 #[derive(Debug, Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq)]
 pub struct RejectResponse {
     /// The [reject code](https://smartcontracts.org/docs/interface-spec/index.html#reject-codes) returned by the replica.
