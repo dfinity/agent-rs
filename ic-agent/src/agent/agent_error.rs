@@ -195,8 +195,8 @@ impl PartialEq for AgentError {
 impl Display for RejectResponse {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         f.write_fmt(format_args!(
-            "Replica Error: reject code {:?}, reject message {}, error code {}",
-            self.reject_code, self.reject_message, self.reject_message,
+            "Replica Error: reject code {:?}, reject message {}, error code {:?}",
+            self.reject_code, self.reject_message, self.error_code,
         ))
     }
 }
