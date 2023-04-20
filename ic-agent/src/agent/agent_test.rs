@@ -151,29 +151,46 @@ async fn call_error() -> Result<(), AgentError> {
     Ok(())
 }
 
-// #[cfg_attr(not(target_family = "wasm"), tokio::test)]
-// #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
-// async fn call_error_in_body() -> Result<(), AgentError> {
-//     let (call_mock, url) = mock("POST", "/api/v2/canister/aaaaa-aa/call", 200, vec![], None).await;
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+async fn call_error_in_body() -> Result<(), AgentError> {
+    let body = vec![
+        217, 217, 247, 163, 107, 114, 101, 106, 101, 99, 116, 95, 99, 111, 100, 101, 108, 83, 121,
+        115, 84, 114, 97, 110, 115, 105, 101, 110, 116, 110, 114, 101, 106, 101, 99, 116, 95, 109,
+        101, 115, 115, 97, 103, 101, 115, 84, 101, 115, 116, 32, 114, 101, 106, 101, 99, 116, 32,
+        109, 101, 115, 115, 97, 103, 101, 106, 101, 114, 114, 111, 114, 95, 99, 111, 100, 101, 111,
+        84, 101, 115, 116, 32, 101, 114, 114, 111, 114, 32, 99, 111, 100, 101,
+    ];
 
-//     let agent = Agent::builder()
-//         .with_transport(ReqwestTransport::create(&url)?)
-//         .build()?;
+    let (call_mock, url) = mock(
+        "POST",
+        "/api/v2/canister/aaaaa-aa/call",
+        200,
+        body,
+        Some("application/cbor"),
+    )
+    .await;
 
-//     let result = agent
-//         .update(&Principal::management_canister(), "greet")
-//         .with_arg([])
-//         .call()
-//         .await;
+    let agent = Agent::builder()
+        .with_transport(ReqwestTransport::create(&url)?)
+        .build()?;
 
-//     assert_mock(call_mock).await;
+    let result = agent
+        .update(&Principal::management_canister(), "greet")
+        .with_arg([])
+        .call()
+        .await;
 
-//     let error = result.unwrap_err();
-//     // assert_type_eq!(AgentError::ReplicaErrorV2, error.type)
-//     // assert!(result.is_err_and(|error| error.to));
+    assert_mock(call_mock).await;
 
-//     // Ok(())
-// }
+    assert!(matches!(result, Err(AgentError::ReplicaError(response))
+        if response.error_code == Some("Test error code".to_string())
+        && response.reject_code == RejectCode::SysTransient
+        && response.reject_message == "Test reject message"
+    ));
+
+    Ok(())
+}
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
