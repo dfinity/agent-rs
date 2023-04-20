@@ -5,7 +5,7 @@ use self::mock::{assert_mock, mock};
 use crate::{
     agent::{
         http_transport::ReqwestTransport,
-        replica_api::{CallReply, QueryResponse, RejectCode},
+        replica_api::{CallReply, QueryResponse, RejectCode, RejectResponse},
         Status,
     },
     export::Principal,
@@ -15,8 +15,6 @@ use ic_certification::Label;
 use std::collections::BTreeMap;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_test::wasm_bindgen_test;
-
-use super::replica_api::RejectResponse;
 
 #[cfg(target_family = "wasm")]
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
