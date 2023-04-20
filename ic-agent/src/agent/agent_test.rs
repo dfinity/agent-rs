@@ -153,14 +153,14 @@ async fn call_error() -> Result<(), AgentError> {
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
-async fn call_error_in_body() -> Result<(), AgentError> {
-    let body = vec![
-        217, 217, 247, 163, 107, 114, 101, 106, 101, 99, 116, 95, 99, 111, 100, 101, 108, 83, 121,
-        115, 84, 114, 97, 110, 115, 105, 101, 110, 116, 110, 114, 101, 106, 101, 99, 116, 95, 109,
-        101, 115, 115, 97, 103, 101, 115, 84, 101, 115, 116, 32, 114, 101, 106, 101, 99, 116, 32,
-        109, 101, 115, 115, 97, 103, 101, 106, 101, 114, 114, 111, 114, 95, 99, 111, 100, 101, 111,
-        84, 101, 115, 116, 32, 101, 114, 114, 111, 114, 32, 99, 111, 100, 101,
-    ];
+async fn call_rejected() -> Result<(), AgentError> {
+    let reject_body = RejectResponse {
+        reject_code: RejectCode::SysTransient,
+        reject_message: "Test reject message".to_string(),
+        error_code: Some("Test error code".to_string()),
+    };
+
+    let body = serde_cbor::to_vec(&reject_body).unwrap();
 
     let (call_mock, url) = mock(
         "POST",
@@ -183,11 +183,46 @@ async fn call_error_in_body() -> Result<(), AgentError> {
 
     assert_mock(call_mock).await;
 
-    assert!(matches!(result, Err(AgentError::ReplicaError(response))
-        if response.error_code == Some("Test error code".to_string())
-        && response.reject_code == RejectCode::SysTransient
-        && response.reject_message == "Test reject message"
-    ));
+    let expected_response = Err(AgentError::ReplicaError(reject_body));
+    assert_eq!(expected_response, result);
+
+    Ok(())
+}
+
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+async fn call_rejected_without_error_code() -> Result<(), AgentError> {
+    let reject_body = RejectResponse {
+        reject_code: RejectCode::SysTransient,
+        reject_message: "Test reject message".to_string(),
+        error_code: None,
+    };
+
+    let body = serde_cbor::to_vec(&reject_body).unwrap();
+
+    let (call_mock, url) = mock(
+        "POST",
+        "/api/v2/canister/aaaaa-aa/call",
+        200,
+        body,
+        Some("application/cbor"),
+    )
+    .await;
+
+    let agent = Agent::builder()
+        .with_transport(ReqwestTransport::create(&url)?)
+        .build()?;
+
+    let result = agent
+        .update(&Principal::management_canister(), "greet")
+        .with_arg([])
+        .call()
+        .await;
+
+    assert_mock(call_mock).await;
+
+    let expected_response = Err(AgentError::ReplicaError(reject_body));
+    assert_eq!(expected_response, result);
 
     Ok(())
 }

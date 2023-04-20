@@ -161,12 +161,7 @@ pub struct RejectResponse {
     pub error_code: Option<String>,
 }
 
-/// Reject codes are integers that canisters should pass to msg.reject
-/// system API calls. These errors are designed for programmatic error
-/// handling, not for end-users. They are also used for classification
-/// of user-facing errors.
-///
-/// See https://sdk.dfinity.org/docs/interface-spec/index.html#reject-codes
+/// See the [interface spec](https://smartcontracts.org/docs/interface-spec/index.html#reject-codes).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deserialize, Serialize, Ord, PartialOrd)]
 pub enum RejectCode {
     /// Fatal system error, retry unlikely to be useful
