@@ -88,7 +88,7 @@ async fn query_rejected() -> Result<(), AgentError> {
     let response: QueryResponse = QueryResponse::Rejected(RejectResponse {
         reject_code: RejectCode::DestinationInvalid,
         reject_message: "Rejected Message".to_string(),
-        error_code: None,
+        error_code: Some("Error code".to_string()),
     });
 
     let (query_mock, url) = mock(
@@ -120,6 +120,7 @@ async fn query_rejected() -> Result<(), AgentError> {
         Err(AgentError::ReplicaError(replica_error)) => {
             assert_eq!(replica_error.reject_code, RejectCode::DestinationInvalid);
             assert_eq!(replica_error.reject_message, "Rejected Message");
+            assert_eq!(replica_error.error_code, Some("Error code".to_string()));
         }
         result => unreachable!("{:?}", result),
     }
