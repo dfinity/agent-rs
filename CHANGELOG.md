@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Handling rejected update calls where status code is 200. See IC-1462
 * Reject code type is changed from `u64` to enum `RejectCode`.
 
+* Fix the conventional-commits job to allow `!` suffix for PRs introducing breaking changes.
 * Support WASM targets in the browser via `wasm-bindgen`
 
 ## [0.23.2] - 2023-04-21
