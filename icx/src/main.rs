@@ -569,9 +569,10 @@ async fn main() -> Result<()> {
                     }
                     agent::RequestStatusResponse::Rejected(replica_error) => {
                         bail!(
-                            r#"The Replica returned an error: code {:?}, message: "{}""#,
+                            r#"The Replica returned an error. reject code: {:?}, reject message: "{}", error code: {}"#,
                             replica_error.reject_code,
-                            replica_error.reject_message
+                            replica_error.reject_message,
+                            replica_error.error_code.unwrap_or_default()
                         );
                     }
                     _ => bail!("Can't get valid status of the request.",),
