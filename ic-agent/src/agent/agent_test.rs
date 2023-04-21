@@ -5,7 +5,7 @@ use self::mock::{assert_mock, mock};
 use crate::{
     agent::{
         http_transport::ReqwestTransport,
-        replica_api::{CallReply, QueryResponse},
+        replica_api::{CallReply, QueryResponse, RejectCode, RejectResponse},
         Status,
     },
     export::Principal,
@@ -85,10 +85,11 @@ async fn query_error() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn query_rejected() -> Result<(), AgentError> {
-    let response: QueryResponse = QueryResponse::Rejected {
-        reject_code: 1234,
+    let response: QueryResponse = QueryResponse::Rejected(RejectResponse {
+        reject_code: RejectCode::DestinationInvalid,
         reject_message: "Rejected Message".to_string(),
-    };
+        error_code: Some("Error code".to_string()),
+    });
 
     let (query_mock, url) = mock(
         "POST",
@@ -116,12 +117,10 @@ async fn query_rejected() -> Result<(), AgentError> {
     assert_mock(query_mock).await;
 
     match result {
-        Err(AgentError::ReplicaError {
-            reject_code: code,
-            reject_message: msg,
-        }) => {
-            assert_eq!(code, 1234);
-            assert_eq!(msg, "Rejected Message");
+        Err(AgentError::ReplicaError(replica_error)) => {
+            assert_eq!(replica_error.reject_code, RejectCode::DestinationInvalid);
+            assert_eq!(replica_error.reject_message, "Rejected Message");
+            assert_eq!(replica_error.error_code, Some("Error code".to_string()));
         }
         result => unreachable!("{:?}", result),
     }
@@ -147,6 +146,82 @@ async fn call_error() -> Result<(), AgentError> {
     assert_mock(call_mock).await;
 
     assert!(result.is_err());
+
+    Ok(())
+}
+
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+async fn call_rejected() -> Result<(), AgentError> {
+    let reject_body = RejectResponse {
+        reject_code: RejectCode::SysTransient,
+        reject_message: "Test reject message".to_string(),
+        error_code: Some("Test error code".to_string()),
+    };
+
+    let body = serde_cbor::to_vec(&reject_body).unwrap();
+
+    let (call_mock, url) = mock(
+        "POST",
+        "/api/v2/canister/aaaaa-aa/call",
+        200,
+        body,
+        Some("application/cbor"),
+    )
+    .await;
+
+    let agent = Agent::builder()
+        .with_transport(ReqwestTransport::create(&url)?)
+        .build()?;
+
+    let result = agent
+        .update(&Principal::management_canister(), "greet")
+        .with_arg([])
+        .call()
+        .await;
+
+    assert_mock(call_mock).await;
+
+    let expected_response = Err(AgentError::ReplicaError(reject_body));
+    assert_eq!(expected_response, result);
+
+    Ok(())
+}
+
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+async fn call_rejected_without_error_code() -> Result<(), AgentError> {
+    let reject_body = RejectResponse {
+        reject_code: RejectCode::SysTransient,
+        reject_message: "Test reject message".to_string(),
+        error_code: None,
+    };
+
+    let body = serde_cbor::to_vec(&reject_body).unwrap();
+
+    let (call_mock, url) = mock(
+        "POST",
+        "/api/v2/canister/aaaaa-aa/call",
+        200,
+        body,
+        Some("application/cbor"),
+    )
+    .await;
+
+    let agent = Agent::builder()
+        .with_transport(ReqwestTransport::create(&url)?)
+        .build()?;
+
+    let result = agent
+        .update(&Principal::management_canister(), "greet")
+        .with_arg([])
+        .call()
+        .await;
+
+    assert_mock(call_mock).await;
+
+    let expected_response = Err(AgentError::ReplicaError(reject_body));
+    assert_eq!(expected_response, result);
 
     Ok(())
 }
