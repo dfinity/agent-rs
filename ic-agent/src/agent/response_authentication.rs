@@ -3,6 +3,8 @@ use crate::{export::Principal, AgentError, RequestId};
 use ic_certification::{Certificate, Label, LookupResult};
 use std::str::from_utf8;
 
+use super::replica_api::{RejectCode, RejectResponse};
+
 const DER_PREFIX: &[u8; 37] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00";
 const KEY_LENGTH: usize = 96;
 
@@ -82,16 +84,17 @@ pub(crate) fn lookup_rejection(
     let reject_code = lookup_reject_code(certificate, request_id)?;
     let reject_message = lookup_reject_message(certificate, request_id)?;
 
-    Ok(RequestStatusResponse::Rejected {
+    Ok(RequestStatusResponse::Rejected(RejectResponse {
         reject_code,
         reject_message,
-    })
+        error_code: None,
+    }))
 }
 
 pub(crate) fn lookup_reject_code(
     certificate: &Certificate,
     request_id: &RequestId,
-) -> Result<u64, AgentError> {
+) -> Result<RejectCode, AgentError> {
     let path = [
         "request_status".into(),
         request_id.to_vec().into(),
@@ -99,7 +102,8 @@ pub(crate) fn lookup_reject_code(
     ];
     let code = lookup_value(certificate, path)?;
     let mut readable = code;
-    Ok(leb128::read::unsigned(&mut readable)?)
+    let code_digit = leb128::read::unsigned(&mut readable)?;
+    RejectCode::try_from(code_digit)
 }
 
 pub(crate) fn lookup_reject_message(

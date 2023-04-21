@@ -15,6 +15,7 @@ pub use agent_error::AgentError;
 use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
 pub use builder::AgentBuilder;
 pub use nonce::{NonceFactory, NonceGenerator};
+pub use replica_api::{RejectCode, RejectResponse};
 pub use response::{Replied, RequestStatusResponse};
 
 #[cfg(test)]
@@ -421,13 +422,9 @@ impl Agent {
             .await
             .and_then(|response| match response {
                 replica_api::QueryResponse::Replied { reply } => Ok(reply.arg),
-                replica_api::QueryResponse::Rejected {
-                    reject_code,
-                    reject_message,
-                } => Err(AgentError::ReplicaError {
-                    reject_code,
-                    reject_message,
-                }),
+                replica_api::QueryResponse::Rejected(response) => {
+                    Err(AgentError::ReplicaError(response))
+                }
             })
     }
 
@@ -445,13 +442,9 @@ impl Agent {
             .await
             .and_then(|response| match response {
                 replica_api::QueryResponse::Replied { reply } => Ok(reply.arg),
-                replica_api::QueryResponse::Rejected {
-                    reject_code,
-                    reject_message,
-                } => Err(AgentError::ReplicaError {
-                    reject_code,
-                    reject_message,
-                }),
+                replica_api::QueryResponse::Rejected(response) => {
+                    Err(AgentError::ReplicaError(response))
+                }
             })
     }
 
@@ -542,13 +535,8 @@ impl Agent {
                 reply: Replied::CallReplied(arg),
             } => Ok(PollResult::Completed(arg)),
 
-            RequestStatusResponse::Rejected {
-                reject_code,
-                reject_message,
-            } => Err(AgentError::ReplicaError {
-                reject_code,
-                reject_message,
-            }),
+            RequestStatusResponse::Rejected(response) => Err(AgentError::ReplicaError(response)),
+
             RequestStatusResponse::Done => Err(AgentError::RequestStatusDoneNoReply(String::from(
                 *request_id,
             ))),

@@ -1,3 +1,5 @@
+use super::replica_api::RejectResponse;
+
 /// The response of /api/v2/canister/<effective_canister_id>/read_state with "request_status" request type.
 ///
 /// See [the HTTP interface specification](https://smartcontracts.org/docs/interface-spec/index.html#http-call-overview) for more details.
@@ -15,12 +17,7 @@ pub enum RequestStatusResponse {
         reply: Replied,
     },
     /// The request has been rejected.
-    Rejected {
-        /// The [reject code](https://smartcontracts.org/docs/interface-spec/index.html#reject-codes) from the replica.
-        reject_code: u64,
-        /// The rejection message.
-        reject_message: String,
-    },
+    Rejected(RejectResponse),
     /// The call has been completed, and it has been long enough that the reply/reject data has been purged, but the call has not expired yet.
     Done,
 }
