@@ -34,6 +34,7 @@ ring = { workspace = true, features = ["std"] }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
 serde_cbor = "0.11.2"
+serde_repr = "0.1.12"
 sha2 = { workspace = true }
 simple_asn1 = "0.6.1"
 thiserror = { workspace = true }

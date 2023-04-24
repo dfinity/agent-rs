@@ -15,7 +15,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize, Nat};
-use ic_agent::{export::Principal, Agent, AgentError, RequestId};
+use ic_agent::{agent::RejectCode, export::Principal, Agent, AgentError, RequestId};
 use once_cell::sync::Lazy;
 use semver::{Version, VersionReq};
 
@@ -427,12 +427,14 @@ impl<'agent> WalletCanister<'agent> {
         let version: Result<(String,), _> =
             canister.query_("wallet_api_version").build().call().await;
         let version = match version {
-            Err(AgentError::ReplicaError {
-                reject_code,
-                reject_message,
-            }) if reject_code == 3
-                && (reject_message.contains(REPLICA_ERROR_NO_SUCH_QUERY_METHOD)
-                    || reject_message.contains(IC_REF_ERROR_NO_SUCH_QUERY_METHOD)) =>
+            Err(AgentError::ReplicaError(replica_error))
+                if replica_error.reject_code == RejectCode::DestinationInvalid
+                    && (replica_error
+                        .reject_message
+                        .contains(REPLICA_ERROR_NO_SUCH_QUERY_METHOD)
+                        || replica_error
+                            .reject_message
+                            .contains(IC_REF_ERROR_NO_SUCH_QUERY_METHOD)) =>
             {
                 DEFAULT_VERSION.clone()
             }

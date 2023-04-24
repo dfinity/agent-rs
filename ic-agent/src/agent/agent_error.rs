@@ -1,6 +1,9 @@
 //! Errors that can occur when using the replica agent.
 
-use crate::{agent::status::Status, RequestIdError};
+use crate::{
+    agent::{replica_api::RejectResponse, status::Status},
+    RequestIdError,
+};
 use ic_certification::Label;
 use leb128::read;
 use std::{
@@ -49,13 +52,8 @@ pub enum AgentError {
     PrincipalError(#[from] crate::export::PrincipalError),
 
     /// The replica rejected the message.
-    #[error(r#"The Replica returned an error: code {reject_code}, message: "{reject_message}""#)]
-    ReplicaError {
-        /// The [reject code](https://smartcontracts.org/docs/interface-spec/index.html#reject-codes) returned by the replica.
-        reject_code: u64,
-        /// The rejection message.
-        reject_message: String,
-    },
+    #[error("The replica returned a replica error: {0}")]
+    ReplicaError(RejectResponse),
 
     /// The replica returned an HTTP error.
     #[error("The replica returned an HTTP Error: {0}")]
@@ -190,6 +188,15 @@ impl PartialEq for AgentError {
         // Verify the debug string is the same. Some of the subtypes of this error
         // don't implement Eq or PartialEq, so we cannot rely on derive.
         format!("{:?}", self) == format!("{:?}", other)
+    }
+}
+
+impl Display for RejectResponse {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        f.write_fmt(format_args!(
+            "Replica Error: reject code {:?}, reject message {}, error code {:?}",
+            self.reject_code, self.reject_message, self.error_code,
+        ))
     }
 }
 
