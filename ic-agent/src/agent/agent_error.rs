@@ -4,7 +4,6 @@ use crate::{
     agent::{replica_api::RejectResponse, status::Status},
     RequestIdError,
 };
-// use crate::{agent::status::Status, RequestIdError};
 use ic_certification::Label;
 use leb128::read;
 use std::{
