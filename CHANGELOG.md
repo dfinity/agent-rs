@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Reject code type is changed from `u64` to enum `RejectCode`.
 
 * Support WASM targets in the browser via `wasm-bindgen`
+* Do not send `certificate_version` on HTTP Update requests
 
 ### icx-cert
 * Fixed issue where a missing request header caused the canister to not respond with an `ic-certificate` header.
