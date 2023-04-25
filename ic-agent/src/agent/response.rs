@@ -1,4 +1,4 @@
-use super::replica_api::RejectResponse;
+use crate::agent::replica_api::RejectResponse;
 
 /// The response of /api/v2/canister/<effective_canister_id>/read_state with "request_status" request type.
 ///

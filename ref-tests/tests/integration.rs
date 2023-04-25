@@ -3,7 +3,11 @@
 //! Contrary to ic-ref.rs, these tests are not meant to match any other tests. They're
 //! integration tests with a running IC-Ref.
 use candid::CandidType;
-use ic_agent::{agent::agent_error::HttpErrorPayload, export::Principal, AgentError};
+use ic_agent::{
+    agent::{agent_error::HttpErrorPayload, RejectCode, RejectResponse},
+    export::Principal,
+    AgentError,
+};
 use ic_utils::{
     call::{AsyncCall, SyncCall},
     interfaces::{
@@ -17,8 +21,6 @@ use ref_tests::{
     get_wallet_wasm_from_env, universal_canister::payload, with_universal_canister,
     with_wallet_canister,
 };
-
-use ic_agent::agent::{RejectCode, RejectResponse};
 
 #[ignore]
 #[test]
