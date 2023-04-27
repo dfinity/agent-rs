@@ -144,22 +144,15 @@ impl ReqwestTransport {
 
         *http_request.body_mut() = body.map(Body::from);
 
-        let status;
-        let headers;
-        let body;
-        loop {
-            let request_result = self.request(http_request.try_clone().unwrap()).await?;
-            status = request_result.0;
-            headers = request_result.1;
-            body = request_result.2;
+        let request_result = self.request(http_request.try_clone().unwrap()).await?;
+        let status = request_result.0;
+        let headers = request_result.1;
+        let body = request_result.2;
 
-            // If the server returned UNAUTHORIZED, and it is the first time we replay the call,
-            // check if we can get the username/password for the HTTP Auth.
-            if status == StatusCode::UNAUTHORIZED {
-                return Err(AgentError::CannotUseAuthenticationOnNonSecureUrl());
-            } else {
-                break;
-            }
+        // If the server returned UNAUTHORIZED, and it is the first time we replay the call,
+        // check if we can get the username/password for the HTTP Auth.
+        if status == StatusCode::UNAUTHORIZED {
+            return Err(AgentError::CannotUseAuthenticationOnNonSecureUrl());
         }
 
         // status == OK means we have an error message for call requests

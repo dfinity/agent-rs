@@ -46,8 +46,8 @@ impl Secp256k1Identity {
             if pem.tag() != EcPrivateKey::PEM_LABEL {
                 continue;
             }
-            let private_key = SecretKey::from_sec1_der(&pem.contents())
-                .map_err(|_| pkcs8::Error::KeyMalformed)?;
+            let private_key =
+                SecretKey::from_sec1_der(pem.contents()).map_err(|_| pkcs8::Error::KeyMalformed)?;
             return Ok(Self::from_private_key(private_key));
         }
         Err(pem::PemError::MissingData.into())
