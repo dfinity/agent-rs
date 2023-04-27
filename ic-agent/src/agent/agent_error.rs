@@ -59,10 +59,6 @@ pub enum AgentError {
     #[error("The replica returned an HTTP Error: {0}")]
     HttpError(HttpErrorPayload),
 
-    /// Attempted to use HTTP authentication in a non-secure URL (either HTTPS or localhost).
-    #[error("HTTP Authentication cannot be used in a non-secure URL (either HTTPS or localhost)")]
-    CannotUseAuthenticationOnNonSecureUrl(),
-
     /// The password manager returned an error.
     #[error("Password Manager returned an error: {0}")]
     AuthenticationError(String),

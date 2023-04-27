@@ -150,12 +150,6 @@ impl ReqwestTransport {
         let headers = request_result.1;
         let body = request_result.2;
 
-        // If the server returned UNAUTHORIZED, and it is the first time we replay the call,
-        // check if we can get the username/password for the HTTP Auth.
-        if status == StatusCode::UNAUTHORIZED {
-            return Err(AgentError::CannotUseAuthenticationOnNonSecureUrl());
-        }
-
         // status == OK means we have an error message for call requests
         // see https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call
         if status == StatusCode::OK && endpoint.ends_with("call") {
