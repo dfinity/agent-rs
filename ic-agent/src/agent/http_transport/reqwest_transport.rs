@@ -1,5 +1,6 @@
 //! A [`Transport`] that connects using a [`reqwest`] client.
 #![cfg(feature = "reqwest")]
+
 pub use reqwest;
 
 use futures_util::StreamExt;
