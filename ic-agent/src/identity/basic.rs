@@ -40,7 +40,7 @@ impl BasicIdentity {
             .collect::<Result<Vec<u8>, std::io::Error>>()?;
 
         Ok(BasicIdentity::from_key_pair(Ed25519KeyPair::from_pkcs8(
-            pem::parse(&bytes)?.contents.as_slice(),
+            pem::parse(&bytes)?.contents(),
         )?))
     }
 

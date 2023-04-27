@@ -1,15 +1,12 @@
 //! A [`Transport`] that connects using a [`reqwest`] client.
 #![cfg(feature = "reqwest")]
-
 pub use reqwest;
-
-use std::sync::Arc;
 
 use futures_util::StreamExt;
 #[cfg(not(target_family = "wasm"))]
 use hyper_rustls::ConfigBuilderExt;
 use reqwest::{
-    header::{HeaderMap, AUTHORIZATION, CONTENT_TYPE},
+    header::{HeaderMap, CONTENT_TYPE},
     Body, Client, Method, Request, StatusCode, Url,
 };
 
@@ -24,41 +21,11 @@ use crate::{
     AgentError, RequestId,
 };
 
-/// Implemented by the Agent environment to cache and update an HTTP Auth password.
-/// It returns a tuple of `(username, password)`.
-pub trait PasswordManager: Send + Sync {
-    /// Retrieve the cached value for a user. If no cache value exists for this URL,
-    /// the manager can return [`None`].
-    fn cached(&self, url: &str) -> Result<Option<(String, String)>, String>;
-
-    /// A call to the replica failed, so in order to succeed a username and password
-    /// is required. If one cannot be provided (for example, there's no terminal),
-    /// this should return an error.
-    /// If the username and password provided by this method does not work (the next
-    /// request still returns UNAUTHORIZED), this will be called and the request will
-    /// be retried in a loop.
-    fn required(&self, url: &str) -> Result<(String, String), String>;
-}
-
-impl dyn PasswordManager {
-    fn get(&self, cached: bool, url: &str) -> Result<Option<(String, String)>, AgentError> {
-        if cached {
-            self.cached(url)
-        } else {
-            self.required(url).map(Some)
-        }
-        .map_err(AgentError::AuthenticationError)
-    }
-}
-
-impl_debug_empty!(dyn PasswordManager);
-
 /// A [`Transport`] using [`reqwest`] to make HTTP calls to the Internet Computer.
 #[derive(Debug)]
 pub struct ReqwestTransport {
     url: Url,
     client: Client,
-    password_manager: Option<Arc<dyn PasswordManager>>,
     max_response_body_size: Option<usize>,
 }
 
@@ -108,22 +75,8 @@ impl ReqwestTransport {
                 })
                 .map_err(|_| AgentError::InvalidReplicaUrl(url.clone()))?,
             client,
-            password_manager: None,
             max_response_body_size: None,
         })
-    }
-
-    /// Sets a password manager to use with HTTP authentication.
-    pub fn with_password_manager<P: 'static + PasswordManager>(self, password_manager: P) -> Self {
-        self.with_arc_password_manager(Arc::new(password_manager))
-    }
-
-    /// Same as [`Self::with_password_manager`], but providing the Arc so one does not have to be created.
-    pub fn with_arc_password_manager(self, password_manager: Arc<dyn PasswordManager>) -> Self {
-        ReqwestTransport {
-            password_manager: Some(password_manager),
-            ..self
-        }
     }
 
     /// Sets a max response body size limit
@@ -132,27 +85,6 @@ impl ReqwestTransport {
             max_response_body_size: Some(max_response_body_size),
             ..self
         }
-    }
-
-    /// Gets the set password manager, if one exists. Otherwise returns None.
-    pub fn password_manager(&self) -> Option<&dyn PasswordManager> {
-        self.password_manager.as_deref()
-    }
-
-    fn maybe_add_authorization(
-        &self,
-        http_request: &mut Request,
-        cached: bool,
-    ) -> Result<(), AgentError> {
-        if let Some(pm) = &self.password_manager {
-            if let Some((u, p)) = pm.get(cached, http_request.url().as_str())? {
-                let auth = base64::encode(&format!("{}:{}", u, p));
-                http_request
-                    .headers_mut()
-                    .insert(AUTHORIZATION, format!("Basic {}", auth).parse().unwrap());
-            }
-        }
-        Ok(())
     }
 
     async fn request(
@@ -210,13 +142,11 @@ impl ReqwestTransport {
             .headers_mut()
             .insert(CONTENT_TYPE, "application/cbor".parse().unwrap());
 
-        self.maybe_add_authorization(&mut http_request, true)?;
-
         *http_request.body_mut() = body.map(Body::from);
 
-        let mut status;
-        let mut headers;
-        let mut body;
+        let status;
+        let headers;
+        let body;
         loop {
             let request_result = self.request(http_request.try_clone().unwrap()).await?;
             status = request_result.0;
@@ -226,12 +156,7 @@ impl ReqwestTransport {
             // If the server returned UNAUTHORIZED, and it is the first time we replay the call,
             // check if we can get the username/password for the HTTP Auth.
             if status == StatusCode::UNAUTHORIZED {
-                if self.url.scheme() == "https" || self.url.host_str() == Some("localhost") {
-                    // If there is a password manager, get the username and password from it.
-                    self.maybe_add_authorization(&mut http_request, false)?;
-                } else {
-                    return Err(AgentError::CannotUseAuthenticationOnNonSecureUrl());
-                }
+                return Err(AgentError::CannotUseAuthenticationOnNonSecureUrl());
             } else {
                 break;
             }

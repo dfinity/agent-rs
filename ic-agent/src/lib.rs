@@ -133,5 +133,4 @@ pub use identity::{Identity, Signature};
 pub use request_id::{to_request_id, RequestId, RequestIdError};
 
 // Re-export from ic_certification for backward compatibility.
-pub use ic_certification::hash_tree;
-pub use ic_certification::Certificate;
+pub use ic_certification::{hash_tree, Certificate};
