@@ -127,6 +127,18 @@ pub enum AgentError {
     #[error("Could not read the root key")]
     CouldNotReadRootKey(),
 
+    /// The invocation to the wallet call forward method failed with an error.
+    #[error("The invocation to the wallet call forward method failed with the error: {0}")]
+    WalletCallFailed(String),
+
+    /// The wallet operation failed.
+    #[error("The  wallet operation failed: {0}")]
+    WalletError(String),
+
+    /// The wallet canister must be upgraded. See [`dfx wallet upgrade`](https://smartcontracts.org/docs/developers-guide/cli-reference/dfx-wallet.html)
+    #[error("The wallet canister must be upgraded: {0}")]
+    WalletUpgradeRequired(String),
+
     /// The transport was not specified in the [`AgentBuilder`](super::AgentBuilder).
     #[error("Missing replica transport in the Agent Builder.")]
     MissingReplicaTransport(),
