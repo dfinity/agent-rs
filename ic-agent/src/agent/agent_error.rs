@@ -31,6 +31,14 @@ pub enum AgentError {
     #[error("Invalid CBOR data, could not deserialize: {0}")]
     InvalidCborData(#[from] serde_cbor::Error),
 
+    /// There was an error calculating a request ID.
+    #[error("Cannot calculate a RequestID: {0}")]
+    CannotCalculateRequestId(#[from] RequestIdError),
+
+    /// There was an error parsing a URL.
+    #[error(r#"Cannot parse url: "{0}""#)]
+    UrlParseError(#[from] url::ParseError),
+
     /// The HTTP method was invalid.
     #[error(r#"Invalid method: "{0}""#)]
     InvalidMethodError(#[from] http::method::InvalidMethod),
@@ -62,6 +70,10 @@ pub enum AgentError {
     /// There was an error reading a LEB128 value.
     #[error("Error reading LEB128 value: {0}")]
     Leb128ReadError(#[from] read::Error),
+
+    /// A string was invalid UTF-8.
+    #[error("Error in UTF-8 string: {0}")]
+    Utf8ReadError(#[from] Utf8Error),
 
     /// The lookup path was absent in the certificate.
     #[error("The lookup path ({0:?}) is absent in the certificate.")]
