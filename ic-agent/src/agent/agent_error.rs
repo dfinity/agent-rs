@@ -31,18 +31,6 @@ pub enum AgentError {
     #[error("Invalid CBOR data, could not deserialize: {0}")]
     InvalidCborData(#[from] serde_cbor::Error),
 
-    /// There was an error calculating a request ID.
-    #[error("Cannot calculate a RequestID: {0}")]
-    CannotCalculateRequestId(#[from] RequestIdError),
-
-    /// There was an error when de/serializing with Candid.
-    #[error("Candid returned an error: {0}")]
-    CandidError(Box<dyn Send + Sync + std::error::Error>),
-
-    /// There was an error parsing a URL.
-    #[error(r#"Cannot parse url: "{0}""#)]
-    UrlParseError(#[from] url::ParseError),
-
     /// The HTTP method was invalid.
     #[error(r#"Invalid method: "{0}""#)]
     InvalidMethodError(#[from] http::method::InvalidMethod),
@@ -59,10 +47,6 @@ pub enum AgentError {
     #[error("The replica returned an HTTP Error: {0}")]
     HttpError(HttpErrorPayload),
 
-    /// The password manager returned an error.
-    #[error("Password Manager returned an error: {0}")]
-    AuthenticationError(String),
-
     /// The status endpoint returned an invalid status.
     #[error("Status endpoint returned an invalid status.")]
     InvalidReplicaStatus,
@@ -75,17 +59,9 @@ pub enum AgentError {
     #[error("A tool returned a string message error: {0}")]
     MessageError(String),
 
-    /// An error occurred in an external tool.
-    #[error("A tool returned a custom error: {0}")]
-    CustomError(#[from] Box<dyn Send + Sync + std::error::Error>),
-
     /// There was an error reading a LEB128 value.
     #[error("Error reading LEB128 value: {0}")]
     Leb128ReadError(#[from] read::Error),
-
-    /// A string was invalid UTF-8.
-    #[error("Error in UTF-8 string: {0}")]
-    Utf8ReadError(#[from] Utf8Error),
 
     /// The lookup path was absent in the certificate.
     #[error("The lookup path ({0:?}) is absent in the certificate.")]
@@ -138,22 +114,6 @@ pub enum AgentError {
     /// Could not read the replica root key.
     #[error("Could not read the root key")]
     CouldNotReadRootKey(),
-
-    /// Failed to initialize the BLS library.
-    #[error("Failed to initialize the BLS library")]
-    BlsInitializationFailure(),
-
-    /// The invocation to the wallet call forward method failed with an error.
-    #[error("The invocation to the wallet call forward method failed with the error: {0}")]
-    WalletCallFailed(String),
-
-    /// The wallet operation failed.
-    #[error("The  wallet operation failed: {0}")]
-    WalletError(String),
-
-    /// The wallet canister must be upgraded. See [`dfx wallet upgrade`](https://smartcontracts.org/docs/developers-guide/cli-reference/dfx-wallet.html)
-    #[error("The wallet canister must be upgraded: {0}")]
-    WalletUpgradeRequired(String),
 
     /// The transport was not specified in the [`AgentBuilder`](super::AgentBuilder).
     #[error("Missing replica transport in the Agent Builder.")]
