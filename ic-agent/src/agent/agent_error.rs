@@ -35,6 +35,10 @@ pub enum AgentError {
     #[error("Cannot calculate a RequestID: {0}")]
     CannotCalculateRequestId(#[from] RequestIdError),
 
+    /// There was an error when de/serializing with Candid.
+    #[error("Candid returned an error: {0}")]
+    CandidError(Box<dyn Send + Sync + std::error::Error>),
+
     /// There was an error parsing a URL.
     #[error(r#"Cannot parse url: "{0}""#)]
     UrlParseError(#[from] url::ParseError),
