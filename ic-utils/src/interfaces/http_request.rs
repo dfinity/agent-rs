@@ -48,7 +48,7 @@ struct HttpRequest<'a, H> {
     /// The request body.
     pub body: &'a [u8],
     /// The certificate version.
-    pub certificate_version: Option<&'a u128>,
+    pub certificate_version: Option<&'a u16>,
 }
 
 /// The important components of an HTTP update request.
@@ -412,7 +412,7 @@ impl<'agent> HttpRequestCanister<'agent> {
             IntoIter = impl 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
         >,
         body: impl AsRef<[u8]>,
-        certificate_version: Option<&u128>,
+        certificate_version: Option<&u16>,
     ) -> impl 'agent + SyncCall<(HttpResponse,)> {
         self.http_request_custom(
             method.as_ref(),
@@ -431,7 +431,7 @@ impl<'agent> HttpRequestCanister<'agent> {
         url: &str,
         headers: H,
         body: &[u8],
-        certificate_version: Option<&u128>,
+        certificate_version: Option<&u16>,
     ) -> impl 'agent + SyncCall<(HttpResponse<T, C>,)>
     where
         H: 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
