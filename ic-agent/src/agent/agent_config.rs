@@ -5,7 +5,6 @@ use crate::{
 use std::{sync::Arc, time::Duration};
 
 /// A configuration for an agent.
-#[derive(Debug)]
 pub struct AgentConfig {
     /// See [`with_nonce_factory`](super::AgentBuilder::with_nonce_factory).
     pub nonce_factory: Arc<dyn NonceGenerator>,

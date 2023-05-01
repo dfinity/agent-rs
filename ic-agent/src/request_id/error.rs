@@ -35,21 +35,6 @@ pub enum RequestIdError {
     /// The serializer received a `bool`, which it does not support.
     #[error("Unsupported type: Bool")]
     UnsupportedTypeBool,
-    /// The serializer received a `u8`, which it does not support.
-    #[error("Unsupported type: U8")]
-    UnsupportedTypeU8,
-    /// The serializer received a `u16`, which it does not support.
-    #[error("Unsupported type: U16")]
-    UnsupportedTypeU16,
-    /// The serializer received a `u32`, which it does not support.
-    #[error("Unsupported type: U32")]
-    UnsupportedTypeU32,
-    /// The serializer received a `u64`, which it does not support.
-    #[error("Unsupported type: U64")]
-    UnsupportedTypeU64,
-    /// The serializer received a `u128`, which it does not support.
-    #[error("Unsupported type: U128")]
-    UnsupportedTypeU128,
     /// The serializer received a `i8`, which it does not support.
     #[error("Unsupported type: I8")]
     UnsupportedTypeI8,
@@ -62,9 +47,6 @@ pub enum RequestIdError {
     /// The serializer received a `i64`, which it does not support.
     #[error("Unsupported type: I64")]
     UnsupportedTypeI64,
-    /// The serializer received a `i128`, which it does not support.
-    #[error("Unsupported type: I128")]
-    UnsupportedTypeI128,
     /// The serializer received a `f32`, which it does not support.
     #[error("Unsupported type: F32")]
     UnsupportedTypeF32,
@@ -75,9 +57,6 @@ pub enum RequestIdError {
     #[error("Unsupported type: Char")]
     UnsupportedTypeChar,
     // UnsupportedTypeStr, // Supported
-    /// The serializer received a byte sequence, which it does not support.
-    #[error("Unsupported type: Bytes")]
-    UnsupportedTypeBytes,
     // UnsupportedTypeNone, // Supported
     // UnsupportedTypeSome, // Supported
     /// The serializer received a `()`, which it does not support.
@@ -97,9 +76,6 @@ pub enum RequestIdError {
     /// The serializer received an enum newtype variant, which it does not support.
     #[error("Unsupported type: NewTypeVariant")]
     UnsupportedTypeNewTypeVariant,
-    /// The serializer received a sequence, which it does not support.
-    #[error("Unsupported type: Sequence")]
-    UnsupportedTypeSequence,
     /// The serializer received a tuple, which it does not support.
     #[error("Unsupported type: Tuple")]
     UnsupportedTypeTuple,

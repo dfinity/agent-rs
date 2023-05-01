@@ -1,5 +1,5 @@
 //! The `ic-agent` is a simple-to-use library that enables you to
-//! build applications and interact with the [Internet Computer](https://dfinity.org)
+//! build applications and interact with the [Internet Computer](https://internetcomputer.org)
 //! in Rust. It serves as a Rust-based low-level backend for the
 //! DFINITY Canister Software Development Kit (SDK) and the
 //! [Canister SDK](https://sdk.dfinity.org) command-line execution environment
@@ -106,16 +106,12 @@
 
 #![deny(
     missing_docs,
-    missing_debug_implementations,
     rustdoc::broken_intra_doc_links,
     rustdoc::private_intra_doc_links
 )]
 
 #[cfg(all(feature = "hyper", target_family = "wasm"))]
 compile_error!("Feature `hyper` cannot be used from WASM.");
-
-#[macro_use]
-mod macros;
 
 pub mod agent;
 pub mod export;
