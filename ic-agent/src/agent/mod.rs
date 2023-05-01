@@ -102,9 +102,6 @@ pub trait Transport: Send + Sync {
     fn status(&self) -> AgentFuture<Vec<u8>>;
 }
 
-#[doc(hidden)]
-pub use Transport as ReplicaV2Transport; // deprecate after 0.24
-
 impl<I: Transport + ?Sized> Transport for Box<I> {
     fn call(
         &self,
