@@ -144,6 +144,7 @@ impl ReqwestTransport {
 
         *http_request.body_mut() = body.map(Body::from);
 
+<<<<<<< HEAD
         let status;
         let headers;
         let body;
@@ -161,6 +162,12 @@ impl ReqwestTransport {
                 break;
             }
         }
+=======
+        let request_result = self.request(http_request.try_clone().unwrap()).await?;
+        let status = request_result.0;
+        let headers = request_result.1;
+        let body = request_result.2;
+>>>>>>> origin/main
 
         // status == OK means we have an error message for call requests
         // see https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call

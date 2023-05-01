@@ -59,14 +59,6 @@ pub enum AgentError {
     #[error("The replica returned an HTTP Error: {0}")]
     HttpError(HttpErrorPayload),
 
-    /// Attempted to use HTTP authentication in a non-secure URL (either HTTPS or localhost).
-    #[error("HTTP Authentication cannot be used in a non-secure URL (either HTTPS or localhost)")]
-    CannotUseAuthenticationOnNonSecureUrl(),
-
-    /// The password manager returned an error.
-    #[error("Password Manager returned an error: {0}")]
-    AuthenticationError(String),
-
     /// The status endpoint returned an invalid status.
     #[error("Status endpoint returned an invalid status.")]
     InvalidReplicaStatus,
@@ -78,10 +70,6 @@ pub enum AgentError {
     /// A string error occurred in an external tool.
     #[error("A tool returned a string message error: {0}")]
     MessageError(String),
-
-    /// An error occurred in an external tool.
-    #[error("A tool returned a custom error: {0}")]
-    CustomError(#[from] Box<dyn Send + Sync + std::error::Error>),
 
     /// There was an error reading a LEB128 value.
     #[error("Error reading LEB128 value: {0}")]
@@ -142,10 +130,6 @@ pub enum AgentError {
     /// Could not read the replica root key.
     #[error("Could not read the root key")]
     CouldNotReadRootKey(),
-
-    /// Failed to initialize the BLS library.
-    #[error("Failed to initialize the BLS library")]
-    BlsInitializationFailure(),
 
     /// The invocation to the wallet call forward method failed with an error.
     #[error("The invocation to the wallet call forward method failed with the error: {0}")]

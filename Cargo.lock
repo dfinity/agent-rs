@@ -1065,7 +1065,10 @@ dependencies = [
  "async-trait",
  "backoff",
  "base32",
+<<<<<<< HEAD
  "base64 0.21.0",
+=======
+>>>>>>> origin/main
  "byteorder",
  "candid",
  "futures-util",
