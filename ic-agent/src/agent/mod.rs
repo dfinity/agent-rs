@@ -104,8 +104,6 @@ pub trait Transport: Send + Sync {
 #[doc(hidden)]
 pub use Transport as ReplicaV2Transport; // deprecate after 0.24
 
-impl_debug_empty!(dyn Transport);
-
 impl<I: Transport + ?Sized> Transport for Box<I> {
     fn call(
         &self,

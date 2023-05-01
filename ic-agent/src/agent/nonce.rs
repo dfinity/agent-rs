@@ -5,7 +5,7 @@ use std::sync::{
 };
 
 /// A Factory for nonce blobs.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct NonceFactory {
     inner: Arc<dyn NonceGenerator>,
 }
@@ -56,8 +56,6 @@ pub trait NonceGenerator: Send + Sync {
     /// Generates a nonce, if one is available. Otherwise, returns None.
     fn generate(&self) -> Option<Vec<u8>>;
 }
-
-impl_debug_empty!(dyn NonceGenerator);
 
 pub struct Func<T>(pub T);
 impl<T: Send + Sync + Fn() -> Option<Vec<u8>>> NonceGenerator for Func<T> {
