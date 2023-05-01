@@ -1,4 +1,5 @@
 //! The `ic-agent` is a simple-to-use library that enables you to
+//! build applications and interact with the [Internet Computer](https://internetcomputer.org)
 //! in Rust. It serves as a Rust-based low-level backend for the
 //! DFINITY Canister Software Development Kit (SDK) and the
 //! [Canister SDK](https://sdk.dfinity.org) command-line execution environment
