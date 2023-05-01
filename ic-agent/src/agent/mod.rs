@@ -7,12 +7,11 @@ pub(crate) mod nonce;
 pub(crate) mod replica_api;
 pub(crate) mod response;
 pub(crate) mod response_authentication;
-
 pub mod signed;
 pub mod status;
+
 pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
-use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
 pub use builder::AgentBuilder;
 pub use nonce::{NonceFactory, NonceGenerator};
 pub use replica_api::{RejectCode, RejectResponse};
@@ -22,21 +21,23 @@ pub use response::{Replied, RequestStatusResponse};
 mod agent_test;
 
 use crate::{
-    agent::replica_api::{
-        CallRequestContent, Envelope, QueryContent, ReadStateContent, ReadStateResponse,
+    agent::{
+        replica_api::{
+            CallRequestContent, Envelope, QueryContent, ReadStateContent, ReadStateResponse,
+        },
+        response_authentication::{
+            extract_der, lookup_canister_info, lookup_canister_metadata, lookup_request_status,
+            lookup_value,
+        },
     },
     export::Principal,
     identity::Identity,
     to_request_id, RequestId,
 };
+use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
 use ic_certification::{Certificate, Delegation, Label};
 use serde::Serialize;
 use status::Status;
-
-use crate::agent::response_authentication::{
-    extract_der, lookup_canister_info, lookup_canister_metadata, lookup_request_status,
-    lookup_value,
-};
 use std::{
     convert::TryFrom,
     fmt,
