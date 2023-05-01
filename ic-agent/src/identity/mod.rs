@@ -39,4 +39,3 @@ pub trait Identity: Send + Sync {
     fn sign(&self, blob: &[u8]) -> Result<Signature, String>;
 }
 
-impl_debug_empty!(dyn Identity);
