@@ -18,35 +18,29 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 async-trait = "0.1.68"
 backoff = "0.4.0"
 base32 = "0.4.0"
-base64 = "0.13.0"
 byteorder = "1.3.2"
 candid = { workspace = true }
 futures-util = "0.3.21"
 hex = { workspace = true }
 http = "0.2.6"
 http-body = "0.4.5"
-hyper-rustls = { version = "0.23.0", features = [
-    "webpki-roots",
-    "http2",
-], optional = true }
+ic-certification = { path = "../ic-certification", version = "0.23" }
 ic-verify-bls-signature = "0.1"
-k256 = { version = "0.11", features = ["pem"] }
+k256 = { version = "0.13.1", features = ["pem"] }
 leb128 = "0.2.5"
 mime = "0.3.16"
+pkcs8 = { version = "0.10.2", features = ["std"] }
+sec1 = { version = "0.7.2", features = ["pem"] }
 rand = "0.8.5"
-rustls = "0.20.4"
 ring = { workspace = true, features = ["std"] }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
 serde_cbor =  { workspace = true }
+serde_repr = "0.1.12"
 sha2 = { workspace = true }
 simple_asn1 = "0.6.1"
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["time"] }
 url = "2.1.0"
-pkcs8 = { version = "0.10", features = ["std"] }
-sec1 = { version = "0.3", features = ["pem"] }
-ic-certification = { path = "../ic-certification", version = "0.23" }
 
 [dependencies.hyper]
 version = "0.14"
@@ -60,14 +54,49 @@ features = ["blocking", "json", "rustls-tls", "stream"]
 optional = true
 
 [dependencies.pem]
-version = "1.0"
+version = "2.0.1"
 optional = true
 
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+hyper-rustls = { version = "0.23.0", features = [
+    "webpki-roots",
+    "http2",
+], optional = true }
+tokio = { version = "1.24.2", features = ["time"] }
+rustls = "0.20.4"
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+backoff = { version = "0.4", features = ["wasm-bindgen"] }
+getrandom = { version = "0.2", features = ["js"] }
+js-sys = "0.3"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = ["Window"] }
+time = { version = "0.3", features = ["wasm-bindgen"] }
+
 [dev-dependencies]
+<<<<<<< HEAD
 mockito = "0.31.0"
 proptest = "1.0.0"
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+=======
+serde_json = "1.0.79"
+
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+tokio = { version = "1.24.2", features = ["full"] }
+mockito = "1"
+
+[target.'cfg(target_family = "wasm")'.dev-dependencies]
+wasm-bindgen-test = "0.3.34"
+web-sys = { version = "0.3", features = [
+    "Navigator",
+    "ServiceWorkerContainer",
+    "ServiceWorker",
+    "ServiceWorkerRegistration",
+    "ServiceWorkerState",
+] }
+>>>>>>> origin/main
 
 [features]
 default = ["pem", "reqwest"]
@@ -76,3 +105,6 @@ hyper = ["dep:hyper", "dep:hyper-rustls"]
 ic_ref_tests = [
     "default",
 ] # Used to separate integration tests for ic-ref which need a server running.
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]

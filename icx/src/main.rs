@@ -341,7 +341,7 @@ async fn main() -> Result<()> {
 
     let agent = Agent::builder()
         .with_transport(
-            agent::http_transport::ReqwestHttpReplicaV2Transport::create(opts.replica.clone())
+            agent::http_transport::ReqwestTransport::create(opts.replica.clone())
                 .context("Failed to create Transport for Agent")?,
         )
         .with_boxed_identity(Box::new(create_identity(opts.pem)))
@@ -567,14 +567,12 @@ async fn main() -> Result<()> {
                         print_idl_blob(&blob, &ArgType::Idl, &None)
                             .context("Failed to print request_status result")?;
                     }
-                    agent::RequestStatusResponse::Rejected {
-                        reject_code,
-                        reject_message,
-                    } => {
+                    agent::RequestStatusResponse::Rejected(replica_error) => {
                         bail!(
-                            r#"The Replica returned an error: code {}, message: "{}""#,
-                            reject_code,
-                            reject_message
+                            r#"The Replica returned an error. reject code: {:?}, reject message: "{}", error code: {}"#,
+                            replica_error.reject_code,
+                            replica_error.reject_message,
+                            replica_error.error_code.unwrap_or_default()
                         );
                     }
                     _ => bail!("Can't get valid status of the request.",),

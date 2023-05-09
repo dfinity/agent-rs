@@ -7,6 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+* chore: remove deprecated code and fix style
+* Breaking Change: removing the PasswordManager
+* Breaking Change: Enum variant `AgentError::ReplicaError` is now a tuple struct containing `RejectResponse`.
+* Handling rejected update calls where status code is 200. See IC-1462
+* Reject code type is changed from `u64` to enum `RejectCode`.
+
+* Support WASM targets in the browser via `wasm-bindgen`
+* Do not send `certificate_version` on HTTP Update requests
+* Update `certificate_version` to `u16` instead of `u128`, fixes an issue where the asset canister always responds with v1 response verification
+
+### icx-cert
+* Fixed issue where a missing request header caused the canister to not respond with an `ic-certificate` header.
 
 ## [0.23.2] - 2023-04-21
 

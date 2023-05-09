@@ -9,7 +9,8 @@ mod expiry;
 pub use expiry::Expiry;
 
 /// A type that implements synchronous calls (ie. 'query' calls).
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub trait SyncCall<O>
 where
     O: for<'de> ArgumentDecoder<'de> + Send,
@@ -32,7 +33,8 @@ where
 ///
 /// The return type must be a tuple type that represents all the values the return
 /// call should be returning.
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub trait AsyncCall<Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send,
@@ -166,7 +168,8 @@ where
     }
 }
 
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<'agent, Out> SyncCall<Out> for SyncCaller<'agent, Out>
 where
     Self: Sized,
@@ -247,7 +250,8 @@ where
     }
 }
 
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<'agent, Out> AsyncCall<Out> for AsyncCaller<'agent, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send,
@@ -348,7 +352,8 @@ where
     }
 }
 
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<Out, Out2, Inner, R, AndThen> AsyncCall<Out2>
     for AndThenAsyncCaller<Out, Out2, Inner, R, AndThen>
 where
@@ -449,7 +454,8 @@ where
     }
 }
 
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<Out, Out2, Inner, Map> AsyncCall<Out2> for MappedAsyncCaller<Out, Out2, Inner, Map>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send,

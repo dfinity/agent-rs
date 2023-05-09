@@ -1,4 +1,4 @@
-//! Types representing signed ingress messages.
+//! Types representing signed messages.
 
 use crate::{export::Principal, RequestId};
 

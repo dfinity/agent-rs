@@ -38,7 +38,11 @@ fn spec_compliance_claimed() {
 
 mod management_canister {
     use candid::CandidType;
-    use ic_agent::{export::Principal, AgentError};
+    use ic_agent::{
+        agent::{RejectCode, RejectResponse},
+        export::Principal,
+        AgentError,
+    };
     use ic_utils::{
         call::AsyncCall,
         interfaces::{
@@ -322,12 +326,18 @@ mod management_canister {
 
             // Only that controller can get canister status
             let result = ic00.canister_status(&canister_id).call_and_wait().await;
-            assert_err_or_reject(result, vec![3, 5]);
+            assert_err_or_reject(
+                result,
+                vec![RejectCode::DestinationInvalid, RejectCode::CanisterError],
+            );
             let result = other_ic00
                 .canister_status(&canister_id)
                 .call_and_wait()
                 .await;
-            assert_err_or_reject(result, vec![3, 5]);
+            assert_err_or_reject(
+                result,
+                vec![RejectCode::DestinationInvalid, RejectCode::CanisterError],
+            );
 
             let result = secp256k1_ic00
                 .canister_status(&canister_id)
@@ -340,16 +350,21 @@ mod management_canister {
         })
     }
 
-    fn assert_err_or_reject<S>(result: Result<S, AgentError>, allowed_reject_codes: Vec<u64>) {
+    fn assert_err_or_reject<S>(
+        result: Result<S, AgentError>,
+        allowed_reject_codes: Vec<RejectCode>,
+    ) {
         for expected_rc in &allowed_reject_codes {
-            if matches!(result, Err(AgentError::ReplicaError {
-                    reject_code: actual_rc,
-                    reject_message: _,
-                }) if actual_rc == *expected_rc)
+            if matches!(result,
+                Err(AgentError::ReplicaError(RejectResponse {
+                reject_code,
+                ..
+            })) if reject_code == *expected_rc)
             {
                 return;
             }
         }
+
         assert!(
             matches!(result, Err(AgentError::HttpError(_))),
             "expect an HttpError, or a ReplicaError with reject_code in {:?}",
@@ -392,17 +407,23 @@ mod management_canister {
 
             // Can't call update on a stopped canister
             let result = agent.update(&canister_id, "update").call_and_wait().await;
-            assert!(matches!(result, Err(AgentError::ReplicaError {
-                reject_code: 5,
+            assert!(
+                matches!(result, Err(AgentError::ReplicaError(RejectResponse{
+                reject_code: RejectCode::CanisterError,
                 reject_message,
-            }) if reject_message == "canister is not running"));
+                ..
+            })) if reject_message == "canister is not running")
+            );
 
             // Can't call query on a stopped canister
             let result = agent.query(&canister_id, "query").with_arg([]).call().await;
-            assert!(matches!(result, Err(AgentError::ReplicaError {
-                    reject_code: 5,
-                    reject_message,
-                }) if reject_message == "canister is stopped"));
+            assert!(
+                matches!(result, Err(AgentError::ReplicaError(RejectResponse{
+                reject_code: RejectCode::CanisterError,
+                reject_message,
+                ..
+            })) if reject_message == "canister is stopped")
+            );
 
             // Upgrade should succeed
             ic00.install_code(&canister_id, &canister_wasm)
@@ -419,17 +440,23 @@ mod management_canister {
 
             // Can call update
             let result = agent.update(&canister_id, "update").call_and_wait().await;
-            assert!(matches!(result, Err(AgentError::ReplicaError {
-                    reject_code: 3,
-                    reject_message,
-                }) if reject_message == "method does not exist: update"));
+            assert!(
+                matches!(result, Err(AgentError::ReplicaError(RejectResponse{
+                reject_code: RejectCode::DestinationInvalid,
+                reject_message,
+                ..
+            })) if reject_message == "method does not exist: update")
+            );
 
             // Can call query
             let result = agent.query(&canister_id, "query").with_arg([]).call().await;
-            assert!(matches!(result, Err(AgentError::ReplicaError {
-                    reject_code: 3,
-                    reject_message,
-                }) if reject_message == "query method does not exist"));
+            assert!(
+                matches!(result, Err(AgentError::ReplicaError(RejectResponse{
+                reject_code: RejectCode::DestinationInvalid,
+                reject_message,
+                ..
+            })) if reject_message == "query method does not exist")
+            );
 
             // Another start is a noop
             ic00.start_canister(&canister_id).call_and_wait().await?;
@@ -452,11 +479,14 @@ mod management_canister {
 
             // Cannot call query
             let result = agent.query(&canister_id, "query").with_arg([]).call().await;
-            assert!(matches!(result, Err(AgentError::ReplicaError {
-                    reject_code: 3,
-                    reject_message,
-                }) if reject_message
-                    == format!("canister no longer exists: {}", canister_id.to_text())));
+            assert!(
+                matches!(result, Err(AgentError::ReplicaError(RejectResponse{
+                reject_code: RejectCode::DestinationInvalid,
+                reject_message,
+                ..
+            })) if reject_message
+                    == format!("canister no longer exists: {}", canister_id.to_text()))
+            );
 
             // Cannot query canister status
             let result = ic00.canister_status(&canister_id).call_and_wait().await;
@@ -674,7 +704,10 @@ mod management_canister {
 
 mod simple_calls {
     use crate::universal_canister::payload;
-    use ic_agent::AgentError;
+    use ic_agent::{
+        agent::{RejectCode, RejectResponse},
+        AgentError,
+    };
     use ref_tests::with_universal_canister;
 
     #[ignore]
@@ -722,7 +755,10 @@ mod simple_calls {
 
             assert!(matches!(
                 result,
-                Err(AgentError::ReplicaError { reject_code: 3, .. })
+                Err(AgentError::ReplicaError(RejectResponse {
+                    reject_code: RejectCode::DestinationInvalid,
+                    ..
+                }))
             ));
             Ok(())
         })
@@ -741,7 +777,10 @@ mod simple_calls {
 
             assert!(matches!(
                 result,
-                Err(AgentError::ReplicaError { reject_code: 3, .. })
+                Err(AgentError::ReplicaError(RejectResponse {
+                    reject_code: RejectCode::DestinationInvalid,
+                    ..
+                }))
             ));
             Ok(())
         })
@@ -750,7 +789,11 @@ mod simple_calls {
 
 mod extras {
     use candid::Nat;
-    use ic_agent::{export::Principal, AgentError};
+    use ic_agent::{
+        agent::{RejectCode, RejectResponse},
+        export::Principal,
+        AgentError,
+    };
     use ic_utils::{
         call::AsyncCall,
         interfaces::{management_canister::builders::ComputeAllocation, ManagementCanister},
@@ -880,10 +923,13 @@ mod extras {
                 .with_effective_canister_id(get_effective_canister_id())
                 .call_and_wait()
                 .await;
-            assert!(matches!(result, Err(AgentError::ReplicaError {
-                    reject_code: 3,
+
+            assert!(matches!(result,
+                    Err(AgentError::ReplicaError(RejectResponse {
+                    reject_code: RejectCode::DestinationInvalid,
                     reject_message,
-                }) if reject_message == "The specified_id of the created canister is already in use."));
+                    ..
+                })) if reject_message == "The specified_id of the created canister is already in use."));
 
             Ok(())
         })

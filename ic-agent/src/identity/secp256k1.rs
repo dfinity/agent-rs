@@ -39,15 +39,15 @@ impl Secp256k1Identity {
         let contents = pem_reader.bytes().collect::<Result<Vec<u8>, io::Error>>()?;
 
         for pem in pem::parse_many(contents)? {
-            if pem.tag == EC_PARAMETERS && pem.contents != SECP256K1 {
-                return Err(PemError::UnsupportedKeyCurve(pem.contents));
+            if pem.tag() == EC_PARAMETERS && pem.contents() != SECP256K1 {
+                return Err(PemError::UnsupportedKeyCurve(pem.contents().to_vec()));
             }
 
-            if pem.tag != EcPrivateKey::PEM_LABEL {
+            if pem.tag() != EcPrivateKey::PEM_LABEL {
                 continue;
             }
             let private_key =
-                SecretKey::from_sec1_der(&pem.contents).map_err(|_| pkcs8::Error::KeyMalformed)?;
+                SecretKey::from_sec1_der(pem.contents()).map_err(|_| pkcs8::Error::KeyMalformed)?;
             return Ok(Self::from_private_key(private_key));
         }
         Err(pem::PemError::MissingData.into())

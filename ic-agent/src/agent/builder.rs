@@ -1,11 +1,11 @@
 use crate::{
-    agent::{agent_config::AgentConfig, Agent, ReplicaV2Transport},
+    agent::{agent_config::AgentConfig, Agent, Transport},
     AgentError, Identity, NonceFactory, NonceGenerator,
 };
 use std::sync::Arc;
 
 /// A builder for an [`Agent`].
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct AgentBuilder {
     config: AgentConfig,
 }
@@ -18,21 +18,20 @@ impl AgentBuilder {
 
     /// Set the URL of the [Agent].
     #[cfg(feature = "reqwest")]
-    #[deprecated(since = "0.3.0", note = "Prefer using with_transport().")]
     pub fn with_url<S: Into<String>>(self, url: S) -> Self {
-        use crate::agent::http_transport::ReqwestHttpReplicaV2Transport;
+        use crate::agent::http_transport::ReqwestTransport;
 
-        self.with_transport(ReqwestHttpReplicaV2Transport::create(url).unwrap())
+        self.with_transport(ReqwestTransport::create(url).unwrap())
     }
 
     /// Set a Replica transport to talk to serve as the replica interface.
-    pub fn with_transport<T: 'static + ReplicaV2Transport>(self, transport: T) -> Self {
+    pub fn with_transport<T: 'static + Transport>(self, transport: T) -> Self {
         self.with_arc_transport(Arc::new(transport))
     }
 
     /// Same as [Self::with_transport], but provides a `Arc` boxed implementation instead
     /// of a direct type.
-    pub fn with_arc_transport(mut self, transport: Arc<dyn ReplicaV2Transport>) -> Self {
+    pub fn with_arc_transport(mut self, transport: Arc<dyn Transport>) -> Self {
         self.config.transport = Some(transport);
         self
     }

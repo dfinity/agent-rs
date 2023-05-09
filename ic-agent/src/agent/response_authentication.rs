@@ -1,4 +1,4 @@
-use crate::agent::{Replied, RequestStatusResponse};
+use crate::agent::{RejectCode, RejectResponse, Replied, RequestStatusResponse};
 use crate::{export::Principal, AgentError, RequestId};
 use ic_certification::{Certificate, Label, LookupResult};
 use std::str::from_utf8;
@@ -82,16 +82,17 @@ pub(crate) fn lookup_rejection(
     let reject_code = lookup_reject_code(certificate, request_id)?;
     let reject_message = lookup_reject_message(certificate, request_id)?;
 
-    Ok(RequestStatusResponse::Rejected {
+    Ok(RequestStatusResponse::Rejected(RejectResponse {
         reject_code,
         reject_message,
-    })
+        error_code: None,
+    }))
 }
 
 pub(crate) fn lookup_reject_code(
     certificate: &Certificate,
     request_id: &RequestId,
-) -> Result<u64, AgentError> {
+) -> Result<RejectCode, AgentError> {
     let path = [
         "request_status".into(),
         request_id.to_vec().into(),
@@ -99,7 +100,8 @@ pub(crate) fn lookup_reject_code(
     ];
     let code = lookup_value(certificate, path)?;
     let mut readable = code;
-    Ok(leb128::read::unsigned(&mut readable)?)
+    let code_digit = leb128::read::unsigned(&mut readable)?;
+    RejectCode::try_from(code_digit)
 }
 
 pub(crate) fn lookup_reject_message(

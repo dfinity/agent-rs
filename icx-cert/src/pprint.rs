@@ -77,6 +77,7 @@ pub fn pprint(url: String, accept_encodings: Option<Vec<String>>) -> Result<()> 
             client
         };
         client
+            .user_agent("icx-cert")
             .build()?
             .get(url)
             .send()
@@ -122,10 +123,13 @@ pub fn pprint(url: String, accept_encodings: Option<Vec<String>>) -> Result<()> 
             .with_context(|| "failed to decode certificate time as LEB128")?;
         const NANOS_PER_SEC: u64 = 1_000_000_000;
 
-        let dt = chrono::Utc.timestamp(
-            (timestamp_nanos / NANOS_PER_SEC) as i64,
-            (timestamp_nanos % NANOS_PER_SEC) as u32,
-        );
+        let dt = chrono::Utc
+            .timestamp_opt(
+                (timestamp_nanos / NANOS_PER_SEC) as i64,
+                (timestamp_nanos % NANOS_PER_SEC) as u32,
+            )
+            .single()
+            .context("timestamp out of range")?;
         println!("CERTIFICATE TIME: {}", dt.to_rfc3339());
     }
     println!("CERTIFICATE TREE: {:#?}", cert.tree);

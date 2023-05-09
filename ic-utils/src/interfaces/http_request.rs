@@ -48,7 +48,21 @@ struct HttpRequest<'a, H> {
     /// The request body.
     pub body: &'a [u8],
     /// The certificate version.
-    pub certificate_version: Option<&'a u128>,
+    pub certificate_version: Option<&'a u16>,
+}
+
+/// The important components of an HTTP update request.
+/// This is the same as `HttpRequest`, excluding the `certificate_version` property.
+#[derive(Debug, Clone, CandidType)]
+struct HttpUpdateRequest<'a, H> {
+    /// The HTTP method string.
+    pub method: &'a str,
+    /// The URL that was visited.
+    pub url: &'a str,
+    /// The request headers.
+    pub headers: H,
+    /// The request body.
+    pub body: &'a [u8],
 }
 
 /// A wrapper around an iterator of headers
@@ -398,7 +412,7 @@ impl<'agent> HttpRequestCanister<'agent> {
             IntoIter = impl 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
         >,
         body: impl AsRef<[u8]>,
-        certificate_version: Option<&u128>,
+        certificate_version: Option<&u16>,
     ) -> impl 'agent + SyncCall<(HttpResponse,)> {
         self.http_request_custom(
             method.as_ref(),
@@ -417,7 +431,7 @@ impl<'agent> HttpRequestCanister<'agent> {
         url: &str,
         headers: H,
         body: &[u8],
-        certificate_version: Option<&u128>,
+        certificate_version: Option<&u16>,
     ) -> impl 'agent + SyncCall<(HttpResponse<T, C>,)>
     where
         H: 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
@@ -443,15 +457,8 @@ impl<'agent> HttpRequestCanister<'agent> {
         url: impl AsRef<str>,
         headers: impl 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
         body: impl AsRef<[u8]>,
-        certificate_version: Option<&u128>,
     ) -> impl 'agent + AsyncCall<(HttpResponse,)> {
-        self.http_request_update_custom(
-            method.as_ref(),
-            url.as_ref(),
-            headers,
-            body.as_ref(),
-            certificate_version,
-        )
+        self.http_request_update_custom(method.as_ref(), url.as_ref(), headers, body.as_ref())
     }
 
     /// Performs a HTTP request over an update call. Unlike query calls, update calls must pass consensus
@@ -463,7 +470,6 @@ impl<'agent> HttpRequestCanister<'agent> {
         url: &str,
         headers: H,
         body: &[u8],
-        certificate_version: Option<&u128>,
     ) -> impl 'agent + AsyncCall<(HttpResponse<T, C>,)>
     where
         H: 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
@@ -471,12 +477,11 @@ impl<'agent> HttpRequestCanister<'agent> {
         C: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
     {
         self.update_("http_request_update")
-            .with_arg(HttpRequest {
+            .with_arg(HttpUpdateRequest {
                 method,
                 url,
                 headers: Headers(headers),
                 body,
-                certificate_version,
             })
             .build()
     }
