@@ -284,7 +284,7 @@ impl Agent {
         self.transport = Arc::new(transport);
     }
 
-    /// Sets the identity provider for signing messages
+    /// Sets the identity provider for signing messages.
     ///
     /// NOTE: if you change the identity while having update calls in
     /// flight, you will not be able to [Agent::poll] the status of these
