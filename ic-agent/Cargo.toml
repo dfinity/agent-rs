@@ -15,7 +15,7 @@ keywords = ["internet-computer", "agent", "icp", "dfinity"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
-async-trait = "0.1.53"
+async-trait = "0.1.68"
 backoff = "0.4.0"
 base32 = "0.4.0"
 base64 = "0.13.0"
@@ -38,13 +38,13 @@ rustls = "0.20.4"
 ring = { workspace = true, features = ["std"] }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
-serde_cbor = "0.11.2"
+serde_cbor =  { workspace = true }
 sha2 = { workspace = true }
 simple_asn1 = "0.6.1"
 thiserror = { workspace = true }
-tokio = { version = "1.24.2", features = ["time"] }
+tokio = { workspace = true, features = ["time"] }
 url = "2.1.0"
-pkcs8 = { version = "0.9", features = ["std"] }
+pkcs8 = { version = "0.10", features = ["std"] }
 sec1 = { version = "0.3", features = ["pem"] }
 ic-certification = { path = "../ic-certification", version = "0.23" }
 
@@ -66,8 +66,8 @@ optional = true
 [dev-dependencies]
 mockito = "0.31.0"
 proptest = "1.0.0"
-serde_json = "1.0.79"
-tokio = { version = "1.24.2", features = ["full"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 
 [features]
 default = ["pem", "reqwest"]
