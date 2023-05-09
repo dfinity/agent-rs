@@ -296,7 +296,7 @@ impl Agent {
         self.identity = Arc::new(identity);
     }
 
-    /// Sets the initial backoff interval used for polling the IC when awaiting a response
+    /// Sets the initial backoff interval used for polling the IC when awaiting a response.
     pub fn set_backoff_initial_interval(&mut self, initial_interval: Duration) {
         self.backoff_initial_interval = initial_interval;
     }
