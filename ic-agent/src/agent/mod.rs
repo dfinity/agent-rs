@@ -236,7 +236,7 @@ pub struct Agent {
     nonce_factory: Arc<dyn NonceGenerator>,
     identity: Arc<dyn Identity>,
     ingress_expiry_duration: Duration,
-    root_key: Arc<RwLock<Option<Vec<u8>>>>,
+    root_key: Arc<RwLock<Vec<u8>>>,
     transport: Arc<dyn Transport>,
 }
 
@@ -263,7 +263,7 @@ impl Agent {
             ingress_expiry_duration: config
                 .ingress_expiry_duration
                 .unwrap_or_else(|| Duration::from_secs(300)),
-            root_key: Arc::new(RwLock::new(Some(IC_ROOT_KEY.to_vec()))),
+            root_key: Arc::new(RwLock::new(IC_ROOT_KEY.to_vec())),
             transport: config
                 .transport
                 .ok_or_else(AgentError::MissingReplicaTransport)?,
@@ -316,21 +316,19 @@ impl Agent {
     /// Using this function you can set the root key to a known one if you know if beforehand.
     pub fn set_root_key(&self, root_key: Vec<u8>) -> Result<(), AgentError> {
         if let Ok(mut write_guard) = self.root_key.write() {
-            *write_guard = Some(root_key);
+            *write_guard = root_key;
+            Ok(())
+        } else {
+            Err(AgentError::Poisoned())
         }
-        Ok(())
     }
 
     /// Return the root key currently in use.
     pub fn read_root_key(&self) -> Result<Vec<u8>, AgentError> {
-        if let Ok(read_lock) = self.root_key.read() {
-            if let Some(root_key) = read_lock.clone() {
-                Ok(root_key)
-            } else {
-                Err(AgentError::CouldNotReadRootKey())
-            }
+        if let Ok(read_guard) = self.root_key.read() {
+            Ok(read_guard.clone())
         } else {
-            Err(AgentError::CouldNotReadRootKey())
+            Err(AgentError::Poisoned())
         }
     }
 
