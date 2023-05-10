@@ -204,7 +204,7 @@ pub enum PollResult {
 ///   // Only do the following call when not contacting the IC main net (e.g. a local emulator).
 ///   // This is important as the main net public key is static and a rogue network could return
 ///   // a different key.
-///   // If you know the root key ahead of time, you can use `agent.set_root_key(root_key)?;`.
+///   // If you know the root key ahead of time, you can use `agent.set_root_key(root_key);`.
 ///   agent.fetch_root_key().await?;
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 ///
@@ -326,40 +326,30 @@ impl Agent {
     /// *Only use this when you are  _not_ talking to the main Internet Computer, otherwise
     /// you are prone to man-in-the-middle attacks! Do not call this function by default.*
     pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
-        if let Ok(key) = self.read_root_key() {
-            if key != IC_ROOT_KEY.to_vec() {
-                // already fetched the root key
-                return Ok(());
-            }
+        if self.read_root_key() != IC_ROOT_KEY.to_vec() {
+            // already fetched the root key
+            return Ok(());
         }
         let status = self.status().await?;
         let root_key = status
             .root_key
             .clone()
             .ok_or(AgentError::NoRootKeyInStatus(status))?;
-        self.set_root_key(root_key)
+        self.set_root_key(root_key);
+        Ok(())
     }
 
     /// By default, the agent is configured to talk to the main Internet Computer, and verifies
     /// responses using a hard-coded public key.
     ///
     /// Using this function you can set the root key to a known one if you know if beforehand.
-    pub fn set_root_key(&self, root_key: Vec<u8>) -> Result<(), AgentError> {
-        if let Ok(mut write_guard) = self.root_key.write() {
-            *write_guard = root_key;
-            Ok(())
-        } else {
-            Err(AgentError::Poisoned())
-        }
+    pub fn set_root_key(&self, root_key: Vec<u8>) {
+        *self.root_key.write().unwrap() = root_key;
     }
 
     /// Return the root key currently in use.
-    pub fn read_root_key(&self) -> Result<Vec<u8>, AgentError> {
-        if let Ok(read_guard) = self.root_key.read() {
-            Ok(read_guard.clone())
-        } else {
-            Err(AgentError::Poisoned())
-        }
+    pub fn read_root_key(&self) -> Vec<u8> {
+        self.root_key.read().unwrap().clone()
     }
 
     fn get_expiry_date(&self) -> u64 {
@@ -677,7 +667,7 @@ impl Agent {
         effective_canister_id: Principal,
     ) -> Result<Vec<u8>, AgentError> {
         match delegation {
-            None => self.read_root_key(),
+            None => Ok(self.read_root_key()),
             Some(delegation) => {
                 let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;

@@ -127,10 +127,6 @@ pub enum AgentError {
     #[error("The status response did not contain a root key.  Status: {0}")]
     NoRootKeyInStatus(Status),
 
-    /// An operation failed due to a poisoned type.
-    #[error("Could not perform the requested operation due to a poisoned type")]
-    Poisoned(),
-
     /// The invocation to the wallet call forward method failed with an error.
     #[error("The invocation to the wallet call forward method failed with the error: {0}")]
     WalletCallFailed(String),
