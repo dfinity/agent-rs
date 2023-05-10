@@ -235,7 +235,7 @@ pub enum PollResult {
 pub struct Agent {
     nonce_factory: Arc<dyn NonceGenerator>,
     identity: Arc<dyn Identity>,
-    ingress_expiry_duration: Duration,
+    ingress_expiry: Duration,
     root_key: Arc<RwLock<Vec<u8>>>,
     transport: Arc<dyn Transport>,
 
@@ -248,7 +248,7 @@ pub struct Agent {
 impl fmt::Debug for Agent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         f.debug_struct("Agent")
-            .field("ingress_expiry_duration", &self.ingress_expiry_duration)
+            .field("ingress_expiry", &self.ingress_expiry)
             .finish_non_exhaustive()
     }
 }
@@ -265,56 +265,18 @@ impl Agent {
         Ok(Agent {
             nonce_factory: config.nonce_factory,
             identity: config.identity,
-            ingress_expiry_duration: config
-                .ingress_expiry_duration
+            ingress_expiry: config
+                .ingress_expiry
                 .unwrap_or_else(|| Duration::from_secs(300)),
             root_key: Arc::new(RwLock::new(IC_ROOT_KEY.to_vec())),
             transport: config
                 .transport
                 .ok_or_else(AgentError::MissingReplicaTransport)?,
-            backoff_initial_interval: Duration::from_millis(500),
-            backoff_max_elapsed_time: Duration::from_secs(60 * 2),
-            backoff_max_interval: Duration::from_secs(1),
-            backoff_multiplier: 1.4,
+            backoff_initial_interval: config.backoff_initial_interval,
+            backoff_max_elapsed_time: config.backoff_max_elapsed_time,
+            backoff_max_interval: config.backoff_max_elapsed_time,
+            backoff_multiplier: config.backoff_multiplier,
         })
-    }
-
-    /// Sets the transport of the [`Agent`].
-    pub fn set_transport<F: 'static + Transport>(&mut self, transport: F) {
-        self.transport = Arc::new(transport);
-    }
-
-    /// Sets the identity provider for signing messages.
-    ///
-    /// NOTE: if you change the identity while having update calls in
-    /// flight, you will not be able to [Agent::poll] the status of these
-    /// messages.
-    pub fn set_identity<I>(&mut self, identity: I)
-    where
-        I: 'static + Identity,
-    {
-        self.identity = Arc::new(identity);
-    }
-
-    /// Sets the initial backoff interval used for polling the IC when awaiting a response.
-    pub fn set_backoff_initial_interval(&mut self, initial_interval: Duration) {
-        self.backoff_initial_interval = initial_interval;
-    }
-
-    /// Sets the max elapsed time for polling the IC when awaiting a response.
-    pub fn set_backoff_max_elapsed_time(&mut self, max_elapsed_time: Duration) {
-        self.backoff_max_elapsed_time = max_elapsed_time;
-    }
-
-    /// Sets the max backoff interval used for polling the IC when awaiting a response.
-    pub fn set_backoff_max_interval(&mut self, max_interval: Duration) {
-        self.backoff_max_interval = max_interval;
-    }
-
-    /// Sets the value to multiply the current interval with for each retry attempt
-    /// when polling the IC for a response.
-    pub fn set_backoff_multiplier(&mut self, multiplier: f64) {
-        self.backoff_multiplier = multiplier;
     }
 
     /// By default, the agent is configured to talk to the main Internet Computer, and verifies
@@ -356,7 +318,7 @@ impl Agent {
         // TODO(hansl): evaluate if we need this on the agent side (my hunch is we don't).
         let permitted_drift = Duration::from_secs(60);
         (self
-            .ingress_expiry_duration
+            .ingress_expiry
             .saturating_add({
                 #[cfg(not(target_family = "wasm"))]
                 {
