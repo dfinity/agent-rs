@@ -55,7 +55,7 @@ impl ReqwestTransport {
     }
 
     /// Creates a replica transport from a HTTP URL.
-    #[cfg(target_family = "wasm")]
+    #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
         Self::create_with_client(url, Client::new())
     }
@@ -217,9 +217,9 @@ impl Transport for ReqwestTransport {
 
 #[cfg(test)]
 mod test {
-    #[cfg(target_family = "wasm")]
+    #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
     use wasm_bindgen_test::wasm_bindgen_test;
-    #[cfg(target_family = "wasm")]
+    #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
     wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
     use super::ReqwestTransport;

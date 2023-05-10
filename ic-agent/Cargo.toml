@@ -67,12 +67,12 @@ rustls = "0.20.4"
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 backoff = { version = "0.4", features = ["wasm-bindgen"] }
-getrandom = { version = "0.2", features = ["js"] }
-js-sys = "0.3"
-wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = ["Window"] }
-time = { version = "0.3", features = ["wasm-bindgen"] }
+getrandom = { version = "0.2", features = ["js"], optional = true }
+js-sys = { version = "0.3", optional = true }
+wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+web-sys = { version = "0.3", features = ["Window"], optional = true }
+time = { version = "0.3", features = ["wasm-bindgen"], optional = true }
 
 [dev-dependencies]
 serde_json = "1.0.79"
@@ -98,6 +98,15 @@ hyper = ["dep:hyper", "dep:hyper-rustls"]
 ic_ref_tests = [
     "default",
 ] # Used to separate integration tests for ic-ref which need a server running.
+wasm-bindgen = [
+    "dep:js-sys",
+    "dep:wasm-bindgen",
+    "dep:wasm-bindgen-futures",
+    "dep:getrandom",
+    "dep:web-sys",
+    "dep:time",
+    "backoff/wasm-bindgen",
+]
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
