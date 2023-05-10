@@ -95,12 +95,6 @@ impl AgentBuilder {
         self
     }
 
-    /// Sets the max elapsed time for polling the IC when awaiting a response.
-    pub fn set_backoff_max_elapsed_time(mut self, max_elapsed_time: Duration) -> Self {
-        self.config.backoff_max_elapsed_time = max_elapsed_time;
-        self
-    }
-
     /// Sets the max backoff interval used for polling the IC when awaiting a response.
     pub fn set_backoff_max_interval(mut self, max_interval: Duration) -> Self {
         self.config.backoff_max_interval = max_interval;

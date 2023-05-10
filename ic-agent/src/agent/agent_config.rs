@@ -33,7 +33,7 @@ impl Default for AgentConfig {
             ingress_expiry: None,
             transport: None,
             backoff_initial_interval: Duration::from_millis(500),
-            backoff_max_elapsed_time: Duration::from_secs(60 * 2),
+            backoff_max_elapsed_time: Duration::from_secs(60 * 5),
             backoff_max_interval: Duration::from_secs(1),
             backoff_multiplier: 1.4,
         }
