@@ -238,11 +238,6 @@ pub struct Agent {
     ingress_expiry: Duration,
     root_key: Arc<RwLock<Vec<u8>>>,
     transport: Arc<dyn Transport>,
-
-    backoff_initial_interval: Duration,
-    backoff_max_elapsed_time: Duration,
-    backoff_max_interval: Duration,
-    backoff_multiplier: f64,
 }
 
 impl fmt::Debug for Agent {
@@ -272,10 +267,6 @@ impl Agent {
             transport: config
                 .transport
                 .ok_or_else(AgentError::MissingReplicaTransport)?,
-            backoff_initial_interval: config.backoff_initial_interval,
-            backoff_max_elapsed_time: config.backoff_max_elapsed_time,
-            backoff_max_interval: config.backoff_max_elapsed_time,
-            backoff_multiplier: config.backoff_multiplier,
         })
     }
 
@@ -526,10 +517,10 @@ impl Agent {
         effective_canister_id: Principal,
     ) -> Result<Vec<u8>, AgentError> {
         let mut retry_policy = ExponentialBackoffBuilder::new()
-            .with_initial_interval(self.backoff_initial_interval)
-            .with_max_interval(self.backoff_max_interval)
-            .with_multiplier(self.backoff_multiplier)
-            .with_max_elapsed_time(Some(self.backoff_max_elapsed_time))
+            .with_initial_interval(Duration::from_millis(500))
+            .with_max_interval(Duration::from_secs(1))
+            .with_multiplier(1.4)
+            .with_max_elapsed_time(Some(Duration::from_secs(60 * 5)))
             .build();
         let mut request_accepted = false;
         loop {

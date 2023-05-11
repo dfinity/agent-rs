@@ -3,7 +3,6 @@ use crate::{
     AgentError, Identity, NonceFactory, NonceGenerator,
 };
 use std::sync::Arc;
-use std::time::Duration;
 
 /// A builder for an [`Agent`].
 #[derive(Default)]
@@ -86,25 +85,6 @@ impl AgentBuilder {
     /// fixed system time.
     pub fn with_ingress_expiry(mut self, ingress_expiry: Option<std::time::Duration>) -> Self {
         self.config.ingress_expiry = ingress_expiry;
-        self
-    }
-
-    /// Sets the initial backoff interval used for polling the IC when awaiting a response.
-    pub fn set_backoff_initial_interval(mut self, initial_interval: Duration) -> Self {
-        self.config.backoff_initial_interval = initial_interval;
-        self
-    }
-
-    /// Sets the max backoff interval used for polling the IC when awaiting a response.
-    pub fn set_backoff_max_interval(mut self, max_interval: Duration) -> Self {
-        self.config.backoff_max_interval = max_interval;
-        self
-    }
-
-    /// Sets the value to multiply the current interval with for each retry attempt
-    /// when polling the IC for a response.
-    pub fn set_backoff_multiplier(mut self, multiplier: f64) -> Self {
-        self.config.backoff_multiplier = multiplier;
         self
     }
 }
