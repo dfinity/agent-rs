@@ -11,7 +11,7 @@ pub struct AgentConfig {
     /// See [`with_identity`](super::AgentBuilder::with_identity).
     pub identity: Arc<dyn Identity>,
     /// See [`with_ingress_expiry`](super::AgentBuilder::with_ingress_expiry).
-    pub ingress_expiry_duration: Option<Duration>,
+    pub ingress_expiry: Option<Duration>,
     /// The [`with_transport`](super::AgentBuilder::with_transport).
     pub transport: Option<Arc<dyn Transport>>,
 }
@@ -21,7 +21,7 @@ impl Default for AgentConfig {
         Self {
             nonce_factory: Arc::new(NonceFactory::random()),
             identity: Arc::new(AnonymousIdentity {}),
-            ingress_expiry_duration: None,
+            ingress_expiry: None,
             transport: None,
         }
     }
