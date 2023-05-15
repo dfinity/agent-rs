@@ -1,8 +1,6 @@
 use crate::{export::Principal, AgentError};
 use ic_certification::Label;
 use serde::{Deserialize, Serialize};
-
-pub use ic_certification::{Certificate, Delegation};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

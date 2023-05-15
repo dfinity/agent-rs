@@ -64,7 +64,7 @@
 //!   // Only do the following call when not contacting the IC main net (e.g. a local emulator).
 //!   // This is important as the main net public key is static and a rogue network could return
 //!   // a different key.
-//!   // If you know the root key ahead of time, you can use `agent.set_root_key(root_key)?;`.
+//!   // If you know the root key ahead of time, you can use `agent.set_root_key(root_key);`.
 //!   agent.fetch_root_key().await?;
 //!   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 //!

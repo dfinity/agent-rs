@@ -127,10 +127,6 @@ pub enum AgentError {
     #[error("The status response did not contain a root key.  Status: {0}")]
     NoRootKeyInStatus(Status),
 
-    /// Could not read the replica root key.
-    #[error("Could not read the root key")]
-    CouldNotReadRootKey(),
-
     /// The invocation to the wallet call forward method failed with an error.
     #[error("The invocation to the wallet call forward method failed with the error: {0}")]
     WalletCallFailed(String),

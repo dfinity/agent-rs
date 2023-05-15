@@ -13,7 +13,7 @@ ic-utils = { path = "../ic-utils", features = ["raw"] }
 ring = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 sha2 = { workspace = true }
-tokio = { version = "1.24.2", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
 serde_cbor = { workspace = true }
