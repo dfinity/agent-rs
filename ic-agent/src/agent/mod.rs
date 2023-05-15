@@ -56,7 +56,7 @@ const IC_ROOT_KEY: &[u8; 133] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x
 #[cfg(not(target_family = "wasm"))]
 type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + Send + 'a>>;
 
-#[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
+#[cfg(target_family = "wasm")]
 type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + 'a>>;
 
 /// A facade that connects to a Replica and does requests. These requests can be of any type
