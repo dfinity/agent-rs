@@ -285,7 +285,7 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
 
     /// Add an argument to the candid argument list. This requires Candid arguments, if
     /// there is a raw argument set (using [`with_arg_raw`](SyncCallBuilder::with_arg_raw)), this will fail.
-    /// 
+    ///
     /// TODO: make this method unnecessary ([#132](https://github.com/dfinity/agent-rs/issues/132))
     pub fn with_value_arg(mut self, arg: IDLValue) -> SyncCallBuilder<'agent, 'canister> {
         self.arg.push_value_arg(arg);
