@@ -35,7 +35,7 @@ rand = "0.8.5"
 ring = { workspace = true, features = ["std"] }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
-serde_cbor =  { workspace = true }
+serde_cbor = { workspace = true }
 serde_repr = "0.1.12"
 sha2 = { workspace = true }
 simple_asn1 = "0.6.1"
@@ -71,7 +71,7 @@ js-sys = { version = "0.3", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 web-sys = { version = "0.3", features = ["Window"], optional = true }
-time = { version = "0.3", features = ["wasm-bindgen"], optional = true }
+time = { workspace = true, features = ["wasm-bindgen"], optional = true }
 
 [dev-dependencies]
 serde_json = "1.0.79"
