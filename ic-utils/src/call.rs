@@ -43,21 +43,21 @@ where
     /// managed by the caller using the Agent directly.
     ///
     /// Since the return type is encoded in the trait itself, this can lead to types
-    /// that are not compatible to [O] when getting the result from the Request Id.
-    /// For example, you might hold a [AsyncCall<u8>], use `call()` and poll for
+    /// that are not compatible to `Out` when getting the result from the Request Id.
+    /// For example, you might hold a [`AsyncCall<u8>`], use `call()` and poll for
     /// the result, and try to deserialize it as a [String]. This would be caught by
     /// Rust type system, but in this case it will be checked at runtime (as Request
     /// Id does not have a type associated with it).
     async fn call(self) -> Result<RequestId, AgentError>;
 
-    /// Execute the call, and wait for an answer using a [Waiter] strategy. The return
+    /// Execute the call, and wait for an answer using an exponential-backoff strategy. The return
     /// type is encoded in the trait.
     async fn call_and_wait(self) -> Result<Out, AgentError>;
 
     /// Apply a transformation function after the call has been successful. The transformation
     /// is applied with the result.
     ///
-    /// ```ignored
+    /// ```ignore
     /// # // This test is ignored because it requires an ic to be running. We run these
     /// # // in the ic-ref workflow.
     /// use ic_agent::{Agent, Principal};
