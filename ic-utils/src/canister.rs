@@ -222,7 +222,7 @@ impl Argument {
         Default::default()
     }
 
-    /// Creates an argument from an arbitrary blob. Equivalent to [`set_raw_arg`].
+    /// Creates an argument from an arbitrary blob. Equivalent to [`set_raw_arg`](Argument::set_raw_arg).
     pub fn from_raw(raw: Vec<u8>) -> Self {
         Self(Ok(ArgumentType::Raw(raw)))
     }
@@ -273,7 +273,8 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
 
 impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
     /// Add an argument to the candid argument list. This requires Candid arguments, if
-    /// there is a raw argument set (using [with_arg_raw]), this will fail.
+    /// there is a raw argument set (using [`with_arg_raw`](SyncCallBuilder::with_arg_raw)),
+    /// this will fail.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> SyncCallBuilder<'agent, 'canister>
     where
         Argument: CandidType + Sync + Send,
@@ -283,8 +284,9 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
     }
 
     /// Add an argument to the candid argument list. This requires Candid arguments, if
-    /// there is a raw argument set (using [with_arg_raw]), this will fail.
-    /// TODO: make this method unnecessary https://github.com/dfinity/agent-rs/issues/132
+    /// there is a raw argument set (using [`with_arg_raw`](SyncCallBuilder::with_arg_raw)), this will fail.
+    ///
+    /// TODO: make this method unnecessary ([#132](https://github.com/dfinity/agent-rs/issues/132))
     pub fn with_value_arg(mut self, arg: IDLValue) -> SyncCallBuilder<'agent, 'canister> {
         self.arg.push_value_arg(arg);
         self
@@ -306,7 +308,7 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
         self
     }
 
-    /// Builds an [SyncCaller] from this builder's state.
+    /// Builds a [SyncCaller] from this builder's state.
     pub fn build<Output>(self) -> SyncCaller<'canister, Output>
     where
         Output: for<'de> ArgumentDecoder<'de> + Send + Sync,
@@ -352,7 +354,7 @@ impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
 
 impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
     /// Add an argument to the candid argument list. This requires Candid arguments, if
-    /// there is a raw argument set (using [with_arg_raw]), this will fail.
+    /// there is a raw argument set (using [`with_arg_raw`](AsyncCallBuilder::with_arg_raw)), this will fail.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> AsyncCallBuilder<'agent, 'canister>
     where
         Argument: CandidType + Sync + Send,

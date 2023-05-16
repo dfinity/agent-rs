@@ -109,6 +109,7 @@
     rustdoc::broken_intra_doc_links,
     rustdoc::private_intra_doc_links
 )]
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 #[cfg(all(feature = "hyper", target_family = "wasm"))]
 compile_error!("Feature `hyper` cannot be used from WASM.");

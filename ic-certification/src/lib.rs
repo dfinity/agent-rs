@@ -3,6 +3,8 @@
 //! If you need support for the serde library, you will need to use the `serde` feature
 //! (available by default).
 
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+
 pub mod hash_tree;
 #[doc(inline)]
 pub use hash_tree::{HashTree, Label, LookupResult, SubtreeLookupResult};
