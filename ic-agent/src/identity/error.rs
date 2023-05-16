@@ -1,5 +1,3 @@
-#![cfg(feature = "pem")]
-
 use thiserror::Error;
 
 /// An error happened while reading a PEM file.
