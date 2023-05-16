@@ -80,6 +80,7 @@ where
     /// #
     /// # const URL: &'static str = concat!("http://localhost:", env!("IC_REF_PORT"));
     /// #
+    /// # let effective_id = Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap();
     ///   let agent = Agent::builder()
     ///     .with_url(URL)
     ///     .with_identity(create_identity())
@@ -94,6 +95,7 @@ where
     ///   let (canister_id,) = management_canister
     ///     .create_canister()
     ///     .as_provisional_create_with_amount(None)
+    ///     .with_effective_canister_id(effective_id)
     ///     .and_then(|(canister_id,)| async move {
     ///       management_canister
     ///         .install_code(&canister_id, canister_wasm)
