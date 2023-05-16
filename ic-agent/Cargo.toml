@@ -71,7 +71,7 @@ js-sys = { version = "0.3", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 web-sys = { version = "0.3", features = ["Window"], optional = true }
-time = { version = "0.3", features = ["wasm-bindgen"], optional = true }
+time = { workspace = true, features = ["wasm-bindgen"], optional = true }
 
 [dev-dependencies]
 serde_json = "1.0.79"
