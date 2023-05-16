@@ -57,7 +57,7 @@ where
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
     /// Add an argument to the candid argument list. This requires Candid arguments, if
-    /// there is a raw argument set (using [with_arg_raw]), this will fail.
+    /// there is a raw argument set (using [`with_arg_raw`](CallForwarder::with_arg_raw)), this will fail.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> Self
     where
         Argument: CandidType + Sync + Send,

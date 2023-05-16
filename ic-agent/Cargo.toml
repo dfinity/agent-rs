@@ -35,7 +35,7 @@ rand = "0.8.5"
 ring = { workspace = true, features = ["std"] }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
-serde_cbor =  { workspace = true }
+serde_cbor = { workspace = true }
 serde_repr = "0.1.12"
 sha2 = { workspace = true }
 simple_asn1 = "0.6.1"
@@ -109,3 +109,5 @@ wasm-bindgen = [
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
+rustdoc-args = ["--cfg=docsrs"]
+features = ["hyper"]

@@ -35,29 +35,29 @@ pub use ReqwestTransport as ReqwestHttpReplicaV2Transport; // deprecate after 0.
 
 impl ReqwestTransport {
     /// Creates a replica transport from a HTTP URL.
-    #[cfg(not(target_family = "wasm"))]
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
-        let mut tls_config = rustls::ClientConfig::builder()
-            .with_safe_defaults()
-            .with_webpki_roots()
-            .with_no_client_auth();
+        #[cfg(not(target_family = "wasm"))]
+        {
+            let mut tls_config = rustls::ClientConfig::builder()
+                .with_safe_defaults()
+                .with_webpki_roots()
+                .with_no_client_auth();
 
-        // Advertise support for HTTP/2
-        tls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+            // Advertise support for HTTP/2
+            tls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
 
-        Self::create_with_client(
-            url,
-            Client::builder()
-                .use_preconfigured_tls(tls_config)
-                .build()
-                .expect("Could not create HTTP client."),
-        )
-    }
-
-    /// Creates a replica transport from a HTTP URL.
-    #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
-    pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
-        Self::create_with_client(url, Client::new())
+            Self::create_with_client(
+                url,
+                Client::builder()
+                    .use_preconfigured_tls(tls_config)
+                    .build()
+                    .expect("Could not create HTTP client."),
+            )
+        }
+        #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
+        {
+            Self::create_with_client(url, Client::new())
+        }
     }
 
     /// Creates a replica transport from a HTTP URL and a [`reqwest::Client`].
