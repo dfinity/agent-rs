@@ -334,7 +334,7 @@ impl Agent {
                         .duration_since(std::time::UNIX_EPOCH)
                         .expect("Time wrapped around.")
                 }
-                #[cfg(target_family = "wasm")]
+                #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
                 {
                     Duration::from_nanos((js_sys::Date::now() * 1_000_000.) as _)
                 }
@@ -562,7 +562,7 @@ impl Agent {
             match retry_policy.next_backoff() {
                 #[cfg(not(target_family = "wasm"))]
                 Some(duration) => tokio::time::sleep(duration).await,
-                #[cfg(target_family = "wasm")]
+                #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
                 Some(duration) => {
                     wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |rs, rj| {
                         if let Err(e) = web_sys::window()
