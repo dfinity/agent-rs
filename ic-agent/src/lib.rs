@@ -64,7 +64,7 @@
 //!   // Only do the following call when not contacting the IC main net (e.g. a local emulator).
 //!   // This is important as the main net public key is static and a rogue network could return
 //!   // a different key.
-//!   // If you know the root key ahead of time, you can use `agent.set_root_key(root_key)?;`.
+//!   // If you know the root key ahead of time, you can use `agent.set_root_key(root_key);`.
 //!   agent.fetch_root_key().await?;
 //!   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 //!
@@ -109,6 +109,7 @@
     rustdoc::broken_intra_doc_links,
     rustdoc::private_intra_doc_links
 )]
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 #[cfg(all(feature = "hyper", target_family = "wasm"))]
 compile_error!("Feature `hyper` cannot be used from WASM.");

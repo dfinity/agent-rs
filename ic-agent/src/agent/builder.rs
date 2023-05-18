@@ -83,12 +83,8 @@ impl AgentBuilder {
     /// Provides a _default_ ingress expiry. This is the delta that will be applied
     /// at the time an update or query is made. The default expiry cannot be a
     /// fixed system time.
-    pub fn with_ingress_expiry(self, duration: Option<std::time::Duration>) -> Self {
-        AgentBuilder {
-            config: AgentConfig {
-                ingress_expiry_duration: duration,
-                ..self.config
-            },
-        }
+    pub fn with_ingress_expiry(mut self, ingress_expiry: Option<std::time::Duration>) -> Self {
+        self.config.ingress_expiry = ingress_expiry;
+        self
     }
 }

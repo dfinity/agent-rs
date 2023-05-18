@@ -204,7 +204,7 @@ pub enum PollResult {
 ///   // Only do the following call when not contacting the IC main net (e.g. a local emulator).
 ///   // This is important as the main net public key is static and a rogue network could return
 ///   // a different key.
-///   // If you know the root key ahead of time, you can use `agent.set_root_key(root_key)?;`.
+///   // If you know the root key ahead of time, you can use `agent.set_root_key(root_key);`.
 ///   agent.fetch_root_key().await?;
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 ///
@@ -235,15 +235,15 @@ pub enum PollResult {
 pub struct Agent {
     nonce_factory: Arc<dyn NonceGenerator>,
     identity: Arc<dyn Identity>,
-    ingress_expiry_duration: Duration,
-    root_key: Arc<RwLock<Option<Vec<u8>>>>,
+    ingress_expiry: Duration,
+    root_key: Arc<RwLock<Vec<u8>>>,
     transport: Arc<dyn Transport>,
 }
 
 impl fmt::Debug for Agent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         f.debug_struct("Agent")
-            .field("ingress_expiry_duration", &self.ingress_expiry_duration)
+            .field("ingress_expiry", &self.ingress_expiry)
             .finish_non_exhaustive()
     }
 }
@@ -260,10 +260,10 @@ impl Agent {
         Ok(Agent {
             nonce_factory: config.nonce_factory,
             identity: config.identity,
-            ingress_expiry_duration: config
-                .ingress_expiry_duration
+            ingress_expiry: config
+                .ingress_expiry
                 .unwrap_or_else(|| Duration::from_secs(300)),
-            root_key: Arc::new(RwLock::new(Some(IC_ROOT_KEY.to_vec()))),
+            root_key: Arc::new(RwLock::new(IC_ROOT_KEY.to_vec())),
             transport: config
                 .transport
                 .ok_or_else(AgentError::MissingReplicaTransport)?,
@@ -296,49 +296,37 @@ impl Agent {
     /// *Only use this when you are  _not_ talking to the main Internet Computer, otherwise
     /// you are prone to man-in-the-middle attacks! Do not call this function by default.*
     pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
-        if let Ok(key) = self.read_root_key() {
-            if key != IC_ROOT_KEY.to_vec() {
-                // already fetched the root key
-                return Ok(());
-            }
+        if self.read_root_key() != IC_ROOT_KEY.to_vec() {
+            // already fetched the root key
+            return Ok(());
         }
         let status = self.status().await?;
         let root_key = status
             .root_key
             .clone()
             .ok_or(AgentError::NoRootKeyInStatus(status))?;
-        self.set_root_key(root_key)
+        self.set_root_key(root_key);
+        Ok(())
     }
 
     /// By default, the agent is configured to talk to the main Internet Computer, and verifies
     /// responses using a hard-coded public key.
     ///
     /// Using this function you can set the root key to a known one if you know if beforehand.
-    pub fn set_root_key(&self, root_key: Vec<u8>) -> Result<(), AgentError> {
-        if let Ok(mut write_guard) = self.root_key.write() {
-            *write_guard = Some(root_key);
-        }
-        Ok(())
+    pub fn set_root_key(&self, root_key: Vec<u8>) {
+        *self.root_key.write().unwrap() = root_key;
     }
 
     /// Return the root key currently in use.
-    pub fn read_root_key(&self) -> Result<Vec<u8>, AgentError> {
-        if let Ok(read_lock) = self.root_key.read() {
-            if let Some(root_key) = read_lock.clone() {
-                Ok(root_key)
-            } else {
-                Err(AgentError::CouldNotReadRootKey())
-            }
-        } else {
-            Err(AgentError::CouldNotReadRootKey())
-        }
+    pub fn read_root_key(&self) -> Vec<u8> {
+        self.root_key.read().unwrap().clone()
     }
 
     fn get_expiry_date(&self) -> u64 {
         // TODO(hansl): evaluate if we need this on the agent side (my hunch is we don't).
         let permitted_drift = Duration::from_secs(60);
         (self
-            .ingress_expiry_duration
+            .ingress_expiry
             .saturating_add({
                 #[cfg(not(target_family = "wasm"))]
                 {
@@ -346,7 +334,7 @@ impl Agent {
                         .duration_since(std::time::UNIX_EPOCH)
                         .expect("Time wrapped around.")
                 }
-                #[cfg(target_family = "wasm")]
+                #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
                 {
                     Duration::from_nanos((js_sys::Date::now() * 1_000_000.) as _)
                 }
@@ -546,9 +534,10 @@ impl Agent {
         effective_canister_id: Principal,
     ) -> Result<Vec<u8>, AgentError> {
         let mut retry_policy = ExponentialBackoffBuilder::new()
-            .with_initial_interval(Duration::from_millis(200))
+            .with_initial_interval(Duration::from_millis(500))
             .with_max_interval(Duration::from_secs(1))
             .with_multiplier(1.4)
+            .with_max_elapsed_time(Some(Duration::from_secs(60 * 5)))
             .build();
         let mut request_accepted = false;
         loop {
@@ -573,7 +562,7 @@ impl Agent {
             match retry_policy.next_backoff() {
                 #[cfg(not(target_family = "wasm"))]
                 Some(duration) => tokio::time::sleep(duration).await,
-                #[cfg(target_family = "wasm")]
+                #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
                 Some(duration) => {
                     wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |rs, rj| {
                         if let Err(e) = web_sys::window()
@@ -648,7 +637,7 @@ impl Agent {
         effective_canister_id: Principal,
     ) -> Result<Vec<u8>, AgentError> {
         match delegation {
-            None => self.read_root_key(),
+            None => Ok(self.read_root_key()),
             Some(delegation) => {
                 let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;

@@ -13,10 +13,10 @@ use crate::{
 };
 use ic_certification::Label;
 use std::collections::BTreeMap;
-#[cfg(target_family = "wasm")]
+#[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
 use wasm_bindgen_test::wasm_bindgen_test;
 
-#[cfg(target_family = "wasm")]
+#[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
@@ -548,7 +548,7 @@ mod mock {
     }
 }
 
-#[cfg(target_family = "wasm")]
+#[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
 mod mock {
     use js_sys::*;
     use reqwest::Client;

@@ -2,6 +2,8 @@
 //!
 //! If you need support for the serde library, you will need to use the `serde` feature
 //! (available by default).
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+
 use hash_tree::Sha256Digest;
 use hex::FromHexError;
 

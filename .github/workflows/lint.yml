@@ -8,8 +8,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        rust: [ '1.65.0' ]
-        os: [ ubuntu-latest ]
+        rust: ["1.65.0"]
+        os: [ubuntu-latest]
 
     steps:
       - uses: actions/checkout@v2
@@ -33,7 +33,7 @@ jobs:
         env:
           RUST_BACKTRACE: 1
       - name: Run Lint (WASM)
-        run: CARGO_TARGET_DIR=target/wasm cargo clippy --target wasm32-unknown-unknown -p ic-agent -p ic-utils --verbose -- -D clippy::all
+        run: CARGO_TARGET_DIR=target/wasm cargo clippy --target wasm32-unknown-unknown -p ic-agent --features wasm-bindgen -p ic-utils --verbose -- -D clippy::all
   aggregate:
     name: lint:required
     runs-on: ubuntu-latest

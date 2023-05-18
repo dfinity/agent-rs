@@ -1,9 +1,9 @@
 use anyhow::{anyhow, Context, Result};
-use chrono::TimeZone;
 use ic_certification::{HashTree, LookupResult};
 use reqwest::header;
 use serde::{de::DeserializeOwned, Deserialize};
 use sha2::Digest;
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 /// Structured contents of the IC-Certificate header.
 struct StructuredCertHeader<'a> {
@@ -121,16 +121,9 @@ pub fn pprint(url: String, accept_encodings: Option<Vec<String>>) -> Result<()> 
     if let LookupResult::Found(mut date_bytes) = cert.tree.lookup_path(&["time"]) {
         let timestamp_nanos = leb128::read::unsigned(&mut date_bytes)
             .with_context(|| "failed to decode certificate time as LEB128")?;
-        const NANOS_PER_SEC: u64 = 1_000_000_000;
-
-        let dt = chrono::Utc
-            .timestamp_opt(
-                (timestamp_nanos / NANOS_PER_SEC) as i64,
-                (timestamp_nanos % NANOS_PER_SEC) as u32,
-            )
-            .single()
+        let dt = OffsetDateTime::from_unix_timestamp_nanos(timestamp_nanos as i128)
             .context("timestamp out of range")?;
-        println!("CERTIFICATE TIME: {}", dt.to_rfc3339());
+        println!("CERTIFICATE TIME: {}", dt.format(&Rfc3339)?);
     }
     println!("CERTIFICATE TREE: {:#?}", cert.tree);
     println!("TREE:             {:#?}", tree);

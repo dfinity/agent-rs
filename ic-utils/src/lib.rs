@@ -7,6 +7,7 @@
     rustdoc::broken_intra_doc_links,
     rustdoc::private_intra_doc_links
 )]
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 /// Utilities to encapsulate calls to a canister.
 pub mod call;

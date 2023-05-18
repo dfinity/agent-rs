@@ -1,6 +1,4 @@
 //! A [`Transport`] that connects using a [`hyper`] client.
-#![cfg(any(feature = "hyper"))]
-
 pub use hyper;
 
 use std::{any, error::Error, future::Future, marker::PhantomData, sync::atomic::AtomicPtr};
