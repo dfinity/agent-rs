@@ -32,6 +32,18 @@ impl<Storage: AsRef<[u8]>> Label<Storage> {
     pub fn as_bytes(&self) -> &[u8] {
         self.0.as_ref()
     }
+
+    /// The length of the output of [`Self::write_hex`]
+    fn hex_len(&self) -> usize {
+        self.as_bytes().len() * 2
+    }
+
+    /// Write out the hex
+    fn write_hex(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        self.as_bytes()
+            .iter()
+            .try_for_each(|b| write!(f, "{:02X}", b))
+    }
 }
 
 impl<Storage: AsRef<[u8]>> From<Storage> for Label<Storage> {
@@ -115,9 +127,7 @@ impl<Storage: AsRef<[u8]>> fmt::Display for Label<Storage> {
 
 impl<Storage: AsRef<[u8]>> fmt::Debug for Label<Storage> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.as_bytes()
-            .iter()
-            .try_for_each(|b| write!(f, "{:02X}", b))
+        self.write_hex(f)
     }
 }
 
@@ -554,7 +564,9 @@ mod serde_impl {
     impl<Storage: AsRef<[u8]>> Serialize for Label<Storage> {
         fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
             if serializer.is_human_readable() {
-                format!("{:?}", self).serialize(serializer)
+                let mut s = String::with_capacity(self.hex_len());
+                self.write_hex(&mut s).unwrap();
+                s.serialize(serializer)
             } else {
                 serializer.serialize_bytes(self.0.as_ref())
             }
