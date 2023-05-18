@@ -276,7 +276,7 @@ mod tests {
     use super::*;
     use crate::hash_tree::{empty, fork, label, leaf};
 
-    fn create_tree<'a>() -> HashTree<Vec<u8>> {
+    fn create_tree() -> HashTree<Vec<u8>> {
         fork(
             fork(
                 label(

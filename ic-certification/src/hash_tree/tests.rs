@@ -4,15 +4,12 @@ use crate::hash_tree::{
     empty, fork, label, leaf, pruned, pruned_from_hex, HashTree, LookupResult, SubtreeLookupResult,
 };
 
-fn lookup_path<'a, P: AsRef<[&'static str]>>(
-    tree: &'a HashTree<Vec<u8>>,
-    path: P,
-) -> LookupResult<'a> {
+fn lookup_path<P: AsRef<[&'static str]>>(tree: &HashTree<Vec<u8>>, path: P) -> LookupResult {
     tree.lookup_path(path.as_ref().iter().map(|s| s.as_bytes()))
 }
 
-fn lookup_subtree<'a, P: AsRef<[&'static str]>>(
-    tree: &'a HashTree<Vec<u8>>,
+fn lookup_subtree<P: AsRef<[&'static str]>>(
+    tree: &HashTree<Vec<u8>>,
     path: P,
 ) -> SubtreeLookupResult<Vec<u8>> {
     tree.lookup_subtree(path.as_ref().iter().map(|s| s.as_bytes()))
