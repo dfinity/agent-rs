@@ -446,7 +446,7 @@ async fn check_subnet_range_with_valid_range() {
     let _result = agent
         .read_state_raw(
             vec![REQ_WITH_DELEGATED_CERT_PATH
-                .iter()
+                .into_iter()
                 .map(Label::from)
                 .collect()],
             Principal::from_text(REQ_WITH_DELEGATED_CERT_CANISTER).unwrap(),
@@ -478,7 +478,7 @@ async fn check_subnet_range_with_unauthorized_range() {
     let result = agent
         .read_state_raw(
             vec![REQ_WITH_DELEGATED_CERT_PATH
-                .iter()
+                .into_iter()
                 .map(Label::from)
                 .collect()],
             wrong_canister,
@@ -509,7 +509,7 @@ async fn check_subnet_range_with_pruned_range() {
     let result = agent
         .read_state_raw(
             vec![REQ_WITH_DELEGATED_CERT_PATH
-                .iter()
+                .into_iter()
                 .map(Label::from)
                 .collect()],
             canister,

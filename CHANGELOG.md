@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+
 * fix: Adjust the default polling parameters to provide better UX. Remove the `CouldNotReadRootKey` error and panic on poisoned mutex.
 * chore: remove deprecated code and fix style
 * Breaking Change: removing the PasswordManager
@@ -17,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Support WASM targets in the browser via `wasm-bindgen`. Feature `wasm-bindgen` required.
 * Do not send `certificate_version` on HTTP Update requests
 * Update `certificate_version` to `u16` instead of `u128`, fixes an issue where the asset canister always responds with v1 response verification
+
+### ic-certification
+
+* Breaking change: Content and path storage has been changed from a `Cow<[u8]>` to a user-provided `T: AsRef<u8>`, removing the lifetime from various types.
 
 ### icx-cert
 * Fixed issue where a missing request header caused the canister to not respond with an `ic-certificate` header.
