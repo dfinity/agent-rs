@@ -600,7 +600,7 @@ impl Agent {
         &self,
         paths: Vec<Vec<Label>>,
         effective_canister_id: Principal,
-    ) -> Result<Certificate<'_>, AgentError> {
+    ) -> Result<Certificate, AgentError> {
         let request = self.read_state_content(paths)?;
         let serialized_bytes = sign_request(&request, self.identity.clone())?;
 
@@ -654,9 +654,9 @@ impl Agent {
                     .map_err(AgentError::InvalidCborData)?;
                 self.verify(&cert, effective_canister_id)?;
                 let canister_range_lookup = [
-                    "subnet".into(),
-                    delegation.subnet_id.clone().into(),
-                    "canister_ranges".into(),
+                    "subnet".as_bytes(),
+                    delegation.subnet_id.as_ref(),
+                    "canister_ranges".as_bytes(),
                 ];
                 let canister_range = lookup_value(&cert, canister_range_lookup)?;
                 let ranges: Vec<(Principal, Principal)> =
@@ -667,9 +667,9 @@ impl Agent {
                 }
 
                 let public_key_path = [
-                    "subnet".into(),
-                    delegation.subnet_id.clone().into(),
-                    "public_key".into(),
+                    "subnet".as_bytes(),
+                    delegation.subnet_id.as_ref(),
+                    "public_key".as_bytes(),
                 ];
                 lookup_value(&cert, public_key_path).map(|pk| pk.to_vec())
             }
@@ -682,7 +682,11 @@ impl Agent {
         canister_id: Principal,
         path: &str,
     ) -> Result<Vec<u8>, AgentError> {
-        let paths: Vec<Vec<Label>> = vec![vec!["canister".into(), canister_id.into(), path.into()]];
+        let paths: Vec<Vec<Label>> = vec![vec![
+            "canister".into(),
+            Label::from_bytes(canister_id.as_slice()),
+            path.into(),
+        ]];
 
         let cert = self.read_state_raw(paths, canister_id).await?;
 
@@ -697,7 +701,7 @@ impl Agent {
     ) -> Result<Vec<u8>, AgentError> {
         let paths: Vec<Vec<Label>> = vec![vec![
             "canister".into(),
-            canister_id.into(),
+            Label::from_bytes(canister_id.as_slice()),
             "metadata".into(),
             path.into(),
         ]];
