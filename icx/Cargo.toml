@@ -24,8 +24,8 @@ candid = { workspace = true }
 clap = { version = "3.0.14", features = ["derive", "cargo"] }
 hex = { workspace = true }
 humantime = "2.0.1"
-ic-agent = { path = "../ic-agent", version = "0.23" }
-ic-utils = { path = "../ic-utils", version = "0.23" }
+ic-agent = { workspace = true }
+ic-utils = { workspace = true }
 pem = "1.0"
 ring = { workspace = true }
 serde = { workspace = true }

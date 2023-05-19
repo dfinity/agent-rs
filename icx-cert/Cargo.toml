@@ -21,7 +21,7 @@ anyhow = "1.0"
 base64 = "0.13"
 clap = { version = "3.1.8", features = ["derive", "cargo"] }
 hex = { workspace = true }
-ic-agent = { path = "../ic-agent", version = "0.23", default-features = false }
+ic-agent = { workspace = true, default-features = false }
 leb128 = "0.2.4"
 reqwest = { version = "0.11", features = ["blocking", "rustls-tls"] }
 sha2 = { workspace = true }
@@ -29,4 +29,4 @@ serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
 serde_cbor = { workspace = true }
 time = { workspace = true }
-ic-certification = { path = "../ic-certification", version = "0.23" }
+ic-certification = { path = "../ic-certification", version = "0.24" }
