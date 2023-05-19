@@ -24,7 +24,7 @@ futures-util = "0.3.21"
 hex = { workspace = true }
 http = "0.2.6"
 http-body = "0.4.5"
-ic-certification = { path = "../ic-certification", version = "0.23" }
+ic-certification = { workspace = true }
 ic-verify-bls-signature = "0.1"
 k256 = { version = "0.13.1", features = ["pem"] }
 leb128 = "0.2.5"

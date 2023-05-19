@@ -15,7 +15,7 @@ pub use hash_tree::LookupResult;
 
 /// A HashTree representing a full tree.
 pub type HashTree = hash_tree::HashTree<Vec<u8>>;
-/// For labeled [HashTreeNode]
+/// For labeled [`HashTreeNode`](hash_tree::HashTreeNode)
 pub type Label = hash_tree::Label<Vec<u8>>;
 /// A result of looking up for a subtree.
 pub type SubtreeLookupResult = hash_tree::SubtreeLookupResult<Vec<u8>>;
