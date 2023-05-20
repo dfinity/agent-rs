@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, iter::Extend, str::FromStr};
 
 pub mod error;
+#[doc(inline)]
 pub use error::RequestIdError;
 
 /// Type alias for a sha256 result (ie. a u256).
@@ -495,7 +496,7 @@ impl<'a> ser::SerializeSeq for &'a mut RequestIdSerializer {
         self.element_encoder = prev_encoder.take();
         match &mut self.element_encoder {
             Some(Hasher::Value(hasher)) => {
-                hasher.update(&hash);
+                hasher.update(hash);
                 Ok(())
             }
             _ => Err(RequestIdError::InvalidState),

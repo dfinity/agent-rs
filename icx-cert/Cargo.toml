@@ -1,18 +1,18 @@
 [package]
 name = "icx-cert"
-version = "0.23.0"
-authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+rust-version.workspace = true
 description = "CLI tool to download a document from the Internet Computer and pretty-print the contents of its IC-Certificate header."
 homepage = "https://docs.rs/icx-cert"
 documentation = "https://docs.rs/icx-cert"
-repository = "https://github.com/dfinity/agent-rs"
-license = "Apache-2.0"
 readme = "README.md"
 categories = ["command-line-interface"]
 keywords = ["internet-computer", "agent", "icp", "dfinity", "certificate"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
-rust-version = "1.60.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -20,13 +20,13 @@ rust-version = "1.60.0"
 anyhow = "1.0"
 base64 = "0.13"
 clap = { version = "3.1.8", features = ["derive", "cargo"] }
-chrono = "0.4.19"
-hex = "0.4.2"
-ic-agent = { path = "../ic-agent", version = "0.23", default-features = false }
+hex = { workspace = true }
+ic-agent = { workspace = true, default-features = false }
 leb128 = "0.2.4"
-reqwest = { version = "0.11", features = [ "blocking", "rustls-tls" ] }
-sha2 = "0.10"
-serde = { version = "1.0.115", features = ["derive"] }
-serde_bytes = "0.11"
-serde_cbor = "0.11"
-ic-certification = { path = "../ic-certification", version = "0.23" }
+reqwest = { version = "0.11", features = ["blocking", "rustls-tls"] }
+sha2 = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_bytes = { workspace = true }
+serde_cbor = { workspace = true }
+time = { workspace = true }
+ic-certification = { path = "../ic-certification", version = "0.24" }

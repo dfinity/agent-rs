@@ -7,35 +7,37 @@ pub(crate) mod nonce;
 pub(crate) mod replica_api;
 pub(crate) mod response;
 pub(crate) mod response_authentication;
-
 pub mod signed;
 pub mod status;
+
 pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
-use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
 pub use builder::AgentBuilder;
 pub use nonce::{NonceFactory, NonceGenerator};
+pub use replica_api::{RejectCode, RejectResponse};
 pub use response::{Replied, RequestStatusResponse};
 
 #[cfg(test)]
 mod agent_test;
 
 use crate::{
-    agent::replica_api::{
-        CallRequestContent, Envelope, QueryContent, ReadStateContent, ReadStateResponse,
+    agent::{
+        replica_api::{
+            CallRequestContent, Envelope, QueryContent, ReadStateContent, ReadStateResponse,
+        },
+        response_authentication::{
+            extract_der, lookup_canister_info, lookup_canister_metadata, lookup_request_status,
+            lookup_value,
+        },
     },
     export::Principal,
     identity::Identity,
     to_request_id, RequestId,
 };
+use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
 use ic_certification::{Certificate, Delegation, Label};
 use serde::Serialize;
 use status::Status;
-
-use crate::agent::response_authentication::{
-    extract_der, lookup_canister_info, lookup_canister_metadata, lookup_request_status,
-    lookup_value,
-};
 use std::{
     convert::TryFrom,
     fmt,
@@ -51,7 +53,11 @@ const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 
 const IC_ROOT_KEY: &[u8; 133] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00\x81\x4c\x0e\x6e\xc7\x1f\xab\x58\x3b\x08\xbd\x81\x37\x3c\x25\x5c\x3c\x37\x1b\x2e\x84\x86\x3c\x98\xa4\xf1\xe0\x8b\x74\x23\x5d\x14\xfb\x5d\x9c\x0c\xd5\x46\xd9\x68\x5f\x91\x3a\x0c\x0b\x2c\xc5\x34\x15\x83\xbf\x4b\x43\x92\xe4\x67\xdb\x96\xd6\x5b\x9b\xb4\xcb\x71\x71\x12\xf8\x47\x2e\x0d\x5a\x4d\x14\x50\x5f\xfd\x74\x84\xb0\x12\x91\x09\x1c\x5f\x87\xb9\x88\x83\x46\x3f\x98\x09\x1a\x0b\xaa\xae";
 
+#[cfg(not(target_family = "wasm"))]
 type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + Send + 'a>>;
+
+#[cfg(target_family = "wasm")]
+type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + 'a>>;
 
 /// A facade that connects to a Replica and does requests. These requests can be of any type
 /// (does not have to be HTTP). This trait is to inverse the control from the Agent over its
@@ -62,7 +68,7 @@ type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + S
 /// feature flag `reqwest`. This might be deprecated in the future.
 ///
 /// Any error returned by these methods will bubble up to the code that called the [Agent].
-pub trait ReplicaV2Transport: Send + Sync {
+pub trait Transport: Send + Sync {
     /// Sends an asynchronous request to a Replica. The Request ID is non-mutable and
     /// depends on the content of the envelope.
     ///
@@ -96,9 +102,7 @@ pub trait ReplicaV2Transport: Send + Sync {
     fn status(&self) -> AgentFuture<Vec<u8>>;
 }
 
-impl_debug_empty!(dyn ReplicaV2Transport);
-
-impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Box<I> {
+impl<I: Transport + ?Sized> Transport for Box<I> {
     fn call(
         &self,
         effective_canister_id: Principal,
@@ -121,7 +125,7 @@ impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Box<I> {
         (**self).status()
     }
 }
-impl<I: ReplicaV2Transport + ?Sized> ReplicaV2Transport for Arc<I> {
+impl<I: Transport + ?Sized> Transport for Arc<I> {
     fn call(
         &self,
         effective_canister_id: Principal,
@@ -200,14 +204,14 @@ pub enum PollResult {
 ///   // Only do the following call when not contacting the IC main net (e.g. a local emulator).
 ///   // This is important as the main net public key is static and a rogue network could return
 ///   // a different key.
-///   // If you know the root key ahead of time, you can use `agent.set_root_key(root_key)?;`.
+///   // If you know the root key ahead of time, you can use `agent.set_root_key(root_key);`.
 ///   agent.fetch_root_key().await?;
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 ///
 ///   // Create a call to the management canister to create a new canister ID,
 ///   // and wait for a result.
 ///   // The effective canister id must belong to the canister ranges of the subnet at which the canister is created.
-///   let effective_canister_id = Principal::from_text("sehci-oaaaa-aaaaa-aaaaa-c").unwrap();
+///   let effective_canister_id = Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap();
 ///   let response = agent.update(&management_canister_id, "provisional_create_canister_with_cycles")
 ///     .with_effective_canister_id(effective_canister_id)
 ///     .with_arg(&Encode!(&Argument { amount: None })?)
@@ -231,15 +235,15 @@ pub enum PollResult {
 pub struct Agent {
     nonce_factory: Arc<dyn NonceGenerator>,
     identity: Arc<dyn Identity>,
-    ingress_expiry_duration: Duration,
-    root_key: Arc<RwLock<Option<Vec<u8>>>>,
-    transport: Arc<dyn ReplicaV2Transport>,
+    ingress_expiry: Duration,
+    root_key: Arc<RwLock<Vec<u8>>>,
+    transport: Arc<dyn Transport>,
 }
 
 impl fmt::Debug for Agent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         f.debug_struct("Agent")
-            .field("ingress_expiry_duration", &self.ingress_expiry_duration)
+            .field("ingress_expiry", &self.ingress_expiry)
             .finish_non_exhaustive()
     }
 }
@@ -256,10 +260,10 @@ impl Agent {
         Ok(Agent {
             nonce_factory: config.nonce_factory,
             identity: config.identity,
-            ingress_expiry_duration: config
-                .ingress_expiry_duration
+            ingress_expiry: config
+                .ingress_expiry
                 .unwrap_or_else(|| Duration::from_secs(300)),
-            root_key: Arc::new(RwLock::new(Some(IC_ROOT_KEY.to_vec()))),
+            root_key: Arc::new(RwLock::new(IC_ROOT_KEY.to_vec())),
             transport: config
                 .transport
                 .ok_or_else(AgentError::MissingReplicaTransport)?,
@@ -267,7 +271,7 @@ impl Agent {
     }
 
     /// Set the transport of the [`Agent`].
-    pub fn set_transport<F: 'static + ReplicaV2Transport>(&mut self, transport: F) {
+    pub fn set_transport<F: 'static + Transport>(&mut self, transport: F) {
         self.transport = Arc::new(transport);
     }
 
@@ -292,56 +296,51 @@ impl Agent {
     /// *Only use this when you are  _not_ talking to the main Internet Computer, otherwise
     /// you are prone to man-in-the-middle attacks! Do not call this function by default.*
     pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
-        if let Ok(key) = self.read_root_key() {
-            if key != IC_ROOT_KEY.to_vec() {
-                // already fetched the root key
-                return Ok(());
-            }
+        if self.read_root_key() != IC_ROOT_KEY.to_vec() {
+            // already fetched the root key
+            return Ok(());
         }
         let status = self.status().await?;
         let root_key = status
             .root_key
             .clone()
             .ok_or(AgentError::NoRootKeyInStatus(status))?;
-        self.set_root_key(root_key)
+        self.set_root_key(root_key);
+        Ok(())
     }
 
     /// By default, the agent is configured to talk to the main Internet Computer, and verifies
     /// responses using a hard-coded public key.
     ///
     /// Using this function you can set the root key to a known one if you know if beforehand.
-    pub fn set_root_key(&self, root_key: Vec<u8>) -> Result<(), AgentError> {
-        if let Ok(mut write_guard) = self.root_key.write() {
-            *write_guard = Some(root_key);
-        }
-        Ok(())
+    pub fn set_root_key(&self, root_key: Vec<u8>) {
+        *self.root_key.write().unwrap() = root_key;
     }
 
-    fn read_root_key(&self) -> Result<Vec<u8>, AgentError> {
-        if let Ok(read_lock) = self.root_key.read() {
-            if let Some(root_key) = read_lock.clone() {
-                Ok(root_key)
-            } else {
-                Err(AgentError::CouldNotReadRootKey())
-            }
-        } else {
-            Err(AgentError::CouldNotReadRootKey())
-        }
+    /// Return the root key currently in use.
+    pub fn read_root_key(&self) -> Vec<u8> {
+        self.root_key.read().unwrap().clone()
     }
 
     fn get_expiry_date(&self) -> u64 {
         // TODO(hansl): evaluate if we need this on the agent side (my hunch is we don't).
         let permitted_drift = Duration::from_secs(60);
         (self
-            .ingress_expiry_duration
-            .as_nanos()
-            .saturating_add(
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("Time wrapped around.")
-                    .as_nanos(),
-            )
-            .saturating_sub(permitted_drift.as_nanos())) as u64
+            .ingress_expiry
+            .saturating_add({
+                #[cfg(not(target_family = "wasm"))]
+                {
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .expect("Time wrapped around.")
+                }
+                #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
+                {
+                    Duration::from_nanos((js_sys::Date::now() * 1_000_000.) as _)
+                }
+            })
+            .saturating_sub(permitted_drift))
+        .as_nanos() as u64
     }
 
     /// Return the principal of the identity.
@@ -407,13 +406,9 @@ impl Agent {
             .await
             .and_then(|response| match response {
                 replica_api::QueryResponse::Replied { reply } => Ok(reply.arg),
-                replica_api::QueryResponse::Rejected {
-                    reject_code,
-                    reject_message,
-                } => Err(AgentError::ReplicaError {
-                    reject_code,
-                    reject_message,
-                }),
+                replica_api::QueryResponse::Rejected(response) => {
+                    Err(AgentError::ReplicaError(response))
+                }
             })
     }
 
@@ -431,13 +426,9 @@ impl Agent {
             .await
             .and_then(|response| match response {
                 replica_api::QueryResponse::Replied { reply } => Ok(reply.arg),
-                replica_api::QueryResponse::Rejected {
-                    reject_code,
-                    reject_message,
-                } => Err(AgentError::ReplicaError {
-                    reject_code,
-                    reject_message,
-                }),
+                replica_api::QueryResponse::Rejected(response) => {
+                    Err(AgentError::ReplicaError(response))
+                }
             })
     }
 
@@ -528,13 +519,8 @@ impl Agent {
                 reply: Replied::CallReplied(arg),
             } => Ok(PollResult::Completed(arg)),
 
-            RequestStatusResponse::Rejected {
-                reject_code,
-                reject_message,
-            } => Err(AgentError::ReplicaError {
-                reject_code,
-                reject_message,
-            }),
+            RequestStatusResponse::Rejected(response) => Err(AgentError::ReplicaError(response)),
+
             RequestStatusResponse::Done => Err(AgentError::RequestStatusDoneNoReply(String::from(
                 *request_id,
             ))),
@@ -548,9 +534,10 @@ impl Agent {
         effective_canister_id: Principal,
     ) -> Result<Vec<u8>, AgentError> {
         let mut retry_policy = ExponentialBackoffBuilder::new()
-            .with_initial_interval(Duration::from_millis(200))
+            .with_initial_interval(Duration::from_millis(500))
             .with_max_interval(Duration::from_secs(1))
             .with_multiplier(1.4)
+            .with_max_elapsed_time(Some(Duration::from_secs(60 * 5)))
             .build();
         let mut request_accepted = false;
         loop {
@@ -573,7 +560,25 @@ impl Agent {
             };
 
             match retry_policy.next_backoff() {
+                #[cfg(not(target_family = "wasm"))]
                 Some(duration) => tokio::time::sleep(duration).await,
+                #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
+                Some(duration) => {
+                    wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |rs, rj| {
+                        if let Err(e) = web_sys::window()
+                            .expect("global window unavailable")
+                            .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                &rs,
+                                duration.as_millis() as _,
+                            )
+                        {
+                            use wasm_bindgen::UnwrapThrowExt;
+                            rj.call1(&rj, &e).unwrap_throw();
+                        }
+                    }))
+                    .await
+                    .expect("unable to setTimeout");
+                }
                 None => return Err(AgentError::TimeoutWaitingForResponse()),
             }
         }
@@ -584,7 +589,7 @@ impl Agent {
         &self,
         paths: Vec<Vec<Label>>,
         effective_canister_id: Principal,
-    ) -> Result<Certificate<'_>, AgentError> {
+    ) -> Result<Certificate, AgentError> {
         let request = self.read_state_content(paths)?;
         let serialized_bytes = sign_request(&request, self.identity.clone())?;
 
@@ -632,15 +637,15 @@ impl Agent {
         effective_canister_id: Principal,
     ) -> Result<Vec<u8>, AgentError> {
         match delegation {
-            None => self.read_root_key(),
+            None => Ok(self.read_root_key()),
             Some(delegation) => {
                 let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;
                 self.verify(&cert, effective_canister_id)?;
                 let canister_range_lookup = [
-                    "subnet".into(),
-                    delegation.subnet_id.clone().into(),
-                    "canister_ranges".into(),
+                    "subnet".as_bytes(),
+                    delegation.subnet_id.as_ref(),
+                    "canister_ranges".as_bytes(),
                 ];
                 let canister_range = lookup_value(&cert, canister_range_lookup)?;
                 let ranges: Vec<(Principal, Principal)> =
@@ -651,9 +656,9 @@ impl Agent {
                 }
 
                 let public_key_path = [
-                    "subnet".into(),
-                    delegation.subnet_id.clone().into(),
-                    "public_key".into(),
+                    "subnet".as_bytes(),
+                    delegation.subnet_id.as_ref(),
+                    "public_key".as_bytes(),
                 ];
                 lookup_value(&cert, public_key_path).map(|pk| pk.to_vec())
             }
@@ -666,7 +671,11 @@ impl Agent {
         canister_id: Principal,
         path: &str,
     ) -> Result<Vec<u8>, AgentError> {
-        let paths: Vec<Vec<Label>> = vec![vec!["canister".into(), canister_id.into(), path.into()]];
+        let paths: Vec<Vec<Label>> = vec![vec![
+            "canister".into(),
+            Label::from_bytes(canister_id.as_slice()),
+            path.into(),
+        ]];
 
         let cert = self.read_state_raw(paths, canister_id).await?;
 
@@ -681,7 +690,7 @@ impl Agent {
     ) -> Result<Vec<u8>, AgentError> {
         let paths: Vec<Vec<Label>> = vec![vec![
             "canister".into(),
-            canister_id.into(),
+            Label::from_bytes(canister_id.as_slice()),
             "metadata".into(),
             path.into(),
         ]];
@@ -1103,7 +1112,7 @@ impl<'agent> QueryBuilder<'agent> {
 /// An in-flight canister update call. Useful primarily as a `Future`.
 pub struct UpdateCall<'agent> {
     agent: &'agent Agent,
-    request_id: Pin<Box<dyn Future<Output = Result<RequestId, AgentError>> + Send + 'agent>>,
+    request_id: AgentFuture<'agent, RequestId>,
     effective_canister_id: Principal,
 }
 

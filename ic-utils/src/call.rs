@@ -9,7 +9,8 @@ mod expiry;
 pub use expiry::Expiry;
 
 /// A type that implements synchronous calls (ie. 'query' calls).
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub trait SyncCall<O>
 where
     O: for<'de> ArgumentDecoder<'de> + Send,
@@ -32,7 +33,8 @@ where
 ///
 /// The return type must be a tuple type that represents all the values the return
 /// call should be returning.
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub trait AsyncCall<Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send,
@@ -41,34 +43,36 @@ where
     /// managed by the caller using the Agent directly.
     ///
     /// Since the return type is encoded in the trait itself, this can lead to types
-    /// that are not compatible to [O] when getting the result from the Request Id.
-    /// For example, you might hold a [AsyncCall<u8>], use `call()` and poll for
+    /// that are not compatible to `Out` when getting the result from the Request Id.
+    /// For example, you might hold a [`AsyncCall<u8>`], use `call()` and poll for
     /// the result, and try to deserialize it as a [String]. This would be caught by
     /// Rust type system, but in this case it will be checked at runtime (as Request
     /// Id does not have a type associated with it).
     async fn call(self) -> Result<RequestId, AgentError>;
 
-    /// Execute the call, and wait for an answer using a [Waiter] strategy. The return
+    /// Execute the call, and wait for an answer using an exponential-backoff strategy. The return
     /// type is encoded in the trait.
     async fn call_and_wait(self) -> Result<Out, AgentError>;
 
     /// Apply a transformation function after the call has been successful. The transformation
     /// is applied with the result.
     ///
-    /// ```ignored
+    /// ```ignore
     /// # // This test is ignored because it requires an ic to be running. We run these
     /// # // in the ic-ref workflow.
-    /// use ic_agent::{Agent, Principal};
-    /// use ic_utils::{Canister, interfaces};
-    /// use candid::{Encode, Decode, CandidType};
+    /// use ic_agent::Agent;
+    /// # use ic_agent::identity::{Identity, BasicIdentity};
+    /// use ic_utils::{Canister, interfaces, call::AsyncCall};
+    /// use candid::{Encode, Decode, CandidType, Principal};
     ///
+    /// async fn create_a_canister() -> Result<Principal, Box<dyn std::error::Error>> {
     /// # let canister_wasm = b"\0asm\x01\0\0\0";
-    /// # fn create_identity() -> impl ic_agent::Identity {
+    /// # fn create_identity() -> impl Identity {
     /// #     let rng = ring::rand::SystemRandom::new();
     /// #     let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
     /// #         .expect("Could not generate a key pair.");
     /// #
-    /// #     ic_agent::BasicIdentity::from_key_pair(
+    /// #     BasicIdentity::from_key_pair(
     /// #         ring::signature::Ed25519KeyPair::from_pkcs8(key_pair.as_ref())
     /// #           .expect("Could not read the key pair."),
     /// #     )
@@ -76,34 +80,34 @@ where
     /// #
     /// # const URL: &'static str = concat!("http://localhost:", env!("IC_REF_PORT"));
     /// #
-    /// async fn create_a_canister() -> Result<Principal, Box<dyn std::error::Error>> {
+    /// # let effective_id = Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap();
     ///   let agent = Agent::builder()
     ///     .with_url(URL)
     ///     .with_identity(create_identity())
     ///     .build()?;
-    ///   let management_canister = Canister::builder()
-    ///     .with_agent(&agent)
-    ///     .with_canister_id("aaaaa-aa")
-    ///     .with_interface(interfaces::ManagementCanister)
-    ///     .build()?;
+    ///   agent.fetch_root_key().await?;
+    ///   let management_canister = interfaces::ManagementCanister::create(&agent);
+    ///   let management_canister = &management_canister; // needed for `async move`
     ///
     ///   // Create a canister, then call the management canister to install a base canister
     ///   // WASM. This is to show how this API would be used, but is probably not a good
     ///   // real use case.
-    ///   let canister_id = management_canister
+    ///   let (canister_id,) = management_canister
     ///     .create_canister()
-    ///     .and_then(|(canister_id,)| async {
+    ///     .as_provisional_create_with_amount(None)
+    ///     .with_effective_canister_id(effective_id)
+    ///     .and_then(|(canister_id,)| async move {
     ///       management_canister
     ///         .install_code(&canister_id, canister_wasm)
     ///         .build()
+    ///         .unwrap()
     ///         .call_and_wait()
-    ///         .await
+    ///         .await?;
+    ///       Ok((canister_id,))
     ///     })
     ///     .call_and_wait()
     ///     .await?;
     ///
-    ///   let result = Decode!(response.as_slice(), CreateCanisterResult)?;
-    ///   let canister_id: Principal = Principal::from_text(&result.canister_id.to_text())?;
     ///   Ok(canister_id)
     /// }
     ///
@@ -166,7 +170,8 @@ where
     }
 }
 
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<'agent, Out> SyncCall<Out> for SyncCaller<'agent, Out>
 where
     Self: Sized,
@@ -247,7 +252,8 @@ where
     }
 }
 
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<'agent, Out> AsyncCall<Out> for AsyncCaller<'agent, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send,
@@ -348,7 +354,8 @@ where
     }
 }
 
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<Out, Out2, Inner, R, AndThen> AsyncCall<Out2>
     for AndThenAsyncCaller<Out, Out2, Inner, R, AndThen>
 where
@@ -449,7 +456,8 @@ where
     }
 }
 
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<Out, Out2, Inner, Map> AsyncCall<Out2> for MappedAsyncCaller<Out, Out2, Inner, Map>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send,

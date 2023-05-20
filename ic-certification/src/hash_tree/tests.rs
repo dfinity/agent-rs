@@ -1,32 +1,27 @@
 #![cfg(test)]
 
 use crate::hash_tree::{
-    empty, fork, label, leaf, pruned, pruned_from_hex, HashTree, Label, LookupResult,
-    SubtreeLookupResult,
+    empty, fork, label, leaf, pruned, pruned_from_hex, HashTree, LookupResult, SubtreeLookupResult,
 };
 
-fn lookup_path<'a, P: AsRef<[&'static str]>>(tree: &'a HashTree<'a>, path: P) -> LookupResult<'a> {
-    let path: Vec<Label> = path.as_ref().iter().map(|l| l.into()).collect();
-
-    tree.lookup_path(&path)
+fn lookup_path<P: AsRef<[&'static str]>>(tree: &HashTree<Vec<u8>>, path: P) -> LookupResult {
+    tree.lookup_path(path.as_ref().iter().map(|s| s.as_bytes()))
 }
 
-fn lookup_subtree<'a, P: AsRef<[&'static str]>>(
-    tree: &'a HashTree<'a>,
+fn lookup_subtree<P: AsRef<[&'static str]>>(
+    tree: &HashTree<Vec<u8>>,
     path: P,
-) -> SubtreeLookupResult<'a> {
-    let path: Vec<Label> = path.as_ref().iter().map(|l| l.into()).collect();
-
-    tree.lookup_subtree(&path)
+) -> SubtreeLookupResult<Vec<u8>> {
+    tree.lookup_subtree(path.as_ref().iter().map(|s| s.as_bytes()))
 }
 
 #[test]
 fn works_with_simple_tree() {
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         label("label 1", empty()),
         fork(
             pruned(*b"\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01"),
-            leaf(&[1u8, 2, 3, 4, 5, 6]),
+            leaf([1u8, 2, 3, 4, 5, 6]),
         ),
     );
 
@@ -39,18 +34,18 @@ fn works_with_simple_tree() {
 #[test]
 fn spec_example() {
     // This is the example straight from the spec.
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         fork(
             label(
                 "a",
                 fork(
-                    fork(label("x", leaf(b"hello")), empty()),
-                    label("y", leaf(b"world")),
+                    fork(label("x", leaf(*b"hello")), empty()),
+                    label("y", leaf(*b"world")),
                 ),
             ),
-            label("b", leaf(b"good")),
+            label("b", leaf(*b"good")),
         ),
-        fork(label("c", empty()), label("d", leaf(b"morning"))),
+        fork(label("c", empty()), label("d", leaf(*b"morning"))),
     );
 
     // Check CBOR serialization.
@@ -69,7 +64,7 @@ fn spec_example() {
 #[test]
 fn spec_example_pruned() {
     // This is the example straight from the spec.
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         fork(
             label(
                 "a",
@@ -78,7 +73,7 @@ fn spec_example_pruned() {
                         "1b4feff9bef8131788b0c9dc6dbad6e81e524249c879e9f10f71ce3749f5a638",
                     )
                     .unwrap(),
-                    label("y", leaf(b"world")),
+                    label("y", leaf(*b"world")),
                 ),
             ),
             label(
@@ -90,7 +85,7 @@ fn spec_example_pruned() {
         fork(
             pruned_from_hex("ec8324b8a1f1ac16bd2e806edba78006479c9877fed4eb464a25485465af601d")
                 .unwrap(),
-            label("d", leaf(b"morning")),
+            label("d", leaf(*b"morning")),
         ),
     );
 
@@ -114,7 +109,7 @@ fn spec_example_pruned() {
 
 #[test]
 fn can_lookup_paths_1() {
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         label("label 1", empty()),
         fork(
             pruned([1; 32]),
@@ -125,21 +120,21 @@ fn can_lookup_paths_1() {
         ),
     );
 
-    assert_eq!(tree.lookup_path(&["label 0".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 1".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 2".into()]), LookupResult::Unknown);
+    assert_eq!(tree.lookup_path([b"label 0"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 1"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 2"]), LookupResult::Unknown);
     assert_eq!(
-        tree.lookup_path(&["label 3".into()]),
+        tree.lookup_path([b"label 3"]),
         LookupResult::Found(&[1, 2, 3, 4, 5, 6])
     );
-    assert_eq!(tree.lookup_path(&["label 4".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 5".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 6".into()]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 4"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 5"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 6"]), LookupResult::Absent);
 }
 
 #[test]
 fn can_lookup_paths_2() {
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         label("label 1", empty()),
         fork(
             fork(
@@ -150,21 +145,21 @@ fn can_lookup_paths_2() {
         ),
     );
 
-    assert_eq!(tree.lookup_path(&["label 0".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 1".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 2".into()]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 0"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 1"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 2"]), LookupResult::Absent);
     assert_eq!(
-        tree.lookup_path(&["label 3".into()]),
+        tree.lookup_path([b"label 3"]),
         LookupResult::Found(&[1, 2, 3, 4, 5, 6])
     );
-    assert_eq!(tree.lookup_path(&["label 4".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 5".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 6".into()]), LookupResult::Unknown);
+    assert_eq!(tree.lookup_path([b"label 4"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 5"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 6"]), LookupResult::Unknown);
 }
 
 #[test]
 fn can_lookup_paths_3() {
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         pruned([0; 32]),
         fork(
             pruned([1; 32]),
@@ -175,19 +170,19 @@ fn can_lookup_paths_3() {
         ),
     );
 
-    assert_eq!(tree.lookup_path(&["label 2".into()]), LookupResult::Unknown);
+    assert_eq!(tree.lookup_path([b"label 2"]), LookupResult::Unknown);
     assert_eq!(
-        tree.lookup_path(&["label 3".into()]),
+        tree.lookup_path([b"label 3"]),
         LookupResult::Found(&[1, 2, 3, 4, 5, 6])
     );
-    assert_eq!(tree.lookup_path(&["label 4".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 5".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 6".into()]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 4"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 5"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 6"]), LookupResult::Absent);
 }
 
 #[test]
 fn can_lookup_paths_4() {
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         pruned([0; 32]),
         fork(
             fork(
@@ -198,19 +193,19 @@ fn can_lookup_paths_4() {
         ),
     );
 
-    assert_eq!(tree.lookup_path(&["label 2".into()]), LookupResult::Unknown);
+    assert_eq!(tree.lookup_path([b"label 2"]), LookupResult::Unknown);
     assert_eq!(
-        tree.lookup_path(&["label 3".into()]),
+        tree.lookup_path([b"label 3"]),
         LookupResult::Found(&[1, 2, 3, 4, 5, 6])
     );
-    assert_eq!(tree.lookup_path(&["label 4".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 5".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 6".into()]), LookupResult::Unknown);
+    assert_eq!(tree.lookup_path([b"label 4"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 5"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 6"]), LookupResult::Unknown);
 }
 
 #[test]
 fn can_lookup_paths_5() {
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         fork(
             pruned([1; 32]),
             fork(
@@ -221,21 +216,21 @@ fn can_lookup_paths_5() {
         label("label 7", empty()),
     );
 
-    assert_eq!(tree.lookup_path(&["label 2".into()]), LookupResult::Unknown);
+    assert_eq!(tree.lookup_path([b"label 2"]), LookupResult::Unknown);
     assert_eq!(
-        tree.lookup_path(&["label 3".into()]),
+        tree.lookup_path([b"label 3"]),
         LookupResult::Found(&[1, 2, 3, 4, 5, 6])
     );
-    assert_eq!(tree.lookup_path(&["label 4".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 5".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 6".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 7".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 8".into()]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 4"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 5"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 6"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 7"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 8"]), LookupResult::Absent);
 }
 
 #[test]
 fn can_lookup_paths_6() {
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         fork(
             fork(
                 label("label 3", leaf(vec![1, 2, 3, 4, 5, 6])),
@@ -246,21 +241,21 @@ fn can_lookup_paths_6() {
         label("label 7", empty()),
     );
 
-    assert_eq!(tree.lookup_path(&["label 2".into()]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 2"]), LookupResult::Absent);
     assert_eq!(
-        tree.lookup_path(&["label 3".into()]),
+        tree.lookup_path([b"label 3"]),
         LookupResult::Found(&[1, 2, 3, 4, 5, 6])
     );
-    assert_eq!(tree.lookup_path(&["label 4".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 5".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 6".into()]), LookupResult::Unknown);
-    assert_eq!(tree.lookup_path(&["label 7".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 8".into()]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 4"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 5"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 6"]), LookupResult::Unknown);
+    assert_eq!(tree.lookup_path([b"label 7"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 8"]), LookupResult::Absent);
 }
 
 #[test]
 fn can_lookup_paths_7() {
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         fork(
             pruned([1; 32]),
             fork(
@@ -271,19 +266,19 @@ fn can_lookup_paths_7() {
         pruned([0; 32]),
     );
 
-    assert_eq!(tree.lookup_path(&["label 2".into()]), LookupResult::Unknown);
+    assert_eq!(tree.lookup_path([b"label 2"]), LookupResult::Unknown);
     assert_eq!(
-        tree.lookup_path(&["label 3".into()]),
+        tree.lookup_path([b"label 3"]),
         LookupResult::Found(&[1, 2, 3, 4, 5, 6])
     );
-    assert_eq!(tree.lookup_path(&["label 4".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 5".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 6".into()]), LookupResult::Unknown);
+    assert_eq!(tree.lookup_path([b"label 4"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 5"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 6"]), LookupResult::Unknown);
 }
 
 #[test]
 fn can_lookup_paths_8() {
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         fork(
             fork(
                 label("label 3", leaf(vec![1, 2, 3, 4, 5, 6])),
@@ -294,21 +289,21 @@ fn can_lookup_paths_8() {
         pruned([0; 32]),
     );
 
-    assert_eq!(tree.lookup_path(&["label 2".into()]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 2"]), LookupResult::Absent);
     assert_eq!(
-        tree.lookup_path(&["label 3".into()]),
+        tree.lookup_path([b"label 3"]),
         LookupResult::Found(&[1, 2, 3, 4, 5, 6])
     );
-    assert_eq!(tree.lookup_path(&["label 4".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 5".into()]), LookupResult::Absent);
-    assert_eq!(tree.lookup_path(&["label 6".into()]), LookupResult::Unknown);
+    assert_eq!(tree.lookup_path([b"label 4"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 5"]), LookupResult::Absent);
+    assert_eq!(tree.lookup_path([b"label 6"]), LookupResult::Unknown);
 }
 
 #[test]
 fn can_lookup_subtrees_1() {
     use SubtreeLookupResult::*;
 
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         label("label 1", empty()),
         fork(
             pruned([1; 32]),
@@ -319,23 +314,23 @@ fn can_lookup_subtrees_1() {
         ),
     );
 
-    assert_eq!(lookup_subtree(&tree, &["label 0"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 1"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 2"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 0"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 1"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 2"]), Unknown);
     assert_eq!(
-        lookup_subtree(&tree, &["label 3"]),
+        lookup_subtree(&tree, ["label 3"]),
         Found(leaf(vec![1, 2, 3, 4, 5, 6]))
     );
-    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 6"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 5"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 6"]), Absent);
 }
 
 #[test]
 fn can_lookup_subtrees_2() {
     use SubtreeLookupResult::*;
 
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         label("label 1", empty()),
         fork(
             fork(
@@ -346,23 +341,23 @@ fn can_lookup_subtrees_2() {
         ),
     );
 
-    assert_eq!(lookup_subtree(&tree, &["label 0"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 1"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 2"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 0"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 1"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 2"]), Absent);
     assert_eq!(
-        lookup_subtree(&tree, &["label 3"]),
+        lookup_subtree(&tree, ["label 3"]),
         Found(leaf(vec![1, 2, 3, 4, 5, 6]))
     );
-    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 6"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 5"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 6"]), Unknown);
 }
 
 #[test]
 fn can_lookup_subtrees_3() {
     use SubtreeLookupResult::*;
 
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         pruned([0; 32]),
         fork(
             pruned([1; 32]),
@@ -373,21 +368,21 @@ fn can_lookup_subtrees_3() {
         ),
     );
 
-    assert_eq!(lookup_subtree(&tree, &["label 2"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 2"]), Unknown);
     assert_eq!(
-        lookup_subtree(&tree, &["label 3"]),
+        lookup_subtree(&tree, ["label 3"]),
         Found(leaf(vec![1, 2, 3, 4, 5, 6]))
     );
-    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 6"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 5"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 6"]), Absent);
 }
 
 #[test]
 fn can_lookup_subtrees_4() {
     use SubtreeLookupResult::*;
 
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         pruned([0; 32]),
         fork(
             fork(
@@ -398,21 +393,21 @@ fn can_lookup_subtrees_4() {
         ),
     );
 
-    assert_eq!(lookup_subtree(&tree, &["label 2"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 2"]), Unknown);
     assert_eq!(
-        lookup_subtree(&tree, &["label 3"]),
+        lookup_subtree(&tree, ["label 3"]),
         Found(leaf(vec![1, 2, 3, 4, 5, 6]))
     );
-    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 6"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 5"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 6"]), Unknown);
 }
 
 #[test]
 fn can_lookup_subtrees_5() {
     use SubtreeLookupResult::*;
 
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         fork(
             pruned([1; 32]),
             fork(
@@ -423,23 +418,23 @@ fn can_lookup_subtrees_5() {
         label("label 7", empty()),
     );
 
-    assert_eq!(lookup_subtree(&tree, &["label 2"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 2"]), Unknown);
     assert_eq!(
-        lookup_subtree(&tree, &["label 3"]),
+        lookup_subtree(&tree, ["label 3"]),
         Found(leaf(vec![1, 2, 3, 4, 5, 6]))
     );
-    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 6"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 7"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 8"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 5"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 6"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 7"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 8"]), Absent);
 }
 
 #[test]
 fn can_lookup_subtrees_6() {
     use SubtreeLookupResult::*;
 
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         fork(
             fork(
                 label("label 3", leaf(vec![1, 2, 3, 4, 5, 6])),
@@ -450,23 +445,23 @@ fn can_lookup_subtrees_6() {
         label("label 7", empty()),
     );
 
-    assert_eq!(lookup_subtree(&tree, &["label 2"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 2"]), Absent);
     assert_eq!(
-        lookup_subtree(&tree, &["label 3"]),
+        lookup_subtree(&tree, ["label 3"]),
         Found(leaf(vec![1, 2, 3, 4, 5, 6]))
     );
-    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 6"]), Unknown);
-    assert_eq!(lookup_subtree(&tree, &["label 7"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 8"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 5"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 6"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 7"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 8"]), Absent);
 }
 
 #[test]
 fn can_lookup_subtrees_7() {
     use SubtreeLookupResult::*;
 
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         fork(
             pruned([1; 32]),
             fork(
@@ -477,21 +472,21 @@ fn can_lookup_subtrees_7() {
         pruned([0; 32]),
     );
 
-    assert_eq!(lookup_subtree(&tree, &["label 2"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 2"]), Unknown);
     assert_eq!(
-        lookup_subtree(&tree, &["label 3"]),
+        lookup_subtree(&tree, ["label 3"]),
         Found(leaf(vec![1, 2, 3, 4, 5, 6]))
     );
-    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 6"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 5"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 6"]), Unknown);
 }
 
 #[test]
 fn can_lookup_subtrees_8() {
     use SubtreeLookupResult::*;
 
-    let tree = fork(
+    let tree: HashTree<Vec<u8>> = fork(
         fork(
             fork(
                 label("label 3", leaf(vec![1, 2, 3, 4, 5, 6])),
@@ -502,12 +497,12 @@ fn can_lookup_subtrees_8() {
         pruned([0; 32]),
     );
 
-    assert_eq!(lookup_subtree(&tree, &["label 2"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 2"]), Absent);
     assert_eq!(
-        lookup_subtree(&tree, &["label 3"]),
+        lookup_subtree(&tree, ["label 3"]),
         Found(leaf(vec![1, 2, 3, 4, 5, 6]))
     );
-    assert_eq!(lookup_subtree(&tree, &["label 4"]), Absent);
-    assert_eq!(lookup_subtree(&tree, &["label 5"]), Found(empty()));
-    assert_eq!(lookup_subtree(&tree, &["label 6"]), Unknown);
+    assert_eq!(lookup_subtree(&tree, ["label 4"]), Absent);
+    assert_eq!(lookup_subtree(&tree, ["label 5"]), Found(empty()));
+    assert_eq!(lookup_subtree(&tree, ["label 6"]), Unknown);
 }

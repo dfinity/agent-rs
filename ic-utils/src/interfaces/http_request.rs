@@ -47,9 +47,25 @@ struct HttpRequest<'a, H> {
     pub headers: H,
     /// The request body.
     pub body: &'a [u8],
+    /// The certificate version.
+    pub certificate_version: Option<&'a u16>,
 }
 
-/// A wraper around an iterator of headers
+/// The important components of an HTTP update request.
+/// This is the same as `HttpRequest`, excluding the `certificate_version` property.
+#[derive(Debug, Clone, CandidType)]
+struct HttpUpdateRequest<'a, H> {
+    /// The HTTP method string.
+    pub method: &'a str,
+    /// The URL that was visited.
+    pub url: &'a str,
+    /// The request headers.
+    pub headers: H,
+    /// The request body.
+    pub body: &'a [u8],
+}
+
+/// A wrapper around an iterator of headers
 #[derive(Debug, Clone)]
 pub struct Headers<H>(H);
 
@@ -349,7 +365,7 @@ impl<'de> Deserialize<'de> for Token {
 }
 
 /// A marker type to match unconstrained callback arguments
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub struct ArgToken;
 
 impl CandidType for ArgToken {
@@ -392,12 +408,14 @@ impl<'agent> HttpRequestCanister<'agent> {
             IntoIter = impl 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
         >,
         body: impl AsRef<[u8]>,
+        certificate_version: Option<&u16>,
     ) -> impl 'agent + SyncCall<(HttpResponse,)> {
         self.http_request_custom(
             method.as_ref(),
             url.as_ref(),
             headers.into_iter(),
             body.as_ref(),
+            certificate_version,
         )
     }
 
@@ -409,6 +427,7 @@ impl<'agent> HttpRequestCanister<'agent> {
         url: &str,
         headers: H,
         body: &[u8],
+        certificate_version: Option<&u16>,
     ) -> impl 'agent + SyncCall<(HttpResponse<T, C>,)>
     where
         H: 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
@@ -421,6 +440,7 @@ impl<'agent> HttpRequestCanister<'agent> {
                 url,
                 headers: Headers(headers),
                 body,
+                certificate_version,
             })
             .build()
     }
@@ -453,7 +473,7 @@ impl<'agent> HttpRequestCanister<'agent> {
         C: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
     {
         self.update_("http_request_update")
-            .with_arg(HttpRequest {
+            .with_arg(HttpUpdateRequest {
                 method,
                 url,
                 headers: Headers(headers),

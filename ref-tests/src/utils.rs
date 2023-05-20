@@ -1,4 +1,4 @@
-use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
+use ic_agent::agent::http_transport::ReqwestTransport;
 use ic_agent::identity::Secp256k1Identity;
 use ic_agent::{export::Principal, identity::BasicIdentity, Agent, Identity};
 use ic_identity_hsm::HardwareIdentity;
@@ -12,7 +12,7 @@ const HSM_KEY_ID: &str = "HSM_KEY_ID";
 const HSM_PIN: &str = "HSM_PIN";
 
 pub fn get_effective_canister_id() -> Principal {
-    Principal::from_text("sehci-oaaaa-aaaaa-aaaaa-c").unwrap()
+    Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap()
 }
 
 pub async fn create_identity() -> Result<Box<dyn Identity>, String> {
@@ -85,9 +85,7 @@ pub async fn create_agent(identity: Box<dyn Identity>) -> Result<Agent, String> 
         .expect("Could not parse the IC_REF_PORT environment variable as an integer.");
 
     Agent::builder()
-        .with_transport(
-            ReqwestHttpReplicaV2Transport::create(format!("http://127.0.0.1:{}", port)).unwrap(),
-        )
+        .with_transport(ReqwestTransport::create(format!("http://127.0.0.1:{}", port)).unwrap())
         .with_boxed_identity(identity)
         .build()
         .map_err(|e| format!("{:?}", e))
@@ -126,7 +124,7 @@ pub async fn create_universal_canister(agent: &Agent) -> Result<Principal, Box<d
     let canister_wasm = if !canister_path.exists() {
         panic!("Could not find the universal canister WASM file.");
     } else {
-        std::fs::read(&canister_path).expect("Could not read file.")
+        std::fs::read(canister_path).expect("Could not read file.")
     };
 
     let ic00 = ManagementCanister::create(agent);
@@ -155,7 +153,7 @@ pub fn get_wallet_wasm_from_env() -> Vec<u8> {
     if !canister_path.exists() {
         panic!("Could not find the wallet canister WASM file.");
     } else {
-        std::fs::read(&canister_path).expect("Could not read file.")
+        std::fs::read(canister_path).expect("Could not read file.")
     }
 }
 

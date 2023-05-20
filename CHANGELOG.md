@@ -6,9 +6,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [0.24.0] - 2023-05-19
 
-* Add `lookup_subtree` method to HashTree & HashTreeNode to allow for subtree lookups
+* fix: Adjust the default polling parameters to provide better UX. Remove the `CouldNotReadRootKey` error and panic on poisoned mutex.
+* chore: remove deprecated code and fix style
+* Breaking Change: removing the PasswordManager
+* Breaking Change: Enum variant `AgentError::ReplicaError` is now a tuple struct containing `RejectResponse`.
+* Handling rejected update calls where status code is 200. See IC-1462
+* Reject code type is changed from `u64` to enum `RejectCode`.
+
+* Support WASM targets in the browser via `wasm-bindgen`. Feature `wasm-bindgen` required.
+* Do not send `certificate_version` on HTTP Update requests
+* Update `certificate_version` to `u16` instead of `u128`, fixes an issue where the asset canister always responds with v1 response verification
+
+### ic-certification
+
+* Breaking change: Content and path storage has been changed from a `Cow<[u8]>` to a user-provided `T: AsRef<u8>`, removing the lifetime from various types.
+
+### icx-cert
+
+* Fixed issue where a missing request header caused the canister to not respond with an `ic-certificate` header.
+
+## [0.23.2] - 2023-04-21
+
+* Expose the root key to clients through `read_root_key`
+
+## [0.23.1] - 2023-03-09
+
+* Add `lookup_subtree` method to HashTree & HashTreeNode to allow for subtree lookups.
+* Derive `Clone` on `Certificate` and `Delegation` structs.
+* Add certificate version to http_request canister interface.
+* (ic-utils) Add specified_id in provisional_create_canister_with_cycles.
 
 ## [0.23.0] - 2022-12-01
 

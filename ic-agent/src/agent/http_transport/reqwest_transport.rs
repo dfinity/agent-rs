@@ -1,14 +1,13 @@
-//! A [ReplicaV2Transport] that connects using a reqwest client.
+//! A [`Transport`] that connects using a [`reqwest`] client.
 #![cfg(feature = "reqwest")]
 
 pub use reqwest;
 
-use std::sync::Arc;
-
 use futures_util::StreamExt;
+#[cfg(not(target_family = "wasm"))]
 use hyper_rustls::ConfigBuilderExt;
 use reqwest::{
-    header::{HeaderMap, AUTHORIZATION, CONTENT_TYPE},
+    header::{HeaderMap, CONTENT_TYPE},
     Body, Client, Method, Request, StatusCode, Url,
 };
 
@@ -16,68 +15,49 @@ use crate::{
     agent::{
         agent_error::HttpErrorPayload,
         http_transport::{IC0_DOMAIN, IC0_SUB_DOMAIN},
-        AgentFuture, ReplicaV2Transport,
+        replica_api::RejectResponse,
+        AgentFuture, Transport,
     },
     export::Principal,
     AgentError, RequestId,
 };
 
-/// Implemented by the Agent environment to cache and update an HTTP Auth password.
-/// It returns a tuple of `(username, password)`.
-pub trait PasswordManager: Send + Sync {
-    /// Retrieve the cached value for a user. If no cache value exists for this URL,
-    /// the manager can return [`None`].
-    fn cached(&self, url: &str) -> Result<Option<(String, String)>, String>;
-
-    /// A call to the replica failed, so in order to succeed a username and password
-    /// is required. If one cannot be provided (for example, there's no terminal),
-    /// this should return an error.
-    /// If the username and password provided by this method does not work (the next
-    /// request still returns UNAUTHORIZED), this will be called and the request will
-    /// be retried in a loop.
-    fn required(&self, url: &str) -> Result<(String, String), String>;
-}
-
-impl dyn PasswordManager {
-    fn get(&self, cached: bool, url: &str) -> Result<Option<(String, String)>, AgentError> {
-        if cached {
-            self.cached(url)
-        } else {
-            self.required(url).map(Some)
-        }
-        .map_err(AgentError::AuthenticationError)
-    }
-}
-
-impl_debug_empty!(dyn PasswordManager);
-
-/// A [ReplicaV2Transport] using [reqwest] to make HTTP calls to the internet computer.
+/// A [`Transport`] using [`reqwest`] to make HTTP calls to the Internet Computer.
 #[derive(Debug)]
-pub struct ReqwestHttpReplicaV2Transport {
+pub struct ReqwestTransport {
     url: Url,
     client: Client,
-    password_manager: Option<Arc<dyn PasswordManager>>,
     max_response_body_size: Option<usize>,
 }
 
-impl ReqwestHttpReplicaV2Transport {
+#[doc(hidden)]
+pub use ReqwestTransport as ReqwestHttpReplicaV2Transport; // deprecate after 0.24
+
+impl ReqwestTransport {
     /// Creates a replica transport from a HTTP URL.
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
-        let mut tls_config = rustls::ClientConfig::builder()
-            .with_safe_defaults()
-            .with_webpki_roots()
-            .with_no_client_auth();
+        #[cfg(not(target_family = "wasm"))]
+        {
+            let mut tls_config = rustls::ClientConfig::builder()
+                .with_safe_defaults()
+                .with_webpki_roots()
+                .with_no_client_auth();
 
-        // Advertise support for HTTP/2
-        tls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+            // Advertise support for HTTP/2
+            tls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
 
-        Self::create_with_client(
-            url,
-            Client::builder()
-                .use_preconfigured_tls(tls_config)
-                .build()
-                .expect("Could not create HTTP client."),
-        )
+            Self::create_with_client(
+                url,
+                Client::builder()
+                    .use_preconfigured_tls(tls_config)
+                    .build()
+                    .expect("Could not create HTTP client."),
+            )
+        }
+        #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
+        {
+            Self::create_with_client(url, Client::new())
+        }
     }
 
     /// Creates a replica transport from a HTTP URL and a [`reqwest::Client`].
@@ -96,51 +76,16 @@ impl ReqwestHttpReplicaV2Transport {
                 })
                 .map_err(|_| AgentError::InvalidReplicaUrl(url.clone()))?,
             client,
-            password_manager: None,
             max_response_body_size: None,
         })
     }
 
-    /// Sets a password manager to use with HTTP authentication.
-    pub fn with_password_manager<P: 'static + PasswordManager>(self, password_manager: P) -> Self {
-        self.with_arc_password_manager(Arc::new(password_manager))
-    }
-
-    /// Same as [`Self::with_password_manager`], but providing the Arc so one does not have to be created.
-    pub fn with_arc_password_manager(self, password_manager: Arc<dyn PasswordManager>) -> Self {
-        ReqwestHttpReplicaV2Transport {
-            password_manager: Some(password_manager),
-            ..self
-        }
-    }
-
     /// Sets a max response body size limit
     pub fn with_max_response_body_size(self, max_response_body_size: usize) -> Self {
-        ReqwestHttpReplicaV2Transport {
+        ReqwestTransport {
             max_response_body_size: Some(max_response_body_size),
             ..self
         }
-    }
-
-    /// Gets the set password manager, if one exists. Otherwise returns None.
-    pub fn password_manager(&self) -> Option<&dyn PasswordManager> {
-        self.password_manager.as_deref()
-    }
-
-    fn maybe_add_authorization(
-        &self,
-        http_request: &mut Request,
-        cached: bool,
-    ) -> Result<(), AgentError> {
-        if let Some(pm) = &self.password_manager {
-            if let Some((u, p)) = pm.get(cached, http_request.url().as_str())? {
-                let auth = base64::encode(&format!("{}:{}", u, p));
-                http_request
-                    .headers_mut()
-                    .insert(AUTHORIZATION, format!("Basic {}", auth).parse().unwrap());
-            }
-        }
-        Ok(())
     }
 
     async fn request(
@@ -198,34 +143,26 @@ impl ReqwestHttpReplicaV2Transport {
             .headers_mut()
             .insert(CONTENT_TYPE, "application/cbor".parse().unwrap());
 
-        self.maybe_add_authorization(&mut http_request, true)?;
-
         *http_request.body_mut() = body.map(Body::from);
 
-        let mut status;
-        let mut headers;
-        let mut body;
-        loop {
-            let request_result = self.request(http_request.try_clone().unwrap()).await?;
-            status = request_result.0;
-            headers = request_result.1;
-            body = request_result.2;
+        let request_result = self.request(http_request.try_clone().unwrap()).await?;
+        let status = request_result.0;
+        let headers = request_result.1;
+        let body = request_result.2;
 
-            // If the server returned UNAUTHORIZED, and it is the first time we replay the call,
-            // check if we can get the username/password for the HTTP Auth.
-            if status == StatusCode::UNAUTHORIZED {
-                if self.url.scheme() == "https" || self.url.host_str() == Some("localhost") {
-                    // If there is a password manager, get the username and password from it.
-                    self.maybe_add_authorization(&mut http_request, false)?;
-                } else {
-                    return Err(AgentError::CannotUseAuthenticationOnNonSecureUrl());
-                }
-            } else {
-                break;
-            }
-        }
+        // status == OK means we have an error message for call requests
+        // see https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call
+        if status == StatusCode::OK && endpoint.ends_with("call") {
+            let cbor_decoded_body: Result<RejectResponse, serde_cbor::Error> =
+                serde_cbor::from_slice(&body);
 
-        if status.is_client_error() || status.is_server_error() {
+            let agent_error = match cbor_decoded_body {
+                Ok(replica_error) => AgentError::ReplicaError(replica_error),
+                Err(cbor_error) => AgentError::InvalidCborData(cbor_error),
+            };
+
+            Err(agent_error)
+        } else if status.is_client_error() || status.is_server_error() {
             Err(AgentError::HttpError(HttpErrorPayload {
                 status: status.into(),
                 content_type: headers
@@ -240,7 +177,7 @@ impl ReqwestHttpReplicaV2Transport {
     }
 }
 
-impl ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
+impl Transport for ReqwestTransport {
     fn call(
         &self,
         effective_canister_id: Principal,
@@ -280,12 +217,18 @@ impl ReplicaV2Transport for ReqwestHttpReplicaV2Transport {
 
 #[cfg(test)]
 mod test {
-    use super::ReqwestHttpReplicaV2Transport;
+    #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
+    use wasm_bindgen_test::wasm_bindgen_test;
+    #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
+    wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
-    #[test]
+    use super::ReqwestTransport;
+
+    #[cfg_attr(not(target_family = "wasm"), test)]
+    #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
     fn redirect() {
         fn test(base: &str, result: &str) {
-            let t = ReqwestHttpReplicaV2Transport::create(base).unwrap();
+            let t = ReqwestTransport::create(base).unwrap();
             assert_eq!(t.url.as_str(), result, "{}", base);
         }
 

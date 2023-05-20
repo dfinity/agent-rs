@@ -1,18 +1,18 @@
 [package]
 name = "icx"
-version = "0.23.0"
-authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+rust-version.workspace = true
 description = "CLI tool to call canisters on the Internet Computer."
 homepage = "https://docs.rs/icx"
 documentation = "https://docs.rs/icx"
-repository = "https://github.com/dfinity/agent-rs"
-license = "Apache-2.0"
 readme = "README.md"
 categories = ["command-line-interface", "web-programming::http-client"]
 keywords = ["internet-computer", "agent", "icp", "dfinity", "call"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
-rust-version = "1.60.0"
 
 [[bin]]
 name = "icx"
@@ -20,15 +20,15 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { version = "1.0", features = ["backtrace"] }
-candid = "0.9.0-beta.2"
+candid = { workspace = true }
 clap = { version = "3.0.14", features = ["derive", "cargo"] }
-hex = "0.4.2"
+hex = { workspace = true }
 humantime = "2.0.1"
-ic-agent = { path = "../ic-agent", version = "0.23" }
-ic-utils = { path = "../ic-utils", version = "0.23" }
+ic-agent = { workspace = true }
+ic-utils = { workspace = true }
 pem = "1.0"
-ring = "0.16.11"
-serde = "1.0.115"
-serde_json = "1.0.57"
-tokio = { version = "1.8.1", features = ["full"] }
-thiserror = "1.0.24"
+ring = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+thiserror = { workspace = true }

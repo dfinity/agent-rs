@@ -1,6 +1,9 @@
 //! Errors that can occur when using the replica agent.
 
-use crate::{agent::status::Status, RequestIdError};
+use crate::{
+    agent::{replica_api::RejectResponse, status::Status},
+    RequestIdError,
+};
 use ic_certification::Label;
 use leb128::read;
 use std::{
@@ -49,25 +52,12 @@ pub enum AgentError {
     PrincipalError(#[from] crate::export::PrincipalError),
 
     /// The replica rejected the message.
-    #[error(r#"The Replica returned an error: code {reject_code}, message: "{reject_message}""#)]
-    ReplicaError {
-        /// The [reject code](https://smartcontracts.org/docs/interface-spec/index.html#reject-codes) returned by the replica.
-        reject_code: u64,
-        /// The rejection message.
-        reject_message: String,
-    },
+    #[error("The replica returned a replica error: {0}")]
+    ReplicaError(RejectResponse),
 
     /// The replica returned an HTTP error.
     #[error("The replica returned an HTTP Error: {0}")]
     HttpError(HttpErrorPayload),
-
-    /// Attempted to use HTTP authentication in a non-secure URL (either HTTPS or localhost).
-    #[error("HTTP Authentication cannot be used in a non-secure URL (either HTTPS or localhost)")]
-    CannotUseAuthenticationOnNonSecureUrl(),
-
-    /// The password manager returned an error.
-    #[error("Password Manager returned an error: {0}")]
-    AuthenticationError(String),
 
     /// The status endpoint returned an invalid status.
     #[error("Status endpoint returned an invalid status.")]
@@ -80,10 +70,6 @@ pub enum AgentError {
     /// A string error occurred in an external tool.
     #[error("A tool returned a string message error: {0}")]
     MessageError(String),
-
-    /// An error occurred in an external tool.
-    #[error("A tool returned a custom error: {0}")]
-    CustomError(#[from] Box<dyn Send + Sync + std::error::Error>),
 
     /// There was an error reading a LEB128 value.
     #[error("Error reading LEB128 value: {0}")]
@@ -141,14 +127,6 @@ pub enum AgentError {
     #[error("The status response did not contain a root key.  Status: {0}")]
     NoRootKeyInStatus(Status),
 
-    /// Could not read the replica root key.
-    #[error("Could not read the root key")]
-    CouldNotReadRootKey(),
-
-    /// Failed to initialize the BLS library.
-    #[error("Failed to initialize the BLS library")]
-    BlsInitializationFailure(),
-
     /// The invocation to the wallet call forward method failed with an error.
     #[error("The invocation to the wallet call forward method failed with the error: {0}")]
     WalletCallFailed(String),
@@ -193,6 +171,15 @@ impl PartialEq for AgentError {
     }
 }
 
+impl Display for RejectResponse {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        f.write_fmt(format_args!(
+            "Replica Error: reject code {:?}, reject message {}, error code {:?}",
+            self.reject_code, self.reject_message, self.error_code,
+        ))
+    }
+}
+
 /// A HTTP error from the replica.
 pub struct HttpErrorPayload {
     /// The HTTP status code.
@@ -212,7 +199,7 @@ impl HttpErrorPayload {
             "Http Error: status {}, content type {:?}, content: {}",
             http::StatusCode::from_u16(self.status)
                 .map_or_else(|_| format!("{}", self.status), |code| format!("{}", code)),
-            self.content_type.clone().unwrap_or_else(|| "".to_string()),
+            self.content_type.clone().unwrap_or_default(),
             String::from_utf8(self.content.clone()).unwrap_or_else(|_| format!(
                 "(unable to decode content as UTF-8: {:?})",
                 self.content

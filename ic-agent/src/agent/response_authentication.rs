@@ -1,6 +1,6 @@
-use crate::agent::{Replied, RequestStatusResponse};
+use crate::agent::{RejectCode, RejectResponse, Replied, RequestStatusResponse};
 use crate::{export::Principal, AgentError, RequestId};
-use ic_certification::{Certificate, Label, LookupResult};
+use ic_certification::{certificate::Certificate, hash_tree::Label, LookupResult};
 use std::str::from_utf8;
 
 const DER_PREFIX: &[u8; 37] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00";
@@ -27,31 +27,36 @@ pub fn extract_der(buf: Vec<u8>) -> Result<Vec<u8>, AgentError> {
     Ok(key.to_vec())
 }
 
-pub(crate) fn lookup_canister_info(
-    certificate: Certificate,
-    canister_id: Principal,
-    path: &str,
-) -> Result<Vec<u8>, AgentError> {
-    let path_canister = ["canister".into(), canister_id.into(), path.into()];
-    lookup_value(&certificate, path_canister).map(<[u8]>::to_vec)
-}
-
-pub(crate) fn lookup_canister_metadata(
-    certificate: Certificate,
+pub(crate) fn lookup_canister_info<Storage: AsRef<[u8]>>(
+    certificate: Certificate<Storage>,
     canister_id: Principal,
     path: &str,
 ) -> Result<Vec<u8>, AgentError> {
     let path_canister = [
-        "canister".into(),
-        canister_id.into(),
-        "metadata".into(),
-        path.into(),
+        "canister".as_bytes(),
+        canister_id.as_slice(),
+        path.as_bytes(),
     ];
     lookup_value(&certificate, path_canister).map(<[u8]>::to_vec)
 }
 
-pub(crate) fn lookup_request_status(
-    certificate: Certificate,
+pub(crate) fn lookup_canister_metadata<Storage: AsRef<[u8]>>(
+    certificate: Certificate<Storage>,
+    canister_id: Principal,
+    path: &str,
+) -> Result<Vec<u8>, AgentError> {
+    let path_canister = [
+        "canister".as_bytes(),
+        canister_id.as_slice(),
+        "metadata".as_bytes(),
+        path.as_bytes(),
+    ];
+
+    lookup_value(&certificate, path_canister).map(<[u8]>::to_vec)
+}
+
+pub(crate) fn lookup_request_status<Storage: AsRef<[u8]>>(
+    certificate: Certificate<Storage>,
     request_id: &RequestId,
 ) -> Result<RequestStatusResponse, AgentError> {
     use AgentError::*;
@@ -75,76 +80,181 @@ pub(crate) fn lookup_request_status(
     }
 }
 
-pub(crate) fn lookup_rejection(
-    certificate: &Certificate,
+pub(crate) fn lookup_rejection<Storage: AsRef<[u8]>>(
+    certificate: &Certificate<Storage>,
     request_id: &RequestId,
 ) -> Result<RequestStatusResponse, AgentError> {
     let reject_code = lookup_reject_code(certificate, request_id)?;
     let reject_message = lookup_reject_message(certificate, request_id)?;
 
-    Ok(RequestStatusResponse::Rejected {
+    Ok(RequestStatusResponse::Rejected(RejectResponse {
         reject_code,
         reject_message,
-    })
+        error_code: None,
+    }))
 }
 
-pub(crate) fn lookup_reject_code(
-    certificate: &Certificate,
+pub(crate) fn lookup_reject_code<Storage: AsRef<[u8]>>(
+    certificate: &Certificate<Storage>,
     request_id: &RequestId,
-) -> Result<u64, AgentError> {
+) -> Result<RejectCode, AgentError> {
     let path = [
-        "request_status".into(),
-        request_id.to_vec().into(),
-        "reject_code".into(),
+        "request_status".as_bytes(),
+        request_id.as_slice(),
+        "reject_code".as_bytes(),
     ];
     let code = lookup_value(certificate, path)?;
     let mut readable = code;
-    Ok(leb128::read::unsigned(&mut readable)?)
+    let code_digit = leb128::read::unsigned(&mut readable)?;
+    RejectCode::try_from(code_digit)
 }
 
-pub(crate) fn lookup_reject_message(
-    certificate: &Certificate,
+pub(crate) fn lookup_reject_message<Storage: AsRef<[u8]>>(
+    certificate: &Certificate<Storage>,
     request_id: &RequestId,
 ) -> Result<String, AgentError> {
     let path = [
-        "request_status".into(),
-        request_id.to_vec().into(),
-        "reject_message".into(),
+        "request_status".as_bytes(),
+        request_id.as_slice(),
+        "reject_message".as_bytes(),
     ];
     let msg = lookup_value(certificate, path)?;
     Ok(from_utf8(msg)?.to_string())
 }
 
-pub(crate) fn lookup_reply(
-    certificate: &Certificate,
+pub(crate) fn lookup_reply<Storage: AsRef<[u8]>>(
+    certificate: &Certificate<Storage>,
     request_id: &RequestId,
 ) -> Result<RequestStatusResponse, AgentError> {
     let path = [
-        "request_status".into(),
-        request_id.to_vec().into(),
-        "reply".into(),
+        "request_status".as_bytes(),
+        request_id.as_slice(),
+        "reply".as_bytes(),
     ];
     let reply_data = lookup_value(certificate, path)?;
     let reply = Replied::CallReplied(Vec::from(reply_data));
     Ok(RequestStatusResponse::Replied { reply })
 }
 
+/// The path to [`lookup_value`]
+pub trait LookupPath {
+    type Item<'a>: AsRef<[u8]>
+    where
+        Self: 'a;
+    type Iter<'a>: Iterator<Item = Self::Item<'a>>
+    where
+        Self: 'a;
+    fn iter(&self) -> Self::Iter<'_>;
+    fn into_vec(self) -> Vec<Label<Vec<u8>>>;
+}
+
+impl<'b, const N: usize> LookupPath for [&'b [u8]; N] {
+    type Item<'a> = &'a &'b [u8] where Self: 'a;
+    type Iter<'a> = std::slice::Iter<'a, &'b [u8]> where Self: 'a;
+    fn iter(&self) -> Self::Iter<'_> {
+        self.as_slice().iter()
+    }
+    fn into_vec(self) -> Vec<Label<Vec<u8>>> {
+        self.map(Label::from_bytes).into()
+    }
+}
+impl<'b, 'c> LookupPath for &'c [&'b [u8]] {
+    type Item<'a> = &'a &'b [u8] where Self: 'a;
+    type Iter<'a> = std::slice::Iter<'a, &'b [u8]> where Self: 'a;
+    fn iter(&self) -> Self::Iter<'_> {
+        <[_]>::iter(self)
+    }
+    fn into_vec(self) -> Vec<Label<Vec<u8>>> {
+        self.iter().map(|v| Label::from_bytes(v)).collect()
+    }
+}
+impl<'b> LookupPath for Vec<&'b [u8]> {
+    type Item<'a> = &'a &'b [u8] where Self: 'a;
+    type Iter<'a> = std::slice::Iter<'a, &'b [u8]> where Self: 'a;
+    fn iter(&self) -> Self::Iter<'_> {
+        <[_]>::iter(self.as_slice())
+    }
+    fn into_vec(self) -> Vec<Label<Vec<u8>>> {
+        self.into_iter().map(Label::from_bytes).collect()
+    }
+}
+
+impl<const N: usize> LookupPath for [Vec<u8>; N] {
+    type Item<'a> = &'a Vec<u8> where Self: 'a;
+    type Iter<'a> = std::slice::Iter<'a, Vec<u8>> where Self: 'a;
+    fn iter(&self) -> Self::Iter<'_> {
+        self.as_slice().iter()
+    }
+    fn into_vec(self) -> Vec<Label<Vec<u8>>> {
+        self.map(Label::from).into()
+    }
+}
+impl<'c> LookupPath for &'c [Vec<u8>] {
+    type Item<'a> = &'a Vec<u8> where Self: 'a;
+    type Iter<'a> = std::slice::Iter<'a, Vec<u8>> where Self: 'a;
+    fn iter(&self) -> Self::Iter<'_> {
+        <[_]>::iter(self)
+    }
+    fn into_vec(self) -> Vec<Label<Vec<u8>>> {
+        self.iter().map(|v| Label::from(v.clone())).collect()
+    }
+}
+impl LookupPath for Vec<Vec<u8>> {
+    type Item<'a> = &'a Vec<u8> where Self: 'a;
+    type Iter<'a> = std::slice::Iter<'a, Vec<u8>> where Self: 'a;
+    fn iter(&self) -> Self::Iter<'_> {
+        <[_]>::iter(self.as_slice())
+    }
+    fn into_vec(self) -> Vec<Label<Vec<u8>>> {
+        self.into_iter().map(Label::from).collect()
+    }
+}
+
+impl<Storage: AsRef<[u8]> + Into<Vec<u8>>, const N: usize> LookupPath for [Label<Storage>; N] {
+    type Item<'a> = &'a Label<Storage> where Self: 'a;
+    type Iter<'a> = std::slice::Iter<'a, Label<Storage>> where Self: 'a;
+    fn iter(&self) -> Self::Iter<'_> {
+        self.as_slice().iter()
+    }
+    fn into_vec(self) -> Vec<Label<Vec<u8>>> {
+        self.map(Label::from_label).into()
+    }
+}
+impl<'c, Storage: AsRef<[u8]> + Into<Vec<u8>>> LookupPath for &'c [Label<Storage>] {
+    type Item<'a> = &'a Label<Storage> where Self: 'a;
+    type Iter<'a> = std::slice::Iter<'a, Label<Storage>> where Self: 'a;
+    fn iter(&self) -> Self::Iter<'_> {
+        <[_]>::iter(self)
+    }
+    fn into_vec(self) -> Vec<Label<Vec<u8>>> {
+        self.iter()
+            .map(|v| Label::from_bytes(v.as_bytes()))
+            .collect()
+    }
+}
+impl LookupPath for Vec<Label<Vec<u8>>> {
+    type Item<'a> = &'a Label<Vec<u8>> where Self: 'a;
+    type Iter<'a> = std::slice::Iter<'a, Label<Vec<u8>>> where Self: 'a;
+    fn iter(&self) -> Self::Iter<'_> {
+        <[_]>::iter(self.as_slice())
+    }
+    fn into_vec(self) -> Vec<Label<Vec<u8>>> {
+        self
+    }
+}
+
 /// Looks up a value in the certificate's tree at the specified hash.
 ///
 /// Returns the value if it was found; otherwise, errors with `LookupPathAbsent`, `LookupPathUnknown`, or `LookupPathError`.
-pub fn lookup_value<'a, P>(
-    certificate: &'a Certificate<'a>,
+pub fn lookup_value<P: LookupPath, Storage: AsRef<[u8]>>(
+    certificate: &Certificate<Storage>,
     path: P,
-) -> Result<&'a [u8], AgentError>
-where
-    for<'p> &'p P: IntoIterator<Item = &'p Label>,
-    P: Into<Vec<Label>>,
-{
+) -> Result<&[u8], AgentError> {
     use AgentError::*;
-    match certificate.tree.lookup_path(&path) {
-        LookupResult::Absent => Err(LookupPathAbsent(path.into())),
-        LookupResult::Unknown => Err(LookupPathUnknown(path.into())),
+    match certificate.tree.lookup_path(path.iter()) {
+        LookupResult::Absent => Err(LookupPathAbsent(path.into_vec())),
+        LookupResult::Unknown => Err(LookupPathUnknown(path.into_vec())),
         LookupResult::Found(value) => Ok(value),
-        LookupResult::Error => Err(LookupPathError(path.into())),
+        LookupResult::Error => Err(LookupPathError(path.into_vec())),
     }
 }
