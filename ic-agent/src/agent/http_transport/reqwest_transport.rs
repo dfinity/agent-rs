@@ -5,7 +5,6 @@ pub use reqwest;
 
 use futures_util::StreamExt;
 #[cfg(not(target_family = "wasm"))]
-use hyper_rustls::ConfigBuilderExt;
 use reqwest::{
     header::{HeaderMap, CONTENT_TYPE},
     Body, Client, Method, Request, StatusCode, Url,
@@ -38,18 +37,10 @@ impl ReqwestTransport {
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
         #[cfg(not(target_family = "wasm"))]
         {
-            let mut tls_config = rustls::ClientConfig::builder()
-                .with_safe_defaults()
-                .with_webpki_roots()
-                .with_no_client_auth();
-
-            // Advertise support for HTTP/2
-            tls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-
             Self::create_with_client(
                 url,
                 Client::builder()
-                    .use_preconfigured_tls(tls_config)
+                    .use_rustls_tls()
                     .build()
                     .expect("Could not create HTTP client."),
             )
