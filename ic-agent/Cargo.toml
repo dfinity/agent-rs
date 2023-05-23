@@ -41,7 +41,6 @@ sha2 = { workspace = true }
 simple_asn1 = "0.6.1"
 thiserror = { workspace = true }
 url = "2.1.0"
-webpki-roots = "0.23"
 
 [dependencies.hyper]
 version = "0.14"
