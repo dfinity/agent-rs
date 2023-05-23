@@ -4,7 +4,6 @@
 pub use reqwest;
 
 use futures_util::StreamExt;
-#[cfg(not(target_family = "wasm"))]
 use reqwest::{
     header::{HeaderMap, CONTENT_TYPE},
     Body, Client, Method, Request, StatusCode, Url,
