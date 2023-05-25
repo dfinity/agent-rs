@@ -28,4 +28,4 @@ sha2 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
 serde_cbor = { workspace = true }
-time = { workspace = true }
+time = { workspace = true, features = ["formatting"] }
