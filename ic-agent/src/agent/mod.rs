@@ -301,7 +301,7 @@ impl Agent {
         let status = self.status().await?;
         let root_key = match status.root_key {
             Some(key) => key,
-            None => return Err(AgentError::NoRootKeyInStatus(status))
+            None => return Err(AgentError::NoRootKeyInStatus(status)),
         };
         self.set_root_key(root_key);
         Ok(())
@@ -1287,7 +1287,7 @@ impl<'agent> UpdateBuilder<'agent> {
         )?;
         let signed_update = sign_envelope(&content, self.agent.identity.clone())?;
         let request_id = to_request_id(&content)?;
-        let EnvelopeContent::Call { 
+        let EnvelopeContent::Call {
             nonce,
             ingress_expiry,
             sender,
