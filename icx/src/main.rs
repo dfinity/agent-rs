@@ -381,7 +381,7 @@ async fn main() -> Result<()> {
                         let mut builder = agent.update(&t.canister_id, &t.method_name);
 
                         if let Some(d) = expire_after {
-                            builder.expire_after(d);
+                            builder = builder.expire_after(d);
                         }
 
                         let printer = async {
@@ -404,7 +404,7 @@ async fn main() -> Result<()> {
                     SubCommand::Query(_) => {
                         let mut builder = agent.query(&t.canister_id, &t.method_name);
                         if let Some(d) = expire_after {
-                            builder.expire_after(d);
+                            builder = builder.expire_after(d);
                         }
 
                         builder
@@ -461,7 +461,7 @@ async fn main() -> Result<()> {
 
                         let mut builder = agent.update(&t.canister_id, &t.method_name);
                         if let Some(d) = expire_after {
-                            builder.expire_after(d);
+                            builder = builder.expire_after(d);
                         }
                         let signed_update = builder
                             .with_arg(arg)
@@ -482,7 +482,7 @@ async fn main() -> Result<()> {
                     &SubCommand::Query(_) => {
                         let mut builder = agent.query(&t.canister_id, &t.method_name);
                         if let Some(d) = expire_after {
-                            builder.expire_after(d);
+                            builder = builder.expire_after(d);
                         }
                         let signed_query = builder
                             .with_arg(arg)

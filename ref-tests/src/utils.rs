@@ -78,8 +78,7 @@ yeMC60IsMNxDjLqElV7+T7dkb5Ki7Q==
 }
 
 pub async fn create_agent(identity: Box<dyn Identity>) -> Result<Agent, String> {
-    let port_env = std::env::var("IC_REF_PORT")
-        .expect("Need to specify the IC_REF_PORT environment variable.");
+    let port_env = std::env::var("IC_REF_PORT").unwrap_or_else(|_| "8001".into());
     let port = port_env
         .parse::<u32>()
         .expect("Could not parse the IC_REF_PORT environment variable as an integer.");

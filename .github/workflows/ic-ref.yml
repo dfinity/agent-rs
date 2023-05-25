@@ -67,7 +67,6 @@ jobs:
           export IC_REF_PORT=$(cat $HOME/ic_ref_port)
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
           export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
-          cd main/ref-tests
           cargo test --all-features -- --ignored
           killall ic-ref
         env:

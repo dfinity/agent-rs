@@ -401,8 +401,13 @@ impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
 mod tests {
     use super::super::interfaces::ManagementCanister;
     use crate::call::AsyncCall;
+    use candid::Principal;
     use ic_agent::agent::http_transport::ReqwestTransport;
     use ic_agent::identity::BasicIdentity;
+
+    fn get_effective_canister_id() -> Principal {
+        Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap()
+    }
 
     #[ignore]
     #[tokio::test]
@@ -418,8 +423,10 @@ mod tests {
                 .expect("Could not read the key pair."),
         );
 
+        let port = std::env::var("IC_REF_PORT").unwrap_or_else(|_| "8001".into());
+
         let agent = ic_agent::Agent::builder()
-            .with_transport(ReqwestTransport::create("http://localhost:8001").unwrap())
+            .with_transport(ReqwestTransport::create(format!("http://localhost:{port}")).unwrap())
             .with_identity(identity)
             .build()
             .unwrap();
@@ -435,6 +442,8 @@ mod tests {
 
         let (new_canister_id,) = management_canister
             .create_canister()
+            .as_provisional_create_with_amount(None)
+            .with_effective_canister_id(get_effective_canister_id())
             .call_and_wait()
             .await
             .unwrap();
