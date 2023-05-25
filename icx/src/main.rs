@@ -408,7 +408,7 @@ async fn main() -> Result<()> {
                         }
 
                         builder
-                            .with_arg(&arg)
+                            .with_arg(arg)
                             .with_effective_canister_id(effective_canister_id)
                             .call()
                             .await

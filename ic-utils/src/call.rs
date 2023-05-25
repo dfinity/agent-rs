@@ -165,7 +165,7 @@ where
         let mut builder = self.agent.query(&self.canister_id, &self.method_name);
         builder = self.expiry.apply_to_query(builder);
         builder
-            .with_arg(&self.arg?)
+            .with_arg(self.arg?)
             .with_effective_canister_id(self.effective_canister_id)
             .call()
             .await

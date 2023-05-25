@@ -771,7 +771,7 @@ mod simple_calls {
             let arg = payload().reply_data(b"hello").build();
             let result = agent
                 .query(&canister_id, "non_existent_method")
-                .with_arg(&arg)
+                .with_arg(arg)
                 .call()
                 .await;
 

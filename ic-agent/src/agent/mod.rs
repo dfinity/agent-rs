@@ -294,15 +294,15 @@ impl Agent {
     /// *Only use this when you are  _not_ talking to the main Internet Computer, otherwise
     /// you are prone to man-in-the-middle attacks! Do not call this function by default.*
     pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
-        if self.read_root_key() != IC_ROOT_KEY.to_vec() {
+        if self.read_root_key()[..] != IC_ROOT_KEY[..] {
             // already fetched the root key
             return Ok(());
         }
         let status = self.status().await?;
-        let root_key = status
-            .root_key
-            .clone()
-            .ok_or(AgentError::NoRootKeyInStatus(status))?;
+        let root_key = match status.root_key {
+            Some(key) => key,
+            None => return Err(AgentError::NoRootKeyInStatus(status))
+        };
         self.set_root_key(root_key);
         Ok(())
     }
@@ -1062,8 +1062,8 @@ impl<'agent> QueryBuilder<'agent> {
     }
 
     /// Sets the argument blob to pass to the canister. For most canisters this should be a Candid-serialized tuple.
-    pub fn with_arg<A: AsRef<[u8]>>(mut self, arg: A) -> Self {
-        self.arg = arg.as_ref().to_vec();
+    pub fn with_arg<A: Into<Vec<u8>>>(mut self, arg: A) -> Self {
+        self.arg = arg.into();
         self
     }
 
