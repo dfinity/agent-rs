@@ -28,27 +28,19 @@ impl Expiry {
         Self::DateTime(dt)
     }
 
-    pub(crate) fn apply_to_update(self, u: &mut UpdateBuilder<'_>) {
+    pub(crate) fn apply_to_update(self, u: UpdateBuilder<'_>) -> UpdateBuilder<'_> {
         match self {
-            Expiry::Unspecified => {}
-            Expiry::Delay(d) => {
-                u.expire_after(d);
-            }
-            Expiry::DateTime(dt) => {
-                u.expire_at(dt);
-            }
+            Expiry::Unspecified => u,
+            Expiry::Delay(d) => u.expire_after(d),
+            Expiry::DateTime(dt) => u.expire_at(dt),
         }
     }
 
-    pub(crate) fn apply_to_query(self, u: &mut QueryBuilder<'_>) {
+    pub(crate) fn apply_to_query(self, u: QueryBuilder<'_>) -> QueryBuilder<'_> {
         match self {
-            Expiry::Unspecified => {}
-            Expiry::Delay(d) => {
-                u.expire_after(d);
-            }
-            Expiry::DateTime(dt) => {
-                u.expire_at(dt);
-            }
+            Expiry::Unspecified => u,
+            Expiry::Delay(d) => u.expire_after(d),
+            Expiry::DateTime(dt) => u.expire_at(dt),
         }
     }
 }

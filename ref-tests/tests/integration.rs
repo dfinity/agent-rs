@@ -31,7 +31,7 @@ fn basic_expiry() {
         // Verify this works first.
         let result = agent
             .update(&canister_id, "update")
-            .with_arg(&arg)
+            .with_arg(arg.clone())
             .expire_after(std::time::Duration::from_secs(120))
             .call_and_wait()
             .await?;
@@ -41,7 +41,7 @@ fn basic_expiry() {
         // Verify a zero expiry will fail with the proper code.
         let result = agent
             .update(&canister_id, "update")
-            .with_arg(&arg)
+            .with_arg(arg.clone())
             .expire_after(std::time::Duration::from_secs(0))
             .call_and_wait()
             .await;
@@ -53,7 +53,7 @@ fn basic_expiry() {
 
         let result = agent
             .update(&canister_id, "update")
-            .with_arg(&arg)
+            .with_arg(arg.clone())
             .expire_after(std::time::Duration::from_secs(120))
             .call_and_wait()
             .await?;
