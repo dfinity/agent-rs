@@ -159,16 +159,16 @@ pub enum QueryResponse {
 /// An IC execution error received from the replica.
 #[derive(Debug, Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq)]
 pub struct RejectResponse {
-    /// The [reject code](https://smartcontracts.org/docs/interface-spec/index.html#reject-codes) returned by the replica.
+    /// The [reject code](https://internetcomputer.org/docs/current/references/ic-interface-spec#reject-codes) returned by the replica.
     pub reject_code: RejectCode,
     /// The rejection message.
     pub reject_message: String,
-    /// The optional [error code](https://smartcontracts.org/docs/interface-spec/index.html#error-codes) returned by the replica.
+    /// The optional [error code](https://internetcomputer.org/docs/current/references/ic-interface-spec#error-codes) returned by the replica.
     #[serde(default)]
     pub error_code: Option<String>,
 }
 
-/// See the [interface spec](https://smartcontracts.org/docs/interface-spec/index.html#reject-codes).
+/// See the [interface spec](https://internetcomputer.org/docs/current/references/ic-interface-spec#reject-codes).
 #[derive(
     Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr, Ord, PartialOrd,
 )]

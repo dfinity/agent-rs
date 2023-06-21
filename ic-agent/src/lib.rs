@@ -1,21 +1,20 @@
 //! The `ic-agent` is a simple-to-use library that enables you to
 //! build applications and interact with the [Internet Computer](https://internetcomputer.org)
 //! in Rust. It serves as a Rust-based low-level backend for the
-//! DFINITY Canister Software Development Kit (SDK) and the
-//! [Canister SDK](https://sdk.dfinity.org) command-line execution environment
-//! [`dfx`](https://sdk.dfinity.org/docs/developers-guide/install-upgrade-remove.html#_what_gets_installed).
+//! DFINITY Canister Software Development Kit (SDK) and the command-line execution environment
+//! [`dfx`](https://internetcomputer.org/docs/current/developer-docs/setup/install).
 //!
 //! ## Overview
 //! The `ic-agent` is a Rust crate that can connect directly to the Internet
 //! Computer through the Internet Computer protocol (ICP).
 //! The key software components of the ICP are broadly referred to as the
-//! [replica](https://sdk.dfinity.org/docs/developers-guide/introduction-key-concepts.html#_basic_architecture).
+//! [replica](https://internetcomputer.org/docs/current/concepts/nodes-subnets).
 //!
 //! The agent is designed to be compatible with multiple versions of the
 //! replica API, and to expose both low-level APIs for communicating with
 //! Internet Computer protocol components like the replica and to provide
 //! higher-level APIs for communicating with software applications deployed
-//! as [canisters](https://sdk.dfinity.org/docs/developers-guide/introduction-key-concepts.html#_writing_deploying_and_running_software).
+//! as [canisters](https://internetcomputer.org/docs/current/concepts/canisters-code).
 //!
 //! ## Example
 //! The following example illustrates how to use the Agent interface to send
@@ -96,8 +95,8 @@
 //! For an introduction to the Internet Computer and the DFINITY Canister SDK,
 //! see the following resources:
 //!
-//! - [Frequently Asked Questions](https://dfinity.org/faq)
-//! - [DFINITY Canister SDK](https://sdk.dfinity.org/docs/index.html)
+//! - [How the IC Works](https://internetcomputer.org/docs/current/concepts/)
+//! - [DFINITY Canister SDK](https://internetcomputer.org/docs/current/references/cli-reference/)
 //!
 //! The Internet Computer protocol and interface specifications are not
 //! publicly available yet. When these specifications are made public and

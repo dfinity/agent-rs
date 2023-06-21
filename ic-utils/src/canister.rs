@@ -299,7 +299,7 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
         self
     }
 
-    /// Sets the [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
+    /// Sets the [effective canister ID](https://internetcomputer.org/docs/references/current/ic-interface-spec#http-effective-canister-id) of the destination.
     pub fn with_effective_canister_id(
         mut self,
         canister_id: Principal,
@@ -370,7 +370,7 @@ impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
         self
     }
 
-    /// Sets the [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
+    /// Sets the [effective canister ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-canister-id) of the destination.
     pub fn with_effective_canister_id(
         mut self,
         canister_id: Principal,
