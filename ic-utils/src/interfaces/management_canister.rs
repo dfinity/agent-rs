@@ -1,6 +1,6 @@
 //! The canister interface for the IC management canister. See the [specification][spec] for full documentation of the interface.
 //!
-//! [spec]: https://smartcontracts.org/docs/interface-spec/index.html#ic-management-canister
+//! [spec]: https://internetcomputer.org/docs/current/references/ic-interface-spec#ic-management-canister
 
 use crate::{call::AsyncCall, Canister};
 use candid::{CandidType, Deserialize, Nat};

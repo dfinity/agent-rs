@@ -589,7 +589,7 @@ impl Agent {
         }
     }
 
-    /// Request the raw state tree directly. See [the protocol docs](https://smartcontracts.org/docs/interface-spec/index.html#http-read-state) for more information.
+    /// Request the raw state tree directly. See [the protocol docs](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-read-state) for more information.
     pub async fn read_state_raw(
         &self,
         paths: Vec<Vec<Label>>,
@@ -670,7 +670,8 @@ impl Agent {
         }
     }
 
-    /// Request information about a particular canister for a single state subkey. See [the protocol docs](https://smartcontracts.org/docs/interface-spec/index.html#state-tree-canister-information) for more information.
+    /// Request information about a particular canister for a single state subkey.
+    /// See [the protocol docs](https://internetcomputer.org/docs/current/references/ic-interface-spec#state-tree-canister-information) for more information.
     pub async fn read_state_canister_info(
         &self,
         canister_id: Principal,
@@ -790,7 +791,7 @@ impl Agent {
 }
 
 // Checks if a principal is contained within a list of principal ranges
-// A range is a tuple: (low: Principal, high: Principal), as described here: https://docs.dfinity.systems/spec/public/#state-tree-subnet
+// A range is a tuple: (low: Principal, high: Principal), as described here: https://internetcomputer.org/docs/current/references/ic-interface-spec#state-tree-subnet
 fn principal_is_within_ranges(principal: &Principal, ranges: &[(Principal, Principal)]) -> bool {
     ranges
         .iter()
@@ -1030,7 +1031,7 @@ pub fn signed_request_status_inspect(
 #[derive(Debug, Clone)]
 pub struct QueryBuilder<'agent> {
     agent: &'agent Agent,
-    /// The [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
+    /// The [effective canister ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-canister-id) of the destination.
     pub effective_canister_id: Principal,
     /// The principal ID of the canister being called.
     pub canister_id: Principal,
@@ -1055,7 +1056,7 @@ impl<'agent> QueryBuilder<'agent> {
         }
     }
 
-    /// Sets the [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
+    /// Sets the [effective canister ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-canister-id) of the destination.
     pub fn with_effective_canister_id(mut self, canister_id: Principal) -> Self {
         self.effective_canister_id = canister_id;
         self
@@ -1178,7 +1179,7 @@ impl<'a> UpdateCall<'a> {
 #[derive(Debug)]
 pub struct UpdateBuilder<'agent> {
     agent: &'agent Agent,
-    /// The [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
+    /// The [effective canister ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-canister-id) of the destination.
     pub effective_canister_id: Principal,
     /// The principal ID of the canister being called.
     pub canister_id: Principal,
@@ -1203,7 +1204,7 @@ impl<'agent> UpdateBuilder<'agent> {
         }
     }
 
-    /// Sets the [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
+    /// Sets the [effective canister ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-canister-id) of the destination.
     pub fn with_effective_canister_id(mut self, canister_id: Principal) -> Self {
         self.effective_canister_id = canister_id;
         self

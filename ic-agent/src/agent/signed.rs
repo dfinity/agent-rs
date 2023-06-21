@@ -18,9 +18,9 @@ pub struct SignedQuery {
     /// The argument blob to be passed to the method.
     #[serde(with = "serde_bytes")]
     pub arg: Vec<u8>,
-    /// The [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
+    /// The [effective canister ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-canister-id) of the destination.
     pub effective_canister_id: Principal,
-    /// The CBOR-encoded [authentication envelope](https://smartcontracts.org/docs/interface-spec/index.html#authentication) for the request.
+    /// The CBOR-encoded [authentication envelope](https://internetcomputer.org/docs/current/references/ic-interface-spec#authentication) for the request.
     #[serde(with = "serde_bytes")]
     pub signed_query: Vec<u8>,
 }
@@ -44,10 +44,10 @@ pub struct SignedUpdate {
     /// The argument blob to be passed to the method.
     #[serde(with = "serde_bytes")]
     pub arg: Vec<u8>,
-    /// The [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
+    /// The [effective canister ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-canister-id) of the destination.
     pub effective_canister_id: Principal,
     #[serde(with = "serde_bytes")]
-    /// The CBOR-encoded [authentication envelope](https://smartcontracts.org/docs/interface-spec/index.html#authentication) for the request.
+    /// The CBOR-encoded [authentication envelope](https://internetcomputer.org/docs/current/references/ic-interface-spec#authentication) for the request.
     pub signed_update: Vec<u8>,
     /// The request ID.
     pub request_id: RequestId,
@@ -60,11 +60,11 @@ pub struct SignedRequestStatus {
     pub ingress_expiry: u64,
     /// The principal ID of the caller.
     pub sender: Principal,
-    /// The [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
+    /// The [effective canister ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-canister-id) of the destination.
     pub effective_canister_id: Principal,
     /// The request ID.
     pub request_id: RequestId,
-    /// The CBOR-encoded [authentication envelope](https://smartcontracts.org/docs/interface-spec/index.html#authentication) for the request.
+    /// The CBOR-encoded [authentication envelope](https://internetcomputer.org/docs/current/references/ic-interface-spec#authentication) for the request.
     #[serde(with = "serde_bytes")]
     pub signed_request_status: Vec<u8>,
 }

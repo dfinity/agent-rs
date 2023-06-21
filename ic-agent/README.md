@@ -1,5 +1,5 @@
-`ic-agent` is simple to use library to interact with the [Internet Computer](https://dfinity.org)
-in Rust. It is the backend for [`dfx`](https://sdk.dfinity.org).
+`ic-agent` is a simple-to-use library to interact with the [Internet Computer](https://internetcomputer.org)
+in Rust. It is the backend for [`dfx`](https://internetcomputer.org/docs/current/references/cli-reference/).
 
 ## Useful links
 
