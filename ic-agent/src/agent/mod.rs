@@ -16,6 +16,7 @@ pub use builder::AgentBuilder;
 pub use nonce::{NonceFactory, NonceGenerator};
 pub use replica_api::{EnvelopeContent, RejectCode, RejectResponse};
 pub use response::{Replied, RequestStatusResponse};
+use time::OffsetDateTime;
 
 #[cfg(test)]
 mod agent_test;
@@ -323,22 +324,10 @@ impl Agent {
     fn get_expiry_date(&self) -> u64 {
         // TODO(hansl): evaluate if we need this on the agent side (my hunch is we don't).
         let permitted_drift = Duration::from_secs(60);
-        (self
-            .ingress_expiry
-            .saturating_add({
-                #[cfg(not(target_family = "wasm"))]
-                {
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .expect("Time wrapped around.")
-                }
-                #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
-                {
-                    Duration::from_nanos((js_sys::Date::now() * 1_000_000.) as _)
-                }
-            })
-            .saturating_sub(permitted_drift))
-        .as_nanos() as u64
+        self.ingress_expiry
+            .as_nanos()
+            .saturating_add(OffsetDateTime::now_utc().unix_timestamp_nanos() as u128)
+            .saturating_sub(permitted_drift.as_nanos()) as u64
     }
 
     /// Return the principal of the identity.
@@ -1068,33 +1057,20 @@ impl<'agent> QueryBuilder<'agent> {
         self
     }
 
-    /// Takes a SystemTime converts it to a Duration by calling
-    /// duration_since(UNIX_EPOCH) to learn about where in time this SystemTime lies.
-    /// The Duration is converted to nanoseconds and stored in ingress_expiry_datetime
-    pub fn expire_at(mut self, time: std::time::SystemTime) -> Self {
-        self.ingress_expiry_datetime = Some(
-            time.duration_since(std::time::UNIX_EPOCH)
-                .expect("Time wrapped around")
-                .as_nanos() as u64,
-        );
+    /// Sets ingress_expiry_datetime to the provided timestamp, at nanosecond precision.
+    pub fn expire_at(mut self, time: impl Into<OffsetDateTime>) -> Self {
+        self.ingress_expiry_datetime = Some(time.into().unix_timestamp_nanos() as u64);
         self
     }
 
-    /// Takes a Duration (i.e. 30 sec/5 min 30 sec/1 h 30 min, etc.) and adds it to the
-    /// Duration of the current SystemTime since the UNIX_EPOCH
-    /// Subtracts a permitted drift from the sum to account for using system time and not block time.
-    /// Converts the difference to nanoseconds and stores in ingress_expiry_datetime
-    pub fn expire_after(mut self, duration: std::time::Duration) -> Self {
+    /// Sets ingress_expiry_datetime to `now + duration - drift`, where `drift` is a
+    /// permitted drift from the duration to account for using system time and not block time.
+    pub fn expire_after(mut self, duration: Duration) -> Self {
         let permitted_drift = Duration::from_secs(60);
         self.ingress_expiry_datetime = Some(
             (duration
                 .as_nanos()
-                .saturating_add(
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .expect("Time wrapped around")
-                        .as_nanos(),
-                )
+                .saturating_add(OffsetDateTime::now_utc().unix_timestamp_nanos() as u128)
                 .saturating_sub(permitted_drift.as_nanos())) as u64,
         );
         self
@@ -1216,33 +1192,20 @@ impl<'agent> UpdateBuilder<'agent> {
         self
     }
 
-    /// Takes a SystemTime converts it to a Duration by calling
-    /// duration_since(UNIX_EPOCH) to learn about where in time this SystemTime lies.
-    /// The Duration is converted to nanoseconds and stored in ingress_expiry_datetime
-    pub fn expire_at(mut self, time: std::time::SystemTime) -> Self {
-        self.ingress_expiry_datetime = Some(
-            time.duration_since(std::time::UNIX_EPOCH)
-                .expect("Time wrapped around")
-                .as_nanos() as u64,
-        );
+    /// Sets ingress_expiry_datetime to the provided timestamp, at nanosecond precision.
+    pub fn expire_at(mut self, time: impl Into<OffsetDateTime>) -> Self {
+        self.ingress_expiry_datetime = Some(time.into().unix_timestamp_nanos() as u64);
         self
     }
 
-    /// Takes a Duration (i.e. 30 sec/5 min 30 sec/1 h 30 min, etc.) and adds it to the
-    /// Duration of the current SystemTime since the UNIX_EPOCH
-    /// Subtracts a permitted drift from the sum to account for using system time and not block time.
-    /// Converts the difference to nanoseconds and stores in ingress_expiry_datetime
-    pub fn expire_after(mut self, duration: std::time::Duration) -> Self {
+    /// Sets ingress_expiry_datetime to `now + duration - drift`, where `drift` is a
+    /// permitted drift from the duration to account for using system time and not block time.
+    pub fn expire_after(mut self, duration: Duration) -> Self {
         let permitted_drift = Duration::from_secs(60);
         self.ingress_expiry_datetime = Some(
             (duration
                 .as_nanos()
-                .saturating_add(
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .expect("Time wrapped around")
-                        .as_nanos(),
-                )
+                .saturating_add(OffsetDateTime::now_utc().unix_timestamp_nanos() as u128)
                 .saturating_sub(permitted_drift.as_nanos())) as u64,
         );
         self
