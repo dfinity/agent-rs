@@ -36,6 +36,7 @@ serde_repr = "0.1.12"
 sha2 = { workspace = true }
 simple_asn1 = "0.6.1"
 thiserror = { workspace = true }
+time = { workspace = true }
 url = "2.1.0"
 
 [dependencies.hyper]
@@ -67,7 +68,6 @@ js-sys = { version = "0.3", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 web-sys = { version = "0.3", features = ["Window"], optional = true }
-time = { workspace = true, features = ["wasm-bindgen"], optional = true }
 
 [dev-dependencies]
 serde_json = "1.0.79"
@@ -99,7 +99,7 @@ wasm-bindgen = [
     "dep:wasm-bindgen-futures",
     "dep:getrandom",
     "dep:web-sys",
-    "dep:time",
+    "time/wasm-bindgen",
     "backoff/wasm-bindgen",
 ]
 

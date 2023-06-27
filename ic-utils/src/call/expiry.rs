@@ -1,4 +1,7 @@
+use std::time::{Duration, SystemTime};
+
 use ic_agent::agent::{QueryBuilder, UpdateBuilder};
+use time::OffsetDateTime;
 
 /// An expiry value. Either not specified (the default), a delay relative to the time the
 /// call is made, or a specific date time.
@@ -9,23 +12,23 @@ pub enum Expiry {
     Unspecified,
 
     /// A duration that will be added to the system time when the call is made.
-    Delay(std::time::Duration),
+    Delay(Duration),
 
     /// A specific date and time to use for the expiry of the request.
-    DateTime(std::time::SystemTime),
+    DateTime(OffsetDateTime),
 }
 
 impl Expiry {
     /// Create an expiry that happens after a duration.
     #[inline]
-    pub fn after(d: std::time::Duration) -> Self {
+    pub fn after(d: Duration) -> Self {
         Self::Delay(d)
     }
 
     /// Set the expiry field to a specific date and time.
     #[inline]
-    pub fn at(dt: std::time::SystemTime) -> Self {
-        Self::DateTime(dt)
+    pub fn at(dt: impl Into<OffsetDateTime>) -> Self {
+        Self::DateTime(dt.into())
     }
 
     pub(crate) fn apply_to_update(self, u: UpdateBuilder<'_>) -> UpdateBuilder<'_> {
@@ -45,14 +48,20 @@ impl Expiry {
     }
 }
 
-impl From<std::time::Duration> for Expiry {
-    fn from(d: std::time::Duration) -> Self {
+impl From<Duration> for Expiry {
+    fn from(d: Duration) -> Self {
         Self::Delay(d)
     }
 }
 
-impl From<std::time::SystemTime> for Expiry {
-    fn from(dt: std::time::SystemTime) -> Self {
+impl From<SystemTime> for Expiry {
+    fn from(dt: SystemTime) -> Self {
+        Self::DateTime(dt.into())
+    }
+}
+
+impl From<OffsetDateTime> for Expiry {
+    fn from(dt: OffsetDateTime) -> Self {
         Self::DateTime(dt)
     }
 }
