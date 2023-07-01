@@ -26,9 +26,7 @@ hex = { workspace = true }
 humantime = "2.0.1"
 ic-agent = { workspace = true }
 ic-utils = { workspace = true }
-pem = "1.0"
 ring = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-thiserror = { workspace = true }

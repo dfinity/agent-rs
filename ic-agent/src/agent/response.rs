@@ -2,7 +2,7 @@ use crate::agent::replica_api::RejectResponse;
 
 /// The response of /api/v2/canister/<effective_canister_id>/read_state with "request_status" request type.
 ///
-/// See [the HTTP interface specification](https://smartcontracts.org/docs/interface-spec/index.html#http-call-overview) for more details.
+/// See [the HTTP interface specification](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call-overview) for more details.
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum RequestStatusResponse {
     /// The status of the request is unknown.

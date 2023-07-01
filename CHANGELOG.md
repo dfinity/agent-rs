@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+##  Unreleased
+
+* Breaking Change: builders are now owning-style rather than borrowing-style; with_arg takes an owned Vec rather than a borrowed Vec
+* Breaking Change: Identity::sign takes &EnvelopeContent rather than the request ID.
+
 ## [0.24.0] - 2023-05-19
 
 * fix: Adjust the default polling parameters to provide better UX. Remove the `CouldNotReadRootKey` error and panic on poisoned mutex.

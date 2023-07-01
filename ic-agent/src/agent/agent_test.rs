@@ -41,10 +41,10 @@ async fn query() -> Result<(), AgentError> {
         .build()?;
     let result = agent
         .query_raw(
-            &Principal::management_canister(),
             Principal::management_canister(),
-            "main",
-            &[],
+            Principal::management_canister(),
+            "main".to_string(),
+            vec![],
             None,
         )
         .await;
@@ -67,10 +67,10 @@ async fn query_error() -> Result<(), AgentError> {
 
     let result = agent
         .query_raw(
-            &Principal::management_canister(),
             Principal::management_canister(),
-            "greet",
-            &[],
+            Principal::management_canister(),
+            "greet".to_string(),
+            vec![],
             None,
         )
         .await;
@@ -106,10 +106,10 @@ async fn query_rejected() -> Result<(), AgentError> {
 
     let result = agent
         .query_raw(
-            &Principal::management_canister(),
             Principal::management_canister(),
-            "greet",
-            &[],
+            Principal::management_canister(),
+            "greet".to_string(),
+            vec![],
             None,
         )
         .await;

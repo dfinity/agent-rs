@@ -135,7 +135,7 @@ pub enum AgentError {
     #[error("The  wallet operation failed: {0}")]
     WalletError(String),
 
-    /// The wallet canister must be upgraded. See [`dfx wallet upgrade`](https://smartcontracts.org/docs/developers-guide/cli-reference/dfx-wallet.html)
+    /// The wallet canister must be upgraded. See [`dfx wallet upgrade`](https://internetcomputer.org/docs/current/references/cli-reference/dfx-wallet)
     #[error("The wallet canister must be upgraded: {0}")]
     WalletUpgradeRequired(String),
 

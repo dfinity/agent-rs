@@ -1,4 +1,4 @@
-use ic_agent::{export::Principal, Identity, Signature};
+use ic_agent::{agent::EnvelopeContent, export::Principal, Identity, Signature};
 
 use pkcs11::{
     types::{
@@ -136,8 +136,8 @@ impl Identity for HardwareIdentity {
     fn sender(&self) -> Result<Principal, String> {
         Ok(Principal::self_authenticating(&self.public_key))
     }
-    fn sign(&self, msg: &[u8]) -> Result<Signature, String> {
-        let hash = Sha256::digest(msg);
+    fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
+        let hash = Sha256::digest(content.to_request_id().signable());
         let signature = self.sign_hash(&hash)?;
 
         Ok(Signature {

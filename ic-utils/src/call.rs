@@ -163,10 +163,12 @@ where
     /// Perform the call, consuming the the abstraction. This is a private method.
     async fn call_raw(self) -> Result<Vec<u8>, AgentError> {
         let mut builder = self.agent.query(&self.canister_id, &self.method_name);
-        self.expiry.apply_to_query(&mut builder);
-        builder.with_arg(&self.arg?);
-        builder.with_effective_canister_id(self.effective_canister_id);
-        builder.call().await
+        builder = self.expiry.apply_to_query(builder);
+        builder
+            .with_arg(self.arg?)
+            .with_effective_canister_id(self.effective_canister_id)
+            .call()
+            .await
     }
 }
 
@@ -212,9 +214,10 @@ where
     /// essentially downleveling this type into the lower level [ic-agent] abstraction.
     pub fn build_call(self) -> Result<UpdateBuilder<'agent>, AgentError> {
         let mut builder = self.agent.update(&self.canister_id, &self.method_name);
-        self.expiry.apply_to_update(&mut builder);
-        builder.with_arg(&self.arg?);
-        builder.with_effective_canister_id(self.effective_canister_id);
+        builder = self.expiry.apply_to_update(builder);
+        builder = builder
+            .with_arg(self.arg?)
+            .with_effective_canister_id(self.effective_canister_id);
         Ok(builder)
     }
 
