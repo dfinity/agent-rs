@@ -1,8 +1,8 @@
 use anyhow::{bail, Context, Result};
 use candid::{
     check_prog,
-    parser::value::IDLValue,
-    types::{Function, Type},
+    types::value::IDLValue,
+    types::{Function, Type, TypeInner},
     CandidType, Decode, Deserialize, IDLArgs, IDLProg, TypeEnv,
 };
 use clap::{crate_authors, crate_version, Parser};
@@ -210,7 +210,7 @@ fn blob_from_arguments(
                     let args = args.or_else(|e| {
                         if func.args.len() == 1 && !is_candid_format {
                             let is_quote = first_char.map_or(false, |c| c == '"');
-                            if Type::Text == func.args[0] && !is_quote {
+                            if &TypeInner::Text == func.args[0].as_ref() && !is_quote {
                                 Ok(IDLValue::Text(arguments.to_string()))
                             } else {
                                 arguments.parse::<IDLValue>()

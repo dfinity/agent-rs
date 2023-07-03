@@ -520,7 +520,7 @@ mod test {
     use serde::de::DeserializeOwned;
 
     mod pre_update_legacy {
-        use candid::{CandidType, Deserialize, Func, Nat};
+        use candid::{define_function, CandidType, Deserialize, Nat};
         use serde_bytes::ByteBuf;
 
         #[derive(CandidType, Deserialize)]
@@ -531,9 +531,10 @@ mod test {
             pub sha256: Option<ByteBuf>,
         }
 
+        define_function!(pub CallbackFunc : () -> ());
         #[derive(CandidType, Deserialize)]
         pub struct CallbackStrategy {
-            pub callback: Func,
+            pub callback: CallbackFunc,
             pub token: Token,
         }
 
@@ -607,10 +608,10 @@ mod test {
             headers: Vec::new(),
             body: Vec::new(),
             streaming_strategy: Some(StreamingStrategy::Callback(CallbackStrategy {
-                callback: Func {
+                callback: pre_update_legacy::CallbackFunc(Func {
                     principal: Principal::from_text("2chl6-4hpzw-vqaaa-aaaaa-c").unwrap(),
                     method: "callback".into()
-                },
+                }),
                 token: pre_update_legacy::Token {
                     key: "foo".into(),
                     content_encoding: "bar".into(),
@@ -621,7 +622,7 @@ mod test {
             upgrade: None,
         })
         .unwrap();
-        decode::<Func>(&bytes);
+        decode::<pre_update_legacy::CallbackFunc>(&bytes);
         decode::<HttpRequestStreamingCallbackAny>(&bytes);
 
         let bytes = Encode!(&HttpResponse {
