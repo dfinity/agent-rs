@@ -20,7 +20,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { version = "1.0", features = ["backtrace"] }
-candid = { workspace = true }
+candid = { workspace = true, features = ["parser"] }
 clap = { version = "3.0.14", features = ["derive", "cargo"] }
 hex = { workspace = true }
 humantime = "2.0.1"

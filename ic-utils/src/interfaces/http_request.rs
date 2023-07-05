@@ -5,11 +5,11 @@ use crate::{
     Canister,
 };
 use candid::{
-    parser::{
-        types::FuncMode,
+    types::{
+        reference::FuncVisitor,
         value::{IDLValue, IDLValueVisitor},
+        Compound, Serializer, Type, TypeInner,
     },
-    types::{reference::FuncVisitor, Compound, Function, Serializer, Type},
     CandidType, Deserialize, Func,
 };
 use ic_agent::{export::Principal, Agent};
@@ -77,7 +77,7 @@ impl<'a, H: Clone + ExactSizeIterator<Item = HeaderField<'a>>> From<H> for Heade
 
 impl<'a, H: Clone + ExactSizeIterator<Item = HeaderField<'a>>> CandidType for Headers<H> {
     fn _ty() -> Type {
-        Type::Vec(Box::new(HeaderField::ty()))
+        TypeInner::Vec(HeaderField::ty()).into()
     }
     fn idl_serialize<S: Serializer>(&self, serializer: S) -> Result<(), S::Error> {
         let mut ser = serializer.serialize_vec(self.0.len())?;
@@ -256,7 +256,7 @@ pub struct HttpRequestStreamingCallbackAny(pub Func);
 
 impl CandidType for HttpRequestStreamingCallbackAny {
     fn _ty() -> Type {
-        Type::Reserved
+        TypeInner::Reserved.into()
     }
     fn idl_serialize<S: Serializer>(&self, _serializer: S) -> Result<(), S::Error> {
         // We cannot implement serialize, since our type must be `Reserved` in order to accept anything.
@@ -292,11 +292,7 @@ pub struct HttpRequestStreamingCallback<ArgToken = self::ArgToken>(
 
 impl<ArgToken: CandidType> CandidType for HttpRequestStreamingCallback<ArgToken> {
     fn _ty() -> Type {
-        Type::Func(Function {
-            modes: vec![FuncMode::Query],
-            args: vec![ArgToken::ty()],
-            rets: vec![StreamingCallbackHttpResponse::<ArgToken>::ty()],
-        })
+        candid::func!((ArgToken) -> (StreamingCallbackHttpResponse::<ArgToken>) query)
     }
     fn idl_serialize<S: Serializer>(&self, serializer: S) -> Result<(), S::Error> {
         self.0.idl_serialize(serializer)
@@ -350,7 +346,7 @@ pub struct Token(pub IDLValue);
 
 impl CandidType for Token {
     fn _ty() -> Type {
-        Type::Reserved
+        TypeInner::Reserved.into()
     }
     fn idl_serialize<S: Serializer>(&self, _serializer: S) -> Result<(), S::Error> {
         // We cannot implement serialize, since our type must be `Reserved` in order to accept anything.
@@ -374,7 +370,7 @@ pub struct ArgToken;
 
 impl CandidType for ArgToken {
     fn _ty() -> Type {
-        Type::Empty
+        TypeInner::Empty.into()
     }
     fn idl_serialize<S: Serializer>(&self, _serializer: S) -> Result<(), S::Error> {
         // We cannot implement serialize, since our type must be `Empty` in order to accept anything.
@@ -518,13 +514,13 @@ mod test {
         StreamingCallbackHttpResponse, StreamingStrategy, Token,
     };
     use candid::{
-        parser::value::{IDLField, IDLValue},
+        types::value::{IDLField, IDLValue},
         CandidType, Decode, Deserialize, Encode,
     };
     use serde::de::DeserializeOwned;
 
     mod pre_update_legacy {
-        use candid::{CandidType, Deserialize, Func, Nat};
+        use candid::{define_function, CandidType, Deserialize, Nat};
         use serde_bytes::ByteBuf;
 
         #[derive(CandidType, Deserialize)]
@@ -535,9 +531,10 @@ mod test {
             pub sha256: Option<ByteBuf>,
         }
 
+        define_function!(pub CallbackFunc : () -> ());
         #[derive(CandidType, Deserialize)]
         pub struct CallbackStrategy {
-            pub callback: Func,
+            pub callback: CallbackFunc,
             pub token: Token,
         }
 
@@ -611,10 +608,10 @@ mod test {
             headers: Vec::new(),
             body: Vec::new(),
             streaming_strategy: Some(StreamingStrategy::Callback(CallbackStrategy {
-                callback: Func {
+                callback: pre_update_legacy::CallbackFunc(Func {
                     principal: Principal::from_text("2chl6-4hpzw-vqaaa-aaaaa-c").unwrap(),
                     method: "callback".into()
-                },
+                }),
                 token: pre_update_legacy::Token {
                     key: "foo".into(),
                     content_encoding: "bar".into(),
@@ -625,7 +622,7 @@ mod test {
             upgrade: None,
         })
         .unwrap();
-        decode::<Func>(&bytes);
+        decode::<pre_update_legacy::CallbackFunc>(&bytes);
         decode::<HttpRequestStreamingCallbackAny>(&bytes);
 
         let bytes = Encode!(&HttpResponse {

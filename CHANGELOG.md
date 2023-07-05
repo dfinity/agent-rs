@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Breaking Change: builders are now owning-style rather than borrowing-style; with_arg takes an owned Vec rather than a borrowed Vec
 * Breaking Change: Identity::sign takes &EnvelopeContent rather than the request ID.
+* Bump Candid crate to 0.9.0
 
 ## [0.24.0] - 2023-05-19
 
