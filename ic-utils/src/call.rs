@@ -102,14 +102,15 @@ where
     ///     .create_canister()
     ///     .as_provisional_create_with_amount(None)
     ///     .with_effective_canister_id(effective_id)
-    ///     .and_then(|(canister_id,)| async move {
-    ///       management_canister
-    ///         .install_code(&canister_id, canister_wasm)
-    ///         .build()
-    ///         .unwrap()
-    ///         .call_and_wait()
-    ///         .await?;
-    ///       Ok((canister_id,))
+    ///     .and_then(|(canister_id,)| {
+    ///         let call = management_canister
+    ///             .install_code(&canister_id, canister_wasm)
+    ///             .build()
+    ///             .unwrap();
+    ///         async move {
+    ///             call.call_and_wait().await?;
+    ///             Ok((canister_id,))
+    ///         }
     ///     })
     ///     .call_and_wait()
     ///     .await?;
