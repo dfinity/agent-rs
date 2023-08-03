@@ -4,9 +4,15 @@ use ic_agent::{agent::UpdateBuilder, export::Principal, Agent, AgentError, Reque
 use serde::de::DeserializeOwned;
 use std::fmt;
 use std::future::Future;
+use std::pin::Pin;
 
 mod expiry;
 pub use expiry::Expiry;
+
+#[cfg(target_family = "wasm")]
+pub(crate) type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
+#[cfg(not(target_family = "wasm"))]
+pub(crate) type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a + Send>>;
 
 /// A type that implements synchronous calls (ie. 'query' calls).
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
@@ -96,14 +102,15 @@ where
     ///     .create_canister()
     ///     .as_provisional_create_with_amount(None)
     ///     .with_effective_canister_id(effective_id)
-    ///     .and_then(|(canister_id,)| async move {
-    ///       management_canister
-    ///         .install_code(&canister_id, canister_wasm)
-    ///         .build()
-    ///         .unwrap()
-    ///         .call_and_wait()
-    ///         .await?;
-    ///       Ok((canister_id,))
+    ///     .and_then(|(canister_id,)| {
+    ///         let call = management_canister
+    ///             .install_code(&canister_id, canister_wasm)
+    ///             .build()
+    ///             .unwrap();
+    ///         async move {
+    ///             call.call_and_wait().await?;
+    ///             Ok((canister_id,))
+    ///         }
     ///     })
     ///     .call_and_wait()
     ///     .await?;
