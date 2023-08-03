@@ -4,9 +4,15 @@ use ic_agent::{agent::UpdateBuilder, export::Principal, Agent, AgentError, Reque
 use serde::de::DeserializeOwned;
 use std::fmt;
 use std::future::Future;
+use std::pin::Pin;
 
 mod expiry;
 pub use expiry::Expiry;
+
+#[cfg(target_family = "wasm")]
+pub(crate) type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
+#[cfg(not(target_family = "wasm"))]
+pub(crate) type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a + Send>>;
 
 /// A type that implements synchronous calls (ie. 'query' calls).
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]

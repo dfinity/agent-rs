@@ -2,10 +2,10 @@
 //!
 //! [cycles wallet]: https://github.com/dfinity/cycles-wallet
 
-use std::ops::Deref;
+use std::{future::Future, ops::Deref};
 
 use crate::{
-    call::{AsyncCall, SyncCall},
+    call::{AsyncCall, BoxFuture, SyncCall},
     canister::Argument,
     interfaces::management_canister::{
         attributes::{ComputeAllocation, FreezingThreshold, MemoryAllocation},
@@ -13,7 +13,6 @@ use crate::{
     },
     Canister,
 };
-use async_trait::async_trait;
 use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize, Nat};
 use ic_agent::{agent::RejectCode, export::Principal, Agent, AgentError, RequestId};
 use once_cell::sync::Lazy;
@@ -111,28 +110,34 @@ where
     }
 
     /// Calls the forwarded canister call on the wallet canister. Equivalent to `.build().call()`.
-    pub async fn call(self) -> Result<RequestId, AgentError> {
-        self.build()?.call().await
+    pub fn call(self) -> impl Future<Output = Result<RequestId, AgentError>> + 'agent {
+        let call_res = self.build();
+        async move { call_res?.call().await }
     }
 
     /// Calls the forwarded canister call on the wallet canister, and waits for the result. Equivalent to `.build().call_and_wait()`.
-    pub async fn call_and_wait(self) -> Result<Out, AgentError> {
-        self.build()?.call_and_wait().await
+    pub fn call_and_wait(self) -> impl Future<Output = Result<Out, AgentError>> + 'agent {
+        let call_res = self.build();
+        async move { call_res?.call_and_wait().await }
     }
 }
 
-#[cfg_attr(target_family = "wasm", async_trait(?Send))]
-#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<'agent, 'canister: 'agent, Out> AsyncCall<Out> for CallForwarder<'agent, 'canister, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
-    async fn call(self) -> Result<RequestId, AgentError> {
-        self.call().await
+    fn call<'async_trait>(self) -> BoxFuture<'async_trait, Result<RequestId, AgentError>>
+    where
+        Self: 'async_trait,
+    {
+        Box::pin(self.call())
     }
 
-    async fn call_and_wait(self) -> Result<Out, AgentError> {
-        self.call_and_wait().await
+    fn call_and_wait<'async_trait>(self) -> BoxFuture<'async_trait, Result<Out, AgentError>>
+    where
+        Self: 'async_trait,
+    {
+        Box::pin(self.call_and_wait())
     }
 }
 
