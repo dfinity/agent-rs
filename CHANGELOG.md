@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ##  Unreleased
 
-* The `Unknown` lookup of a path in a certificate results in an `AgentError` (the IC returns `Absent` for non-existing paths).
+* The `Unknown` lookup of a request_status path in a certificate results in an `AgentError` (the IC returns `Absent` for non-existing paths).
 
 ## [0.25.0] - 2023-07-05
 
