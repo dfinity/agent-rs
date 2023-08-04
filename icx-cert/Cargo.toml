@@ -20,13 +20,12 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 anyhow = "1.0"
 base64 = "0.13"
 clap = { version = "3.1.8", features = ["derive", "cargo"] }
-chrono = "0.4.19"
 hex = { workspace = true }
-ic-agent = { path = "../ic-agent", version = "0.23", default-features = false }
+ic-certification = { workspace = true }
 leb128 = "0.2.4"
 reqwest = { version = "0.11", features = ["blocking", "rustls-tls"] }
 sha2 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
 serde_cbor = { workspace = true }
-ic-certification = { path = "../ic-certification", version = "0.23" }
+time = { workspace = true, features = ["formatting"] }

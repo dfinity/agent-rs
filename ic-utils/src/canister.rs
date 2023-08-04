@@ -1,6 +1,6 @@
 use crate::call::{AsyncCaller, SyncCaller};
 use candid::utils::ArgumentEncoder;
-use candid::{parser::value::IDLValue, ser::IDLBuilder, utils::ArgumentDecoder, CandidType};
+use candid::{ser::IDLBuilder, types::value::IDLValue, utils::ArgumentDecoder, CandidType};
 use ic_agent::{export::Principal, Agent, AgentError, RequestId};
 use std::convert::TryInto;
 use std::fmt;
@@ -222,7 +222,7 @@ impl Argument {
         Default::default()
     }
 
-    /// Creates an argument from an arbitrary blob. Equivalent to [`set_raw_arg`].
+    /// Creates an argument from an arbitrary blob. Equivalent to [`set_raw_arg`](Argument::set_raw_arg).
     pub fn from_raw(raw: Vec<u8>) -> Self {
         Self(Ok(ArgumentType::Raw(raw)))
     }
@@ -273,7 +273,8 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
 
 impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
     /// Add an argument to the candid argument list. This requires Candid arguments, if
-    /// there is a raw argument set (using [with_arg_raw]), this will fail.
+    /// there is a raw argument set (using [`with_arg_raw`](SyncCallBuilder::with_arg_raw)),
+    /// this will fail.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> SyncCallBuilder<'agent, 'canister>
     where
         Argument: CandidType + Sync + Send,
@@ -283,8 +284,9 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
     }
 
     /// Add an argument to the candid argument list. This requires Candid arguments, if
-    /// there is a raw argument set (using [with_arg_raw]), this will fail.
-    /// TODO: make this method unnecessary https://github.com/dfinity/agent-rs/issues/132
+    /// there is a raw argument set (using [`with_arg_raw`](SyncCallBuilder::with_arg_raw)), this will fail.
+    ///
+    /// TODO: make this method unnecessary ([#132](https://github.com/dfinity/agent-rs/issues/132))
     pub fn with_value_arg(mut self, arg: IDLValue) -> SyncCallBuilder<'agent, 'canister> {
         self.arg.push_value_arg(arg);
         self
@@ -297,7 +299,7 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
         self
     }
 
-    /// Sets the [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
+    /// Sets the [effective canister ID](https://internetcomputer.org/docs/references/current/ic-interface-spec#http-effective-canister-id) of the destination.
     pub fn with_effective_canister_id(
         mut self,
         canister_id: Principal,
@@ -306,7 +308,7 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
         self
     }
 
-    /// Builds an [SyncCaller] from this builder's state.
+    /// Builds a [SyncCaller] from this builder's state.
     pub fn build<Output>(self) -> SyncCaller<'canister, Output>
     where
         Output: for<'de> ArgumentDecoder<'de> + Send + Sync,
@@ -352,7 +354,7 @@ impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
 
 impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
     /// Add an argument to the candid argument list. This requires Candid arguments, if
-    /// there is a raw argument set (using [with_arg_raw]), this will fail.
+    /// there is a raw argument set (using [`with_arg_raw`](AsyncCallBuilder::with_arg_raw)), this will fail.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> AsyncCallBuilder<'agent, 'canister>
     where
         Argument: CandidType + Sync + Send,
@@ -368,7 +370,7 @@ impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
         self
     }
 
-    /// Sets the [effective canister ID](https://smartcontracts.org/docs/interface-spec/index.html#http-effective-canister-id) of the destination.
+    /// Sets the [effective canister ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-canister-id) of the destination.
     pub fn with_effective_canister_id(
         mut self,
         canister_id: Principal,
@@ -399,8 +401,13 @@ impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
 mod tests {
     use super::super::interfaces::ManagementCanister;
     use crate::call::AsyncCall;
-    use ic_agent::agent::http_transport::ReqwestHttpReplicaV2Transport;
+    use candid::Principal;
+    use ic_agent::agent::http_transport::ReqwestTransport;
     use ic_agent::identity::BasicIdentity;
+
+    fn get_effective_canister_id() -> Principal {
+        Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap()
+    }
 
     #[ignore]
     #[tokio::test]
@@ -416,8 +423,10 @@ mod tests {
                 .expect("Could not read the key pair."),
         );
 
+        let port = std::env::var("IC_REF_PORT").unwrap_or_else(|_| "8001".into());
+
         let agent = ic_agent::Agent::builder()
-            .with_transport(ReqwestHttpReplicaV2Transport::create("http://localhost:8001").unwrap())
+            .with_transport(ReqwestTransport::create(format!("http://localhost:{port}")).unwrap())
             .with_identity(identity)
             .build()
             .unwrap();
@@ -433,6 +442,8 @@ mod tests {
 
         let (new_canister_id,) = management_canister
             .create_canister()
+            .as_provisional_create_with_amount(None)
+            .with_effective_canister_id(get_effective_canister_id())
             .call_and_wait()
             .await
             .unwrap();

@@ -1,8 +1,8 @@
 use anyhow::{bail, Context, Result};
 use candid::{
     check_prog,
-    parser::value::IDLValue,
-    types::{Function, Type},
+    types::value::IDLValue,
+    types::{Function, Type, TypeInner},
     CandidType, Decode, Deserialize, IDLArgs, IDLProg, TypeEnv,
 };
 use clap::{crate_authors, crate_version, Parser};
@@ -210,7 +210,7 @@ fn blob_from_arguments(
                     let args = args.or_else(|e| {
                         if func.args.len() == 1 && !is_candid_format {
                             let is_quote = first_char.map_or(false, |c| c == '"');
-                            if Type::Text == func.args[0] && !is_quote {
+                            if &TypeInner::Text == func.args[0].as_ref() && !is_quote {
                                 Ok(IDLValue::Text(arguments.to_string()))
                             } else {
                                 arguments.parse::<IDLValue>()
@@ -341,7 +341,7 @@ async fn main() -> Result<()> {
 
     let agent = Agent::builder()
         .with_transport(
-            agent::http_transport::ReqwestHttpReplicaV2Transport::create(opts.replica.clone())
+            agent::http_transport::ReqwestTransport::create(opts.replica.clone())
                 .context("Failed to create Transport for Agent")?,
         )
         .with_boxed_identity(Box::new(create_identity(opts.pem)))
@@ -381,7 +381,7 @@ async fn main() -> Result<()> {
                         let mut builder = agent.update(&t.canister_id, &t.method_name);
 
                         if let Some(d) = expire_after {
-                            builder.expire_after(d);
+                            builder = builder.expire_after(d);
                         }
 
                         let printer = async {
@@ -404,11 +404,11 @@ async fn main() -> Result<()> {
                     SubCommand::Query(_) => {
                         let mut builder = agent.query(&t.canister_id, &t.method_name);
                         if let Some(d) = expire_after {
-                            builder.expire_after(d);
+                            builder = builder.expire_after(d);
                         }
 
                         builder
-                            .with_arg(&arg)
+                            .with_arg(arg)
                             .with_effective_canister_id(effective_canister_id)
                             .call()
                             .await
@@ -461,7 +461,7 @@ async fn main() -> Result<()> {
 
                         let mut builder = agent.update(&t.canister_id, &t.method_name);
                         if let Some(d) = expire_after {
-                            builder.expire_after(d);
+                            builder = builder.expire_after(d);
                         }
                         let signed_update = builder
                             .with_arg(arg)
@@ -482,7 +482,7 @@ async fn main() -> Result<()> {
                     &SubCommand::Query(_) => {
                         let mut builder = agent.query(&t.canister_id, &t.method_name);
                         if let Some(d) = expire_after {
-                            builder.expire_after(d);
+                            builder = builder.expire_after(d);
                         }
                         let signed_query = builder
                             .with_arg(arg)
@@ -567,14 +567,12 @@ async fn main() -> Result<()> {
                         print_idl_blob(&blob, &ArgType::Idl, &None)
                             .context("Failed to print request_status result")?;
                     }
-                    agent::RequestStatusResponse::Rejected {
-                        reject_code,
-                        reject_message,
-                    } => {
+                    agent::RequestStatusResponse::Rejected(replica_error) => {
                         bail!(
-                            r#"The Replica returned an error: code {}, message: "{}""#,
-                            reject_code,
-                            reject_message
+                            r#"The Replica returned an error. reject code: {:?}, reject message: "{}", error code: {}"#,
+                            replica_error.reject_code,
+                            replica_error.reject_message,
+                            replica_error.error_code.unwrap_or_default()
                         );
                     }
                     _ => bail!("Can't get valid status of the request.",),

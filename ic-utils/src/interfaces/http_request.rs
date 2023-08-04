@@ -5,11 +5,11 @@ use crate::{
     Canister,
 };
 use candid::{
-    parser::{
-        types::FuncMode,
+    types::{
+        reference::FuncVisitor,
         value::{IDLValue, IDLValueVisitor},
+        Compound, Serializer, Type, TypeInner,
     },
-    types::{reference::FuncVisitor, Compound, Function, Serializer, Type},
     CandidType, Deserialize, Func,
 };
 use ic_agent::{export::Principal, Agent};
@@ -48,7 +48,21 @@ struct HttpRequest<'a, H> {
     /// The request body.
     pub body: &'a [u8],
     /// The certificate version.
-    pub certificate_version: Option<&'a u128>,
+    pub certificate_version: Option<&'a u16>,
+}
+
+/// The important components of an HTTP update request.
+/// This is the same as `HttpRequest`, excluding the `certificate_version` property.
+#[derive(Debug, Clone, CandidType)]
+struct HttpUpdateRequest<'a, H> {
+    /// The HTTP method string.
+    pub method: &'a str,
+    /// The URL that was visited.
+    pub url: &'a str,
+    /// The request headers.
+    pub headers: H,
+    /// The request body.
+    pub body: &'a [u8],
 }
 
 /// A wrapper around an iterator of headers
@@ -63,7 +77,7 @@ impl<'a, H: Clone + ExactSizeIterator<Item = HeaderField<'a>>> From<H> for Heade
 
 impl<'a, H: Clone + ExactSizeIterator<Item = HeaderField<'a>>> CandidType for Headers<H> {
     fn _ty() -> Type {
-        Type::Vec(Box::new(HeaderField::ty()))
+        TypeInner::Vec(HeaderField::ty()).into()
     }
     fn idl_serialize<S: Serializer>(&self, serializer: S) -> Result<(), S::Error> {
         let mut ser = serializer.serialize_vec(self.0.len())?;
@@ -242,7 +256,7 @@ pub struct HttpRequestStreamingCallbackAny(pub Func);
 
 impl CandidType for HttpRequestStreamingCallbackAny {
     fn _ty() -> Type {
-        Type::Reserved
+        TypeInner::Reserved.into()
     }
     fn idl_serialize<S: Serializer>(&self, _serializer: S) -> Result<(), S::Error> {
         // We cannot implement serialize, since our type must be `Reserved` in order to accept anything.
@@ -278,11 +292,7 @@ pub struct HttpRequestStreamingCallback<ArgToken = self::ArgToken>(
 
 impl<ArgToken: CandidType> CandidType for HttpRequestStreamingCallback<ArgToken> {
     fn _ty() -> Type {
-        Type::Func(Function {
-            modes: vec![FuncMode::Query],
-            args: vec![ArgToken::ty()],
-            rets: vec![StreamingCallbackHttpResponse::<ArgToken>::ty()],
-        })
+        candid::func!((ArgToken) -> (StreamingCallbackHttpResponse::<ArgToken>) query)
     }
     fn idl_serialize<S: Serializer>(&self, serializer: S) -> Result<(), S::Error> {
         self.0.idl_serialize(serializer)
@@ -336,7 +346,7 @@ pub struct Token(pub IDLValue);
 
 impl CandidType for Token {
     fn _ty() -> Type {
-        Type::Reserved
+        TypeInner::Reserved.into()
     }
     fn idl_serialize<S: Serializer>(&self, _serializer: S) -> Result<(), S::Error> {
         // We cannot implement serialize, since our type must be `Reserved` in order to accept anything.
@@ -360,7 +370,7 @@ pub struct ArgToken;
 
 impl CandidType for ArgToken {
     fn _ty() -> Type {
-        Type::Empty
+        TypeInner::Empty.into()
     }
     fn idl_serialize<S: Serializer>(&self, _serializer: S) -> Result<(), S::Error> {
         // We cannot implement serialize, since our type must be `Empty` in order to accept anything.
@@ -398,7 +408,7 @@ impl<'agent> HttpRequestCanister<'agent> {
             IntoIter = impl 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
         >,
         body: impl AsRef<[u8]>,
-        certificate_version: Option<&u128>,
+        certificate_version: Option<&u16>,
     ) -> impl 'agent + SyncCall<(HttpResponse,)> {
         self.http_request_custom(
             method.as_ref(),
@@ -417,7 +427,7 @@ impl<'agent> HttpRequestCanister<'agent> {
         url: &str,
         headers: H,
         body: &[u8],
-        certificate_version: Option<&u128>,
+        certificate_version: Option<&u16>,
     ) -> impl 'agent + SyncCall<(HttpResponse<T, C>,)>
     where
         H: 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
@@ -443,15 +453,8 @@ impl<'agent> HttpRequestCanister<'agent> {
         url: impl AsRef<str>,
         headers: impl 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
         body: impl AsRef<[u8]>,
-        certificate_version: Option<&u128>,
     ) -> impl 'agent + AsyncCall<(HttpResponse,)> {
-        self.http_request_update_custom(
-            method.as_ref(),
-            url.as_ref(),
-            headers,
-            body.as_ref(),
-            certificate_version,
-        )
+        self.http_request_update_custom(method.as_ref(), url.as_ref(), headers, body.as_ref())
     }
 
     /// Performs a HTTP request over an update call. Unlike query calls, update calls must pass consensus
@@ -463,7 +466,6 @@ impl<'agent> HttpRequestCanister<'agent> {
         url: &str,
         headers: H,
         body: &[u8],
-        certificate_version: Option<&u128>,
     ) -> impl 'agent + AsyncCall<(HttpResponse<T, C>,)>
     where
         H: 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
@@ -471,12 +473,11 @@ impl<'agent> HttpRequestCanister<'agent> {
         C: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
     {
         self.update_("http_request_update")
-            .with_arg(HttpRequest {
+            .with_arg(HttpUpdateRequest {
                 method,
                 url,
                 headers: Headers(headers),
                 body,
-                certificate_version,
             })
             .build()
     }
@@ -513,13 +514,13 @@ mod test {
         StreamingCallbackHttpResponse, StreamingStrategy, Token,
     };
     use candid::{
-        parser::value::{IDLField, IDLValue},
+        types::value::{IDLField, IDLValue},
         CandidType, Decode, Deserialize, Encode,
     };
     use serde::de::DeserializeOwned;
 
     mod pre_update_legacy {
-        use candid::{CandidType, Deserialize, Func, Nat};
+        use candid::{define_function, CandidType, Deserialize, Nat};
         use serde_bytes::ByteBuf;
 
         #[derive(CandidType, Deserialize)]
@@ -530,9 +531,10 @@ mod test {
             pub sha256: Option<ByteBuf>,
         }
 
+        define_function!(pub CallbackFunc : () -> ());
         #[derive(CandidType, Deserialize)]
         pub struct CallbackStrategy {
-            pub callback: Func,
+            pub callback: CallbackFunc,
             pub token: Token,
         }
 
@@ -606,10 +608,10 @@ mod test {
             headers: Vec::new(),
             body: Vec::new(),
             streaming_strategy: Some(StreamingStrategy::Callback(CallbackStrategy {
-                callback: Func {
+                callback: pre_update_legacy::CallbackFunc(Func {
                     principal: Principal::from_text("2chl6-4hpzw-vqaaa-aaaaa-c").unwrap(),
                     method: "callback".into()
-                },
+                }),
                 token: pre_update_legacy::Token {
                     key: "foo".into(),
                     content_encoding: "bar".into(),
@@ -620,7 +622,7 @@ mod test {
             upgrade: None,
         })
         .unwrap();
-        decode::<Func>(&bytes);
+        decode::<pre_update_legacy::CallbackFunc>(&bytes);
         decode::<HttpRequestStreamingCallbackAny>(&bytes);
 
         let bytes = Encode!(&HttpResponse {

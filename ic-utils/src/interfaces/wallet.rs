@@ -2,10 +2,10 @@
 //!
 //! [cycles wallet]: https://github.com/dfinity/cycles-wallet
 
-use std::ops::Deref;
+use std::{future::Future, ops::Deref};
 
 use crate::{
-    call::{AsyncCall, SyncCall},
+    call::{AsyncCall, BoxFuture, SyncCall},
     canister::Argument,
     interfaces::management_canister::{
         attributes::{ComputeAllocation, FreezingThreshold, MemoryAllocation},
@@ -13,9 +13,8 @@ use crate::{
     },
     Canister,
 };
-use async_trait::async_trait;
 use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize, Nat};
-use ic_agent::{export::Principal, Agent, AgentError, RequestId};
+use ic_agent::{agent::RejectCode, export::Principal, Agent, AgentError, RequestId};
 use once_cell::sync::Lazy;
 use semver::{Version, VersionReq};
 
@@ -57,7 +56,7 @@ where
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
     /// Add an argument to the candid argument list. This requires Candid arguments, if
-    /// there is a raw argument set (using [with_arg_raw]), this will fail.
+    /// there is a raw argument set (using [`with_arg_raw`](CallForwarder::with_arg_raw)), this will fail.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> Self
     where
         Argument: CandidType + Sync + Send,
@@ -111,27 +110,34 @@ where
     }
 
     /// Calls the forwarded canister call on the wallet canister. Equivalent to `.build().call()`.
-    pub async fn call(self) -> Result<RequestId, AgentError> {
-        self.build()?.call().await
+    pub fn call(self) -> impl Future<Output = Result<RequestId, AgentError>> + 'agent {
+        let call_res = self.build();
+        async move { call_res?.call().await }
     }
 
     /// Calls the forwarded canister call on the wallet canister, and waits for the result. Equivalent to `.build().call_and_wait()`.
-    pub async fn call_and_wait(self) -> Result<Out, AgentError> {
-        self.build()?.call_and_wait().await
+    pub fn call_and_wait(self) -> impl Future<Output = Result<Out, AgentError>> + 'agent {
+        let call_res = self.build();
+        async move { call_res?.call_and_wait().await }
     }
 }
 
-#[async_trait]
 impl<'agent, 'canister: 'agent, Out> AsyncCall<Out> for CallForwarder<'agent, 'canister, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
-    async fn call(self) -> Result<RequestId, AgentError> {
-        self.call().await
+    fn call<'async_trait>(self) -> BoxFuture<'async_trait, Result<RequestId, AgentError>>
+    where
+        Self: 'async_trait,
+    {
+        Box::pin(self.call())
     }
 
-    async fn call_and_wait(self) -> Result<Out, AgentError> {
-        self.call_and_wait().await
+    fn call_and_wait<'async_trait>(self) -> BoxFuture<'async_trait, Result<Out, AgentError>>
+    where
+        Self: 'async_trait,
+    {
+        Box::pin(self.call_and_wait())
     }
 }
 
@@ -426,12 +432,14 @@ impl<'agent> WalletCanister<'agent> {
         let version: Result<(String,), _> =
             canister.query_("wallet_api_version").build().call().await;
         let version = match version {
-            Err(AgentError::ReplicaError {
-                reject_code,
-                reject_message,
-            }) if reject_code == 3
-                && (reject_message.contains(REPLICA_ERROR_NO_SUCH_QUERY_METHOD)
-                    || reject_message.contains(IC_REF_ERROR_NO_SUCH_QUERY_METHOD)) =>
+            Err(AgentError::ReplicaError(replica_error))
+                if replica_error.reject_code == RejectCode::DestinationInvalid
+                    && (replica_error
+                        .reject_message
+                        .contains(REPLICA_ERROR_NO_SUCH_QUERY_METHOD)
+                        || replica_error
+                            .reject_message
+                            .contains(IC_REF_ERROR_NO_SUCH_QUERY_METHOD)) =>
             {
                 DEFAULT_VERSION.clone()
             }

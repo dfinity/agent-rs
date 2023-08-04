@@ -3,7 +3,11 @@
 //! Contrary to ic-ref.rs, these tests are not meant to match any other tests. They're
 //! integration tests with a running IC-Ref.
 use candid::CandidType;
-use ic_agent::{agent::agent_error::HttpErrorPayload, export::Principal, AgentError};
+use ic_agent::{
+    agent::{agent_error::HttpErrorPayload, RejectCode, RejectResponse},
+    export::Principal,
+    AgentError,
+};
 use ic_utils::{
     call::{AsyncCall, SyncCall},
     interfaces::{
@@ -27,7 +31,7 @@ fn basic_expiry() {
         // Verify this works first.
         let result = agent
             .update(&canister_id, "update")
-            .with_arg(&arg)
+            .with_arg(arg.clone())
             .expire_after(std::time::Duration::from_secs(120))
             .call_and_wait()
             .await?;
@@ -37,7 +41,7 @@ fn basic_expiry() {
         // Verify a zero expiry will fail with the proper code.
         let result = agent
             .update(&canister_id, "update")
-            .with_arg(&arg)
+            .with_arg(arg.clone())
             .expire_after(std::time::Duration::from_secs(0))
             .call_and_wait()
             .await;
@@ -49,7 +53,7 @@ fn basic_expiry() {
 
         let result = agent
             .update(&canister_id, "update")
-            .with_arg(&arg)
+            .with_arg(arg.clone())
             .expire_after(std::time::Duration::from_secs(120))
             .call_and_wait()
             .await?;
@@ -98,10 +102,11 @@ fn canister_reject_call() {
 
         assert_eq!(
             result,
-            Err(AgentError::ReplicaError {
-                reject_code: 3,
-                reject_message: "method does not exist: wallet_send".to_string()
-            })
+            Err(AgentError::ReplicaError(RejectResponse {
+                reject_code: RejectCode::DestinationInvalid,
+                reject_message: "method does not exist: wallet_send".to_string(),
+                error_code: None
+            }))
         );
 
         Ok(())

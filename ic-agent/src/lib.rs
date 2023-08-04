@@ -1,21 +1,20 @@
 //! The `ic-agent` is a simple-to-use library that enables you to
-//! build applications and interact with the [Internet Computer](https://dfinity.org)
+//! build applications and interact with the [Internet Computer](https://internetcomputer.org)
 //! in Rust. It serves as a Rust-based low-level backend for the
-//! DFINITY Canister Software Development Kit (SDK) and the
-//! [Canister SDK](https://sdk.dfinity.org) command-line execution environment
-//! [`dfx`](https://sdk.dfinity.org/docs/developers-guide/install-upgrade-remove.html#_what_gets_installed).
+//! DFINITY Canister Software Development Kit (SDK) and the command-line execution environment
+//! [`dfx`](https://internetcomputer.org/docs/current/developer-docs/setup/install).
 //!
 //! ## Overview
 //! The `ic-agent` is a Rust crate that can connect directly to the Internet
 //! Computer through the Internet Computer protocol (ICP).
 //! The key software components of the ICP are broadly referred to as the
-//! [replica](https://sdk.dfinity.org/docs/developers-guide/introduction-key-concepts.html#_basic_architecture).
+//! [replica](https://internetcomputer.org/docs/current/concepts/nodes-subnets).
 //!
 //! The agent is designed to be compatible with multiple versions of the
 //! replica API, and to expose both low-level APIs for communicating with
 //! Internet Computer protocol components like the replica and to provide
 //! higher-level APIs for communicating with software applications deployed
-//! as [canisters](https://sdk.dfinity.org/docs/developers-guide/introduction-key-concepts.html#_writing_deploying_and_running_software).
+//! as [canisters](https://internetcomputer.org/docs/current/concepts/canisters-code).
 //!
 //! ## Example
 //! The following example illustrates how to use the Agent interface to send
@@ -64,7 +63,7 @@
 //!   // Only do the following call when not contacting the IC main net (e.g. a local emulator).
 //!   // This is important as the main net public key is static and a rogue network could return
 //!   // a different key.
-//!   // If you know the root key ahead of time, you can use `agent.set_root_key(root_key)?;`.
+//!   // If you know the root key ahead of time, you can use `agent.set_root_key(root_key);`.
 //!   agent.fetch_root_key().await?;
 //!   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 //!
@@ -74,7 +73,7 @@
 //!   let effective_canister_id = Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap();
 //!   let response = agent.update(&management_canister_id, "provisional_create_canister_with_cycles")
 //!     .with_effective_canister_id(effective_canister_id)
-//!     .with_arg(&Encode!(&Argument { amount: None})?)
+//!     .with_arg(Encode!(&Argument { amount: None})?)
 //!     .call_and_wait()
 //!     .await?;
 //!
@@ -96,8 +95,8 @@
 //! For an introduction to the Internet Computer and the DFINITY Canister SDK,
 //! see the following resources:
 //!
-//! - [Frequently Asked Questions](https://dfinity.org/faq)
-//! - [DFINITY Canister SDK](https://sdk.dfinity.org/docs/index.html)
+//! - [How the IC Works](https://internetcomputer.org/docs/current/concepts/)
+//! - [DFINITY Canister SDK](https://internetcomputer.org/docs/current/references/cli-reference/)
 //!
 //! The Internet Computer protocol and interface specifications are not
 //! publicly available yet. When these specifications are made public and
@@ -106,26 +105,28 @@
 
 #![deny(
     missing_docs,
-    missing_debug_implementations,
     rustdoc::broken_intra_doc_links,
     rustdoc::private_intra_doc_links
 )]
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
-#[macro_use]
-mod macros;
+#[cfg(all(feature = "hyper", target_family = "wasm"))]
+compile_error!("Feature `hyper` cannot be used from WASM.");
 
 pub mod agent;
 pub mod export;
 pub mod identity;
 pub mod request_id;
 
+#[doc(inline)]
 pub use agent::{
     agent_error, agent_error::AgentError, response_authentication::lookup_value, Agent,
     NonceFactory, NonceGenerator,
 };
+#[doc(inline)]
 pub use identity::{Identity, Signature};
+#[doc(inline)]
 pub use request_id::{to_request_id, RequestId, RequestIdError};
 
 // Re-export from ic_certification for backward compatibility.
-pub use ic_certification::hash_tree;
-pub use ic_certification::Certificate;
+pub use ic_certification::{hash_tree, Certificate};

@@ -1,6 +1,4 @@
-//! A [ReplicaV2Transport] that connects using a hyper client.
-#![cfg(any(feature = "hyper"))]
-
+//! A [`Transport`] that connects using a [`hyper`] client.
 pub use hyper;
 
 use std::{any, error::Error, future::Future, marker::PhantomData, sync::atomic::AtomicPtr};
@@ -20,22 +18,25 @@ use crate::{
     agent::{
         agent_error::HttpErrorPayload,
         http_transport::{IC0_DOMAIN, IC0_SUB_DOMAIN},
-        AgentFuture, ReplicaV2Transport,
+        AgentFuture, Transport,
     },
     export::Principal,
     AgentError, RequestId,
 };
 
-/// A [ReplicaV2Transport] using [hyper] to make HTTP calls to the internet computer.
+/// A [`Transport`] using [`hyper`] to make HTTP calls to the Internet Computer.
 #[derive(Debug)]
-pub struct HyperReplicaV2Transport<B1, S = Client<HttpsConnector<HttpConnector>, B1>> {
+pub struct HyperTransport<B1, S = Client<HttpsConnector<HttpConnector>, B1>> {
     _marker: PhantomData<AtomicPtr<B1>>,
     url: Uri,
     max_response_body_size: Option<usize>,
     service: S,
 }
 
-/// Trait representing the contraints on [`HttpBody`] that [`HyperReplicaV2Transport`] requires
+#[doc(hidden)]
+pub use HyperTransport as HyperReplicaV2Transport; // deprecate after 0.24
+
+/// Trait representing the contraints on [`HttpBody`] that [`HyperTransport`] requires
 pub trait HyperBody:
     HttpBody<Data = Self::BodyData, Error = Self::BodyError> + Send + From<Vec<u8>> + 'static
 {
@@ -55,7 +56,7 @@ where
     type BodyError = B::Error;
 }
 
-/// Trait representing the contraints on [`Service`] that [`HyperReplicaV2Transport`] requires.
+/// Trait representing the contraints on [`Service`] that [`HyperTransport`] requires.
 pub trait HyperService<B1: HyperBody>:
     Send
     + Sync
@@ -84,7 +85,7 @@ where
     type ServiceFuture = S::Future;
 }
 
-impl<B1: HyperBody> HyperReplicaV2Transport<B1> {
+impl<B1: HyperBody> HyperTransport<B1> {
     /// Creates a replica transport from a HTTP URL.
     pub fn create<U: Into<Uri>>(url: U) -> Result<Self, AgentError> {
         let connector = HttpsConnectorBuilder::new()
@@ -97,7 +98,7 @@ impl<B1: HyperBody> HyperReplicaV2Transport<B1> {
     }
 }
 
-impl<B1, S> HyperReplicaV2Transport<B1, S>
+impl<B1, S> HyperTransport<B1, S>
 where
     B1: HyperBody,
     S: HyperService<B1>,
@@ -230,7 +231,7 @@ where
     }
 }
 
-impl<B1, S> ReplicaV2Transport for HyperReplicaV2Transport<B1, S>
+impl<B1, S> Transport for HyperTransport<B1, S>
 where
     B1: HyperBody,
     S: HyperService<B1>,
@@ -276,7 +277,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::HyperReplicaV2Transport;
+    use super::HyperTransport;
     use hyper::{Client, Uri};
 
     #[test]
@@ -284,7 +285,7 @@ mod test {
         fn test(base: &str, result: &str) {
             let client: Client<_> = Client::builder().build_http();
             let uri: Uri = base.parse().unwrap();
-            let t = HyperReplicaV2Transport::create_with_service(uri, client).unwrap();
+            let t = HyperTransport::create_with_service(uri, client).unwrap();
             assert_eq!(t.url, result, "{}", base);
         }
 

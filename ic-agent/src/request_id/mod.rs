@@ -12,7 +12,10 @@ use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, iter::Extend, str::FromStr};
 
 pub mod error;
+#[doc(inline)]
 pub use error::RequestIdError;
+
+const IC_REQUEST_DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 
 /// Type alias for a sha256 result (ie. a u256).
 type Sha256Hash = [u8; 32];
@@ -34,6 +37,15 @@ impl RequestId {
 
     pub(crate) fn to_vec(self) -> Vec<u8> {
         self.0.to_vec()
+    }
+
+    /// Returns the signable form of the request ID, by prepending `"\x0Aic-request"` to it,
+    /// for use in [`Identity::sign`](crate::identity::Identity::sign).
+    pub fn signable(&self) -> Vec<u8> {
+        let mut signable = Vec::with_capacity(43);
+        signable.extend_from_slice(IC_REQUEST_DOMAIN_SEPARATOR);
+        signable.extend_from_slice(&self.0);
+        signable
     }
 }
 
@@ -659,7 +671,8 @@ impl<'a> ser::SerializeStructVariant for &'a mut RequestIdSerializer {
 
 /// Derive the request ID from a serializable data structure.
 ///
-/// See <https://hydra.dfinity.systems//build/268411/download/1/dfinity/spec/public/index.html#api-request-id>
+/// See [Representation-independent Hashing of Structured Data](https://internetcomputer.org/docs/current/references/ic-interface-spec#hash-of-map)
+/// from the IC spec for the method of calculation.
 ///
 /// # Warnings
 ///

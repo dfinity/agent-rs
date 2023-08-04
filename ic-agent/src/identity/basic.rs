@@ -1,4 +1,4 @@
-use crate::{export::Principal, Identity, Signature};
+use crate::{agent::EnvelopeContent, export::Principal, Identity, Signature};
 
 #[cfg(feature = "pem")]
 use crate::identity::error::PemError;
@@ -40,7 +40,7 @@ impl BasicIdentity {
             .collect::<Result<Vec<u8>, std::io::Error>>()?;
 
         Ok(BasicIdentity::from_key_pair(Ed25519KeyPair::from_pkcs8(
-            pem::parse(&bytes)?.contents.as_slice(),
+            pem::parse(&bytes)?.contents(),
         )?))
     }
 
@@ -59,11 +59,9 @@ impl Identity for BasicIdentity {
     fn sender(&self) -> Result<Principal, String> {
         Ok(Principal::self_authenticating(&self.der_encoded_public_key))
     }
-    fn sign(&self, msg: &[u8]) -> Result<Signature, String> {
-        let signature = self.key_pair.sign(msg.as_ref());
-        // At this point we shall validate the signature in this first
-        // skeleton version.
 
+    fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
+        let signature = self.key_pair.sign(&content.to_request_id().signable());
         Ok(Signature {
             signature: Some(signature.as_ref().to_vec()),
             public_key: Some(self.der_encoded_public_key.clone()),

@@ -1,4 +1,4 @@
-use crate::{export::Principal, identity::Identity, Signature};
+use crate::{agent::EnvelopeContent, export::Principal, identity::Identity, Signature};
 
 /// The anonymous identity.
 ///
@@ -11,7 +11,7 @@ impl Identity for AnonymousIdentity {
         Ok(Principal::anonymous())
     }
 
-    fn sign(&self, _blob: &[u8]) -> Result<Signature, String> {
+    fn sign(&self, _: &EnvelopeContent) -> Result<Signature, String> {
         Ok(Signature {
             signature: None,
             public_key: None,

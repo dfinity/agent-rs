@@ -1,4 +1,4 @@
-use crate::{export::Principal, Identity, Signature};
+use crate::{agent::EnvelopeContent, export::Principal, Identity, Signature};
 
 #[cfg(feature = "pem")]
 use crate::identity::error::PemError;
@@ -39,15 +39,15 @@ impl Secp256k1Identity {
         let contents = pem_reader.bytes().collect::<Result<Vec<u8>, io::Error>>()?;
 
         for pem in pem::parse_many(contents)? {
-            if pem.tag == EC_PARAMETERS && pem.contents != SECP256K1 {
-                return Err(PemError::UnsupportedKeyCurve(pem.contents));
+            if pem.tag() == EC_PARAMETERS && pem.contents() != SECP256K1 {
+                return Err(PemError::UnsupportedKeyCurve(pem.contents().to_vec()));
             }
 
-            if pem.tag != EcPrivateKey::PEM_LABEL {
+            if pem.tag() != EcPrivateKey::PEM_LABEL {
                 continue;
             }
             let private_key =
-                SecretKey::from_sec1_der(&pem.contents).map_err(|_| pkcs8::Error::KeyMalformed)?;
+                SecretKey::from_sec1_der(pem.contents()).map_err(|_| pkcs8::Error::KeyMalformed)?;
             return Ok(Self::from_private_key(private_key));
         }
         Err(pem::PemError::MissingData.into())
@@ -74,10 +74,10 @@ impl Identity for Secp256k1Identity {
         ))
     }
 
-    fn sign(&self, msg: &[u8]) -> Result<Signature, String> {
+    fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
         let ecdsa_sig: ecdsa::Signature = self
             .private_key
-            .try_sign(msg)
+            .try_sign(&content.to_request_id().signable())
             .map_err(|err| format!("Cannot create secp256k1 signature: {}", err))?;
         let r = ecdsa_sig.r().as_ref().to_bytes();
         let s = ecdsa_sig.s().as_ref().to_bytes();
@@ -100,6 +100,7 @@ impl Identity for Secp256k1Identity {
 #[cfg(test)]
 mod test {
     use super::*;
+    use candid::Encode;
     use k256::{
         ecdsa::{signature::Verifier, Signature},
         elliptic_curve::PrimeField,
@@ -175,10 +176,17 @@ N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
         let identity = Secp256k1Identity::from_pem(IDENTITY_FILE.as_bytes())
             .expect("Cannot create secp256k1 identity from PEM file.");
 
-        // Create a secp256k1 signature on the message "Hello World".
-        let message = b"Hello World";
+        // Create a secp256k1 signature for a hello-world canister.
+        let message = EnvelopeContent::Call {
+            nonce: None,
+            ingress_expiry: 0,
+            sender: identity.sender().unwrap(),
+            canister_id: "bkyz2-fmaaa-aaaaa-qaaaq-cai".parse().unwrap(),
+            method_name: "greet".to_string(),
+            arg: Encode!(&"world").unwrap(),
+        };
         let signature = identity
-            .sign(message)
+            .sign(&message)
             .expect("Cannot create secp256k1 signature.")
             .signature
             .expect("Cannot find secp256k1 signature bytes.");
@@ -196,7 +204,7 @@ N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
         // Assert the secp256k1 signature is valid.
         identity
             ._public_key
-            .verify(message, &ecdsa_sig)
+            .verify(&message.to_request_id().signable(), &ecdsa_sig)
             .expect("Cannot verify secp256k1 signature.");
     }
 }

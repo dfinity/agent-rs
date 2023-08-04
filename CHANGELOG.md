@@ -6,7 +6,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+##  Unreleased
+
+## [0.25.0] - 2023-07-05
+
+* Breaking Change: builders are now owning-style rather than borrowing-style; with_arg takes an owned Vec rather than a borrowed Vec
+* Breaking Change: Identity::sign takes &EnvelopeContent rather than the request ID.
+* Bump Candid crate to 0.9.0
+
+## [0.24.0] - 2023-05-19
+
+* fix: Adjust the default polling parameters to provide better UX. Remove the `CouldNotReadRootKey` error and panic on poisoned mutex.
+* chore: remove deprecated code and fix style
+* Breaking Change: removing the PasswordManager
+* Breaking Change: Enum variant `AgentError::ReplicaError` is now a tuple struct containing `RejectResponse`.
+* Handling rejected update calls where status code is 200. See IC-1462
+* Reject code type is changed from `u64` to enum `RejectCode`.
+
+* Support WASM targets in the browser via `wasm-bindgen`. Feature `wasm-bindgen` required.
+* Do not send `certificate_version` on HTTP Update requests
+* Update `certificate_version` to `u16` instead of `u128`, fixes an issue where the asset canister always responds with v1 response verification
+
+### ic-certification
+
+* Breaking change: Content and path storage has been changed from a `Cow<[u8]>` to a user-provided `T: AsRef<u8>`, removing the lifetime from various types.
+
+### icx-cert
+
+* Fixed issue where a missing request header caused the canister to not respond with an `ic-certificate` header.
 
 ## [0.23.2] - 2023-04-21
 
