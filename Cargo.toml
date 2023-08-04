@@ -14,7 +14,10 @@ version = "0.25.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2021"
 repository = "https://github.com/dfinity/agent-rs"
-rust-version = "1.71.1"
+# MSRV
+# Avoid updating this field unless we use new Rust features
+# Sync rust-version in following CI files:
+rust-version = "1.65.0"
 license = "Apache-2.0"
 
 [workspace.dependencies]
