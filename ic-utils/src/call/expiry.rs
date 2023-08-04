@@ -5,10 +5,11 @@ use time::OffsetDateTime;
 
 /// An expiry value. Either not specified (the default), a delay relative to the time the
 /// call is made, or a specific date time.
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Default)]
 pub enum Expiry {
     /// Unspecified. Will not try to override the Agent's value, which might itself have
     /// its own default value.
+    #[default]
     Unspecified,
 
     /// A duration that will be added to the system time when the call is made.
@@ -63,11 +64,5 @@ impl From<SystemTime> for Expiry {
 impl From<OffsetDateTime> for Expiry {
     fn from(dt: OffsetDateTime) -> Self {
         Self::DateTime(dt)
-    }
-}
-
-impl Default for Expiry {
-    fn default() -> Self {
-        Expiry::Unspecified
     }
 }
