@@ -16,12 +16,12 @@ jobs:
             name: linux
             binary_path: target/x86_64-unknown-linux-musl/release
             binary_files: icx
-            rust: '1.71.1'
+            rust: '1.65.0'
           - os: macos-latest
             name: macos
             binary_path: target/release
             binary_files: icx
-            rust: '1.71.1'
+            rust: '1.65.0'
     steps:
     - uses: actions/checkout@master
 
