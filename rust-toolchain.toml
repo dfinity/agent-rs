@@ -1,3 +1,7 @@
 [toolchain]
-channel = "1.65.0"
+channel = "1.71.1"
 components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]
+
+# The version only influences the local develop environment.
+# No need to sync with Cargo.toml and CI.
