@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ##  Unreleased
 
+Switched from rustls crate to rustls-webpki fork to address https://rustsec.org/advisories/RUSTSEC-2023-0052
+
 ## [0.26.0] - 2023-08-21
 
 Removed the `arc_type` feature requirement for candid, in order to avoid deprecation warnings.  This is a breaking change.  The call and call_and_wait are no longer `async fn` and instead return a Future or BoxFuture.
