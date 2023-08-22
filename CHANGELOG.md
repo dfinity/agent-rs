@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * The `Unknown` lookup of a request_status path in a certificate results in an `AgentError` (the IC returns `Absent` for non-existing paths).
 
+## [0.26.0] - 2023-08-21
+
+Removed the `arc_type` feature requirement for candid, in order to avoid deprecation warnings.  This is a breaking change.  The call and call_and_wait are no longer `async fn` and instead return a Future or BoxFuture.
+
 ## [0.25.0] - 2023-07-05
 
 * Breaking Change: builders are now owning-style rather than borrowing-style; with_arg takes an owned Vec rather than a borrowed Vec
