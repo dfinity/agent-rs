@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::{export::Principal, to_request_id, AgentError, RequestId};
+use crate::{export::Principal, identity::SignedDelegation, to_request_id, AgentError, RequestId};
 use ic_certification::Label;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -17,6 +17,9 @@ pub struct Envelope<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(with = "serde_bytes")]
     pub sender_sig: Option<Vec<u8>>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sender_delegations: Option<Vec<SignedDelegation>>,
 }
 
 /// The content of an IC ingress message, not including any signature information.

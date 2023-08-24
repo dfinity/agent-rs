@@ -137,13 +137,20 @@ impl Identity for HardwareIdentity {
         Ok(Principal::self_authenticating(&self.public_key))
     }
     fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
-        let hash = Sha256::digest(content.to_request_id().signable());
+        self.sign_arbitrary(&content.to_request_id().signable())
+    }
+    fn sign_arbitrary(&self, content: &[u8]) -> Result<Signature, String> {
+        let hash = Sha256::digest(content);
         let signature = self.sign_hash(&hash)?;
 
         Ok(Signature {
-            public_key: Some(self.public_key.clone()),
+            public_key: self.public_key(),
             signature: Some(signature),
+            delegations: None,
         })
+    }
+    fn public_key(&self) -> Option<Vec<u8>> {
+        Some(self.public_key.clone())
     }
 }
 

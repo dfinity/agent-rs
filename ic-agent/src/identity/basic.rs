@@ -61,10 +61,19 @@ impl Identity for BasicIdentity {
     }
 
     fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
-        let signature = self.key_pair.sign(&content.to_request_id().signable());
+        self.sign_arbitrary(&content.to_request_id().signable())
+    }
+
+    fn public_key(&self) -> Option<Vec<u8>> {
+        Some(self.der_encoded_public_key.clone())
+    }
+
+    fn sign_arbitrary(&self, content: &[u8]) -> Result<Signature, String> {
+        let signature = self.key_pair.sign(content);
         Ok(Signature {
             signature: Some(signature.as_ref().to_vec()),
-            public_key: Some(self.der_encoded_public_key.clone()),
+            public_key: self.public_key(),
+            delegations: None,
         })
     }
 }
