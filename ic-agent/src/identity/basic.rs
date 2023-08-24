@@ -11,6 +11,8 @@ use simple_asn1::{
 
 use std::fmt;
 
+use super::Delegation;
+
 /// A Basic Identity which sign using an ED25519 key pair.
 pub struct BasicIdentity {
     key_pair: Ed25519KeyPair,
@@ -60,11 +62,23 @@ impl Identity for BasicIdentity {
         Ok(Principal::self_authenticating(&self.der_encoded_public_key))
     }
 
+    fn public_key(&self) -> Option<Vec<u8>> {
+        Some(self.der_encoded_public_key.clone())
+    }
+
     fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
-        let signature = self.key_pair.sign(&content.to_request_id().signable());
+        self.sign_arbitrary(&content.to_request_id().signable())
+    }
+
+    fn sign_delegation(&self, content: &Delegation) -> Result<Signature, String> {
+        self.sign_arbitrary(&content.signable())
+    }
+
+    fn sign_arbitrary(&self, content: &[u8]) -> Result<Signature, String> {
+        let signature = self.key_pair.sign(content);
         Ok(Signature {
             signature: Some(signature.as_ref().to_vec()),
-            public_key: Some(self.der_encoded_public_key.clone()),
+            public_key: self.public_key(),
         })
     }
 }

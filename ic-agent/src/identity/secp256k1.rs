@@ -11,6 +11,8 @@ use k256::{
 #[cfg(feature = "pem")]
 use std::{fs::File, io, path::Path};
 
+use super::Delegation;
+
 /// A cryptographic identity based on the Secp256k1 elliptic curve.
 ///
 /// The caller will be represented via [`Principal::self_authenticating`], which contains the SHA-224 hash of the public key.
@@ -74,10 +76,22 @@ impl Identity for Secp256k1Identity {
         ))
     }
 
+    fn public_key(&self) -> Option<Vec<u8>> {
+        Some(self.der_encoded_public_key.as_ref().to_vec())
+    }
+
     fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
+        self.sign_arbitrary(&content.to_request_id().signable())
+    }
+
+    fn sign_delegation(&self, content: &Delegation) -> Result<Signature, String> {
+        self.sign_arbitrary(&content.signable())
+    }
+
+    fn sign_arbitrary(&self, content: &[u8]) -> Result<Signature, String> {
         let ecdsa_sig: ecdsa::Signature = self
             .private_key
-            .try_sign(&content.to_request_id().signable())
+            .try_sign(content)
             .map_err(|err| format!("Cannot create secp256k1 signature: {}", err))?;
         let r = ecdsa_sig.r().as_ref().to_bytes();
         let s = ecdsa_sig.s().as_ref().to_bytes();
@@ -88,7 +102,7 @@ impl Identity for Secp256k1Identity {
         bytes[(32 - r.len())..32].clone_from_slice(&r);
         bytes[32 + (32 - s.len())..].clone_from_slice(&s);
         let signature = Some(bytes.to_vec());
-        let public_key = Some(self.der_encoded_public_key.as_ref().to_vec());
+        let public_key = self.public_key();
         Ok(Signature {
             public_key,
             signature,
