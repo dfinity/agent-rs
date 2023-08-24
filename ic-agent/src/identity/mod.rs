@@ -49,6 +49,8 @@ pub trait Identity: Send + Sync {
 
     /// Sign a delegation to let another key be used to authenticate [`sender`](Identity::sender).
     ///
+    /// Not all `Identity` implementations support this operation.
+    ///
     /// Implementors should call `content.signable()` for the actual bytes that need to be signed.
     fn sign_delegation(&self, content: &Delegation) -> Result<Signature, String> {
         let _ = content; // silence unused warning
@@ -83,13 +85,15 @@ pub struct Delegation {
     pub senders: Option<Vec<Principal>>,
 }
 
+const IC_REQUEST_DELEGATION_DOMAIN_SEPARATOR: &[u8] = b"\x1Aic-request-auth-delegation";
+
 impl Delegation {
     /// Returns the signable form of the delegation, by running it through [`to_request_id`]
     /// and prepending `\x1Aic-request-auth-delegation` to the result.
     pub fn signable(&self) -> Vec<u8> {
         let hash = to_request_id(self).unwrap();
         let mut bytes = Vec::with_capacity(59);
-        bytes.extend_from_slice(b"\x1Aic-request-auth-delegation");
+        bytes.extend_from_slice(IC_REQUEST_DELEGATION_DOMAIN_SEPARATOR);
         bytes.extend_from_slice(hash.as_slice());
         bytes
     }
