@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ##  Unreleased
 
+* feat: Added `public_key`, `sign_arbitrary`, `sign_delegation` functions to `Identity`.
+
 ## [0.26.1] - 2023-08-22
 
 Switched from rustls crate to rustls-webpki fork to address https://rustsec.org/advisories/RUSTSEC-2023-0052
