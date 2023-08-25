@@ -180,6 +180,12 @@ impl Display for RejectResponse {
     }
 }
 
+impl From<candid::Error> for AgentError {
+    fn from(e: candid::Error) -> AgentError {
+        AgentError::CandidError(e.into())
+    }
+}
+
 /// A HTTP error from the replica.
 pub struct HttpErrorPayload {
     /// The HTTP status code.
