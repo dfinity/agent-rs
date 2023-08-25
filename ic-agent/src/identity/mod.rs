@@ -39,7 +39,7 @@ pub trait Identity: Send + Sync {
 
     /// Produce the public key commonly returned in [`Signature`].
     ///
-    /// May return `None` when [`sign`](Identity::sign) would return `Some`, in non-`ic-agent` identities.
+    /// Should only return `None` if `sign` would do the same.
     fn public_key(&self) -> Option<Vec<u8>>;
 
     /// Sign a request ID derived from a content map.
