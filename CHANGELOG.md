@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ##  Unreleased
 
+* feat: Added `public_key`, `sign_arbitrary`, `sign_delegation` functions to `Identity`.
 * Add `From` trait to coerce `candid::Error` into `ic_agent::AgentError`.
 * Add `Agent::set_arc_identity` method to switch identity.
 
