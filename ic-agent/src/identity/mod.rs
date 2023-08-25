@@ -39,7 +39,7 @@ pub trait Identity: Send + Sync {
 
     /// Produce the public key commonly returned in [`Signature`].
     ///
-    /// May return `None` when [`sign`](Identity::sign) would return `Some`.
+    /// May return `None` when [`sign`](Identity::sign) would return `Some`, in non-`ic-agent` identities.
     fn public_key(&self) -> Option<Vec<u8>>;
 
     /// Sign a request ID derived from a content map.
@@ -49,7 +49,7 @@ pub trait Identity: Send + Sync {
 
     /// Sign a delegation to let another key be used to authenticate [`sender`](Identity::sender).
     ///
-    /// Not all `Identity` implementations support this operation.
+    /// Not all `Identity` implementations support this operation, though all `ic-agent` implementations other than `AnonymousIdentity` do.
     ///
     /// Implementors should call `content.signable()` for the actual bytes that need to be signed.
     fn sign_delegation(&self, content: &Delegation) -> Result<Signature, String> {
@@ -59,7 +59,7 @@ pub trait Identity: Send + Sync {
 
     /// Sign arbitrary bytes.
     ///
-    /// Not all `Identity` implementations support this operation.
+    /// Not all `Identity` implementations support this operation, though all `ic-agent` implementations do.
     fn sign_arbitrary(&self, content: &[u8]) -> Result<Signature, String> {
         let _ = content; // silence unused warning
         Err(String::from("unsupported"))
