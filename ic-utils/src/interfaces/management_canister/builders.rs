@@ -392,7 +392,7 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
         mut self,
         arg: Argument,
     ) -> InstallCodeBuilder<'agent, 'canister> {
-        self.arg.push_idl_arg(arg);
+        self.arg.set_idl_arg(arg);
         self
     }
 

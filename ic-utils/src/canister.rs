@@ -135,14 +135,14 @@ pub struct Argument(Result<Vec<u8>, AgentError>);
 
 impl Argument {
     /// Set an IDL Argument, replacing existing arguments. If the current value is an error, will do nothing.
-    pub fn push_idl_arg<A: CandidType>(&mut self, arg: A) {
+    pub fn set_idl_arg<A: CandidType>(&mut self, arg: A) {
         if self.0.is_ok() {
             self.0 = Encode!(&arg).map_err(|e| e.into());
         }
     }
 
     /// Set an IDLValue Argument, replacing existing arguments. If the current value is an error, will do nothing.
-    pub fn push_value_arg(&mut self, arg: IDLValue) {
+    pub fn set_value_arg(&mut self, arg: IDLValue) {
         if self.0.is_ok() {
             let mut builder = IDLBuilder::new();
             let result = builder
@@ -226,7 +226,7 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
     where
         Argument: CandidType + Sync + Send,
     {
-        self.arg.push_idl_arg(arg);
+        self.arg.set_idl_arg(arg);
         self
     }
 
@@ -234,7 +234,7 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
     ///
     /// TODO: make this method unnecessary ([#132](https://github.com/dfinity/agent-rs/issues/132))
     pub fn with_value_arg(mut self, arg: IDLValue) -> SyncCallBuilder<'agent, 'canister> {
-        self.arg.push_value_arg(arg);
+        self.arg.set_value_arg(arg);
         self
     }
 
@@ -304,7 +304,7 @@ impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
     where
         Argument: CandidType + Sync + Send,
     {
-        self.arg.push_idl_arg(arg);
+        self.arg.set_idl_arg(arg);
         self
     }
 

@@ -62,7 +62,7 @@ where
     where
         Argument: CandidType + Sync + Send,
     {
-        self.arg.push_idl_arg(arg);
+        self.arg.set_idl_arg(arg);
         self
     }
 
