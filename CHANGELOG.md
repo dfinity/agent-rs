@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ##  Unreleased
 
+* Breaking change: Remove argument builder form `ic-utils`. `CallBuilder::with_arg` replaces the argument, instead of pushing a new argument to the list. If you have multiple arguments, use `CallBuilder::set_raw_arg(candid::Encode!(arg1, arg2)?)` instead.
 * feat: Added `public_key`, `sign_arbitrary`, `sign_delegation` functions to `Identity`.
 * Add `From` trait to coerce `candid::Error` into `ic_agent::AgentError`.
 * Add `Agent::set_arc_identity` method to switch identity.
