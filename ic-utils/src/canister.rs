@@ -131,29 +131,38 @@ impl<'agent> Canister<'agent> {
 
 /// A buffer to hold canister argument blob.
 #[derive(Debug)]
-pub struct Argument(Vec<u8>);
+pub struct Argument(Result<Vec<u8>, AgentError>);
 
 impl Argument {
-    /// Set an IDL Argument, replacing existing arguments.
+    /// Set an IDL Argument, replacing existing arguments. If the current value is an error, will do nothing.
     pub fn push_idl_arg<A: CandidType>(&mut self, arg: A) {
-        self.0 = Encode!(&arg).unwrap();
+        if self.0.is_ok() {
+            self.0 = Encode!(&arg).map_err(|e| e.into());
+        }
     }
 
-    /// Set an IDLValue Argument, replacing existing arguments.
+    /// Set an IDLValue Argument, replacing existing arguments. If the current value is an error, will do nothing.
     pub fn push_value_arg(&mut self, arg: IDLValue) {
-        let mut builder = IDLBuilder::new();
-        builder.value_arg(&arg).unwrap();
-        self.0 = builder.serialize_to_vec().unwrap();
+        if self.0.is_ok() {
+            let mut builder = IDLBuilder::new();
+            let result = builder
+                .value_arg(&arg)
+                .and_then(|builder| builder.serialize_to_vec())
+                .map_err(|e| e.into());
+            self.0 = result;
+        }
     }
 
     /// Set the argument as raw, replacing existing arguments.
     pub fn set_raw_arg(&mut self, arg: Vec<u8>) {
-        self.0 = arg;
+        if self.0.is_ok() {
+            self.0 = Ok(arg);
+        }
     }
 
     /// Return the argument blob.
     pub fn serialize(self) -> Result<Vec<u8>, AgentError> {
-        Ok(self.0)
+        self.0
     }
 
     /// Resets the argument to an empty message.
@@ -168,20 +177,20 @@ impl Argument {
 
     /// Creates an argument from an arbitrary blob. Equivalent to [`set_raw_arg`](Argument::set_raw_arg).
     pub fn from_raw(raw: Vec<u8>) -> Self {
-        Self(raw)
+        Self(Ok(raw))
     }
 
     /// Creates an argument from an existing Candid ArgumentEncoder.
     pub fn from_candid(tuple: impl ArgumentEncoder) -> Result<Self, AgentError> {
         let mut builder = IDLBuilder::new();
         tuple.encode(&mut builder)?;
-        Ok(Self(builder.serialize_to_vec()?))
+        Ok(Self(Ok(builder.serialize_to_vec()?)))
     }
 }
 
 impl Default for Argument {
     fn default() -> Self {
-        Self(Encode!().unwrap())
+        Self(Ok(Encode!().unwrap()))
     }
 }
 
