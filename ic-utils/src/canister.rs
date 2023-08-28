@@ -181,10 +181,13 @@ impl Argument {
     }
 
     /// Creates an argument from an existing Candid ArgumentEncoder.
-    pub fn from_candid(tuple: impl ArgumentEncoder) -> Result<Self, AgentError> {
+    pub fn from_candid(tuple: impl ArgumentEncoder) -> Self {
         let mut builder = IDLBuilder::new();
-        tuple.encode(&mut builder)?;
-        Ok(Self(Ok(builder.serialize_to_vec()?)))
+        let result = tuple
+            .encode(&mut builder)
+            .and_then(|_| builder.serialize_to_vec())
+            .map_err(|e| e.into());
+        Self(result)
     }
 }
 
