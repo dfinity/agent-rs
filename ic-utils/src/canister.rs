@@ -1,9 +1,8 @@
 use crate::call::{AsyncCaller, SyncCaller};
 use candid::utils::ArgumentEncoder;
-use candid::{ser::IDLBuilder, types::value::IDLValue, utils::ArgumentDecoder, CandidType};
+use candid::{ser::IDLBuilder, types::value::IDLValue, utils::ArgumentDecoder, CandidType, Encode};
 use ic_agent::{export::Principal, Agent, AgentError, RequestId};
 use std::convert::TryInto;
-use std::fmt;
 use thiserror::Error;
 
 /// An error happened while building a canister.
@@ -130,89 +129,34 @@ impl<'agent> Canister<'agent> {
     }
 }
 
-/// The type of argument passed to a canister call. This can either be a raw argument,
-/// in which case it's a vector of bytes that will be passed verbatim, or an IDL
-/// Builder which will result in an error or a raw argument at the call site.
-///
-/// This enumeration is meant to be private. You should use [Argument] for holding
-/// argument values.
-enum ArgumentType {
-    Raw(Vec<u8>),
-    Idl(IDLBuilder),
-}
-
-impl fmt::Debug for ArgumentType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Raw(v) => f.debug_tuple("ArgumentType::Raw").field(v).finish(),
-            Self::Idl(_) => f.debug_struct("ArgumentType::Idl").finish_non_exhaustive(),
-        }
-    }
-}
-
-/// A builder for a canister argument, allowing you to append elements to an argument tuple with chaining syntax.
+/// A buffer to hold canister argument blob.
 #[derive(Debug)]
-pub struct Argument(Result<ArgumentType, AgentError>);
+pub struct Argument(Vec<u8>);
 
 impl Argument {
-    /// Add an IDL Argument. If the current value of Argument is Raw, will set the
-    /// result to an error. If the current value is an error, will do nothing.
+    /// Set an IDL Argument, replacing existing arguments.
     pub fn push_idl_arg<A: CandidType>(&mut self, arg: A) {
-        match self.0 {
-            Ok(ArgumentType::Idl(ref mut idl_builder)) => {
-                let result = idl_builder.arg(&arg);
-                if let Err(e) = result {
-                    self.0 = Err(AgentError::CandidError(Box::new(e)))
-                }
-            }
-            Ok(ArgumentType::Raw(_)) => {
-                self.0 = Err(AgentError::MessageError(
-                    "Cannot overwrite a Raw Argument with a non-raw argument.".to_owned(),
-                ))
-            }
-            _ => {}
-        }
+        self.0 = Encode!(&arg).unwrap();
     }
 
-    /// Add an IDLValue Argument. If the current value of Argument is Raw, will set the
-    /// result to an error. If the current value is an error, will do nothing.
+    /// Set an IDLValue Argument, replacing existing arguments.
     pub fn push_value_arg(&mut self, arg: IDLValue) {
-        match self.0 {
-            Ok(ArgumentType::Idl(ref mut idl_builder)) => {
-                let result = idl_builder.value_arg(&arg);
-                if let Err(e) = result {
-                    self.0 = Err(AgentError::CandidError(Box::new(e)))
-                }
-            }
-            Ok(ArgumentType::Raw(_)) => {
-                self.0 = Err(AgentError::MessageError(
-                    "Cannot overwrite a Raw Argument with a non-raw argument.".to_owned(),
-                ))
-            }
-            _ => {}
-        }
+        let mut builder = IDLBuilder::new();
+        builder.value_arg(&arg).unwrap();
+        self.0 = builder.serialize_to_vec().unwrap();
     }
 
-    /// Set the argument as raw, replacing any value that was there before. If the
-    /// current argument was an error, does nothing.
+    /// Set the argument as raw, replacing existing arguments.
     pub fn set_raw_arg(&mut self, arg: Vec<u8>) {
-        if self.0.is_ok() {
-            self.0 = Ok(ArgumentType::Raw(arg));
-        }
+        self.0 = arg;
     }
 
-    /// Encodes the completed argument into an IDL blob.
+    /// Return the argument blob.
     pub fn serialize(self) -> Result<Vec<u8>, AgentError> {
-        match self.0 {
-            Ok(ArgumentType::Idl(mut idl_builder)) => idl_builder
-                .serialize_to_vec()
-                .map_err(|e| AgentError::CandidError(Box::new(e))),
-            Ok(ArgumentType::Raw(vec)) => Ok(vec),
-            Err(e) => Err(e),
-        }
+        Ok(self.0)
     }
 
-    /// Resets the argument to an empty builder.
+    /// Resets the argument to an empty message.
     pub fn reset(&mut self) {
         *self = Default::default();
     }
@@ -224,24 +168,20 @@ impl Argument {
 
     /// Creates an argument from an arbitrary blob. Equivalent to [`set_raw_arg`](Argument::set_raw_arg).
     pub fn from_raw(raw: Vec<u8>) -> Self {
-        Self(Ok(ArgumentType::Raw(raw)))
+        Self(raw)
     }
 
     /// Creates an argument from an existing Candid ArgumentEncoder.
-    pub fn from_candid(tuple: impl ArgumentEncoder) -> Self {
+    pub fn from_candid(tuple: impl ArgumentEncoder) -> Result<Self, AgentError> {
         let mut builder = IDLBuilder::new();
-        Self(
-            tuple
-                .encode(&mut builder)
-                .map(|_| ArgumentType::Idl(builder))
-                .map_err(|e| AgentError::CandidError(Box::new(e))),
-        )
+        tuple.encode(&mut builder)?;
+        Ok(Self(builder.serialize_to_vec()?))
     }
 }
 
 impl Default for Argument {
     fn default() -> Self {
-        Self(Ok(ArgumentType::Idl(IDLBuilder::new())))
+        Self(Encode!().unwrap())
     }
 }
 
@@ -272,9 +212,7 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
 }
 
 impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
-    /// Add an argument to the candid argument list. This requires Candid arguments, if
-    /// there is a raw argument set (using [`with_arg_raw`](SyncCallBuilder::with_arg_raw)),
-    /// this will fail.
+    /// Replace the argument with candid argument.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> SyncCallBuilder<'agent, 'canister>
     where
         Argument: CandidType + Sync + Send,
@@ -283,8 +221,7 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
         self
     }
 
-    /// Add an argument to the candid argument list. This requires Candid arguments, if
-    /// there is a raw argument set (using [`with_arg_raw`](SyncCallBuilder::with_arg_raw)), this will fail.
+    /// Replace the argument with IDLValue argument.
     ///
     /// TODO: make this method unnecessary ([#132](https://github.com/dfinity/agent-rs/issues/132))
     pub fn with_value_arg(mut self, arg: IDLValue) -> SyncCallBuilder<'agent, 'canister> {
@@ -353,8 +290,7 @@ impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
 }
 
 impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
-    /// Add an argument to the candid argument list. This requires Candid arguments, if
-    /// there is a raw argument set (using [`with_arg_raw`](AsyncCallBuilder::with_arg_raw)), this will fail.
+    /// Replace the argument with Candid argument.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> AsyncCallBuilder<'agent, 'canister>
     where
         Argument: CandidType + Sync + Send,
