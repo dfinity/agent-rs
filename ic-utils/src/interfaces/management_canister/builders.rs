@@ -1,10 +1,7 @@
 //! Builder interfaces for some method calls of the management canister.
 
 use crate::{
-    call::{AsyncCall, BoxFuture},
-    canister::Argument,
-    interfaces::management_canister::MgmtMethod,
-    Canister,
+    call::AsyncCall, canister::Argument, interfaces::management_canister::MgmtMethod, Canister,
 };
 use async_trait::async_trait;
 use candid::{CandidType, Deserialize, Nat};
@@ -440,20 +437,15 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
     }
 }
 
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<'agent, 'canister: 'agent> AsyncCall<()> for InstallCodeBuilder<'agent, 'canister> {
-    fn call<'async_trait>(self) -> BoxFuture<'async_trait, Result<RequestId, AgentError>>
-    where
-        Self: 'async_trait,
-    {
-        let call_res = self.build();
-        Box::pin(async move { call_res?.call().await })
+    async fn call(self) -> Result<RequestId, AgentError> {
+        self.build()?.call().await
     }
-    fn call_and_wait<'async_trait>(self) -> BoxFuture<'async_trait, Result<(), AgentError>>
-    where
-        Self: 'async_trait,
-    {
-        let call_res = self.build();
-        Box::pin(async move { call_res?.call_and_wait().await })
+
+    async fn call_and_wait(self) -> Result<(), AgentError> {
+        self.build()?.call_and_wait().await
     }
 }
 
