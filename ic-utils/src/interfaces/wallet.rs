@@ -2,10 +2,10 @@
 //!
 //! [cycles wallet]: https://github.com/dfinity/cycles-wallet
 
-use std::{future::Future, ops::Deref};
+use std::ops::Deref;
 
 use crate::{
-    call::{AsyncCall, BoxFuture, SyncCall},
+    call::{AsyncCall, SyncCall},
     canister::Argument,
     interfaces::management_canister::{
         attributes::{ComputeAllocation, FreezingThreshold, MemoryAllocation},
@@ -13,6 +13,7 @@ use crate::{
     },
     Canister,
 };
+use async_trait::async_trait;
 use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize, Nat};
 use ic_agent::{agent::RejectCode, export::Principal, Agent, AgentError, RequestId};
 use once_cell::sync::Lazy;
@@ -55,18 +56,24 @@ impl<'agent, 'canister: 'agent, Out> CallForwarder<'agent, 'canister, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
-    /// Add an argument to the candid argument list. This requires Candid arguments, if
-    /// there is a raw argument set (using [`with_arg_raw`](CallForwarder::with_arg_raw)), this will fail.
+    /// Set the argument with candid argument. Can be called at most once.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> Self
     where
         Argument: CandidType + Sync + Send,
     {
-        self.arg.push_idl_arg(arg);
+        self.arg.set_idl_arg(arg);
+        self
+    }
+    /// Set the argument with multiple arguments as tuple. Can be called at most once.
+    pub fn with_args(mut self, tuple: impl candid::utils::ArgumentEncoder) -> Self {
+        if self.arg.0.is_some() {
+            panic!("argument is being set more than once");
+        }
+        self.arg = Argument::from_candid(tuple);
         self
     }
 
-    /// Replace the argument with raw argument bytes. This will overwrite the current
-    /// argument set, so calling this method twice will discard the first argument.
+    /// Set the argument with raw argument bytes. Can be called at most once.
     pub fn with_arg_raw(mut self, arg: Vec<u8>) -> Self {
         self.arg.set_raw_arg(arg);
         self
@@ -110,34 +117,28 @@ where
     }
 
     /// Calls the forwarded canister call on the wallet canister. Equivalent to `.build().call()`.
-    pub fn call(self) -> impl Future<Output = Result<RequestId, AgentError>> + 'agent {
-        let call_res = self.build();
-        async move { call_res?.call().await }
+    pub async fn call(self) -> Result<RequestId, AgentError> {
+        self.build()?.call().await
     }
 
     /// Calls the forwarded canister call on the wallet canister, and waits for the result. Equivalent to `.build().call_and_wait()`.
-    pub fn call_and_wait(self) -> impl Future<Output = Result<Out, AgentError>> + 'agent {
-        let call_res = self.build();
-        async move { call_res?.call_and_wait().await }
+    pub async fn call_and_wait(self) -> Result<Out, AgentError> {
+        self.build()?.call_and_wait().await
     }
 }
 
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<'agent, 'canister: 'agent, Out> AsyncCall<Out> for CallForwarder<'agent, 'canister, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
-    fn call<'async_trait>(self) -> BoxFuture<'async_trait, Result<RequestId, AgentError>>
-    where
-        Self: 'async_trait,
-    {
-        Box::pin(self.call())
+    async fn call(self) -> Result<RequestId, AgentError> {
+        self.call().await
     }
 
-    fn call_and_wait<'async_trait>(self) -> BoxFuture<'async_trait, Result<Out, AgentError>>
-    where
-        Self: 'async_trait,
-    {
-        Box::pin(self.call_and_wait())
+    async fn call_and_wait(self) -> Result<Out, AgentError> {
+        self.call_and_wait().await
     }
 }
 
