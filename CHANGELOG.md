@@ -6,7 +6,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-##  Unreleased
+## Unreleased
+
+## [0.27.0] - 2023-08-30
 
 * Breaking change: Remove argument builder form `ic-utils`. `CallBuilder::with_arg` sets a single argument, instead of pushing a new argument to the list. This function can be called at most once. If it's called multiple times, it panics. If you have multiple arguments, use `CallBuilder::with_args((arg1, arg2))` or `CallBuilder::set_raw_arg(candid::Encode!(arg1, arg2)?)`.
 * feat: Added `public_key`, `sign_arbitrary`, `sign_delegation` functions to `Identity`.
