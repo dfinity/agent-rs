@@ -138,7 +138,7 @@ impl Argument {
     pub fn set_idl_arg<A: CandidType>(&mut self, arg: A) {
         match self.0 {
             None => self.0 = Some(Encode!(&arg).map_err(|e| e.into())),
-            Some(_) => panic!("argument is being set for more than once"),
+            Some(_) => panic!("argument is being set more than once"),
         }
     }
 
@@ -153,7 +153,7 @@ impl Argument {
                     .map_err(|e| e.into());
                 self.0 = Some(result);
             }
-            Some(_) => panic!("argument is being set for more than once"),
+            Some(_) => panic!("argument is being set more than once"),
         }
     }
 
@@ -161,7 +161,7 @@ impl Argument {
     pub fn set_raw_arg(&mut self, arg: Vec<u8>) {
         match self.0 {
             None => self.0 = Some(Ok(arg)),
-            Some(_) => panic!("argument is being set for more than once"),
+            Some(_) => panic!("argument is being set more than once"),
         }
     }
 
@@ -234,7 +234,7 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
     /// Set the argument with multiple arguments as tuple. Can be called at most once.
     pub fn with_args(mut self, tuple: impl ArgumentEncoder) -> SyncCallBuilder<'agent, 'canister> {
         if self.arg.0.is_some() {
-            panic!("argument is being set for more than once");
+            panic!("argument is being set more than once");
         }
         self.arg = Argument::from_candid(tuple);
         self
@@ -319,7 +319,7 @@ impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
     /// Set the argument with multiple arguments as tuple. Can be called at most once.
     pub fn with_args(mut self, tuple: impl ArgumentEncoder) -> AsyncCallBuilder<'agent, 'canister> {
         if self.arg.0.is_some() {
-            panic!("argument is being set for more than once");
+            panic!("argument is being set more than once");
         }
         self.arg = Argument::from_candid(tuple);
         self

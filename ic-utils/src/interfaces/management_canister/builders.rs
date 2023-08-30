@@ -399,7 +399,7 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
     /// which will be passed to the init method of the canister. Can be called at most once.
     pub fn with_args(mut self, tuple: impl candid::utils::ArgumentEncoder) -> Self {
         if self.arg.0.is_some() {
-            panic!("argument is being set for more than once");
+            panic!("argument is being set more than once");
         }
         self.arg = Argument::from_candid(tuple);
         self
