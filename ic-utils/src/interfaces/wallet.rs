@@ -56,8 +56,7 @@ impl<'agent, 'canister: 'agent, Out> CallForwarder<'agent, 'canister, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
-    /// Add an argument to the candid argument list. This requires Candid arguments, if
-    /// there is a raw argument set (using [`with_arg_raw`](CallForwarder::with_arg_raw)), this will fail.
+    /// Set the argument with candid argument. Can be called at most once.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> Self
     where
         Argument: CandidType + Sync + Send,
@@ -65,9 +64,16 @@ where
         self.arg.set_idl_arg(arg);
         self
     }
+    /// Set the argument with multiple arguments as tuple. Can be called at most once.
+    pub fn with_args(mut self, tuple: impl candid::utils::ArgumentEncoder) -> Self {
+        if self.arg.0.is_some() {
+            panic!("argument is being set for more than once");
+        }
+        self.arg = Argument::from_candid(tuple);
+        self
+    }
 
-    /// Replace the argument with raw argument bytes. This will overwrite the current
-    /// argument set, so calling this method twice will discard the first argument.
+    /// Set the argument with raw argument bytes. Can be called at most once.
     pub fn with_arg_raw(mut self, arg: Vec<u8>) -> Self {
         self.arg.set_raw_arg(arg);
         self

@@ -131,7 +131,7 @@ impl<'agent> Canister<'agent> {
 
 /// A buffer to hold canister argument blob.
 #[derive(Debug, Default)]
-pub struct Argument(Option<Result<Vec<u8>, AgentError>>);
+pub struct Argument(pub(crate) Option<Result<Vec<u8>, AgentError>>);
 
 impl Argument {
     /// Set an IDL Argument. Can only be called at most once.

@@ -386,8 +386,8 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
         }
     }
 
-    /// Add an argument to the installation, which will be passed to the init
-    /// method of the canister.
+    /// Set the argument to the installation, which will be passed to the init
+    /// method of the canister. Can be called at most once.
     pub fn with_arg<Argument: CandidType + Sync + Send>(
         mut self,
         arg: Argument,
@@ -395,8 +395,16 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
         self.arg.set_idl_arg(arg);
         self
     }
-
-    /// Override the argument passed in to the canister with raw bytes.
+    /// Set the argument with multiple arguments as tuple to the installation,
+    /// which will be passed to the init method of the canister. Can be called at most once.
+    pub fn with_args(mut self, tuple: impl candid::utils::ArgumentEncoder) -> Self {
+        if self.arg.0.is_some() {
+            panic!("argument is being set for more than once");
+        }
+        self.arg = Argument::from_candid(tuple);
+        self
+    }
+    /// Set the argument passed in to the canister with raw bytes. Can be called at most once.
     pub fn with_raw_arg(mut self, arg: Vec<u8>) -> InstallCodeBuilder<'agent, 'canister> {
         self.arg.set_raw_arg(arg);
         self
