@@ -29,7 +29,7 @@ jobs:
           rustup default ${{ matrix.rust }}
           rustup target add wasm32-unknown-unknown
       - name: Run Lint
-        run: cargo clippy --verbose --tests --benches -- -D clippy::all
+        run: cargo clippy --verbose --tests --benches -- -D warnings
         env:
           RUST_BACKTRACE: 1
       - name: Run Lint (WASM)

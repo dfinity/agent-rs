@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ##  Unreleased
 
 * The `Unknown` lookup of a request_status path in a certificate results in an `AgentError` (the IC returns `Absent` for non-existing paths).
+* feat: Added `public_key`, `sign_arbitrary`, `sign_delegation` functions to `Identity`.
+* Add `From` trait to coerce `candid::Error` into `ic_agent::AgentError`.
+* Add `Agent::set_arc_identity` method to switch identity.
 
 ## [0.26.1] - 2023-08-22
 
