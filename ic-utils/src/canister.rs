@@ -130,39 +130,44 @@ impl<'agent> Canister<'agent> {
 }
 
 /// A buffer to hold canister argument blob.
-#[derive(Debug)]
-pub struct Argument(Result<Vec<u8>, AgentError>);
+#[derive(Debug, Default)]
+pub struct Argument(Option<Result<Vec<u8>, AgentError>>);
 
 impl Argument {
-    /// Set an IDL Argument, replacing existing arguments. If the current value is an error, will do nothing.
+    /// Set an IDL Argument. Can only be called at most once.
     pub fn set_idl_arg<A: CandidType>(&mut self, arg: A) {
-        if self.0.is_ok() {
-            self.0 = Encode!(&arg).map_err(|e| e.into());
+        match self.0 {
+            None => self.0 = Some(Encode!(&arg).map_err(|e| e.into())),
+            Some(_) => panic!("argument is being set for more than once"),
         }
     }
 
-    /// Set an IDLValue Argument, replacing existing arguments. If the current value is an error, will do nothing.
+    /// Set an IDLValue Argument. Can only be called at most once.
     pub fn set_value_arg(&mut self, arg: IDLValue) {
-        if self.0.is_ok() {
-            let mut builder = IDLBuilder::new();
-            let result = builder
-                .value_arg(&arg)
-                .and_then(|builder| builder.serialize_to_vec())
-                .map_err(|e| e.into());
-            self.0 = result;
+        match self.0 {
+            None => {
+                let mut builder = IDLBuilder::new();
+                let result = builder
+                    .value_arg(&arg)
+                    .and_then(|builder| builder.serialize_to_vec())
+                    .map_err(|e| e.into());
+                self.0 = Some(result);
+            }
+            Some(_) => panic!("argument is being set for more than once"),
         }
     }
 
-    /// Set the argument as raw, replacing existing arguments.
+    /// Set the argument as raw. Can only be called at most once.
     pub fn set_raw_arg(&mut self, arg: Vec<u8>) {
-        if self.0.is_ok() {
-            self.0 = Ok(arg);
+        match self.0 {
+            None => self.0 = Some(Ok(arg)),
+            Some(_) => panic!("argument is being set for more than once"),
         }
     }
 
     /// Return the argument blob.
     pub fn serialize(self) -> Result<Vec<u8>, AgentError> {
-        self.0
+        self.0.unwrap_or_else(|| Ok(Encode!()?))
     }
 
     /// Resets the argument to an empty message.
@@ -177,7 +182,7 @@ impl Argument {
 
     /// Creates an argument from an arbitrary blob. Equivalent to [`set_raw_arg`](Argument::set_raw_arg).
     pub fn from_raw(raw: Vec<u8>) -> Self {
-        Self(Ok(raw))
+        Self(Some(Ok(raw)))
     }
 
     /// Creates an argument from an existing Candid ArgumentEncoder.
@@ -187,13 +192,7 @@ impl Argument {
             .encode(&mut builder)
             .and_then(|_| builder.serialize_to_vec())
             .map_err(|e| e.into());
-        Self(result)
-    }
-}
-
-impl Default for Argument {
-    fn default() -> Self {
-        Self(Ok(Encode!().unwrap()))
+        Self(Some(result))
     }
 }
 
@@ -224,7 +223,7 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
 }
 
 impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
-    /// Replace the argument with candid argument.
+    /// Set the argument with candid argument. Can be called at most once.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> SyncCallBuilder<'agent, 'canister>
     where
         Argument: CandidType + Sync + Send,
@@ -232,8 +231,16 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
         self.arg.set_idl_arg(arg);
         self
     }
+    /// Set the argument with multiple arguments as tuple. Can be called at most once.
+    pub fn with_args(mut self, tuple: impl ArgumentEncoder) -> SyncCallBuilder<'agent, 'canister> {
+        if self.arg.0.is_some() {
+            panic!("argument is being set for more than once");
+        }
+        self.arg = Argument::from_candid(tuple);
+        self
+    }
 
-    /// Replace the argument with IDLValue argument.
+    /// Set the argument with IDLValue argument. Can be called at most once.
     ///
     /// TODO: make this method unnecessary ([#132](https://github.com/dfinity/agent-rs/issues/132))
     pub fn with_value_arg(mut self, arg: IDLValue) -> SyncCallBuilder<'agent, 'canister> {
@@ -241,8 +248,7 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
         self
     }
 
-    /// Replace the argument with raw argument bytes. This will overwrite the current
-    /// argument set, so calling this method twice will discard the first argument.
+    /// Set the argument with raw argument bytes. Can be called at most once.
     pub fn with_arg_raw(mut self, arg: Vec<u8>) -> SyncCallBuilder<'agent, 'canister> {
         self.arg.set_raw_arg(arg);
         self
@@ -302,7 +308,7 @@ impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
 }
 
 impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
-    /// Replace the argument with Candid argument.
+    /// Set the argument with Candid argument. Can be called at most once.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> AsyncCallBuilder<'agent, 'canister>
     where
         Argument: CandidType + Sync + Send,
@@ -310,9 +316,16 @@ impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
         self.arg.set_idl_arg(arg);
         self
     }
+    /// Set the argument with multiple arguments as tuple. Can be called at most once.
+    pub fn with_args(mut self, tuple: impl ArgumentEncoder) -> AsyncCallBuilder<'agent, 'canister> {
+        if self.arg.0.is_some() {
+            panic!("argument is being set for more than once");
+        }
+        self.arg = Argument::from_candid(tuple);
+        self
+    }
 
-    /// Replace the argument with raw argument bytes. This will overwrite the current
-    /// argument set, so calling this method twice will discard the first argument.
+    /// Set the argument with raw argument bytes. Can be called at most once.
     pub fn with_arg_raw(mut self, arg: Vec<u8>) -> AsyncCallBuilder<'agent, 'canister> {
         self.arg.set_raw_arg(arg);
         self
