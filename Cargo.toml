@@ -10,7 +10,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.26.1"
+version = "0.27.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2021"
 repository = "https://github.com/dfinity/agent-rs"
@@ -21,11 +21,11 @@ rust-version = "1.65.0"
 license = "Apache-2.0"
 
 [workspace.dependencies]
-ic-agent = { path = "ic-agent", version = "0.26.1", default-features = false }
-ic-utils = { path = "ic-utils", version = "0.26.1" }
-ic-certification = { path = "ic-certification", version = "0.26.1" }
+ic-agent = { path = "ic-agent", version = "0.27.0", default-features = false }
+ic-utils = { path = "ic-utils", version = "0.27.0" }
+ic-certification = { path = "ic-certification", version = "0.27.0" }
 
-candid = "0.9.0"
+candid = "0.9.5"
 hex = "0.4.3"
 ring = "0.16.20"
 serde = "1.0.162"

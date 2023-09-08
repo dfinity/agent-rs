@@ -16,10 +16,10 @@ sudo apt-get install --yes bats
 
 # Install Bats support.
 version=0.3.0
-wget https://github.com/ztombol/bats-support/archive/v$version.tar.gz
+curl --location --output bats-support.tar.gz https://github.com/ztombol/bats-support/archive/v$version.tar.gz
 sudo mkdir /usr/local/lib/bats-support
-sudo tar --directory /usr/local/lib/bats-support --extract --file v$version.tar.gz --strip-components 1
-rm v$version.tar.gz
+sudo tar --directory /usr/local/lib/bats-support --extract --file bats-support.tar.gz --strip-components 1
+rm bats-support.tar.gz
 
 # Install DFINITY SDK.
 wget --output-document install-dfx.sh "https://sdk.dfinity.org/install.sh"

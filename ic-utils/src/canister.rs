@@ -1,9 +1,8 @@
 use crate::call::{AsyncCaller, SyncCaller};
 use candid::utils::ArgumentEncoder;
-use candid::{ser::IDLBuilder, types::value::IDLValue, utils::ArgumentDecoder, CandidType};
+use candid::{ser::IDLBuilder, types::value::IDLValue, utils::ArgumentDecoder, CandidType, Encode};
 use ic_agent::{export::Principal, Agent, AgentError, RequestId};
 use std::convert::TryInto;
-use std::fmt;
 use thiserror::Error;
 
 /// An error happened while building a canister.
@@ -130,89 +129,48 @@ impl<'agent> Canister<'agent> {
     }
 }
 
-/// The type of argument passed to a canister call. This can either be a raw argument,
-/// in which case it's a vector of bytes that will be passed verbatim, or an IDL
-/// Builder which will result in an error or a raw argument at the call site.
-///
-/// This enumeration is meant to be private. You should use [Argument] for holding
-/// argument values.
-enum ArgumentType {
-    Raw(Vec<u8>),
-    Idl(IDLBuilder),
-}
-
-impl fmt::Debug for ArgumentType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Raw(v) => f.debug_tuple("ArgumentType::Raw").field(v).finish(),
-            Self::Idl(_) => f.debug_struct("ArgumentType::Idl").finish_non_exhaustive(),
-        }
-    }
-}
-
-/// A builder for a canister argument, allowing you to append elements to an argument tuple with chaining syntax.
-#[derive(Debug)]
-pub struct Argument(Result<ArgumentType, AgentError>);
+/// A buffer to hold canister argument blob.
+#[derive(Debug, Default)]
+pub struct Argument(pub(crate) Option<Result<Vec<u8>, AgentError>>);
 
 impl Argument {
-    /// Add an IDL Argument. If the current value of Argument is Raw, will set the
-    /// result to an error. If the current value is an error, will do nothing.
-    pub fn push_idl_arg<A: CandidType>(&mut self, arg: A) {
+    /// Set an IDL Argument. Can only be called at most once.
+    pub fn set_idl_arg<A: CandidType>(&mut self, arg: A) {
         match self.0 {
-            Ok(ArgumentType::Idl(ref mut idl_builder)) => {
-                let result = idl_builder.arg(&arg);
-                if let Err(e) = result {
-                    self.0 = Err(AgentError::CandidError(Box::new(e)))
-                }
-            }
-            Ok(ArgumentType::Raw(_)) => {
-                self.0 = Err(AgentError::MessageError(
-                    "Cannot overwrite a Raw Argument with a non-raw argument.".to_owned(),
-                ))
-            }
-            _ => {}
+            None => self.0 = Some(Encode!(&arg).map_err(|e| e.into())),
+            Some(_) => panic!("argument is being set more than once"),
         }
     }
 
-    /// Add an IDLValue Argument. If the current value of Argument is Raw, will set the
-    /// result to an error. If the current value is an error, will do nothing.
-    pub fn push_value_arg(&mut self, arg: IDLValue) {
+    /// Set an IDLValue Argument. Can only be called at most once.
+    pub fn set_value_arg(&mut self, arg: IDLValue) {
         match self.0 {
-            Ok(ArgumentType::Idl(ref mut idl_builder)) => {
-                let result = idl_builder.value_arg(&arg);
-                if let Err(e) = result {
-                    self.0 = Err(AgentError::CandidError(Box::new(e)))
-                }
+            None => {
+                let mut builder = IDLBuilder::new();
+                let result = builder
+                    .value_arg(&arg)
+                    .and_then(|builder| builder.serialize_to_vec())
+                    .map_err(|e| e.into());
+                self.0 = Some(result);
             }
-            Ok(ArgumentType::Raw(_)) => {
-                self.0 = Err(AgentError::MessageError(
-                    "Cannot overwrite a Raw Argument with a non-raw argument.".to_owned(),
-                ))
-            }
-            _ => {}
+            Some(_) => panic!("argument is being set more than once"),
         }
     }
 
-    /// Set the argument as raw, replacing any value that was there before. If the
-    /// current argument was an error, does nothing.
+    /// Set the argument as raw. Can only be called at most once.
     pub fn set_raw_arg(&mut self, arg: Vec<u8>) {
-        if self.0.is_ok() {
-            self.0 = Ok(ArgumentType::Raw(arg));
-        }
-    }
-
-    /// Encodes the completed argument into an IDL blob.
-    pub fn serialize(self) -> Result<Vec<u8>, AgentError> {
         match self.0 {
-            Ok(ArgumentType::Idl(mut idl_builder)) => idl_builder
-                .serialize_to_vec()
-                .map_err(|e| AgentError::CandidError(Box::new(e))),
-            Ok(ArgumentType::Raw(vec)) => Ok(vec),
-            Err(e) => Err(e),
+            None => self.0 = Some(Ok(arg)),
+            Some(_) => panic!("argument is being set more than once"),
         }
     }
 
-    /// Resets the argument to an empty builder.
+    /// Return the argument blob.
+    pub fn serialize(self) -> Result<Vec<u8>, AgentError> {
+        self.0.unwrap_or_else(|| Ok(Encode!()?))
+    }
+
+    /// Resets the argument to an empty message.
     pub fn reset(&mut self) {
         *self = Default::default();
     }
@@ -224,24 +182,17 @@ impl Argument {
 
     /// Creates an argument from an arbitrary blob. Equivalent to [`set_raw_arg`](Argument::set_raw_arg).
     pub fn from_raw(raw: Vec<u8>) -> Self {
-        Self(Ok(ArgumentType::Raw(raw)))
+        Self(Some(Ok(raw)))
     }
 
     /// Creates an argument from an existing Candid ArgumentEncoder.
     pub fn from_candid(tuple: impl ArgumentEncoder) -> Self {
         let mut builder = IDLBuilder::new();
-        Self(
-            tuple
-                .encode(&mut builder)
-                .map(|_| ArgumentType::Idl(builder))
-                .map_err(|e| AgentError::CandidError(Box::new(e))),
-        )
-    }
-}
-
-impl Default for Argument {
-    fn default() -> Self {
-        Self(Ok(ArgumentType::Idl(IDLBuilder::new())))
+        let result = tuple
+            .encode(&mut builder)
+            .and_then(|_| builder.serialize_to_vec())
+            .map_err(|e| e.into());
+        Self(Some(result))
     }
 }
 
@@ -272,28 +223,32 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
 }
 
 impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
-    /// Add an argument to the candid argument list. This requires Candid arguments, if
-    /// there is a raw argument set (using [`with_arg_raw`](SyncCallBuilder::with_arg_raw)),
-    /// this will fail.
+    /// Set the argument with candid argument. Can be called at most once.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> SyncCallBuilder<'agent, 'canister>
     where
         Argument: CandidType + Sync + Send,
     {
-        self.arg.push_idl_arg(arg);
+        self.arg.set_idl_arg(arg);
+        self
+    }
+    /// Set the argument with multiple arguments as tuple. Can be called at most once.
+    pub fn with_args(mut self, tuple: impl ArgumentEncoder) -> SyncCallBuilder<'agent, 'canister> {
+        if self.arg.0.is_some() {
+            panic!("argument is being set more than once");
+        }
+        self.arg = Argument::from_candid(tuple);
         self
     }
 
-    /// Add an argument to the candid argument list. This requires Candid arguments, if
-    /// there is a raw argument set (using [`with_arg_raw`](SyncCallBuilder::with_arg_raw)), this will fail.
+    /// Set the argument with IDLValue argument. Can be called at most once.
     ///
     /// TODO: make this method unnecessary ([#132](https://github.com/dfinity/agent-rs/issues/132))
     pub fn with_value_arg(mut self, arg: IDLValue) -> SyncCallBuilder<'agent, 'canister> {
-        self.arg.push_value_arg(arg);
+        self.arg.set_value_arg(arg);
         self
     }
 
-    /// Replace the argument with raw argument bytes. This will overwrite the current
-    /// argument set, so calling this method twice will discard the first argument.
+    /// Set the argument with raw argument bytes. Can be called at most once.
     pub fn with_arg_raw(mut self, arg: Vec<u8>) -> SyncCallBuilder<'agent, 'canister> {
         self.arg.set_raw_arg(arg);
         self
@@ -353,18 +308,24 @@ impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
 }
 
 impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
-    /// Add an argument to the candid argument list. This requires Candid arguments, if
-    /// there is a raw argument set (using [`with_arg_raw`](AsyncCallBuilder::with_arg_raw)), this will fail.
+    /// Set the argument with Candid argument. Can be called at most once.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> AsyncCallBuilder<'agent, 'canister>
     where
         Argument: CandidType + Sync + Send,
     {
-        self.arg.push_idl_arg(arg);
+        self.arg.set_idl_arg(arg);
+        self
+    }
+    /// Set the argument with multiple arguments as tuple. Can be called at most once.
+    pub fn with_args(mut self, tuple: impl ArgumentEncoder) -> AsyncCallBuilder<'agent, 'canister> {
+        if self.arg.0.is_some() {
+            panic!("argument is being set more than once");
+        }
+        self.arg = Argument::from_candid(tuple);
         self
     }
 
-    /// Replace the argument with raw argument bytes. This will overwrite the current
-    /// argument set, so calling this method twice will discard the first argument.
+    /// Set the argument with raw argument bytes. Can be called at most once.
     pub fn with_arg_raw(mut self, arg: Vec<u8>) -> AsyncCallBuilder<'agent, 'canister> {
         self.arg.set_raw_arg(arg);
         self
