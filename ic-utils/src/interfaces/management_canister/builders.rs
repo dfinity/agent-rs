@@ -271,12 +271,12 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                 specified_id: self.specified_id,
             };
             self.canister
-                .update_(MgmtMethod::ProvisionalCreateCanisterWithCycles.as_ref())
+                .update(MgmtMethod::ProvisionalCreateCanisterWithCycles.as_ref())
                 .with_arg(in_arg)
                 .with_effective_canister_id(self.effective_canister_id)
         } else {
             self.canister
-                .update_(MgmtMethod::CreateCanister.as_ref())
+                .update(MgmtMethod::CreateCanister.as_ref())
                 .with_arg(CanisterSettings {
                     controllers,
                     compute_allocation,
@@ -423,7 +423,7 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
     pub fn build(self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
         Ok(self
             .canister
-            .update_(MgmtMethod::InstallCode.as_ref())
+            .update(MgmtMethod::InstallCode.as_ref())
             .with_arg(CanisterInstall {
                 mode: self.mode.unwrap_or(InstallMode::Install),
                 canister_id: self.canister_id,
@@ -627,7 +627,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
 
         Ok(self
             .canister
-            .update_(MgmtMethod::UpdateSettings.as_ref())
+            .update(MgmtMethod::UpdateSettings.as_ref())
             .with_arg(In {
                 canister_id: self.canister_id,
                 settings: CanisterSettings {

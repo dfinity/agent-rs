@@ -87,7 +87,13 @@ pub struct Canister<'agent> {
 
 impl<'agent> Canister<'agent> {
     /// Get the canister ID of this canister.
+    /// Prefer using [`canister_id`](Canister::canister_id) instead.
     pub fn canister_id_<'canister: 'agent>(&'canister self) -> &Principal {
+        &self.canister_id
+    }
+
+    /// Get the canister ID of this canister.
+    pub fn canister_id<'canister: 'agent>(&'canister self) -> &Principal {
         &self.canister_id
     }
 
@@ -99,8 +105,26 @@ impl<'agent> Canister<'agent> {
         AsyncCallBuilder::new(self, method_name)
     }
 
+    /// Create an AsyncCallBuilder to do an update call.
+    /// Prefer using [`update`](Canister::update) instead.
+    pub fn update<'canister: 'agent>(
+        &'canister self,
+        method_name: &str,
+    ) -> AsyncCallBuilder<'agent, 'canister> {
+        AsyncCallBuilder::new(self, method_name)
+    }
+
     /// Create a SyncCallBuilder to do a query call.
+    /// Prefer using [`query`](Canister::query) instead.
     pub fn query_<'canister: 'agent>(
+        &'canister self,
+        method_name: &str,
+    ) -> SyncCallBuilder<'agent, 'canister> {
+        SyncCallBuilder::new(self, method_name)
+    }
+
+    /// Create a SyncCallBuilder to do a query call.
+    pub fn query<'canister: 'agent>(
         &'canister self,
         method_name: &str,
     ) -> SyncCallBuilder<'agent, 'canister> {
@@ -116,7 +140,15 @@ impl<'agent> Canister<'agent> {
     }
 
     /// Creates a copy of this canister, changing the canister ID to the provided principal.
+    /// Prefer using [`clone_with`](Canister::clone_with) instead.
     pub fn clone_with_(&self, id: Principal) -> Self {
+        Self {
+            agent: self.agent,
+            canister_id: id,
+        }
+    }
+    /// Creates a copy of this canister, changing the canister ID to the provided principal.
+    pub fn clone_with(&self, id: Principal) -> Self {
         Self {
             agent: self.agent,
             canister_id: id,
@@ -216,7 +248,7 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
         Self {
             canister,
             method_name: method_name.into(),
-            effective_canister_id: canister.canister_id_().to_owned(),
+            effective_canister_id: canister.canister_id().to_owned(),
             arg: Default::default(),
         }
     }
@@ -301,7 +333,7 @@ impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
         Self {
             canister,
             method_name: method_name.to_string(),
-            effective_canister_id: canister.canister_id_().to_owned(),
+            effective_canister_id: canister.canister_id().to_owned(),
             arg: Default::default(),
         }
     }
@@ -431,7 +463,7 @@ mod tests {
             .unwrap();
 
         assert!(canister
-            .update_("hello")
+            .update("hello")
             .build::<()>()
             .call_and_wait()
             .await
