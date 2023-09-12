@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 * The `Unknown` lookup of a request_status path in a certificate results in an `AgentError` (the IC returns `Absent` for non-existing paths).
+* For `Canister` type, added methods with no trailing underscore: update(), query(), canister_id(), clone_with()
 
 ## [0.27.0] - 2023-08-30
 

@@ -140,7 +140,7 @@ impl<'agent> ManagementCanister<'agent> {
             canister_id: Principal,
         }
 
-        self.update_(MgmtMethod::CanisterStatus.as_ref())
+        self.update(MgmtMethod::CanisterStatus.as_ref())
             .with_arg(In {
                 canister_id: *canister_id,
             })
@@ -167,7 +167,7 @@ impl<'agent> ManagementCanister<'agent> {
             canister_id: Principal,
         }
 
-        self.update_(MgmtMethod::DepositCycles.as_ref())
+        self.update(MgmtMethod::DepositCycles.as_ref())
             .with_arg(Argument {
                 canister_id: *canister_id,
             })
@@ -185,7 +185,7 @@ impl<'agent> ManagementCanister<'agent> {
             canister_id: Principal,
         }
 
-        self.update_(MgmtMethod::DeleteCanister.as_ref())
+        self.update(MgmtMethod::DeleteCanister.as_ref())
             .with_arg(Argument {
                 canister_id: *canister_id,
             })
@@ -208,7 +208,7 @@ impl<'agent> ManagementCanister<'agent> {
             amount: u64,
         }
 
-        self.update_(MgmtMethod::ProvisionalTopUpCanister.as_ref())
+        self.update(MgmtMethod::ProvisionalTopUpCanister.as_ref())
             .with_arg(Argument {
                 canister_id: *canister_id,
                 amount,
@@ -221,7 +221,7 @@ impl<'agent> ManagementCanister<'agent> {
     /// The return value is unknown to any part of the IC at time of the submission of this call.
     /// A new return value is generated for each call to this method.
     pub fn raw_rand<'canister: 'agent>(&'canister self) -> impl 'agent + AsyncCall<(Vec<u8>,)> {
-        self.update_(MgmtMethod::RawRand.as_ref())
+        self.update(MgmtMethod::RawRand.as_ref())
             .build()
             .map(|result: (Vec<u8>,)| (result.0,))
     }
@@ -236,7 +236,7 @@ impl<'agent> ManagementCanister<'agent> {
             canister_id: Principal,
         }
 
-        self.update_(MgmtMethod::StartCanister.as_ref())
+        self.update(MgmtMethod::StartCanister.as_ref())
             .with_arg(Argument {
                 canister_id: *canister_id,
             })
@@ -254,7 +254,7 @@ impl<'agent> ManagementCanister<'agent> {
             canister_id: Principal,
         }
 
-        self.update_(MgmtMethod::StopCanister.as_ref())
+        self.update(MgmtMethod::StopCanister.as_ref())
             .with_arg(Argument {
                 canister_id: *canister_id,
             })
@@ -278,7 +278,7 @@ impl<'agent> ManagementCanister<'agent> {
             canister_id: Principal,
         }
 
-        self.update_(MgmtMethod::UninstallCode.as_ref())
+        self.update(MgmtMethod::UninstallCode.as_ref())
             .with_arg(Argument {
                 canister_id: *canister_id,
             })
