@@ -472,7 +472,7 @@ impl<'agent> HttpRequestCanister<'agent> {
         T: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
         C: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
     {
-        self.update_("http_request_update")
+        self.update("http_request_update")
             .with_arg(HttpUpdateRequest {
                 method,
                 url,
