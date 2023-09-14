@@ -4,7 +4,6 @@ members = [
     "icx-cert",
     "ic-identity-hsm",
     "ic-utils",
-    "ic-certification",
     "icx",
     "ref-tests",
 ]
@@ -23,8 +22,8 @@ license = "Apache-2.0"
 [workspace.dependencies]
 ic-agent = { path = "ic-agent", version = "0.27.0", default-features = false }
 ic-utils = { path = "ic-utils", version = "0.27.0" }
-ic-certification = { path = "ic-certification", version = "0.27.0" }
 
+ic-certification = "0.27.0"
 candid = "0.9.5"
 hex = "0.4.3"
 ring = "0.16.20"
