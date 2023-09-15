@@ -4,7 +4,7 @@ use clap::{crate_authors, crate_version, Parser};
 mod pprint;
 
 #[derive(Parser)]
-#[clap(
+#[command(
     version = crate_version!(),
     author = crate_authors!(),
 )]
@@ -15,12 +15,7 @@ enum Command {
         url: String,
 
         /// Specifies one or more encodings to accept.
-        #[clap(
-            long,
-            multiple_occurrences(true),
-            multiple_values(true),
-            number_of_values(1)
-        )]
+        #[arg(long)]
         accept_encoding: Option<Vec<String>>,
     },
 }
@@ -31,5 +26,16 @@ fn main() -> Result<()> {
             url,
             accept_encoding,
         } => pprint::pprint(url, accept_encoding),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Command;
+    use clap::CommandFactory;
+
+    #[test]
+    fn valid_command() {
+        Command::command().debug_assert();
     }
 }
