@@ -4,6 +4,7 @@ members = [
     "icx-cert",
     "ic-identity-hsm",
     "ic-utils",
+    "ic-transport-types",
     "icx",
     "ref-tests",
 ]
@@ -22,15 +23,18 @@ license = "Apache-2.0"
 [workspace.dependencies]
 ic-agent = { path = "ic-agent", version = "0.27.0", default-features = false }
 ic-utils = { path = "ic-utils", version = "0.27.0" }
+ic-transport-types = { path = "ic-transport-types", version = "0.27.0" }
 
 ic-certification = "0.27.0"
 candid = "0.9.5"
 hex = "0.4.3"
+leb128 = "0.2.5"
 ring = "0.16.20"
 serde = "1.0.162"
 serde_bytes = "0.11.9"
 serde_cbor = "0.11.2"
 serde_json = "1.0.96"
+serde_repr = "0.1.12"
 sha2 = "0.10.6"
 thiserror = "1.0.40"
 time = "0.3"

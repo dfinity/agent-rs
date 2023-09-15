@@ -1,22 +1,37 @@
+//! Types related to the [HTTP transport](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-interface)
+//! for the [Internet Computer](https://internetcomputer.org). Primarily used through [`ic-agent`](https://docs.rs/ic-agent).
+
+#![warn(missing_docs, missing_debug_implementations)]
+#![deny(elided_lifetimes_in_paths)]
+
 use std::borrow::Cow;
 
-use crate::{export::Principal, to_request_id, AgentError, RequestId};
+use candid::Principal;
 use ic_certification::Label;
+pub use request_id::{to_request_id, RequestId, RequestIdError};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use thiserror::Error;
 
+mod request_id;
+pub mod signed;
+
+/// The authentication envelope, containing the contents and their signature.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct Envelope<'a> {
+    /// The data that is signed by the caller.
     pub content: Cow<'a, EnvelopeContent>,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(with = "serde_bytes")]
+    /// The public key of the self-signing principal this request is from.
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "serde_bytes")]
     pub sender_pubkey: Option<Vec<u8>>,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(with = "serde_bytes")]
+    /// A cryptographic signature authorizing the request. Not necessarily made by `sender_pubkey`; when delegations are involved,
+    /// `sender_sig` is the tail of the delegation chain, and `sender_pubkey` is the head.
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "serde_bytes")]
     pub sender_sig: Option<Vec<u8>>,
+    /// The chain of delegations connecting `sender_pubkey` to `sender_sig`, and in that order.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_delegation: Option<Vec<Delegation>>,
 }
 
 /// The content of an IC ingress message, not including any signature information.
@@ -89,70 +104,26 @@ impl EnvelopeContent {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "request_type")]
-pub enum SyncContent {
-    #[serde(rename = "read_state")]
-    ReadStateRequest {
-        ingress_expiry: u64,
-        sender: Principal,
-        paths: Vec<Vec<Label>>,
-    },
-    #[serde(rename = "query")]
-    QueryRequest {
-        ingress_expiry: u64,
-        sender: Principal,
-        canister_id: Principal,
-        method_name: String,
-        #[serde(with = "serde_bytes")]
-        arg: Vec<u8>,
-    },
-}
-
+/// The response from a request to the `read_state` endpoint.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct ReadStateResponse {
+    /// A [certificate](https://internetcomputer.org/docs/current/references/ic-interface-spec#certificate), containing
+    /// part of the system state tree as well as a signature to verify its authenticity.
+    /// Use the [`ic-certification`](https://docs.rs/ic-certification) crate to process it.
     #[serde(with = "serde_bytes")]
     pub certificate: Vec<u8>,
 }
 
+/// Possible responses to a query call.
 #[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "status")]
-pub enum Status {
-    #[serde(rename = "unknown")]
-    Unknown {},
-    #[serde(rename = "received")]
-    Received {},
-    #[serde(rename = "processing")]
-    Processing {},
-    #[serde(rename = "replied")]
-    Replied { reply: RequestStatusResponseReplied },
-    #[serde(rename = "rejected")]
-    Rejected {
-        reject_code: u64,
-        reject_message: String,
-    },
-    #[serde(rename = "done")]
-    Done {},
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(untagged)]
-pub enum RequestStatusResponseReplied {
-    CallReply(CallReply),
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CallReply {
-    #[serde(with = "serde_bytes")]
-    pub arg: Vec<u8>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "status")]
+#[serde(tag = "status", rename_all = "snake_case")]
 pub enum QueryResponse {
-    #[serde(rename = "replied")]
-    Replied { reply: CallReply },
-    #[serde(rename = "rejected")]
+    /// The request was successfully replied to.
+    Replied {
+        /// The reply from the canister.
+        reply: ReplyResponse,
+    },
+    /// The request was rejected.
     Rejected(RejectResponse),
 }
 
@@ -187,19 +158,81 @@ pub enum RejectCode {
 }
 
 impl TryFrom<u64> for RejectCode {
-    type Error = AgentError;
+    type Error = InvalidRejectCodeError;
 
-    fn try_from(value: u64) -> Result<Self, AgentError> {
+    fn try_from(value: u64) -> Result<Self, InvalidRejectCodeError> {
         match value {
             1 => Ok(RejectCode::SysFatal),
             2 => Ok(RejectCode::SysTransient),
             3 => Ok(RejectCode::DestinationInvalid),
             4 => Ok(RejectCode::CanisterReject),
             5 => Ok(RejectCode::CanisterError),
-            _ => Err(AgentError::MessageError(format!(
-                "Received an invalid reject code {}",
-                value
-            ))),
+            _ => Err(InvalidRejectCodeError(value)),
         }
+    }
+}
+
+/// Error returned from `RejectCode::try_from`.
+#[derive(Debug, Error)]
+#[error("Invalid reject code {0}")]
+pub struct InvalidRejectCodeError(pub u64);
+
+/// The response of `/api/v2/canister/<effective_canister_id>/read_state` with `request_status` request type.
+///
+/// See [the HTTP interface specification](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call-overview) for more details.
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Clone)]
+pub enum RequestStatusResponse {
+    /// The status of the request is unknown.
+    Unknown,
+    /// The request has been received, and will probably get processed.
+    Received,
+    /// The request is currently being processed.
+    Processing,
+    /// The request has been successfully replied to.
+    Replied(ReplyResponse),
+    /// The request has been rejected.
+    Rejected(RejectResponse),
+    /// The call has been completed, and it has been long enough that the reply/reject data has been purged, but the call has not expired yet.
+    Done,
+}
+
+/// A successful reply to a canister call.
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Clone, Serialize, Deserialize)]
+pub struct ReplyResponse {
+    /// The reply message, likely Candid-encoded.
+    #[serde(with = "serde_bytes")]
+    pub arg: Vec<u8>,
+}
+
+/// A delegation from one key to another.
+///
+/// If key A signs a delegation containing key B, then key B may be used to
+/// authenticate as key A's corresponding principal(s).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Delegation {
+    /// The delegated-to key.
+    #[serde(with = "serde_bytes")]
+    pub pubkey: Vec<u8>,
+    /// A nanosecond timestamp after which this delegation is no longer valid.
+    pub expiration: u64,
+    /// If present, this delegation only applies to requests sent to one of these canisters.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub targets: Option<Vec<Principal>>,
+    /// If present, this delegation only applies to requests originating from one of these principals.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub senders: Option<Vec<Principal>>,
+}
+
+const IC_REQUEST_DELEGATION_DOMAIN_SEPARATOR: &[u8] = b"\x1Aic-request-auth-delegation";
+
+impl Delegation {
+    /// Returns the signable form of the delegation, by running it through [`to_request_id`]
+    /// and prepending `\x1Aic-request-auth-delegation` to the result.
+    pub fn signable(&self) -> Vec<u8> {
+        let hash = to_request_id(self).unwrap();
+        let mut bytes = Vec::with_capacity(59);
+        bytes.extend_from_slice(IC_REQUEST_DELEGATION_DOMAIN_SEPARATOR);
+        bytes.extend_from_slice(hash.as_slice());
+        bytes
     }
 }

@@ -7,7 +7,7 @@ use candid::{
 };
 use clap::{crate_authors, crate_version, Parser};
 use ic_agent::{
-    agent::{self, signed::SignedUpdate, Replied},
+    agent::{self, signed::SignedUpdate},
     agent::{
         agent_error::HttpErrorPayload,
         signed::{SignedQuery, SignedRequestStatus},
@@ -561,10 +561,8 @@ async fn main() -> Result<()> {
                     .context("Got an error when send the signed request_status call")?;
 
                 match response {
-                    agent::RequestStatusResponse::Replied {
-                        reply: Replied::CallReplied(blob),
-                    } => {
-                        print_idl_blob(&blob, &ArgType::Idl, &None)
+                    agent::RequestStatusResponse::Replied(response) => {
+                        print_idl_blob(&response.arg, &ArgType::Idl, &None)
                             .context("Failed to print request_status result")?;
                     }
                     agent::RequestStatusResponse::Rejected(replica_error) => {
