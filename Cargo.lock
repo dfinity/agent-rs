@@ -1006,11 +1006,12 @@ dependencies = [
 [[package]]
 name = "ic-certification"
 version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1120544357d4d2f7540dd5290b952c6305afe24c9620d423e2239560adca2535"
 dependencies = [
  "hex",
  "serde",
  "serde_bytes",
- "serde_cbor",
  "sha2 0.10.7",
 ]
 
