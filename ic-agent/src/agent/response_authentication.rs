@@ -1,6 +1,7 @@
-use crate::agent::{RejectCode, RejectResponse, Replied, RequestStatusResponse};
+use crate::agent::{RejectCode, RejectResponse, RequestStatusResponse};
 use crate::{export::Principal, AgentError, RequestId};
 use ic_certification::{certificate::Certificate, hash_tree::Label, LookupResult};
+use ic_transport_types::ReplyResponse;
 use std::str::from_utf8;
 
 const DER_PREFIX: &[u8; 37] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00";
@@ -106,7 +107,7 @@ pub(crate) fn lookup_reject_code<Storage: AsRef<[u8]>>(
     let code = lookup_value(certificate, path)?;
     let mut readable = code;
     let code_digit = leb128::read::unsigned(&mut readable)?;
-    RejectCode::try_from(code_digit)
+    Ok(RejectCode::try_from(code_digit)?)
 }
 
 pub(crate) fn lookup_reject_message<Storage: AsRef<[u8]>>(
@@ -132,8 +133,8 @@ pub(crate) fn lookup_reply<Storage: AsRef<[u8]>>(
         "reply".as_bytes(),
     ];
     let reply_data = lookup_value(certificate, path)?;
-    let reply = Replied::CallReplied(Vec::from(reply_data));
-    Ok(RequestStatusResponse::Replied { reply })
+    let arg = Vec::from(reply_data);
+    Ok(RequestStatusResponse::Replied(ReplyResponse { arg }))
 }
 
 /// The path to [`lookup_value`]

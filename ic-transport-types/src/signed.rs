@@ -1,7 +1,7 @@
 //! Types representing signed messages.
 
-use crate::{export::Principal, RequestId};
-
+use crate::request_id::RequestId;
+use candid::Principal;
 use serde::{Deserialize, Serialize};
 
 /// A signed query request message. Produced by [`QueryBuilder::sign`](super::QueryBuilder::sign).
