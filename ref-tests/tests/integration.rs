@@ -457,8 +457,8 @@ fn wallet_helper_functions() {
 mod sign_send {
     use ic_agent::{
         agent::{
-            signed_query_inspect, signed_request_status_inspect, signed_update_inspect, Replied,
-            RequestStatusResponse,
+            signed_query_inspect, signed_request_status_inspect, signed_update_inspect,
+            ReplyResponse, RequestStatusResponse,
         },
         AgentError,
     };
@@ -543,7 +543,7 @@ mod sign_send {
                 .await?;
 
             assert!(
-                matches!(response, RequestStatusResponse::Replied{reply: Replied::CallReplied(result)} if result == b"hello")
+                matches!(response, RequestStatusResponse::Replied(ReplyResponse { arg: result }) if result == b"hello")
             );
             Ok(())
         })

@@ -1008,6 +1008,7 @@ dependencies = [
  "hyper",
  "hyper-rustls",
  "ic-certification",
+ "ic-transport-types",
  "ic-verify-bls-signature",
  "js-sys",
  "k256",
@@ -1058,6 +1059,22 @@ dependencies = [
  "pkcs11",
  "sha2 0.10.7",
  "simple_asn1",
+ "thiserror",
+]
+
+[[package]]
+name = "ic-transport-types"
+version = "0.27.0"
+dependencies = [
+ "candid",
+ "hex",
+ "ic-certification",
+ "leb128",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "serde_repr",
+ "sha2 0.10.7",
  "thiserror",
 ]
 

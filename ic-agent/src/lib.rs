@@ -116,7 +116,6 @@ compile_error!("Feature `hyper` cannot be used from WASM.");
 pub mod agent;
 pub mod export;
 pub mod identity;
-pub mod request_id;
 
 #[doc(inline)]
 pub use agent::{
@@ -124,9 +123,9 @@ pub use agent::{
     NonceFactory, NonceGenerator,
 };
 #[doc(inline)]
-pub use identity::{Identity, Signature};
+pub use ic_transport_types::{to_request_id, RequestId, RequestIdError};
 #[doc(inline)]
-pub use request_id::{to_request_id, RequestId, RequestIdError};
+pub use identity::{Identity, Signature};
 
 // Re-export from ic_certification for backward compatibility.
 pub use ic_certification::{hash_tree, Certificate};

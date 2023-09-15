@@ -22,9 +22,10 @@ hex = { workspace = true }
 http = "0.2.6"
 http-body = "0.4.5"
 ic-certification = { workspace = true }
+ic-transport-types = { workspace = true }
 ic-verify-bls-signature = "0.1"
 k256 = { version = "0.13.1", features = ["pem"] }
-leb128 = "0.2.5"
+leb128 = { workspace = true }
 pkcs8 = { version = "0.10.2", features = ["std"] }
 sec1 = { version = "0.7.2", features = ["pem"] }
 rand = "0.8.5"
@@ -32,7 +33,7 @@ ring = { workspace = true, features = ["std"] }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
 serde_cbor = { workspace = true }
-serde_repr = "0.1.12"
+serde_repr = { workspace = true }
 sha2 = { workspace = true }
 simple_asn1 = "0.6.1"
 thiserror = { workspace = true }
