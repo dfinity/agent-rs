@@ -147,6 +147,66 @@ try_from_freezing_threshold_decl!(i64);
 try_from_freezing_threshold_decl!(i128);
 try_from_freezing_threshold_decl!(u128);
 
+/// An error encountered when attempting to construct a [`ReservedCyclesLimit`].
+#[derive(Error, Debug)]
+pub enum ReservedCyclesLimitError {
+    /// The provided value was not in the range [0, 2^128-1].
+    #[error("ReservedCyclesLimit must be between 0 and 2^128-1, inclusively. Got {0}.")]
+    InvalidReservedCyclesLimit(i128),
+}
+
+/// A reserved cycles limit for a canister. Can be anywhere from 0 to 2^128-1 inclusive.
+///
+/// This represents the upper limit of reserved_cycles for the canister.
+///
+/// Reserved cycles are cycles that the system sets aside for future use by the canister.
+/// If a subnet's storage exceeds 450 GiB, then every time a canister allocates new storage bytes,
+/// the system sets aside some amount of cycles from the main balance of the canister.
+/// These reserved cycles will be used to cover future payments for the newly allocated bytes.
+/// The reserved cycles are not transferable and the amount of reserved cycles depends on how full the subnet is.
+///
+/// A reserved cycles limit of 0 disables the reservation mechanism for the canister.
+/// If so disabled, the canister will trap when it tries to allocate storage, if the subnet's usage exceeds 450 GiB.
+#[derive(Copy, Clone, Debug)]
+pub struct ReservedCyclesLimit(u128);
+
+impl std::convert::From<ReservedCyclesLimit> for u128 {
+    fn from(reserved_cycles_limit: ReservedCyclesLimit) -> Self {
+        reserved_cycles_limit.0
+    }
+}
+
+#[allow(unused_comparisons)]
+macro_rules! try_from_reserved_cycles_limit_decl {
+    ( $t: ty ) => {
+        impl std::convert::TryFrom<$t> for ReservedCyclesLimit {
+            type Error = ReservedCyclesLimitError;
+
+            fn try_from(value: $t) -> Result<Self, Self::Error> {
+                #[allow(unused_comparisons)]
+                if value < 0 {
+                    Err(ReservedCyclesLimitError::InvalidReservedCyclesLimit(
+                        value as i128,
+                    ))
+                } else {
+                    Ok(Self(value as u128))
+                }
+            }
+        }
+    };
+}
+
+try_from_reserved_cycles_limit_decl!(u8);
+try_from_reserved_cycles_limit_decl!(u16);
+try_from_reserved_cycles_limit_decl!(u32);
+try_from_reserved_cycles_limit_decl!(u64);
+try_from_reserved_cycles_limit_decl!(i8);
+try_from_reserved_cycles_limit_decl!(i16);
+try_from_reserved_cycles_limit_decl!(i32);
+try_from_reserved_cycles_limit_decl!(i64);
+try_from_reserved_cycles_limit_decl!(i128);
+try_from_reserved_cycles_limit_decl!(u128);
+
 #[test]
 #[allow(clippy::useless_conversion)]
 fn can_convert_compute_allocation() {
@@ -204,4 +264,35 @@ fn can_convert_freezing_threshold() {
 
     let ft = FreezingThreshold(100);
     let _ft_ft: FreezingThreshold = FreezingThreshold::try_from(ft).unwrap();
+}
+
+#[test]
+#[allow(clippy::useless_conversion)]
+fn can_convert_reserved_cycles_limit() {
+    use std::convert::{TryFrom, TryInto};
+
+    // This is more of a compiler test than an actual test.
+    let _ft_u8: ReservedCyclesLimit = 1u8.try_into().unwrap();
+    let _ft_u16: ReservedCyclesLimit = 1u16.try_into().unwrap();
+    let _ft_u32: ReservedCyclesLimit = 1u32.try_into().unwrap();
+    let _ft_u64: ReservedCyclesLimit = 1u64.try_into().unwrap();
+    let _ft_i8: ReservedCyclesLimit = 1i8.try_into().unwrap();
+    let _ft_i16: ReservedCyclesLimit = 1i16.try_into().unwrap();
+    let _ft_i32: ReservedCyclesLimit = 1i32.try_into().unwrap();
+    let _ft_i64: ReservedCyclesLimit = 1i64.try_into().unwrap();
+    let _ft_u128: ReservedCyclesLimit = 1i128.try_into().unwrap();
+    let _ft_i128: ReservedCyclesLimit = 1u128.try_into().unwrap();
+
+    assert!(matches!(
+        ReservedCyclesLimit::try_from(-4).unwrap_err(),
+        ReservedCyclesLimitError::InvalidReservedCyclesLimit(-4)
+    ));
+
+    assert_eq!(
+        ReservedCyclesLimit::try_from(2u128.pow(127)+6).unwrap().0,
+        170141183460469231731687303715884105734u128
+    );
+
+    let ft = ReservedCyclesLimit(100);
+    let _ft_ft: ReservedCyclesLimit = ReservedCyclesLimit::try_from(ft).unwrap();
 }

@@ -633,6 +633,7 @@ mod management_canister {
                     compute_allocation: None,
                     memory_allocation: None,
                     freezing_threshold: None,
+                    reserved_cycles_limit: None,
                 },
             };
 
@@ -867,6 +868,7 @@ mod extras {
                 .with_compute_allocation(1_u64)
                 .with_memory_allocation(1024 * 1024_u64)
                 .with_freezing_threshold(1_000_000_u64)
+                .with_reserved_cycles_limit(2_500_800_000_000u128)
                 .call_and_wait()
                 .await?;
 
@@ -879,6 +881,10 @@ mod extras {
             assert_eq!(
                 result.0.settings.freezing_threshold,
                 Nat::from(1_000_000_u64)
+            );
+            assert_eq!(
+                result.0.settings.reserved_cycles_limit,
+                Some(Nat::from(2_500_800_000_000u128))
             );
 
             Ok(())
@@ -947,6 +953,78 @@ mod extras {
                 .call_and_wait()
                 .await
                 .is_err());
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn create_with_reserved_cycles_limit() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
+                .with_reserved_cycles_limit(2u128.pow(70))
+                .call_and_wait()
+                .await
+                .unwrap();
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.reserved_cycles_limit,
+                Some(Nat::from(2u128.pow(70)))
+            );
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn update_reserved_cycles_limit() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
+                .with_effective_canister_id(get_effective_canister_id())
+                .with_reserved_cycles_limit(2_500_800_000_000u128)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.reserved_cycles_limit,
+                Some(Nat::from(2_500_800_000_000u128))
+            );
+
+            ic00.update_settings(&canister_id)
+                .with_reserved_cycles_limit(3_400_200_000_000u128)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.reserved_cycles_limit,
+                Some(Nat::from(3_400_200_000_000u128))
+            );
+
+            let no_change: Option<u128> = None;
+            ic00.update_settings(&canister_id)
+                .with_optional_reserved_cycles_limit(no_change)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.reserved_cycles_limit,
+                Some(Nat::from(3_400_200_000_000u128))
+            );
 
             Ok(())
         })
