@@ -1,8 +1,11 @@
 //! Types and traits dealing with identity across the Internet Computer.
+use std::sync::Arc;
+
 use crate::{agent::EnvelopeContent, export::Principal};
 
 pub(crate) mod anonymous;
 pub(crate) mod basic;
+pub(crate) mod delegated;
 pub(crate) mod secp256k1;
 
 #[cfg(feature = "pem")]
@@ -13,7 +16,9 @@ pub use anonymous::AnonymousIdentity;
 #[doc(inline)]
 pub use basic::BasicIdentity;
 #[doc(inline)]
-pub use ic_transport_types::Delegation;
+pub use delegated::DelegatedIdentity;
+#[doc(inline)]
+pub use ic_transport_types::{Delegation, SignedDelegation};
 #[doc(inline)]
 pub use secp256k1::Secp256k1Identity;
 
@@ -27,6 +32,8 @@ pub struct Signature {
     pub public_key: Option<Vec<u8>>,
     /// The signature bytes.
     pub signature: Option<Vec<u8>>,
+    /// A list of delegations connecting `public_key` to the key that signed `signature`, and in that order.
+    pub delegations: Option<Vec<SignedDelegation>>,
 }
 
 /// An `Identity` produces [`Signatures`](Signature) for requests or delegations. It knows or
@@ -67,4 +74,44 @@ pub trait Identity: Send + Sync {
         let _ = content; // silence unused warning
         Err(String::from("unsupported"))
     }
+
+    /// A list of signed delegations connecting [`sender`](Identity::sender)
+    /// to [`public_key`](Identity::public_key), and in that order.
+    fn delegation_chain(&self) -> Vec<SignedDelegation> {
+        vec![]
+    }
 }
+
+macro_rules! delegating_impl {
+    ($implementor:ty, $name:ident => $self_expr:expr) => {
+        impl Identity for $implementor {
+            fn sender(&$name) -> Result<Principal, String> {
+                $self_expr.sender()
+            }
+
+            fn public_key(&$name) -> Option<Vec<u8>> {
+                $self_expr.public_key()
+            }
+
+            fn sign(&$name, content: &EnvelopeContent) -> Result<Signature, String> {
+                $self_expr.sign(content)
+            }
+
+            fn sign_delegation(&$name, content: &Delegation) -> Result<Signature, String> {
+                $self_expr.sign_delegation(content)
+            }
+
+            fn sign_arbitrary(&$name, content: &[u8]) -> Result<Signature, String> {
+                $self_expr.sign_arbitrary(content)
+            }
+
+            fn delegation_chain(&$name) -> Vec<SignedDelegation> {
+                $self_expr.delegation_chain()
+            }
+        }
+    };
+}
+
+delegating_impl!(Box<dyn Identity>, self => **self);
+delegating_impl!(Arc<dyn Identity>, self => **self);
+delegating_impl!(&dyn Identity, self => *self);

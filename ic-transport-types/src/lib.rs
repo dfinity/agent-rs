@@ -31,7 +31,7 @@ pub struct Envelope<'a> {
     pub sender_sig: Option<Vec<u8>>,
     /// The chain of delegations connecting `sender_pubkey` to `sender_sig`, and in that order.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub sender_delegation: Option<Vec<Delegation>>,
+    pub sender_delegation: Option<Vec<SignedDelegation>>,
 }
 
 /// The content of an IC ingress message, not including any signature information.
@@ -235,4 +235,14 @@ impl Delegation {
         bytes.extend_from_slice(hash.as_slice());
         bytes
     }
+}
+
+/// A [`Delegation`] that has been signed by an [`Identity`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignedDelegation {
+    /// The signed delegation.
+    pub delegation: Delegation,
+    /// The signature for the delegation.
+    #[serde(with = "serde_bytes")]
+    pub signature: Vec<u8>,
 }

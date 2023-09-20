@@ -106,6 +106,7 @@ impl Identity for Secp256k1Identity {
         Ok(Signature {
             public_key,
             signature,
+            delegations: None,
         })
     }
 }

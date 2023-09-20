@@ -41,7 +41,7 @@ mod management_canister {
     use ic_agent::{
         agent::{RejectCode, RejectResponse},
         export::Principal,
-        AgentError,
+        AgentError, Identity,
     };
     use ic_utils::{
         call::AsyncCall,
@@ -152,7 +152,7 @@ mod management_canister {
                 .await?;
 
             // Each agent has their own identity.
-            let other_agent_identity = create_basic_identity().await?;
+            let other_agent_identity = create_basic_identity()?;
             let other_agent_principal = other_agent_identity.sender()?;
             let other_agent = create_agent(other_agent_identity).await?;
             other_agent.fetch_root_key().await?;
@@ -260,7 +260,7 @@ mod management_canister {
         with_agent(|agent| async move {
             let agent_principal = agent.get_principal()?;
             // Each agent has their own identity.
-            let other_agent_identity = create_basic_identity().await?;
+            let other_agent_identity = create_basic_identity()?;
             let other_agent_principal = other_agent_identity.sender()?;
             let other_agent = create_agent(other_agent_identity).await?;
             other_agent.fetch_root_key().await?;
@@ -528,7 +528,7 @@ mod management_canister {
                 .await?;
 
             // Create another agent with different identity.
-            let other_agent_identity = create_basic_identity().await?;
+            let other_agent_identity = create_basic_identity()?;
             let other_agent = create_agent(other_agent_identity).await?;
             other_agent.fetch_root_key().await?;
             let other_ic00 = ManagementCanister::create(&other_agent);

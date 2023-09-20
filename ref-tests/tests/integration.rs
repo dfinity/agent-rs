@@ -6,7 +6,7 @@ use candid::CandidType;
 use ic_agent::{
     agent::{agent_error::HttpErrorPayload, RejectCode, RejectResponse},
     export::Principal,
-    AgentError,
+    AgentError, Identity,
 };
 use ic_utils::{
     call::{AsyncCall, SyncCall},
@@ -192,7 +192,7 @@ fn wallet_create_and_set_controller() {
             .await?;
 
         // controller
-        let other_agent_identity = create_basic_identity().await?;
+        let other_agent_identity = create_basic_identity()?;
         let other_agent_principal = other_agent_identity.sender()?;
         let other_agent = create_agent(other_agent_identity).await?;
         other_agent.fetch_root_key().await?;
@@ -418,7 +418,7 @@ fn wallet_helper_functions() {
         assert_eq!(name, Some(wallet_name));
 
         // controller
-        let other_agent_identity = create_basic_identity().await?;
+        let other_agent_identity = create_basic_identity()?;
         let other_agent_principal = other_agent_identity.sender()?;
         let other_agent = create_agent(other_agent_identity).await?;
         other_agent.fetch_root_key().await?;
@@ -571,6 +571,59 @@ mod sign_send {
                     Err(AgentError::CallDataMismatch{field, value_arg, value_cbor})
                     if field == *"method_name" && value_arg == *"non_query" && value_cbor == *"query"));
 
+            Ok(())
+        })
+    }
+}
+
+mod identity {
+    use candid::Principal;
+    use ic_agent::{
+        identity::{BasicIdentity, DelegatedIdentity, Delegation, SignedDelegation},
+        Identity,
+    };
+    use ref_tests::{universal_canister::payload, with_universal_canister_as};
+    use ring::{
+        rand::{SecureRandom, SystemRandom},
+        signature::Ed25519KeyPair,
+    };
+
+    #[ignore]
+    #[test]
+    fn delegated_identity() {
+        let random = SystemRandom::new();
+        let mut seed = [0; 32];
+        random.fill(&mut seed).unwrap();
+        let sending_identity =
+            BasicIdentity::from_key_pair(Ed25519KeyPair::from_seed_unchecked(&seed).unwrap());
+        random.fill(&mut seed).unwrap();
+        let signing_identity =
+            BasicIdentity::from_key_pair(Ed25519KeyPair::from_seed_unchecked(&seed).unwrap());
+        let delegation = Delegation {
+            expiration: i64::MAX as u64,
+            pubkey: signing_identity.public_key().unwrap(),
+            targets: None,
+            senders: None,
+        };
+        let signature = sending_identity.sign_delegation(&delegation).unwrap();
+        let delegated_identity = DelegatedIdentity::new(
+            signature.public_key.unwrap(),
+            Box::new(signing_identity),
+            vec![SignedDelegation {
+                delegation,
+                signature: signature.signature.unwrap(),
+            }],
+        );
+        with_universal_canister_as(delegated_identity, |agent, canister| async move {
+            let payload = payload().caller().append_and_reply().build();
+            let caller_resp = agent
+                .query(&canister, "query")
+                .with_arg(payload)
+                .call()
+                .await
+                .unwrap();
+            let caller = Principal::from_slice(&caller_resp);
+            assert_eq!(caller, sending_identity.sender().unwrap());
             Ok(())
         })
     }

@@ -158,6 +158,7 @@ impl Identity for HardwareIdentity {
         Ok(Signature {
             public_key: self.public_key(),
             signature: Some(signature),
+            delegations: None,
         })
     }
 }

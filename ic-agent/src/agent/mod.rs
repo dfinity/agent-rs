@@ -799,7 +799,7 @@ fn sign_envelope(
         content: Cow::Borrowed(content),
         sender_pubkey: signature.public_key,
         sender_sig: signature.signature,
-        sender_delegation: None,
+        sender_delegation: signature.delegations,
     };
 
     let mut serialized_bytes = Vec::new();

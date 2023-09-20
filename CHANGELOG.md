@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Added `DelegatedIdentity`, an `Identity` implementation for consuming delegations such as those from Internet Identity.
 * Replica protocol type definitions have been moved to an `ic-transport-types` crate. `ic-agent` still reexports the ones for its API.
 * The `Unknown` lookup of a request_status path in a certificate results in an `AgentError` (the IC returns `Absent` for non-existing paths).
 * For `Canister` type, added methods with no trailing underscore: update(), query(), canister_id(), clone_with()

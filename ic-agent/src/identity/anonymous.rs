@@ -19,6 +19,7 @@ impl Identity for AnonymousIdentity {
         Ok(Signature {
             signature: None,
             public_key: None,
+            delegations: None,
         })
     }
 
@@ -26,6 +27,7 @@ impl Identity for AnonymousIdentity {
         Ok(Signature {
             public_key: None,
             signature: None,
+            delegations: None,
         })
     }
 }
