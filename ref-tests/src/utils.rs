@@ -15,11 +15,11 @@ pub fn get_effective_canister_id() -> Principal {
     Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap()
 }
 
-pub async fn create_identity() -> Result<Box<dyn Identity>, String> {
+pub fn create_identity() -> Result<Box<dyn Identity>, String> {
     if std::env::var(HSM_PKCS11_LIBRARY_PATH).is_ok() {
-        create_hsm_identity().await
+        create_hsm_identity().map(|x| Box::new(x) as _)
     } else {
-        create_basic_identity().await
+        create_basic_identity().map(|x| Box::new(x) as _)
     }
 }
 
@@ -27,7 +27,7 @@ fn expect_env_var(name: &str) -> Result<String, String> {
     std::env::var(name).map_err(|_| format!("Need to specify the {} environment variable", name))
 }
 
-pub async fn create_hsm_identity() -> Result<Box<dyn Identity>, String> {
+pub fn create_hsm_identity() -> Result<HardwareIdentity, String> {
     let path = expect_env_var(HSM_PKCS11_LIBRARY_PATH)?;
     let slot_index = expect_env_var(HSM_SLOT_INDEX)?
         .parse::<usize>()
@@ -35,7 +35,7 @@ pub async fn create_hsm_identity() -> Result<Box<dyn Identity>, String> {
     let key = expect_env_var(HSM_KEY_ID)?;
     let id = HardwareIdentity::new(path, slot_index, &key, get_hsm_pin)
         .map_err(|e| format!("Unable to create hw identity: {}", e))?;
-    Ok(Box::new(id))
+    Ok(id)
 }
 
 fn get_hsm_pin() -> Result<String, String> {
@@ -49,19 +49,19 @@ fn get_hsm_pin() -> Result<String, String> {
 // To avoid this, we use a basic identity for any second identity in tests.
 //
 // A shared container of Ctx objects might be possible instead, but my rust-fu is inadequate.
-pub async fn create_basic_identity() -> Result<Box<dyn Identity>, String> {
+pub fn create_basic_identity() -> Result<BasicIdentity, String> {
     let rng = ring::rand::SystemRandom::new();
     let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
         .expect("Could not generate a key pair.");
 
-    Ok(Box::new(BasicIdentity::from_key_pair(
+    Ok(BasicIdentity::from_key_pair(
         Ed25519KeyPair::from_pkcs8(key_pair.as_ref()).expect("Could not read the key pair."),
-    )))
+    ))
 }
 
 /// Create a secp256k1identity, which unfortunately will always be the same one
 /// (So can only use one per test)
-pub fn create_secp256k1_identity() -> Result<Box<dyn Identity + Send + Sync>, String> {
+pub fn create_secp256k1_identity() -> Result<Secp256k1Identity, String> {
     // generated from the the following commands:
     // $ openssl ecparam -name secp256k1 -genkey -noout -out identity.pem
     // $ cat identity.pem
@@ -74,10 +74,10 @@ yeMC60IsMNxDjLqElV7+T7dkb5Ki7Q==
 
     let identity = Secp256k1Identity::from_pem(identity_file.as_bytes())
         .expect("Cannot create secp256k1 identity from PEM file.");
-    Ok(Box::new(identity))
+    Ok(identity)
 }
 
-pub async fn create_agent(identity: Box<dyn Identity>) -> Result<Agent, String> {
+pub async fn create_agent(identity: impl Identity + 'static) -> Result<Agent, String> {
     let port_env = std::env::var("IC_REF_PORT").unwrap_or_else(|_| "8001".into());
     let port = port_env
         .parse::<u32>()
@@ -85,7 +85,7 @@ pub async fn create_agent(identity: Box<dyn Identity>) -> Result<Agent, String> 
 
     Agent::builder()
         .with_transport(ReqwestTransport::create(format!("http://127.0.0.1:{}", port)).unwrap())
-        .with_boxed_identity(identity)
+        .with_identity(identity)
         .build()
         .map_err(|e| format!("{:?}", e))
 }
@@ -95,11 +95,18 @@ where
     R: Future<Output = Result<(), Box<dyn Error>>>,
     F: FnOnce(Agent) -> R,
 {
+    let agent_identity = create_identity().expect("Could not create an identity.");
+    with_agent_as(agent_identity, f)
+}
+
+pub fn with_agent_as<I, F, R>(agent_identity: I, f: F)
+where
+    I: Identity + 'static,
+    R: Future<Output = Result<(), Box<dyn Error>>>,
+    F: FnOnce(Agent) -> R,
+{
     let runtime = tokio::runtime::Runtime::new().expect("Could not create tokio runtime.");
     runtime.block_on(async {
-        let agent_identity = create_identity()
-            .await
-            .expect("Could not create an identity.");
         let agent = create_agent(agent_identity)
             .await
             .expect("Could not create an agent.");
@@ -189,6 +196,18 @@ where
     F: FnOnce(Agent, Principal) -> R,
 {
     with_agent(|agent| async move {
+        let canister_id = create_universal_canister(&agent).await?;
+        f(agent, canister_id).await
+    })
+}
+
+pub fn with_universal_canister_as<I, F, R>(identity: I, f: F)
+where
+    I: Identity + 'static,
+    R: Future<Output = Result<(), Box<dyn Error>>>,
+    F: FnOnce(Agent, Principal) -> R,
+{
+    with_agent_as(identity, |agent| async move {
         let canister_id = create_universal_canister(&agent).await?;
         f(agent, canister_id).await
     })

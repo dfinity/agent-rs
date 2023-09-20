@@ -8,35 +8,17 @@ use super::{Delegation, Identity, SignedDelegation};
 pub struct DelegatedIdentity {
     to: Box<dyn Identity>,
     chain: Vec<SignedDelegation>,
-    principal: Principal,
+    from_key: Vec<u8>,
 }
 
 impl DelegatedIdentity {
-    /// Creates a delegated identity that signs using `identity`, for the principal derived from `from.pubkey`.
+    /// Creates a delegated identity that signs using `to`, for the principal corresponding to the public key `from_key`.
     ///
-    /// `from` must be a delegation to `to.public_key()`. For more than one delegation in the chain, use [`for_principal`](Self::for_principal).
-    pub fn new(to: Box<dyn Identity>, from: Delegation, signature: Vec<u8>) -> Self {
-        let public_key = from.pubkey.clone();
-        Self::for_principal(
-            Principal::self_authenticating(public_key),
-            to,
-            vec![SignedDelegation {
-                delegation: from,
-                signature,
-            }],
-        )
-    }
-    /// Creates a delegated identity that signs using `identity`, for `principal`.
-    ///
-    /// `chain` must be a list of delegations connecting `principal` to `to.public_key()`, and in that order.
-    pub fn for_principal(
-        principal: Principal,
-        to: Box<dyn Identity>,
-        chain: Vec<SignedDelegation>,
-    ) -> Self {
+    /// `chain` must be a list of delegations connecting `from_key` to `to.public_key()`, and in that order.
+    pub fn new(from_key: Vec<u8>, to: Box<dyn Identity>, chain: Vec<SignedDelegation>) -> Self {
         Self {
             to,
-            principal,
+            from_key,
             chain,
         }
     }
@@ -52,10 +34,10 @@ impl DelegatedIdentity {
 
 impl Identity for DelegatedIdentity {
     fn sender(&self) -> Result<Principal, String> {
-        Ok(self.principal)
+        Ok(Principal::self_authenticating(&self.from_key))
     }
     fn public_key(&self) -> Option<Vec<u8>> {
-        Some(self.chain[0].delegation.pubkey.clone())
+        Some(self.from_key.clone())
     }
     fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
         self.to.sign(content).map(|sig| self.chain_signature(sig))

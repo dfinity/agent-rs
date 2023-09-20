@@ -1,7 +1,7 @@
 //! Types and traits dealing with identity across the Internet Computer.
-use crate::{agent::EnvelopeContent, export::Principal};
+use std::sync::Arc;
 
-use ic_transport_types::SignedDelegation;
+use crate::{agent::EnvelopeContent, export::Principal};
 
 pub(crate) mod anonymous;
 pub(crate) mod basic;
@@ -18,7 +18,7 @@ pub use basic::BasicIdentity;
 #[doc(inline)]
 pub use delegated::DelegatedIdentity;
 #[doc(inline)]
-pub use ic_transport_types::Delegation;
+pub use ic_transport_types::{Delegation, SignedDelegation};
 #[doc(inline)]
 pub use secp256k1::Secp256k1Identity;
 
@@ -81,3 +81,37 @@ pub trait Identity: Send + Sync {
         vec![]
     }
 }
+
+macro_rules! delegating_impl {
+    ($implementor:ty, $name:ident => $self_expr:expr) => {
+        impl Identity for $implementor {
+            fn sender(&$name) -> Result<Principal, String> {
+                $self_expr.sender()
+            }
+
+            fn public_key(&$name) -> Option<Vec<u8>> {
+                $self_expr.public_key()
+            }
+
+            fn sign(&$name, content: &EnvelopeContent) -> Result<Signature, String> {
+                $self_expr.sign(content)
+            }
+
+            fn sign_delegation(&$name, content: &Delegation) -> Result<Signature, String> {
+                $self_expr.sign_delegation(content)
+            }
+
+            fn sign_arbitrary(&$name, content: &[u8]) -> Result<Signature, String> {
+                $self_expr.sign_arbitrary(content)
+            }
+
+            fn delegation_chain(&$name) -> Vec<SignedDelegation> {
+                $self_expr.delegation_chain()
+            }
+        }
+    };
+}
+
+delegating_impl!(Box<dyn Identity>, self => **self);
+delegating_impl!(Arc<dyn Identity>, self => **self);
+delegating_impl!(&dyn Identity, self => *self);

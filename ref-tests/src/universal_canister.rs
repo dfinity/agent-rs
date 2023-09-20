@@ -36,11 +36,6 @@ enum Ops {
 /// A succinct shortcut for creating a `PayloadBuilder`, which is used to encode
 /// instructions to be executed by the UC.
 ///
-/// Note that a `PayloadBuilder` isn't really building Wasm as the name
-/// of the shortcut here suggests, but we call it `wasm()` since it gives
-/// a close enough indicator of what `PayloadBuilder` accomplishes without
-/// getting into the details of how it accomplishes it.
-///
 /// Example usage:
 /// ```
 /// use ref_tests::universal_canister::payload;
