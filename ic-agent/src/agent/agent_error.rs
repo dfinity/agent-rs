@@ -1,10 +1,8 @@
 //! Errors that can occur when using the replica agent.
 
-use crate::{
-    agent::{replica_api::RejectResponse, status::Status},
-    RequestIdError,
-};
+use crate::{agent::status::Status, RequestIdError};
 use ic_certification::Label;
+use ic_transport_types::{InvalidRejectCodeError, RejectResponse};
 use leb128::read;
 use std::{
     fmt::{Debug, Display, Formatter},
@@ -52,7 +50,7 @@ pub enum AgentError {
     PrincipalError(#[from] crate::export::PrincipalError),
 
     /// The replica rejected the message.
-    #[error("The replica returned a replica error: {0}")]
+    #[error("The replica returned a replica error: reject code {:?}, reject message {}, error code {:?}", .0.reject_code, .0.reject_message, .0.error_code)]
     ReplicaError(RejectResponse),
 
     /// The replica returned an HTTP error.
@@ -161,6 +159,10 @@ pub enum AgentError {
         /// The value that was actually in the CBOR.
         value_cbor: String,
     },
+
+    /// The rejected call had an invalid reject code (valid range 1..5).
+    #[error(transparent)]
+    InvalidRejectCode(#[from] InvalidRejectCodeError),
 }
 
 impl PartialEq for AgentError {
@@ -171,12 +173,9 @@ impl PartialEq for AgentError {
     }
 }
 
-impl Display for RejectResponse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        f.write_fmt(format_args!(
-            "Replica Error: reject code {:?}, reject message {}, error code {:?}",
-            self.reject_code, self.reject_message, self.error_code,
-        ))
+impl From<candid::Error> for AgentError {
+    fn from(e: candid::Error) -> AgentError {
+        AgentError::CandidError(e.into())
     }
 }
 

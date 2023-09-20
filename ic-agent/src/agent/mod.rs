@@ -4,30 +4,26 @@ pub mod agent_error;
 pub(crate) mod builder;
 pub mod http_transport;
 pub(crate) mod nonce;
-pub(crate) mod replica_api;
-pub(crate) mod response;
 pub(crate) mod response_authentication;
-pub mod signed;
 pub mod status;
 
 pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
 pub use builder::AgentBuilder;
+#[doc(inline)]
+pub use ic_transport_types::{
+    signed, EnvelopeContent, RejectCode, RejectResponse, ReplyResponse, RequestStatusResponse,
+};
 pub use nonce::{NonceFactory, NonceGenerator};
-pub use replica_api::{EnvelopeContent, RejectCode, RejectResponse};
-pub use response::{Replied, RequestStatusResponse};
 use time::OffsetDateTime;
 
 #[cfg(test)]
 mod agent_test;
 
 use crate::{
-    agent::{
-        replica_api::{Envelope, ReadStateResponse},
-        response_authentication::{
-            extract_der, lookup_canister_info, lookup_canister_metadata, lookup_request_status,
-            lookup_value,
-        },
+    agent::response_authentication::{
+        extract_der, lookup_canister_info, lookup_canister_metadata, lookup_request_status,
+        lookup_value,
     },
     export::Principal,
     identity::Identity,
@@ -35,6 +31,10 @@ use crate::{
 };
 use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
 use ic_certification::{Certificate, Delegation, Label};
+use ic_transport_types::{
+    signed::{SignedQuery, SignedRequestStatus, SignedUpdate},
+    Envelope, QueryResponse, ReadStateResponse,
+};
 use serde::Serialize;
 use status::Status;
 use std::{
@@ -285,6 +285,14 @@ impl Agent {
     {
         self.identity = Arc::new(identity);
     }
+    /// Set the arc identity provider for signing messages.
+    ///
+    /// NOTE: if you change the identity while having update calls in
+    /// flight, you will not be able to [Agent::poll] the status of these
+    /// messages.
+    pub fn set_arc_identity(&mut self, identity: Arc<dyn Identity>) {
+        self.identity = identity;
+    }
 
     /// By default, the agent is configured to talk to the main Internet Computer, and verifies
     /// responses using a hard-coded public key.
@@ -389,13 +397,11 @@ impl Agent {
     ) -> Result<Vec<u8>, AgentError> {
         let content = self.query_content(canister_id, method_name, arg, ingress_expiry_datetime)?;
         let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
-        self.query_endpoint::<replica_api::QueryResponse>(effective_canister_id, serialized_bytes)
+        self.query_endpoint::<QueryResponse>(effective_canister_id, serialized_bytes)
             .await
             .and_then(|response| match response {
-                replica_api::QueryResponse::Replied { reply } => Ok(reply.arg),
-                replica_api::QueryResponse::Rejected(response) => {
-                    Err(AgentError::ReplicaError(response))
-                }
+                QueryResponse::Replied { reply } => Ok(reply.arg),
+                QueryResponse::Rejected(response) => Err(AgentError::ReplicaError(response)),
             })
     }
 
@@ -409,13 +415,11 @@ impl Agent {
     ) -> Result<Vec<u8>, AgentError> {
         let _envelope: Envelope =
             serde_cbor::from_slice(&signed_query).map_err(AgentError::InvalidCborData)?;
-        self.query_endpoint::<replica_api::QueryResponse>(effective_canister_id, signed_query)
+        self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query)
             .await
             .and_then(|response| match response {
-                replica_api::QueryResponse::Replied { reply } => Ok(reply.arg),
-                replica_api::QueryResponse::Rejected(response) => {
-                    Err(AgentError::ReplicaError(response))
-                }
+                QueryResponse::Replied { reply } => Ok(reply.arg),
+                QueryResponse::Rejected(response) => Err(AgentError::ReplicaError(response)),
             })
     }
 
@@ -509,9 +513,7 @@ impl Agent {
                 Ok(PollResult::Accepted)
             }
 
-            RequestStatusResponse::Replied {
-                reply: Replied::CallReplied(arg),
-            } => Ok(PollResult::Completed(arg)),
+            RequestStatusResponse::Replied(ReplyResponse { arg }) => Ok(PollResult::Completed(arg)),
 
             RequestStatusResponse::Rejected(response) => Err(AgentError::ReplicaError(response)),
 
@@ -762,14 +764,14 @@ impl Agent {
         &self,
         effective_canister_id: Principal,
         request_id: RequestId,
-    ) -> Result<signed::SignedRequestStatus, AgentError> {
+    ) -> Result<SignedRequestStatus, AgentError> {
         let paths: Vec<Vec<Label>> =
             vec![vec!["request_status".into(), request_id.to_vec().into()]];
         let read_state_content = self.read_state_content(paths)?;
         let signed_request_status = sign_envelope(&read_state_content, self.identity.clone())?;
         let ingress_expiry = read_state_content.ingress_expiry();
         let sender = *read_state_content.sender();
-        Ok(signed::SignedRequestStatus {
+        Ok(SignedRequestStatus {
             ingress_expiry,
             sender,
             effective_canister_id,
@@ -797,7 +799,7 @@ fn sign_envelope(
         content: Cow::Borrowed(content),
         sender_pubkey: signature.public_key,
         sender_sig: signature.signature,
-        sender_delegations: signature.delegations,
+        sender_delegation: signature.delegations,
     };
 
     let mut serialized_bytes = Vec::new();
@@ -1092,7 +1094,7 @@ impl<'agent> QueryBuilder<'agent> {
 
     /// Sign a query call. This will return a [`signed::SignedQuery`]
     /// which contains all fields of the query and the signed query in CBOR encoding
-    pub fn sign(self) -> Result<signed::SignedQuery, AgentError> {
+    pub fn sign(self) -> Result<SignedQuery, AgentError> {
         let content = self.agent.query_content(
             self.canister_id,
             self.method_name,
@@ -1107,7 +1109,7 @@ impl<'agent> QueryBuilder<'agent> {
             method_name,
             arg
         } = content else { unreachable!() };
-        Ok(signed::SignedQuery {
+        Ok(SignedQuery {
             ingress_expiry,
             sender,
             canister_id,
@@ -1241,7 +1243,7 @@ impl<'agent> UpdateBuilder<'agent> {
 
     /// Sign a update call. This will return a [`signed::SignedUpdate`]
     /// which contains all fields of the update and the signed update in CBOR encoding
-    pub fn sign(self) -> Result<signed::SignedUpdate, AgentError> {
+    pub fn sign(self) -> Result<SignedUpdate, AgentError> {
         let nonce = self.agent.nonce_factory.generate();
         let content = self.agent.update_content(
             self.canister_id,
@@ -1260,7 +1262,7 @@ impl<'agent> UpdateBuilder<'agent> {
             method_name,
             arg
         } = content else { unreachable!() };
-        Ok(signed::SignedUpdate {
+        Ok(SignedUpdate {
             nonce,
             ingress_expiry,
             sender,

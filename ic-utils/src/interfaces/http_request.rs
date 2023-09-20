@@ -434,7 +434,7 @@ impl<'agent> HttpRequestCanister<'agent> {
         T: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
         C: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
     {
-        self.query_("http_request")
+        self.query("http_request")
             .with_arg(HttpRequest {
                 method,
                 url,
@@ -472,7 +472,7 @@ impl<'agent> HttpRequestCanister<'agent> {
         T: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
         C: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
     {
-        self.update_("http_request_update")
+        self.update("http_request_update")
             .with_arg(HttpUpdateRequest {
                 method,
                 url,
@@ -488,7 +488,7 @@ impl<'agent> HttpRequestCanister<'agent> {
         method: impl AsRef<str>,
         token: Token,
     ) -> impl 'agent + SyncCall<(StreamingCallbackHttpResponse,)> {
-        self.query_(method.as_ref()).with_value_arg(token.0).build()
+        self.query(method.as_ref()).with_value_arg(token.0).build()
     }
 
     /// Retrieves the next chunk of a stream from a streaming callback, using the method from [`CallbackStrategy`].
@@ -501,7 +501,7 @@ impl<'agent> HttpRequestCanister<'agent> {
     where
         T: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
     {
-        self.query_(method.as_ref()).with_arg(token).build()
+        self.query(method.as_ref()).with_arg(token).build()
     }
 }
 

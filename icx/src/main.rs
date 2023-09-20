@@ -5,9 +5,9 @@ use candid::{
     types::{Function, Type, TypeInner},
     CandidType, Decode, Deserialize, IDLArgs, IDLProg, TypeEnv,
 };
-use clap::{crate_authors, crate_version, Parser};
+use clap::{crate_authors, crate_version, Parser, ValueEnum};
 use ic_agent::{
-    agent::{self, signed::SignedUpdate, Replied},
+    agent::{self, signed::SignedUpdate},
     agent::{
         agent_error::HttpErrorPayload,
         signed::{SignedQuery, SignedRequestStatus},
@@ -75,35 +75,32 @@ enum SubCommand {
 #[derive(Parser)]
 struct CallOpts {
     /// The Canister ID to call.
-    #[clap(parse(try_from_str), required = true)]
     canister_id: Principal,
 
     /// Output the serialization of a message to STDOUT.
-    #[clap(long)]
+    #[arg(long)]
     serialize: bool,
 
     /// Path to a candid file to analyze the argument. Otherwise candid will parse the
     /// argument without type hint.
-    #[clap(long)]
+    #[arg(long)]
     candid: Option<PathBuf>,
 
-    #[clap(required = true)]
     method_name: String,
 
     /// The type of output (hex or IDL).
-    #[clap(long, default_value = "idl")]
+    #[arg(long, value_enum, default_value_t = ArgType::Idl)]
     arg: ArgType,
 
     /// The type of output (hex or IDL).
-    #[clap(long, default_value = "idl")]
+    #[arg(long, value_enum, default_value_t = ArgType::Idl)]
     output: ArgType,
 
     /// Argument to send, in Candid textual format.
-    #[clap()]
     arg_value: Option<String>,
 }
 
-#[derive(Parser)]
+#[derive(ValueEnum, Clone)]
 enum ArgType {
     Idl,
     Raw,
@@ -561,10 +558,8 @@ async fn main() -> Result<()> {
                     .context("Got an error when send the signed request_status call")?;
 
                 match response {
-                    agent::RequestStatusResponse::Replied {
-                        reply: Replied::CallReplied(blob),
-                    } => {
-                        print_idl_blob(&blob, &ArgType::Idl, &None)
+                    agent::RequestStatusResponse::Replied(response) => {
+                        print_idl_blob(&response.arg, &ArgType::Idl, &None)
                             .context("Failed to print request_status result")?;
                     }
                     agent::RequestStatusResponse::Rejected(replica_error) => {
@@ -584,4 +579,15 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Opts;
+    use clap::CommandFactory;
+
+    #[test]
+    fn valid_command() {
+        Opts::command().debug_assert();
+    }
 }

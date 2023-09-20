@@ -1,6 +1,7 @@
 //! A [`Transport`] that connects using a [`reqwest`] client.
 #![cfg(feature = "reqwest")]
 
+use ic_transport_types::RejectResponse;
 pub use reqwest;
 
 use futures_util::StreamExt;
@@ -13,7 +14,6 @@ use crate::{
     agent::{
         agent_error::HttpErrorPayload,
         http_transport::{IC0_DOMAIN, IC0_SUB_DOMAIN},
-        replica_api::RejectResponse,
         AgentFuture, Transport,
     },
     export::Principal,

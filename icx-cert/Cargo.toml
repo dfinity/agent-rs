@@ -19,7 +19,7 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 [dependencies]
 anyhow = "1.0"
 base64 = "0.13"
-clap = { version = "3.1.8", features = ["derive", "cargo"] }
+clap = { workspace = true, features = ["derive", "cargo", "color"] }
 hex = { workspace = true }
 ic-certification = { workspace = true }
 leb128 = "0.2.4"

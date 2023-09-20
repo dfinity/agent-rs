@@ -2,10 +2,10 @@
 //!
 //! [cycles wallet]: https://github.com/dfinity/cycles-wallet
 
-use std::{future::Future, ops::Deref};
+use std::ops::Deref;
 
 use crate::{
-    call::{AsyncCall, BoxFuture, SyncCall},
+    call::{AsyncCall, SyncCall},
     canister::Argument,
     interfaces::management_canister::{
         attributes::{ComputeAllocation, FreezingThreshold, MemoryAllocation},
@@ -13,6 +13,7 @@ use crate::{
     },
     Canister,
 };
+use async_trait::async_trait;
 use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize, Nat};
 use ic_agent::{agent::RejectCode, export::Principal, Agent, AgentError, RequestId};
 use once_cell::sync::Lazy;
@@ -55,18 +56,24 @@ impl<'agent, 'canister: 'agent, Out> CallForwarder<'agent, 'canister, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
-    /// Add an argument to the candid argument list. This requires Candid arguments, if
-    /// there is a raw argument set (using [`with_arg_raw`](CallForwarder::with_arg_raw)), this will fail.
+    /// Set the argument with candid argument. Can be called at most once.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> Self
     where
         Argument: CandidType + Sync + Send,
     {
-        self.arg.push_idl_arg(arg);
+        self.arg.set_idl_arg(arg);
+        self
+    }
+    /// Set the argument with multiple arguments as tuple. Can be called at most once.
+    pub fn with_args(mut self, tuple: impl candid::utils::ArgumentEncoder) -> Self {
+        if self.arg.0.is_some() {
+            panic!("argument is being set more than once");
+        }
+        self.arg = Argument::from_candid(tuple);
         self
     }
 
-    /// Replace the argument with raw argument bytes. This will overwrite the current
-    /// argument set, so calling this method twice will discard the first argument.
+    /// Set the argument with raw argument bytes. Can be called at most once.
     pub fn with_arg_raw(mut self, arg: Vec<u8>) -> Self {
         self.arg.set_raw_arg(arg);
         self
@@ -83,14 +90,14 @@ where
             cycles: TCycles,
         }
         Ok(if self.u128 {
-            self.wallet.update_("wallet_call128").with_arg(In {
+            self.wallet.update("wallet_call128").with_arg(In {
                 canister: self.destination,
                 method_name: self.method_name,
                 args: self.arg.serialize()?.to_vec(),
                 cycles: self.amount,
             })
         } else {
-            self.wallet.update_("wallet_call").with_arg(In {
+            self.wallet.update("wallet_call").with_arg(In {
                 canister: self.destination,
                 method_name: self.method_name,
                 args: self.arg.serialize()?.to_vec(),
@@ -110,34 +117,28 @@ where
     }
 
     /// Calls the forwarded canister call on the wallet canister. Equivalent to `.build().call()`.
-    pub fn call(self) -> impl Future<Output = Result<RequestId, AgentError>> + 'agent {
-        let call_res = self.build();
-        async move { call_res?.call().await }
+    pub async fn call(self) -> Result<RequestId, AgentError> {
+        self.build()?.call().await
     }
 
     /// Calls the forwarded canister call on the wallet canister, and waits for the result. Equivalent to `.build().call_and_wait()`.
-    pub fn call_and_wait(self) -> impl Future<Output = Result<Out, AgentError>> + 'agent {
-        let call_res = self.build();
-        async move { call_res?.call_and_wait().await }
+    pub async fn call_and_wait(self) -> Result<Out, AgentError> {
+        self.build()?.call_and_wait().await
     }
 }
 
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<'agent, 'canister: 'agent, Out> AsyncCall<Out> for CallForwarder<'agent, 'canister, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
-    fn call<'async_trait>(self) -> BoxFuture<'async_trait, Result<RequestId, AgentError>>
-    where
-        Self: 'async_trait,
-    {
-        Box::pin(self.call())
+    async fn call(self) -> Result<RequestId, AgentError> {
+        self.call().await
     }
 
-    fn call_and_wait<'async_trait>(self) -> BoxFuture<'async_trait, Result<Out, AgentError>>
-    where
-        Self: 'async_trait,
-    {
-        Box::pin(self.call_and_wait())
+    async fn call_and_wait(self) -> Result<Out, AgentError> {
+        self.call_and_wait().await
     }
 }
 
@@ -430,7 +431,7 @@ impl<'agent> WalletCanister<'agent> {
     ) -> Result<WalletCanister<'agent>, AgentError> {
         static DEFAULT_VERSION: Lazy<Version> = Lazy::new(|| Version::parse("0.1.0").unwrap());
         let version: Result<(String,), _> =
-            canister.query_("wallet_api_version").build().call().await;
+            canister.query("wallet_api_version").build().call().await;
         let version = match version {
             Err(AgentError::ReplicaError(replica_error))
                 if replica_error.reject_code == RejectCode::DestinationInvalid
@@ -461,7 +462,7 @@ impl<'agent> WalletCanister<'agent> {
     pub fn fetch_wallet_api_version<'canister: 'agent>(
         &'canister self,
     ) -> impl 'agent + SyncCall<(Option<String>,)> {
-        self.query_("wallet_api_version").build()
+        self.query("wallet_api_version").build()
     }
 
     /// Get the (cached) API version of the wallet.
@@ -471,7 +472,7 @@ impl<'agent> WalletCanister<'agent> {
 
     /// Get the friendly name of the wallet (if one exists).
     pub fn name<'canister: 'agent>(&'canister self) -> impl 'agent + SyncCall<(Option<String>,)> {
-        self.query_("name").build()
+        self.query("name").build()
     }
 
     /// Set the friendly name of the wallet.
@@ -479,14 +480,14 @@ impl<'agent> WalletCanister<'agent> {
         &'canister self,
         name: String,
     ) -> impl 'agent + AsyncCall<()> {
-        self.update_("set_name").with_arg(name).build()
+        self.update("set_name").with_arg(name).build()
     }
 
     /// Get the current controller's principal ID.
     pub fn get_controllers<'canister: 'agent>(
         &'canister self,
     ) -> impl 'agent + SyncCall<(Vec<Principal>,)> {
-        self.query_("get_controllers").build()
+        self.query("get_controllers").build()
     }
 
     /// Transfer controller to another principal ID.
@@ -494,7 +495,7 @@ impl<'agent> WalletCanister<'agent> {
         &'canister self,
         principal: Principal,
     ) -> impl 'agent + AsyncCall<()> {
-        self.update_("add_controller").with_arg(principal).build()
+        self.update("add_controller").with_arg(principal).build()
     }
 
     /// Remove a user as a wallet controller.
@@ -502,16 +503,14 @@ impl<'agent> WalletCanister<'agent> {
         &'canister self,
         principal: Principal,
     ) -> impl 'agent + AsyncCall<()> {
-        self.update_("remove_controller")
-            .with_arg(principal)
-            .build()
+        self.update("remove_controller").with_arg(principal).build()
     }
 
     /// Get the list of custodians.
     pub fn get_custodians<'canister: 'agent>(
         &'canister self,
     ) -> impl 'agent + SyncCall<(Vec<Principal>,)> {
-        self.query_("get_custodians").build()
+        self.query("get_custodians").build()
     }
 
     /// Authorize a new custodian.
@@ -519,7 +518,7 @@ impl<'agent> WalletCanister<'agent> {
         &'canister self,
         custodian: Principal,
     ) -> impl 'agent + AsyncCall<()> {
-        self.update_("authorize").with_arg(custodian).build()
+        self.update("authorize").with_arg(custodian).build()
     }
 
     /// Deauthorize a custodian.
@@ -527,21 +526,21 @@ impl<'agent> WalletCanister<'agent> {
         &'canister self,
         custodian: Principal,
     ) -> impl 'agent + AsyncCall<()> {
-        self.update_("deauthorize").with_arg(custodian).build()
+        self.update("deauthorize").with_arg(custodian).build()
     }
 
     /// Get the balance with the 64-bit API.
     pub fn wallet_balance64<'canister: 'agent>(
         &'canister self,
     ) -> impl 'agent + SyncCall<(BalanceResult<u64>,)> {
-        self.query_("wallet_balance").build()
+        self.query("wallet_balance").build()
     }
 
     /// Get the balance with the 128-bit API.
     pub fn wallet_balance128<'canister: 'agent>(
         &'canister self,
     ) -> impl 'agent + SyncCall<(BalanceResult,)> {
-        self.query_("wallet_balance128").build()
+        self.query("wallet_balance128").build()
     }
 
     /// Get the balance.
@@ -572,7 +571,7 @@ impl<'agent> WalletCanister<'agent> {
             amount: u64,
         }
 
-        self.update_("wallet_send")
+        self.update("wallet_send")
             .with_arg(In {
                 canister: destination,
                 amount,
@@ -592,7 +591,7 @@ impl<'agent> WalletCanister<'agent> {
             amount: u128,
         }
 
-        self.update_("wallet_send128")
+        self.update("wallet_send128")
             .with_arg(In {
                 canister: destination,
                 amount,
@@ -633,7 +632,7 @@ impl<'agent> WalletCanister<'agent> {
         struct In {
             memo: Option<String>,
         }
-        self.update_("wallet_receive")
+        self.update("wallet_receive")
             .with_arg(memo.map(|memo| In { memo: Some(memo) }))
             .build()
     }
@@ -660,7 +659,7 @@ impl<'agent> WalletCanister<'agent> {
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
         };
 
-        self.update_("wallet_create_canister")
+        self.update("wallet_create_canister")
             .with_arg(In { cycles, settings })
             .build()
             .map(|result: (Result<CreateResult, String>,)| (result.0,))
@@ -688,7 +687,7 @@ impl<'agent> WalletCanister<'agent> {
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
         };
 
-        self.update_("wallet_create_canister")
+        self.update("wallet_create_canister")
             .with_arg(In { cycles, settings })
             .build()
             .map(|result: (Result<CreateResult, String>,)| (result.0,))
@@ -716,7 +715,7 @@ impl<'agent> WalletCanister<'agent> {
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
         };
 
-        self.update_("wallet_create_canister128")
+        self.update("wallet_create_canister128")
             .with_arg(In { cycles, settings })
             .build()
             .map(|result: (Result<CreateResult, String>,)| (result.0,))
@@ -806,7 +805,7 @@ impl<'agent> WalletCanister<'agent> {
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
         };
 
-        self.update_("wallet_create_wallet")
+        self.update("wallet_create_wallet")
             .with_arg(In { cycles, settings })
             .build()
             .map(|result: (Result<CreateResult, String>,)| (result.0,))
@@ -834,7 +833,7 @@ impl<'agent> WalletCanister<'agent> {
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
         };
 
-        self.update_("wallet_create_wallet")
+        self.update("wallet_create_wallet")
             .with_arg(In { cycles, settings })
             .build()
             .map(|result: (Result<CreateResult, String>,)| (result.0,))
@@ -862,7 +861,7 @@ impl<'agent> WalletCanister<'agent> {
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
         };
 
-        self.update_("wallet_create_wallet128")
+        self.update("wallet_create_wallet128")
             .with_arg(In { cycles, settings })
             .build()
             .map(|result: (Result<CreateResult, String>,)| (result.0,))
@@ -937,7 +936,7 @@ impl<'agent> WalletCanister<'agent> {
             #[serde(with = "serde_bytes")]
             wasm_module: Vec<u8>,
         }
-        self.update_("wallet_store_wallet_wasm")
+        self.update("wallet_store_wallet_wasm")
             .with_arg(In { wasm_module })
             .build()
     }
@@ -947,14 +946,14 @@ impl<'agent> WalletCanister<'agent> {
         &'canister self,
         address: AddressEntry,
     ) -> impl 'agent + AsyncCall<()> {
-        self.update_("add_address").with_arg(address).build()
+        self.update("add_address").with_arg(address).build()
     }
 
     /// List the entries in the address book.
     pub fn list_addresses<'canister: 'agent>(
         &'canister self,
     ) -> impl 'agent + SyncCall<(Vec<AddressEntry>,)> {
-        self.query_("list_addresses").build()
+        self.query("list_addresses").build()
     }
 
     /// Remove a principal from the address book.
@@ -962,7 +961,7 @@ impl<'agent> WalletCanister<'agent> {
         &'canister self,
         principal: Principal,
     ) -> impl 'agent + AsyncCall<()> {
-        self.update_("remove_address").with_arg(principal).build()
+        self.update("remove_address").with_arg(principal).build()
     }
 
     /// Get a list of all transaction events this wallet remembers, using the 64-bit API. Fails if any events are 128-bit.
@@ -983,7 +982,7 @@ impl<'agent> WalletCanister<'agent> {
             Some(In { from, to })
         };
 
-        self.query_("get_events").with_arg(arg).build()
+        self.query("get_events").with_arg(arg).build()
     }
 
     /// Get a list of all transaction events this wallet remembers, using the 128-bit API.
@@ -1002,7 +1001,7 @@ impl<'agent> WalletCanister<'agent> {
         } else {
             Some(In { from, to })
         };
-        self.query_("get_events128").with_arg(arg).build()
+        self.query("get_events128").with_arg(arg).build()
     }
 
     /// Get a list of all transaction events this wallet remembers.
@@ -1104,7 +1103,7 @@ impl<'agent> WalletCanister<'agent> {
             from: Option<u32>,
             to: Option<u32>,
         }
-        self.query_("list_managed_canisters")
+        self.query("list_managed_canisters")
             .with_arg((In { from, to },))
             .build()
     }
@@ -1122,7 +1121,7 @@ impl<'agent> WalletCanister<'agent> {
             from: Option<u32>,
             to: Option<u32>,
         }
-        self.query_("get_managed_canister_events")
+        self.query("get_managed_canister_events")
             .with_arg((In { canister, from, to },))
             .build()
     }
@@ -1140,7 +1139,7 @@ impl<'agent> WalletCanister<'agent> {
             from: Option<u32>,
             to: Option<u32>,
         }
-        self.query_("get_managed_canister_events128")
+        self.query("get_managed_canister_events128")
             .with_arg((In { canister, from, to },))
             .build()
     }

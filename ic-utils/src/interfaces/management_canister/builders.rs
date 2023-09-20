@@ -1,10 +1,7 @@
 //! Builder interfaces for some method calls of the management canister.
 
 use crate::{
-    call::{AsyncCall, BoxFuture},
-    canister::Argument,
-    interfaces::management_canister::MgmtMethod,
-    Canister,
+    call::AsyncCall, canister::Argument, interfaces::management_canister::MgmtMethod, Canister,
 };
 use async_trait::async_trait;
 use candid::{CandidType, Deserialize, Nat};
@@ -274,12 +271,12 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                 specified_id: self.specified_id,
             };
             self.canister
-                .update_(MgmtMethod::ProvisionalCreateCanisterWithCycles.as_ref())
+                .update(MgmtMethod::ProvisionalCreateCanisterWithCycles.as_ref())
                 .with_arg(in_arg)
                 .with_effective_canister_id(self.effective_canister_id)
         } else {
             self.canister
-                .update_(MgmtMethod::CreateCanister.as_ref())
+                .update(MgmtMethod::CreateCanister.as_ref())
                 .with_arg(CanisterSettings {
                     controllers,
                     compute_allocation,
@@ -389,17 +386,25 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
         }
     }
 
-    /// Add an argument to the installation, which will be passed to the init
-    /// method of the canister.
+    /// Set the argument to the installation, which will be passed to the init
+    /// method of the canister. Can be called at most once.
     pub fn with_arg<Argument: CandidType + Sync + Send>(
         mut self,
         arg: Argument,
     ) -> InstallCodeBuilder<'agent, 'canister> {
-        self.arg.push_idl_arg(arg);
+        self.arg.set_idl_arg(arg);
         self
     }
-
-    /// Override the argument passed in to the canister with raw bytes.
+    /// Set the argument with multiple arguments as tuple to the installation,
+    /// which will be passed to the init method of the canister. Can be called at most once.
+    pub fn with_args(mut self, tuple: impl candid::utils::ArgumentEncoder) -> Self {
+        if self.arg.0.is_some() {
+            panic!("argument is being set more than once");
+        }
+        self.arg = Argument::from_candid(tuple);
+        self
+    }
+    /// Set the argument passed in to the canister with raw bytes. Can be called at most once.
     pub fn with_raw_arg(mut self, arg: Vec<u8>) -> InstallCodeBuilder<'agent, 'canister> {
         self.arg.set_raw_arg(arg);
         self
@@ -418,7 +423,7 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
     pub fn build(self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
         Ok(self
             .canister
-            .update_(MgmtMethod::InstallCode.as_ref())
+            .update(MgmtMethod::InstallCode.as_ref())
             .with_arg(CanisterInstall {
                 mode: self.mode.unwrap_or(InstallMode::Install),
                 canister_id: self.canister_id,
@@ -440,20 +445,15 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
     }
 }
 
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<'agent, 'canister: 'agent> AsyncCall<()> for InstallCodeBuilder<'agent, 'canister> {
-    fn call<'async_trait>(self) -> BoxFuture<'async_trait, Result<RequestId, AgentError>>
-    where
-        Self: 'async_trait,
-    {
-        let call_res = self.build();
-        Box::pin(async move { call_res?.call().await })
+    async fn call(self) -> Result<RequestId, AgentError> {
+        self.build()?.call().await
     }
-    fn call_and_wait<'async_trait>(self) -> BoxFuture<'async_trait, Result<(), AgentError>>
-    where
-        Self: 'async_trait,
-    {
-        let call_res = self.build();
-        Box::pin(async move { call_res?.call_and_wait().await })
+
+    async fn call_and_wait(self) -> Result<(), AgentError> {
+        self.build()?.call_and_wait().await
     }
 }
 
@@ -627,7 +627,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
 
         Ok(self
             .canister
-            .update_(MgmtMethod::UpdateSettings.as_ref())
+            .update(MgmtMethod::UpdateSettings.as_ref())
             .with_arg(In {
                 canister_id: self.canister_id,
                 settings: CanisterSettings {

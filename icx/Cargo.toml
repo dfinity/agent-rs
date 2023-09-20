@@ -21,10 +21,10 @@ path = "src/main.rs"
 [dependencies]
 anyhow = { version = "1.0", features = ["backtrace"] }
 candid = { workspace = true, features = ["parser"] }
-clap = { version = "3.0.14", features = ["derive", "cargo"] }
+clap = { workspace = true, features = ["derive", "cargo", "color"] }
 hex = { workspace = true }
 humantime = "2.0.1"
-ic-agent = { workspace = true }
+ic-agent = { workspace = true, default-features = true }
 ic-utils = { workspace = true }
 ring = { workspace = true }
 serde = { workspace = true }

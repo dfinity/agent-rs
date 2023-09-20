@@ -9,7 +9,7 @@
 use error::RequestIdFromStringError;
 use serde::{ser, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, iter::Extend, str::FromStr};
+use std::{collections::BTreeMap, iter::Extend, ops::Deref, str::FromStr};
 
 pub mod error;
 #[doc(inline)]
@@ -30,15 +30,6 @@ impl RequestId {
         RequestId(*from)
     }
 
-    /// Returns the SHA-256 hash this ID is based on.
-    pub fn as_slice(&self) -> &[u8] {
-        &self.0
-    }
-
-    pub(crate) fn to_vec(self) -> Vec<u8> {
-        self.0.to_vec()
-    }
-
     /// Returns the signable form of the request ID, by prepending `"\x0Aic-request"` to it,
     /// for use in [`Identity::sign`](crate::identity::Identity::sign).
     pub fn signable(&self) -> Vec<u8> {
@@ -46,6 +37,14 @@ impl RequestId {
         signable.extend_from_slice(IC_REQUEST_DOMAIN_SEPARATOR);
         signable.extend_from_slice(&self.0);
         signable
+    }
+}
+
+impl Deref for RequestId {
+    type Target = [u8; 32];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -697,7 +696,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::export::Principal;
+    use candid::Principal;
     use std::convert::TryFrom;
 
     /// The actual example used in the public spec in the Request ID section.

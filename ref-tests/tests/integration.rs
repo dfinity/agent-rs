@@ -76,7 +76,7 @@ fn canister_query() {
         let arg = payload().reply_data(b"hello").build();
 
         let out = universal
-            .query_("query")
+            .query("query")
             .with_arg_raw(arg)
             .build::<()>()
             .call_raw()
@@ -98,7 +98,7 @@ fn canister_reject_call() {
         let bob =
             WalletCanister::create(&agent, create_wallet_canister(&agent, None).await?).await?;
 
-        let result = alice.wallet_send(*bob.canister_id_(), 1_000_000).await;
+        let result = alice.wallet_send(*bob.canister_id(), 1_000_000).await;
 
         assert_eq!(
             result,
@@ -377,7 +377,7 @@ fn wallet_canister_funds() {
         let alice_previous_balance = alice.wallet_balance().await?;
         let bob_previous_balance = bob.wallet_balance().await?;
 
-        alice.wallet_send(*bob.canister_id_(), 1_000_000).await?;
+        alice.wallet_send(*bob.canister_id(), 1_000_000).await?;
 
         let bob_balance = bob.wallet_balance().await?;
 
@@ -457,8 +457,8 @@ fn wallet_helper_functions() {
 mod sign_send {
     use ic_agent::{
         agent::{
-            signed_query_inspect, signed_request_status_inspect, signed_update_inspect, Replied,
-            RequestStatusResponse,
+            signed_query_inspect, signed_request_status_inspect, signed_update_inspect,
+            ReplyResponse, RequestStatusResponse,
         },
         AgentError,
     };
@@ -543,7 +543,7 @@ mod sign_send {
                 .await?;
 
             assert!(
-                matches!(response, RequestStatusResponse::Replied{reply: Replied::CallReplied(result)} if result == b"hello")
+                matches!(response, RequestStatusResponse::Replied(ReplyResponse { arg: result }) if result == b"hello")
             );
             Ok(())
         })

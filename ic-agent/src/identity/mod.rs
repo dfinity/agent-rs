@@ -1,7 +1,7 @@
 //! Types and traits dealing with identity across the Internet Computer.
-use crate::{agent::EnvelopeContent, export::Principal, to_request_id};
+use crate::{agent::EnvelopeContent, export::Principal};
 
-use serde::{Deserialize, Serialize};
+use ic_transport_types::SignedDelegation;
 
 pub(crate) mod anonymous;
 pub(crate) mod basic;
@@ -11,9 +11,15 @@ pub(crate) mod secp256k1;
 #[cfg(feature = "pem")]
 pub(crate) mod error;
 
+#[doc(inline)]
 pub use anonymous::AnonymousIdentity;
+#[doc(inline)]
 pub use basic::BasicIdentity;
+#[doc(inline)]
 pub use delegated::DelegatedIdentity;
+#[doc(inline)]
+pub use ic_transport_types::Delegation;
+#[doc(inline)]
 pub use secp256k1::Secp256k1Identity;
 
 #[cfg(feature = "pem")]
@@ -41,12 +47,19 @@ pub trait Identity: Send + Sync {
     /// Only one sender can be used per request.
     fn sender(&self) -> Result<Principal, String>;
 
+    /// Produce the public key commonly returned in [`Signature`].
+    ///
+    /// Should only return `None` if `sign` would do the same.
+    fn public_key(&self) -> Option<Vec<u8>>;
+
     /// Sign a request ID derived from a content map.
     ///
     /// Implementors should call `content.to_request_id().signable()` for the actual bytes that need to be signed.
     fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String>;
 
     /// Sign a delegation to let another key be used to authenticate [`sender`](Identity::sender).
+    ///
+    /// Not all `Identity` implementations support this operation, though all `ic-agent` implementations other than `AnonymousIdentity` do.
     ///
     /// Implementors should call `content.signable()` for the actual bytes that need to be signed.
     fn sign_delegation(&self, content: &Delegation) -> Result<Signature, String> {
@@ -56,61 +69,15 @@ pub trait Identity: Send + Sync {
 
     /// Sign arbitrary bytes.
     ///
-    /// Not all `Identity` implementations support this operation.
+    /// Not all `Identity` implementations support this operation, though all `ic-agent` implementations do.
     fn sign_arbitrary(&self, content: &[u8]) -> Result<Signature, String> {
         let _ = content; // silence unused warning
         Err(String::from("unsupported"))
     }
-
-    /// Produce the public key commonly returned in [`Signature`].
-    ///
-    /// May return `None` when [`sign`](Identity::sign) would return `Some`.
-    fn public_key(&self) -> Option<Vec<u8>>;
 
     /// A list of signed delegations connecting [`sender`](Identity::sender)
     /// to [`public_key`](Identity::public_key), and in that order.
     fn delegation_chain(&self) -> Vec<SignedDelegation> {
         vec![]
     }
-}
-
-/// A delegation from one key to another.
-///
-/// If key A signs a delegation containing key B, then key B may be used to
-/// authenticate as key A's corresponding principal(s).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Delegation {
-    /// The delegated-to key.
-    #[serde(with = "serde_bytes")]
-    pub pubkey: Vec<u8>,
-    /// A nanosecond timestamp after which this delegation is no longer valid.
-    pub expiration: u64,
-    /// If present, this delegation only applies to requests sent to one of these canisters.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub targets: Option<Vec<Principal>>,
-    /// If present, this delegation only applies to requests originating from one of these principals.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub senders: Option<Vec<Principal>>,
-}
-
-impl Delegation {
-    /// Returns the signable form of the delegation, by running it through [`to_request_id`]
-    /// and prepending `\x1Aic-request-auth-delegation` to the result.
-    pub fn signable(&self) -> Vec<u8> {
-        let hash = to_request_id(self).unwrap();
-        let mut bytes = Vec::with_capacity(59);
-        bytes.extend_from_slice(b"\x1Aic-request-auth-delegation");
-        bytes.extend_from_slice(hash.as_slice());
-        bytes
-    }
-}
-
-/// A [`Delegation`] that has been signed by an [`Identity`].
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SignedDelegation {
-    /// The signed delegation.
-    pub delegation: Delegation,
-    /// The signature for the delegation.
-    #[serde(with = "serde_bytes")]
-    pub signature: Vec<u8>,
 }

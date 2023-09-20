@@ -1,4 +1,6 @@
-use ic_agent::{agent::EnvelopeContent, export::Principal, Identity, Signature};
+use ic_agent::{
+    agent::EnvelopeContent, export::Principal, identity::Delegation, Identity, Signature,
+};
 
 use pkcs11::{
     types::{
@@ -136,9 +138,19 @@ impl Identity for HardwareIdentity {
     fn sender(&self) -> Result<Principal, String> {
         Ok(Principal::self_authenticating(&self.public_key))
     }
+
+    fn public_key(&self) -> Option<Vec<u8>> {
+        Some(self.public_key.clone())
+    }
+
     fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
         self.sign_arbitrary(&content.to_request_id().signable())
     }
+
+    fn sign_delegation(&self, content: &Delegation) -> Result<Signature, String> {
+        self.sign_arbitrary(&content.signable())
+    }
+
     fn sign_arbitrary(&self, content: &[u8]) -> Result<Signature, String> {
         let hash = Sha256::digest(content);
         let signature = self.sign_hash(&hash)?;
@@ -148,9 +160,6 @@ impl Identity for HardwareIdentity {
             signature: Some(signature),
             delegations: None,
         })
-    }
-    fn public_key(&self) -> Option<Vec<u8>> {
-        Some(self.public_key.clone())
     }
 }
 

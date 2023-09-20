@@ -11,6 +11,8 @@ use k256::{
 #[cfg(feature = "pem")]
 use std::{fs::File, io, path::Path};
 
+use super::Delegation;
+
 /// A cryptographic identity based on the Secp256k1 elliptic curve.
 ///
 /// The caller will be represented via [`Principal::self_authenticating`], which contains the SHA-224 hash of the public key.
@@ -74,12 +76,16 @@ impl Identity for Secp256k1Identity {
         ))
     }
 
+    fn public_key(&self) -> Option<Vec<u8>> {
+        Some(self.der_encoded_public_key.as_ref().to_vec())
+    }
+
     fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
         self.sign_arbitrary(&content.to_request_id().signable())
     }
 
-    fn public_key(&self) -> Option<Vec<u8>> {
-        Some(self.der_encoded_public_key.as_ref().to_vec())
+    fn sign_delegation(&self, content: &Delegation) -> Result<Signature, String> {
+        self.sign_arbitrary(&content.signable())
     }
 
     fn sign_arbitrary(&self, content: &[u8]) -> Result<Signature, String> {

@@ -11,16 +11,16 @@ impl Identity for AnonymousIdentity {
         Ok(Principal::anonymous())
     }
 
+    fn public_key(&self) -> Option<Vec<u8>> {
+        None
+    }
+
     fn sign(&self, _: &EnvelopeContent) -> Result<Signature, String> {
         Ok(Signature {
             signature: None,
             public_key: None,
             delegations: None,
         })
-    }
-
-    fn public_key(&self) -> Option<Vec<u8>> {
-        None
     }
 
     fn sign_arbitrary(&self, _: &[u8]) -> Result<Signature, String> {

@@ -3,15 +3,12 @@
 
 use self::mock::{assert_mock, mock};
 use crate::{
-    agent::{
-        http_transport::ReqwestTransport,
-        replica_api::{CallReply, QueryResponse, RejectCode, RejectResponse},
-        Status,
-    },
+    agent::{http_transport::ReqwestTransport, Status},
     export::Principal,
     Agent, AgentError,
 };
 use ic_certification::Label;
+use ic_transport_types::{QueryResponse, RejectCode, RejectResponse, ReplyResponse};
 use std::collections::BTreeMap;
 #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -24,7 +21,7 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 async fn query() -> Result<(), AgentError> {
     let blob = Vec::from("Hello World");
     let response = QueryResponse::Replied {
-        reply: CallReply { arg: blob.clone() },
+        reply: ReplyResponse { arg: blob.clone() },
     };
 
     let (query_mock, url) = mock(
