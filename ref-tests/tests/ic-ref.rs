@@ -170,7 +170,7 @@ mod management_canister {
                 .with_mode(InstallMode::Reinstall)
                 .call_and_wait()
                 .await;
-            assert!(matches!(result, Err(AgentError::HttpError(..))));
+            assert!(matches!(result, Err(AgentError::ReplicaError(..))));
 
             // Upgrade should succeed.
             ic00.install_code(&canister_id, &canister_wasm)
@@ -184,7 +184,7 @@ mod management_canister {
                 .with_mode(InstallMode::Upgrade)
                 .call_and_wait()
                 .await;
-            assert!(matches!(result, Err(AgentError::HttpError(..))));
+            assert!(matches!(result, Err(AgentError::ReplicaError(..))));
 
             // Change controller.
             ic00.update_settings(&canister_id)
@@ -198,9 +198,14 @@ mod management_canister {
                 .with_controller(other_agent_principal)
                 .call_and_wait()
                 .await;
-            assert!(matches!(result, Err(AgentError::HttpError(payload))
-                if String::from_utf8(payload.content.clone()).expect("Expected utf8")
-                    == *"Wrong sender"));
+            assert!(
+                matches!(result, Err(AgentError::ReplicaError(RejectResponse{
+                reject_code: RejectCode::CanisterError,
+                reject_message,
+                error_code: Some(ref error_code),
+            })) if reject_message == format!("Only controllers of canister {} can call ic00 method update_settings", canister_id) &&
+                    error_code == "IC0512")
+            );
 
             // Reinstall as new controller
             other_ic00
@@ -467,10 +472,9 @@ mod management_canister {
             );
 
             // Another start is a noop
-            ic00.start_canister(&canister_id).call_and_wait().await?;
+            let result = ic00.start_canister(&canister_id).call_and_wait().await;
 
             // Delete a running canister should fail.
-            let result = ic00.delete_canister(&canister_id).call_and_wait().await;
             assert!(matches!(result, Err(AgentError::ReplicaError { .. })));
 
             // Stop should succeed.
