@@ -62,6 +62,7 @@ mod management_canister {
     };
     use sha2::{Digest, Sha256};
     use std::collections::HashSet;
+    use std::convert::TryInto;
 
     mod create_canister {
         use super::with_agent;
@@ -656,7 +657,7 @@ mod management_canister {
                 .call_and_wait()
                 .await?;
 
-            assert_eq!(result.cycles, 0_u64);
+            assert!(result.cycles > 0_u64 && result.cycles < creation_fee);
 
             let ic00 = ManagementCanister::create(&agent);
             // cycle balance is default_canister_balance when creating with
@@ -668,7 +669,10 @@ mod management_canister {
                 .call_and_wait()
                 .await?;
             let result = ic00.canister_status(&canister_id_1).call_and_wait().await?;
-            assert_eq!(result.0.cycles, default_canister_balance);
+            // assume some cycles are already burned
+            let cycles: i128 = result.0.cycles.0.try_into().unwrap();
+            let burned = default_canister_balance as i128 - cycles;
+            assert!(burned > 0 && burned < 100_000_000);
 
             // cycle balance should be amount specified to
             // provisional_create_canister_with_cycles call
@@ -680,7 +684,9 @@ mod management_canister {
                 .call_and_wait()
                 .await?;
             let result = ic00.canister_status(&canister_id_2).call_and_wait().await?;
-            assert_eq!(result.0.cycles, amount);
+            let cycles: i128 = result.0.cycles.0.try_into().unwrap();
+            let burned = amount as i128 - cycles;
+            assert!(burned > 0 && burned < 100_000_000);
 
             Ok(())
         })
