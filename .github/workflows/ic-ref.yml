@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - ic-ref-to-replica
   pull_request:
 
 jobs:
@@ -28,6 +29,11 @@ jobs:
         with:
           path: main
 
+      - name: Install dfx
+        uses: dfinity/setup-dfx@main
+        with:
+          dfx-version: "0.15.0"
+
       - name: Cargo cache
         uses: actions/cache@v2
         with:
@@ -48,13 +54,8 @@ jobs:
           wget https://github.com/dfinity/cycles-wallet/releases/download/${{ matrix.wallet-tag }}/wallet.wasm
           mv wallet.wasm $HOME/wallet.wasm
 
-      - name: Download ic-ref and universal-canister
+      - name: Download universal-canister
         run: |
-          wget https://download.dfinity.systems/ic-ref/ic-ref-0.0.1-${{ matrix.ic-hs-ref }}-x86_64-linux.tar.gz
-          tar -xvf ic-ref-0.0.1-${{ matrix.ic-hs-ref }}-x86_64-linux.tar.gz ic-ref
-          mkdir -p $HOME/bin
-          mv ic-ref $HOME/bin/ic-ref
-
           wget https://download.dfinity.systems/ic-ref/ic-ref-test-0.0.1-${{ matrix.ic-hs-ref }}-x86_64-linux.tar.gz
           tar -xvf ic-ref-test-0.0.1-${{ matrix.ic-hs-ref }}-x86_64-linux.tar.gz test-data/universal-canister.wasm
           mv test-data/universal-canister.wasm $HOME/canister.wasm
@@ -62,14 +63,14 @@ jobs:
       - name: Run Integration Tests
         run: |
           set -ex
-          $HOME/bin/ic-ref --pick-port --write-port-to $HOME/ic_ref_port &
+          dfx start --background
           sleep 1
-          export IC_REF_PORT=$(cat $HOME/ic_ref_port)
+          export IC_REF_PORT=$(dfx info replica-port)
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
           export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
           cd main
           cargo test --all-features -- --ignored
-          killall ic-ref
+          dfx stop
         env:
           RUST_BACKTRACE: 1
 
@@ -89,14 +90,14 @@ jobs:
           # create key:
           pkcs11-tool -k --module $HSM_PKCS11_LIBRARY_PATH --login --slot-index $HSM_SLOT_INDEX -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
 
-          $HOME/bin/ic-ref --pick-port --write-port-to $HOME/ic_ref_port &
+          dfx start --background
           sleep 1
-          export IC_REF_PORT=$(cat $HOME/ic_ref_port)
+          export IC_REF_PORT=$(dfx info replica-port)
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
           export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
           cd main/ref-tests
           cargo test --all-features -- --ignored --nocapture --test-threads=1
-          killall ic-ref
+          dfx stop
         env:
           RUST_BACKTRACE: 1
           HSM_PKCS11_LIBRARY_PATH: /usr/lib/softhsm/libsofthsm2.so
@@ -108,12 +109,12 @@ jobs:
       - name: Run Doc Tests
         run: |
           set -ex
-          $HOME/bin/ic-ref --pick-port --write-port-to $HOME/ic_ref_port &
+          dfx start --background
           sleep 1
-          export IC_REF_PORT=$(cat $HOME/ic_ref_port)
+          export IC_REF_PORT=$(dfx info replica-port)
           cd main
           cargo test --all-features --doc -- --ignored
-          killall ic-ref
+          dfx stop
         env:
           RUST_BACKTRACE: 1
 
