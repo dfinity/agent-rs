@@ -637,8 +637,9 @@ mod management_canister {
 
             let args = Argument::from_candid((create_args,));
 
+            let creation_fee = 8000000000;
             let (create_result,): (CreateResult,) = wallet
-                .call(Principal::management_canister(), "create_canister", args, 0)
+                .call(Principal::management_canister(), "create_canister", args, creation_fee)
                 .call_and_wait()
                 .await?;
             let canister_id = create_result.canister_id;
