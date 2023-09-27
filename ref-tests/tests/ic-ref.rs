@@ -929,7 +929,7 @@ mod extras {
                     reject_code: RejectCode::DestinationInvalid,
                     reject_message,
                     ..
-                })) if reject_message == "The specified_id of the created canister is already in use."));
+                })) if reject_message == "Canister iimsn-6yaaa-aaaaa-afiaa-cai is already installed"));
 
             Ok(())
         })
