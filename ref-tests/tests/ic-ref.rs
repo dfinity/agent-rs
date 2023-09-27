@@ -472,10 +472,7 @@ mod management_canister {
             );
 
             // Another start is a noop
-            let result = ic00.start_canister(&canister_id).call_and_wait().await;
-
-            // Delete a running canister should fail.
-            assert!(matches!(result, Err(AgentError::ReplicaError { .. })));
+            ic00.start_canister(&canister_id).call_and_wait().await?;
 
             // Stop should succeed.
             ic00.stop_canister(&canister_id).call_and_wait().await?;
