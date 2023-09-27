@@ -65,7 +65,12 @@ mod management_canister {
 
     mod create_canister {
         use super::with_agent;
-        use ic_agent::{export::Principal, AgentError};
+        use ic_agent::{
+            agent::{RejectCode, RejectResponse},
+            export::Principal,
+            AgentError,
+        };
+
         use ic_utils::interfaces::ManagementCanister;
         use ref_tests::get_effective_canister_id;
         use std::str::FromStr;
@@ -103,13 +108,13 @@ mod management_canister {
                     .call_and_wait()
                     .await;
 
-                let payload_content =
-                    "canister does not exist: 75hes-oqbaa-aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-q"
-                        .to_string();
-
                 assert!(matches!(result,
-                    Err(AgentError::HttpError(payload))
-                        if String::from_utf8(payload.content.clone()).expect("Expected utf8") == payload_content));
+                    Err(AgentError::ReplicaError(RejectResponse {
+                    reject_code: RejectCode::DestinationInvalid,
+                    reject_message,
+                    ..
+                })) if reject_message == "Canister 75hes-oqbaa-aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-q not found"));
+
                 Ok(())
             })
         }
