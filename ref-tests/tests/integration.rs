@@ -148,7 +148,7 @@ fn wallet_canister_create_and_install() {
         let wallet = WalletCanister::create(&agent, wallet_id).await?;
 
         let create_result = wallet
-            .wallet_create_canister(1_000_000, None, None, None, None)
+            .wallet_create_canister(10_000_000_000, None, None, None, None)
             .await?;
 
         #[derive(CandidType)]
