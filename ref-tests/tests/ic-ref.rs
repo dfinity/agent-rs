@@ -538,33 +538,45 @@ mod management_canister {
                 .start_canister(&canister_id)
                 .call_and_wait()
                 .await;
-            assert!(matches!(result, Err(AgentError::HttpError(payload))
-                if String::from_utf8(payload.content.clone()).expect("Expected utf8")
-                    == *"Wrong sender"));
+            assert!(matches!(result,
+                    Err(AgentError::ReplicaError(RejectResponse {
+                    reject_code: RejectCode::CanisterError,
+                    reject_message,
+                    ..
+                })) if reject_message == format!("Only controllers of canister {} can call ic00 method start_canister", canister_id)));
 
             // Stop as a wrong controller should fail.
             let result = other_ic00.stop_canister(&canister_id).call_and_wait().await;
-            assert!(matches!(result, Err(AgentError::HttpError(payload))
-                if String::from_utf8(payload.content.clone()).expect("Expected utf8")
-                    == *"Wrong sender"));
+            assert!(matches!(result,
+                    Err(AgentError::ReplicaError(RejectResponse {
+                    reject_code: RejectCode::CanisterError,
+                    reject_message,
+                    ..
+                })) if reject_message == format!("Only controllers of canister {} can call ic00 method stop_canister", canister_id)));
 
             // Get canister status as a wrong controller should fail.
             let result = other_ic00
                 .canister_status(&canister_id)
                 .call_and_wait()
                 .await;
-            assert!(matches!(result, Err(AgentError::HttpError(payload))
-                if String::from_utf8(payload.content.clone()).expect("Expected utf8")
-                    == *"Wrong sender"));
+            assert!(matches!(result,
+                    Err(AgentError::ReplicaError(RejectResponse {
+                    reject_code: RejectCode::CanisterError,
+                    reject_message,
+                    ..
+                })) if reject_message == format!("Only controllers of canister {} can call ic00 method canister_status", canister_id)));
 
             // Delete as a wrong controller should fail.
             let result = other_ic00
                 .delete_canister(&canister_id)
                 .call_and_wait()
                 .await;
-            assert!(matches!(result, Err(AgentError::HttpError(payload))
-                if String::from_utf8(payload.content.clone()).expect("Expected utf8")
-                    == *"Wrong sender"));
+            assert!(matches!(result,
+                    Err(AgentError::ReplicaError(RejectResponse {
+                    reject_code: RejectCode::CanisterError,
+                    reject_message,
+                    ..
+                })) if reject_message == format!("Only controllers of canister {} can call ic00 method delete_canister", canister_id)));
 
             Ok(())
         })
