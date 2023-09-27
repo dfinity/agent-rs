@@ -104,7 +104,7 @@ fn canister_reject_call() {
             result,
             Err(AgentError::ReplicaError(RejectResponse {
                 reject_code: RejectCode::DestinationInvalid,
-                reject_message: "method does not exist: wallet_send".to_string(),
+                reject_message: format!("Canister {} has no update method 'wallet_send'", alice.canister_id()),
                 error_code: None
             }))
         );
