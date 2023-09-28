@@ -104,7 +104,10 @@ fn canister_reject_call() {
             result,
             Err(AgentError::ReplicaError(RejectResponse {
                 reject_code: RejectCode::DestinationInvalid,
-                reject_message: "method does not exist: wallet_send".to_string(),
+                reject_message: format!(
+                    "Canister {} has no update method 'wallet_send'",
+                    alice.canister_id()
+                ),
                 error_code: None
             }))
         );
@@ -148,7 +151,7 @@ fn wallet_canister_create_and_install() {
         let wallet = WalletCanister::create(&agent, wallet_id).await?;
 
         let create_result = wallet
-            .wallet_create_canister(1_000_000, None, None, None, None)
+            .wallet_create_canister(100_000_000_000, None, None, None, None)
             .await?;
 
         #[derive(CandidType)]
