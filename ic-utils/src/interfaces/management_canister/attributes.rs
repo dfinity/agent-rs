@@ -289,7 +289,7 @@ fn can_convert_reserved_cycles_limit() {
     ));
 
     assert_eq!(
-        ReservedCyclesLimit::try_from(2u128.pow(127)+6).unwrap().0,
+        ReservedCyclesLimit::try_from(2u128.pow(127) + 6).unwrap().0,
         170141183460469231731687303715884105734u128
     );
 
