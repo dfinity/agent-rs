@@ -22,6 +22,7 @@ async fn query() -> Result<(), AgentError> {
     let blob = Vec::from("Hello World");
     let response = QueryResponse::Replied {
         reply: ReplyResponse { arg: blob.clone() },
+        signatures: vec![],
     };
 
     let (query_mock, url) = mock(
@@ -82,11 +83,14 @@ async fn query_error() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn query_rejected() -> Result<(), AgentError> {
-    let response: QueryResponse = QueryResponse::Rejected(RejectResponse {
-        reject_code: RejectCode::DestinationInvalid,
-        reject_message: "Rejected Message".to_string(),
-        error_code: Some("Error code".to_string()),
-    });
+    let response: QueryResponse = QueryResponse::Rejected {
+        reject: RejectResponse {
+            reject_code: RejectCode::DestinationInvalid,
+            reject_message: "Rejected Message".to_string(),
+            error_code: Some("Error code".to_string()),
+        },
+        signatures: vec![],
+    };
 
     let (query_mock, url) = mock(
         "POST",

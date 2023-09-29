@@ -100,14 +100,15 @@ fn canister_reject_call() {
 
         let result = alice.wallet_send(*bob.canister_id(), 1_000_000).await;
 
-        assert_eq!(
+        assert!(matches!(
             result,
             Err(AgentError::ReplicaError(RejectResponse {
                 reject_code: RejectCode::DestinationInvalid,
-                reject_message: "method does not exist: wallet_send".to_string(),
-                error_code: None
-            }))
-        );
+                reject_message,
+                error_code: None,
+                ..
+            })) if reject_message == "method does not exist: wallet_send"
+        ));
 
         Ok(())
     });
@@ -543,7 +544,7 @@ mod sign_send {
                 .await?;
 
             assert!(
-                matches!(response, RequestStatusResponse::Replied(ReplyResponse { arg: result }) if result == b"hello")
+                matches!(response, RequestStatusResponse::Replied(ReplyResponse { arg: result, .. }) if result == b"hello")
             );
             Ok(())
         })

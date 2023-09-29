@@ -14,7 +14,9 @@ pub use builder::AgentBuilder;
 pub use ic_transport_types::{
     signed, EnvelopeContent, RejectCode, RejectResponse, ReplyResponse, RequestStatusResponse,
 };
+use moka::sync::{Cache, CacheBuilder};
 pub use nonce::{NonceFactory, NonceGenerator};
+use rangemap::{RangeInclusiveMap, StepFns};
 use time::OffsetDateTime;
 
 #[cfg(test)]
@@ -39,14 +41,18 @@ use serde::Serialize;
 use status::Status;
 use std::{
     borrow::Cow,
+    collections::HashMap,
     convert::TryFrom,
     fmt,
     future::Future,
+    ops::RangeInclusive,
     pin::Pin,
     sync::{Arc, RwLock},
     task::{Context, Poll},
     time::Duration,
 };
+
+use self::response_authentication::lookup_subnet;
 
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 
@@ -237,6 +243,7 @@ pub struct Agent {
     ingress_expiry: Duration,
     root_key: Arc<RwLock<Vec<u8>>>,
     transport: Arc<dyn Transport>,
+    subnet_key_cache: Arc<RwLock<SubnetCache>>,
 }
 
 impl fmt::Debug for Agent {
@@ -266,6 +273,7 @@ impl Agent {
             transport: config
                 .transport
                 .ok_or_else(AgentError::MissingReplicaTransport)?,
+            subnet_key_cache: Arc::new(RwLock::new(SubnetCache::new())),
         })
     }
 
@@ -397,12 +405,12 @@ impl Agent {
     ) -> Result<Vec<u8>, AgentError> {
         let content = self.query_content(canister_id, method_name, arg, ingress_expiry_datetime)?;
         let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
-        self.query_endpoint::<QueryResponse>(effective_canister_id, serialized_bytes)
-            .await
-            .and_then(|response| match response {
-                QueryResponse::Replied { reply } => Ok(reply.arg),
-                QueryResponse::Rejected(response) => Err(AgentError::ReplicaError(response)),
-            })
+        self.query_inner(
+            effective_canister_id,
+            serialized_bytes,
+            content.to_request_id(),
+        )
+        .await
     }
 
     /// Send the signed query to the network. Will return a byte vector.
@@ -413,14 +421,47 @@ impl Agent {
         effective_canister_id: Principal,
         signed_query: Vec<u8>,
     ) -> Result<Vec<u8>, AgentError> {
-        let _envelope: Envelope =
+        let envelope: Envelope =
             serde_cbor::from_slice(&signed_query).map_err(AgentError::InvalidCborData)?;
-        self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query)
-            .await
-            .and_then(|response| match response {
-                QueryResponse::Replied { reply } => Ok(reply.arg),
-                QueryResponse::Rejected(response) => Err(AgentError::ReplicaError(response)),
-            })
+        self.query_inner(
+            effective_canister_id,
+            signed_query,
+            envelope.content.to_request_id(),
+        )
+        .await
+    }
+
+    /// Helper function for performing both the query call and possibly a read_state to check the subnet node keys.
+    ///
+    /// This should be used instead of `query_endpoint`. No validation is performed on `signed_query`.
+    async fn query_inner(
+        &self,
+        effective_canister_id: Principal,
+        signed_query: Vec<u8>,
+        request_id: RequestId,
+    ) -> Result<Vec<u8>, AgentError> {
+        let (response, subnet) = futures_util::try_join!(
+            self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query),
+            self.get_subnet_by_canister(&effective_canister_id)
+        )?;
+        for signature in response.signatures() {
+            let signable = response.signable(request_id, signature.timestamp);
+            let node_key = subnet
+                .node_keys
+                .get(&signature.identity)
+                .ok_or(AgentError::CertificateNotAuthorized())?;
+            ic_verify_bls_signature::verify_bls_signature(
+                &signature.signature,
+                &signable,
+                node_key,
+            )
+            .map_err(|_| AgentError::CertificateVerificationFailed())?;
+        }
+
+        match response {
+            QueryResponse::Replied { reply, .. } => Ok(reply.arg),
+            QueryResponse::Rejected { reject, .. } => Err(AgentError::ReplicaError(reject)),
+        }
     }
 
     fn query_content(
@@ -513,7 +554,9 @@ impl Agent {
                 Ok(PollResult::Accepted)
             }
 
-            RequestStatusResponse::Replied(ReplyResponse { arg }) => Ok(PollResult::Completed(arg)),
+            RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => {
+                Ok(PollResult::Completed(arg))
+            }
 
             RequestStatusResponse::Rejected(response) => Err(AgentError::ReplicaError(response)),
 
@@ -643,7 +686,7 @@ impl Agent {
                     delegation.subnet_id.as_ref(),
                     "canister_ranges".as_bytes(),
                 ];
-                let canister_range = lookup_value(&cert, canister_range_lookup)?;
+                let canister_range = lookup_value(&cert.tree, canister_range_lookup)?;
                 let ranges: Vec<(Principal, Principal)> =
                     serde_cbor::from_slice(canister_range).map_err(AgentError::InvalidCborData)?;
                 if !principal_is_within_ranges(&effective_canister_id, &ranges[..]) {
@@ -656,7 +699,7 @@ impl Agent {
                     delegation.subnet_id.as_ref(),
                     "public_key".as_bytes(),
                 ];
-                lookup_value(&cert, public_key_path).map(|pk| pk.to_vec())
+                lookup_value(&cert.tree, public_key_path).map(|pk| pk.to_vec())
             }
         }
     }
@@ -778,6 +821,31 @@ impl Agent {
             request_id,
             signed_request_status,
         })
+    }
+
+    async fn get_subnet_by_canister(
+        &self,
+        canister: &Principal,
+    ) -> Result<Arc<Subnet>, AgentError> {
+        let subnet = self
+            .subnet_key_cache
+            .read()
+            .unwrap()
+            .get_subnet_by_canister(canister);
+        if let Some(subnet) = subnet {
+            Ok(subnet)
+        } else {
+            let cert = self
+                .read_state_raw(vec![vec!["subnet".into()]], *canister)
+                .await?;
+            let (subnet_id, subnet) = lookup_subnet(&cert)?;
+            let subnet = Arc::new(subnet);
+            self.subnet_key_cache
+                .write()
+                .unwrap()
+                .insert_subnet(subnet_id, subnet.clone());
+            Ok(subnet)
+        }
     }
 }
 
@@ -1015,6 +1083,73 @@ pub fn signed_request_status_inspect(
         }
     }
     Ok(())
+}
+
+#[derive(Clone)]
+struct SubnetCache {
+    subnets: Cache<Principal, Arc<Subnet>>,
+    canister_index: RangeInclusiveMap<Principal, Principal, PrincipalStep>,
+}
+
+impl SubnetCache {
+    fn new() -> Self {
+        Self {
+            subnets: CacheBuilder::new(64)
+                .time_to_live(Duration::from_secs(300))
+                .build(),
+            canister_index: RangeInclusiveMap::new_with_step_fns(),
+        }
+    }
+
+    fn get_subnet_by_canister(&self, canister: &Principal) -> Option<Arc<Subnet>> {
+        self.canister_index
+            .get(canister)
+            .and_then(|subnet_id| self.subnets.get(subnet_id))
+    }
+
+    fn insert_subnet(&mut self, subnet_id: Principal, subnet: Arc<Subnet>) {
+        self.subnets.insert(subnet_id, subnet.clone());
+        for range in &subnet.canister_ranges {
+            self.canister_index.insert(range.clone(), subnet_id);
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct PrincipalStep;
+
+impl StepFns<Principal> for PrincipalStep {
+    fn add_one(start: &Principal) -> Principal {
+        let bytes = start.as_slice();
+        let mut arr = [0; 29];
+        arr[..bytes.len()].copy_from_slice(bytes);
+        for byte in arr[..bytes.len()].iter_mut().rev() {
+            *byte = byte.wrapping_add(1);
+            if *byte != 0 {
+                break;
+            }
+        }
+        Principal::from_slice(&arr[..bytes.len()])
+    }
+    fn sub_one(start: &Principal) -> Principal {
+        let bytes = start.as_slice();
+        let mut arr = [0; 29];
+        arr[..bytes.len()].copy_from_slice(bytes);
+        for byte in arr[..bytes.len()].iter_mut() {
+            *byte = byte.wrapping_sub(1);
+            if *byte != 255 {
+                break;
+            }
+        }
+        Principal::from_slice(&arr[..bytes.len()])
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct Subnet {
+    _key: Vec<u8>,
+    node_keys: HashMap<Principal, Vec<u8>>,
+    canister_ranges: Vec<RangeInclusive<Principal>>,
 }
 
 /// A Query Request Builder.

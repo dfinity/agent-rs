@@ -103,10 +103,11 @@
 //! generally available, additional details about the versions supported will
 //! be available here.
 
-#![deny(
+#![warn(
     missing_docs,
     rustdoc::broken_intra_doc_links,
-    rustdoc::private_intra_doc_links
+    rustdoc::private_intra_doc_links,
+    clippy::future_not_send
 )]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 

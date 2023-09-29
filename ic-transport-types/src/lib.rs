@@ -122,9 +122,72 @@ pub enum QueryResponse {
     Replied {
         /// The reply from the canister.
         reply: ReplyResponse,
+
+        /// The list of node signatures.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        signatures: Vec<NodeSignature>,
     },
     /// The request was rejected.
-    Rejected(RejectResponse),
+    Rejected {
+        /// The rejection from the canister.
+        #[serde(flatten)]
+        reject: RejectResponse,
+
+        /// The list of node signatures.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        signatures: Vec<NodeSignature>,
+    },
+}
+
+impl QueryResponse {
+    /// Returns the signable form of the query response, as described in
+    /// [the spec](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-query).
+    /// This is what is signed in the `signatures` fields.
+    pub fn signable(&self, request_id: RequestId, timestamp: u64) -> Vec<u8> {
+        #[derive(Serialize)]
+        #[serde(tag = "status", rename_all = "snake_case")]
+        enum QueryResponseSignable<'a> {
+            Replied {
+                reply: &'a ReplyResponse,
+                request_id: RequestId,
+                timestamp: u64,
+            },
+            Rejected {
+                reject_code: RejectCode,
+                reject_message: &'a String,
+                #[serde(default)]
+                error_code: Option<&'a String>,
+                request_id: RequestId,
+                timestamp: u64,
+            },
+        }
+        let response = match self {
+            Self::Replied { reply, .. } => QueryResponseSignable::Replied {
+                reply,
+                request_id,
+                timestamp,
+            },
+            Self::Rejected { reject, .. } => QueryResponseSignable::Rejected {
+                error_code: reject.error_code.as_ref(),
+                reject_code: reject.reject_code,
+                reject_message: &reject.reject_message,
+                request_id,
+                timestamp,
+            },
+        };
+        let mut signable = Vec::with_capacity(44);
+        signable.extend_from_slice(b"\x0Bic-response");
+        signable.extend_from_slice(to_request_id(&response).unwrap().as_slice());
+        signable
+    }
+
+    /// Helper function to get the signatures field present in both variants.
+    pub fn signatures(&self) -> &[NodeSignature] {
+        match self {
+            Self::Rejected { signatures, .. } => signatures,
+            Self::Replied { signatures, .. } => signatures,
+        }
+    }
 }
 
 /// An IC execution error received from the replica.
@@ -245,4 +308,16 @@ pub struct SignedDelegation {
     /// The signature for the delegation.
     #[serde(with = "serde_bytes")]
     pub signature: Vec<u8>,
+}
+
+/// A response signature from an individual node.
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
+pub struct NodeSignature {
+    /// The timestamp that the signature was created at.
+    pub timestamp: u64,
+    /// The signature.
+    #[serde(with = "serde_bytes")]
+    pub signature: Vec<u8>,
+    /// The ID of the  node.
+    pub identity: Principal,
 }
