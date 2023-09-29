@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.29.0] - 2023-09-29
+
 * Added `reserved_cycles_limit` to canister creation and canister setting update options.
 * Added `reserved_cycles` and `reserved_cycles_limit` to canister status call result.
 
