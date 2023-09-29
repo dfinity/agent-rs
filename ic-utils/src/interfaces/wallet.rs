@@ -685,6 +685,7 @@ impl<'agent> WalletCanister<'agent> {
             compute_allocation: compute_allocation.map(u8::from).map(Nat::from),
             memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
+            reserved_cycles_limit: None,
         };
 
         self.update("wallet_create_canister")
@@ -713,6 +714,7 @@ impl<'agent> WalletCanister<'agent> {
             compute_allocation: compute_allocation.map(u8::from).map(Nat::from),
             memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
+            reserved_cycles_limit: None,
         };
 
         self.update("wallet_create_canister128")
@@ -722,6 +724,10 @@ impl<'agent> WalletCanister<'agent> {
     }
 
     /// Create a canister through the wallet.
+    ///
+    /// This method does not have a `reserved_cycles_limit` parameter,
+    /// as the wallet does not support the setting.  If you need to create a canister
+    /// with a `reserved_cycles_limit` set, use the management canister.
     pub async fn wallet_create_canister<'canister: 'agent>(
         &'canister self,
         cycles: u128,
@@ -831,6 +837,7 @@ impl<'agent> WalletCanister<'agent> {
             compute_allocation: compute_allocation.map(u8::from).map(Nat::from),
             memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
+            reserved_cycles_limit: None,
         };
 
         self.update("wallet_create_wallet")
@@ -859,6 +866,7 @@ impl<'agent> WalletCanister<'agent> {
             compute_allocation: compute_allocation.map(u8::from).map(Nat::from),
             memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
+            reserved_cycles_limit: None,
         };
 
         self.update("wallet_create_wallet128")

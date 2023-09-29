@@ -74,7 +74,7 @@ impl<'agent> ManagementCanister<'agent> {
 
 /// The complete canister status information of a canister. This includes
 /// the CanisterStatus, a hash of the module installed on the canister (None if nothing installed),
-/// the contoller of the canister, the canisters memory size, and its balance in cycles.
+/// the controller of the canister, the canister's memory size, and its balance in cycles.
 #[derive(Clone, Debug, Deserialize, CandidType)]
 pub struct StatusCallResult {
     /// The status of the canister.
@@ -87,6 +87,8 @@ pub struct StatusCallResult {
     pub memory_size: Nat,
     /// The canister's cycle balance.
     pub cycles: Nat,
+    /// The canister's reserved cycles balance.
+    pub reserved_cycles: Nat,
 }
 
 /// The concrete settings of a canister.
@@ -100,6 +102,8 @@ pub struct DefiniteCanisterSettings {
     pub memory_allocation: Nat,
     /// The IC will freeze a canister protectively if it will likely run out of cycles before this amount of time, in seconds (up to `u64::MAX`), has passed.
     pub freezing_threshold: Nat,
+    /// The upper limit of the canister's reserved cycles balance.
+    pub reserved_cycles_limit: Option<Nat>,
 }
 
 impl std::fmt::Display for StatusCallResult {

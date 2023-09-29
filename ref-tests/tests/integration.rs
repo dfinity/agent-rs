@@ -334,6 +334,7 @@ fn wallet_create_wallet() {
                 compute_allocation: None,
                 memory_allocation: None,
                 freezing_threshold: None,
+                reserved_cycles_limit: None,
             },
         };
         let args = Argument::from_candid((create_args,));
