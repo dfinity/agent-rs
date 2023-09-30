@@ -109,13 +109,13 @@ mod management_canister {
                     .call_and_wait()
                     .await;
 
-                assert!(matches!(&result,
+                assert!(matches!(result,
                     Err(AgentError::ReplicaError(RejectResponse {
                     reject_code: RejectCode::DestinationInvalid,
                     reject_message,
                     error_code: Some(ref error_code)
                 })) if reject_message == "Canister 75hes-oqbaa-aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-q not found" &&
-                        error_code == "IC0301"), "{result:?}");
+                        error_code == "IC0301"));
 
                 Ok(())
             })
