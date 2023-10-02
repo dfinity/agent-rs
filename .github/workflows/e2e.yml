@@ -11,7 +11,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ macos-latest, ubuntu-latest ]
-        rust: [ '1.65.0' ]
         dfx: [ '0.8.4', '0.9.2', '0.10.1', '0.11.1' ]
 
     steps:
@@ -24,11 +23,6 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-1
-      - name: Install Rust
-        run: |
-          rustup update ${{ matrix.rust }} --no-self-update
-          rustup default ${{ matrix.rust }}
-          rustup component add rustfmt
 
       - name: Provision Darwin
         if: contains(matrix.os, 'macos')

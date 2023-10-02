@@ -1,7 +1,7 @@
 [toolchain]
-channel = "1.71.1"
+# MSRV
+# Avoid updating this field unless we use new Rust features
+# Sync rust-version in workspace Cargo.toml
+channel = "1.70.0"
 components = ["rustfmt", "clippy"]
 targets = ["wasm32-unknown-unknown"]
-
-# The version only influences the local develop environment.
-# No need to sync with Cargo.toml and CI.

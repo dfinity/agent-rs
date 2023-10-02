@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  pull_request:
 
 jobs:
   build:
@@ -11,17 +12,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        name: ['linux', 'macos']
         include:
           - os: ubuntu-latest
             name: linux
+            target: x86_64-unknown-linux-musl
             binary_path: target/x86_64-unknown-linux-musl/release
             binary_files: icx
-            rust: '1.65.0'
           - os: macos-latest
             name: macos
-            binary_path: target/release
+            target: x86_64-apple-darwin
+            binary_path: target/x86_64-apple-darwin/release
             binary_files: icx
-            rust: '1.65.0'
     steps:
     - uses: actions/checkout@master
 
@@ -34,11 +36,12 @@ jobs:
         echo "--locked --release $binaries" >> $GITHUB_ENV
         echo "END" >> $GITHUB_ENV
 
-    - name: Static build
-      uses: dfinity/rust-musl-action@master
+    - name: Build
+      uses: ructions/cargo@v1
       with:
-        args: cargo build --target x86_64-unknown-linux-musl ${{ env.cargo_build_ARGS }}
-      if: contains(matrix.os, 'ubuntu')
+        command: build
+        args: --target ${{ matrix.target }} ${{ env.cargo_build_ARGS }}
+        use-cross: ${{ contains(matrix.os, 'ubuntu') }}
 
     - name: Strip binaries
       run: |
@@ -47,25 +50,18 @@ jobs:
         strip ${{ matrix.binary_files }}
       if: contains(matrix.os, 'ubuntu')
 
-    - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: ${{ matrix.rust }}
-        override: true
-      if: contains(matrix.os, 'macos')
-
-    - name: Dynamic build
+    - name: Check linkage
       run: |
-        cargo build ${{ env.cargo_build_ARGS }}
         cd ${{ matrix.binary_path }}
         otool -L ${{ matrix.binary_files }}
       if: contains(matrix.os, 'macos')
 
     - name: Create tarball of binaries
+      if: ${{ github.event_name == 'push' }}
       run: tar -zcC ${{ matrix.binary_path }} -f binaries.tar.gz ${{ matrix.binary_files }}
 
     - name: Upload tarball
+      if: ${{ github.event_name == 'push' }}
       uses: svenstaro/upload-release-action@v2
       with:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
