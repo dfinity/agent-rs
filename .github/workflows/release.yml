@@ -36,11 +36,6 @@ jobs:
         echo "--locked --release $binaries" >> $GITHUB_ENV
         echo "END" >> $GITHUB_ENV
 
-    - name: Install Rust toolchain
-      uses: ructions/toolchain@v2
-      with:
-        profile: minimal
-
     - name: Build
       uses: ructions/cargo@v1
       with:

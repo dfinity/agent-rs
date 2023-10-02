@@ -39,11 +39,6 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Install Rust
-        uses: ructions/toolchain@v2
-        with:
-          profile: minimal
-
       - name: Download cycles-wallet canister
         run: |
           wget https://github.com/dfinity/cycles-wallet/releases/download/${{ matrix.wallet-tag }}/wallet.wasm

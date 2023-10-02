@@ -24,11 +24,6 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-1
 
-      - name: Install Rust
-        uses: ructions/toolchain@v2
-        with:
-          profile: minimal
-
       - name: Install wasm-pack
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |

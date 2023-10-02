@@ -21,11 +21,6 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Install Rust
-        uses: ructions/toolchain@v2
-        with:
-          profile: minimal
-          components: clippy
       - name: Run Lint
         run: cargo clippy --verbose --tests --benches -- -D warnings
         env:

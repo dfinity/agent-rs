@@ -22,11 +22,6 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-1
 
-      - name: Install Rust
-        uses: ructions/toolchain@v2
-        with:
-          profile: minimal
-          components: rustfmt
       - name: Run Cargo Fmt
         run: cargo fmt --all -- --check
         env:
