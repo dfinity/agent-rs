@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  pull_request:
 
 jobs:
   build:
@@ -14,11 +15,13 @@ jobs:
         include:
           - os: ubuntu-latest
             name: linux
+            target: x86_64-unknown-linux-musl
             binary_path: target/x86_64-unknown-linux-musl/release
             binary_files: icx
           - os: macos-latest
             name: macos
-            binary_path: target/release
+            target: x86_64-apple-darwin
+            binary_path: target/x86_64-apple-darwin/release
             binary_files: icx
     steps:
     - uses: actions/checkout@master
@@ -41,7 +44,7 @@ jobs:
       uses: ructions/cargo@v1
       with:
         command: build
-        args: --target x86_64-unknown-linux-musl ${{ env.cargo_build_ARGS }}
+        args: --target ${{ matrix.target }} ${{ env.cargo_build_ARGS }}
         use-cross: ${{ contains(matrix.os, 'ubuntu') }}
 
     - name: Strip binaries
@@ -58,9 +61,11 @@ jobs:
       if: contains(matrix.os, 'macos')
 
     - name: Create tarball of binaries
+      if: ${{ github.ref_type == 'tag' }}
       run: tar -zcC ${{ matrix.binary_path }} -f binaries.tar.gz ${{ matrix.binary_files }}
 
     - name: Upload tarball
+      if: ${{ github.ref_type == 'tag' }}
       uses: svenstaro/upload-release-action@v2
       with:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
