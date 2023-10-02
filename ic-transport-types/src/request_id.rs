@@ -3,7 +3,7 @@
 //!
 //! A request ID is a SHA256 hash of the request's body. See
 //! [Representation-independent Hashing of Structured Data](https://internetcomputer.org/docs/current/references/ic-interface-spec#hash-of-map)
-/// from the IC spec for the method of calculation.
+//! from the IC spec for the method of calculation.
 use error::RequestIdFromStringError;
 use serde::{
     ser::{
@@ -60,7 +60,7 @@ impl RequestId {
     }
 
     /// Returns the signable form of the request ID, by prepending `"\x0Aic-request"` to it,
-    /// for use in [`Identity::sign`](crate::identity::Identity::sign).
+    /// for use in [`Identity::sign`](https://docs.rs/ic-agent/latest/ic_agent/trait.Identity.html#tymethod.sign).
     pub fn signable(&self) -> Vec<u8> {
         let mut signable = Vec::with_capacity(43);
         signable.extend_from_slice(IC_REQUEST_DOMAIN_SEPARATOR);
