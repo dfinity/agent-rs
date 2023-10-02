@@ -12,6 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        name: ['linux', 'macos']
         include:
           - os: ubuntu-latest
             name: linux
@@ -61,11 +62,11 @@ jobs:
       if: contains(matrix.os, 'macos')
 
     - name: Create tarball of binaries
-      if: ${{ github.ref_type == 'tag' }}
+      if: ${{ github.event_name == 'push' }}
       run: tar -zcC ${{ matrix.binary_path }} -f binaries.tar.gz ${{ matrix.binary_files }}
 
     - name: Upload tarball
-      if: ${{ github.ref_type == 'tag' }}
+      if: ${{ github.event_name == 'push' }}
       uses: svenstaro/upload-release-action@v2
       with:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
