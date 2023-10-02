@@ -24,8 +24,6 @@ jobs:
           node-version: 16
 
       - uses: actions/checkout@v2
-        with:
-          path: main
 
       - name: Install dfx
         uses: dfinity/setup-dfx@main
@@ -65,7 +63,6 @@ jobs:
           export IC_REF_PORT=$(dfx info replica-port)
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
           export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
-          cd main
           cargo test --all-features -- --ignored
           dfx stop
         env:
@@ -92,7 +89,7 @@ jobs:
           export IC_REF_PORT=$(dfx info replica-port)
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
           export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
-          cd main/ref-tests
+          cd ref-tests
           cargo test --all-features -- --ignored --nocapture --test-threads=1
           dfx stop
         env:
@@ -109,7 +106,6 @@ jobs:
           dfx start --background --clean
           sleep 1
           export IC_REF_PORT=$(dfx info replica-port)
-          cd main
           cargo test --all-features --doc -- --ignored
           dfx stop
         env:
