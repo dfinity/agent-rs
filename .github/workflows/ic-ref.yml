@@ -17,7 +17,6 @@ jobs:
             ic-hs-ref: "3d71032e"
             wallet-tag: "20230308"
             os: ubuntu-latest
-            rust: "1.65.0"
 
     steps:
       - uses: actions/setup-node@v3
@@ -43,10 +42,9 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install Rust
-        run: |
-          rustup update ${{ matrix.rust }} --no-self-update
-          rustup default ${{ matrix.rust }}
-          rustup target add wasm32-unknown-unknown
+        uses: ructions/toolchain@v2
+        with:
+          profile: minimal
 
       - name: Download cycles-wallet canister
         run: |
