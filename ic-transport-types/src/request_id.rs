@@ -350,6 +350,8 @@ impl SerializeStruct for StructSerializer {
 impl SerializeMap for StructSerializer {
     type Ok = Option<Sha256Hash>;
     type Error = RequestIdError;
+    // This implementation naïvely assumes serialize_key is called before serialize_value, with no checks.
+    // SerializeMap's documentation states that such a case is 'allowed to panic or produce bogus results.'
     fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<(), Self::Error>
     where
         T: Serialize,
