@@ -1,11 +1,9 @@
 //! This module deals with computing Request IDs based on the content of a
 //! message.
 //!
-//! We compute the `RequestId` according to the public spec, which
-//! specifies it as a "sha256" digest.
-//!
-//! A single method is exported, to_request_id, which returns a RequestId
-//! (a 256 bits slice) or an error.
+//! A request ID is a SHA256 hash of the request's body. See
+//! [Representation-independent Hashing of Structured Data](https://internetcomputer.org/docs/current/references/ic-interface-spec#hash-of-map)
+/// from the IC spec for the method of calculation.
 use error::RequestIdFromStringError;
 use serde::{
     ser::{
