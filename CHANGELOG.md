@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Types passed to the `to_request_id` function can now contain nested structs, signed integers, and externally tagged enums.
+
+## [0.29.0] - 2023-09-29
+
+* Added `reserved_cycles_limit` to canister creation and canister setting update options.
+* Added `reserved_cycles` and `reserved_cycles_limit` to canister status call result.
+
 ## [0.28.0] - 2023-09-21
 
 * Added `DelegatedIdentity`, an `Identity` implementation for consuming delegations such as those from Internet Identity.

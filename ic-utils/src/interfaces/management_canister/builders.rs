@@ -1,15 +1,16 @@
 //! Builder interfaces for some method calls of the management canister.
 
+pub use super::attributes::{
+    ComputeAllocation, FreezingThreshold, MemoryAllocation, ReservedCyclesLimit,
+};
 use crate::{
     call::AsyncCall, canister::Argument, interfaces::management_canister::MgmtMethod, Canister,
 };
 use async_trait::async_trait;
 use candid::{CandidType, Deserialize, Nat};
 use ic_agent::{export::Principal, AgentError, RequestId};
-use std::str::FromStr;
-
-pub use super::attributes::{ComputeAllocation, FreezingThreshold, MemoryAllocation};
 use std::convert::{From, TryInto};
+use std::str::FromStr;
 
 /// The set of possible canister settings. Similar to [`DefiniteCanisterSettings`](super::DefiniteCanisterSettings),
 /// but all the fields are optional.
@@ -36,6 +37,20 @@ pub struct CanisterSettings {
     ///
     /// If unspecified and a canister is being created with these settings, defaults to 2592000, i.e. ~30 days.
     pub freezing_threshold: Option<Nat>,
+
+    /// The upper limit of reserved_cycles for the canister.
+    ///
+    /// Reserved cycles are cycles that the system sets aside for future use by the canister.
+    /// If a subnet's storage exceeds 450 GiB, then every time a canister allocates new storage bytes,
+    /// the system sets aside some amount of cycles from the main balance of the canister.
+    /// These reserved cycles will be used to cover future payments for the newly allocated bytes.
+    /// The reserved cycles are not transferable and the amount of reserved cycles depends on how full the subnet is.
+    ///
+    /// If unspecified and a canister is being created with these settings, defaults to 5T cycles.
+    ///
+    /// If set to 0, disables the reservation mechanism for the canister.
+    /// Doing so will cause the canister to trap when it tries to allocate storage, if the subnet's usage exceeds 450 GiB.
+    pub reserved_cycles_limit: Option<Nat>,
 }
 
 /// A builder for a `create_canister` call.
@@ -47,6 +62,7 @@ pub struct CreateCanisterBuilder<'agent, 'canister: 'agent> {
     compute_allocation: Option<Result<ComputeAllocation, AgentError>>,
     memory_allocation: Option<Result<MemoryAllocation, AgentError>>,
     freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
+    reserved_cycles_limit: Option<Result<ReservedCyclesLimit, AgentError>>,
     is_provisional_create: bool,
     amount: Option<u128>,
     specified_id: Option<Principal>,
@@ -62,6 +78,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             compute_allocation: None,
             memory_allocation: None,
             freezing_threshold: None,
+            reserved_cycles_limit: None,
             is_provisional_create: false,
             amount: None,
             specified_id: None,
@@ -224,6 +241,32 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         self.with_optional_freezing_threshold(Some(freezing_threshold))
     }
 
+    /// Pass in a reserved cycles limit value for the canister.
+    pub fn with_reserved_cycles_limit<C, E>(self, limit: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<ReservedCyclesLimit, Error = E>,
+    {
+        self.with_optional_reserved_cycles_limit(Some(limit))
+    }
+
+    /// Pass in a reserved cycles limit optional value for the canister. If this is [None],
+    /// it will create the canister with the default limit.
+    pub fn with_optional_reserved_cycles_limit<E, C>(self, limit: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<ReservedCyclesLimit, Error = E>,
+    {
+        Self {
+            reserved_cycles_limit: limit.map(|limit| {
+                limit
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+            }),
+            ..self
+        }
+    }
+
     /// Create an [AsyncCall] implementation that, when called, will create a
     /// canister.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<(Principal,)>, AgentError> {
@@ -247,6 +290,11 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
+        let reserved_cycles_limit = match self.reserved_cycles_limit {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Ok(x)) => Some(Nat::from(u128::from(x))),
+            None => None,
+        };
 
         #[derive(Deserialize, CandidType)]
         struct Out {
@@ -267,6 +315,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     compute_allocation,
                     memory_allocation,
                     freezing_threshold,
+                    reserved_cycles_limit,
                 },
                 specified_id: self.specified_id,
             };
@@ -282,6 +331,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     compute_allocation,
                     memory_allocation,
                     freezing_threshold,
+                    reserved_cycles_limit,
                 })
                 .with_effective_canister_id(self.effective_canister_id)
         };
@@ -466,6 +516,7 @@ pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent> {
     compute_allocation: Option<Result<ComputeAllocation, AgentError>>,
     memory_allocation: Option<Result<MemoryAllocation, AgentError>>,
     freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
+    reserved_cycles_limit: Option<Result<ReservedCyclesLimit, AgentError>>,
 }
 
 impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
@@ -478,6 +529,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             compute_allocation: None,
             memory_allocation: None,
             freezing_threshold: None,
+            reserved_cycles_limit: None,
         }
     }
 
@@ -595,6 +647,31 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         self.with_optional_freezing_threshold(Some(freezing_threshold))
     }
 
+    /// Pass in a reserved cycles limit value for the canister.
+    pub fn with_reserved_cycles_limit<C, E>(self, limit: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<ReservedCyclesLimit, Error = E>,
+    {
+        self.with_optional_reserved_cycles_limit(Some(limit))
+    }
+
+    /// Pass in a reserved cycles limit optional value for the canister.
+    /// If this is [None], leaves the reserved cycles limit unchanged.
+    pub fn with_optional_reserved_cycles_limit<E, C>(self, limit: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<ReservedCyclesLimit, Error = E>,
+    {
+        Self {
+            reserved_cycles_limit: limit.map(|ma| {
+                ma.try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+            }),
+            ..self
+        }
+    }
+
     /// Create an [AsyncCall] implementation that, when called, will update a
     /// canisters settings.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
@@ -624,6 +701,11 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
+        let reserved_cycles_limit = match self.reserved_cycles_limit {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Ok(x)) => Some(Nat::from(u128::from(x))),
+            None => None,
+        };
 
         Ok(self
             .canister
@@ -635,6 +717,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
                     compute_allocation,
                     memory_allocation,
                     freezing_threshold,
+                    reserved_cycles_limit,
                 },
             })
             .with_effective_canister_id(self.canister_id)

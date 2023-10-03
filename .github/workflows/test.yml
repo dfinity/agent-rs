@@ -11,7 +11,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        rust: ["1.65.0"]
         os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
@@ -24,12 +23,6 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-1
-
-      - name: Install Rust
-        run: |
-          rustup update ${{ matrix.rust }} --no-self-update
-          rustup default ${{ matrix.rust }}
-          rustup target add wasm32-unknown-unknown
 
       - name: Install wasm-pack
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -52,7 +45,7 @@ jobs:
       - name: Run Tests (WASM)
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
-          CARGO_TARGET_DIR=../target/wasm wasm-pack test --chrome --headless ic-agent --features wasm-bindgen
+          CARGO_TARGET_DIR=target/wasm wasm-pack test --chrome --headless ic-agent --features wasm-bindgen
 
       - name: Purge for OSX
         if: matrix.os == 'macos-latest'

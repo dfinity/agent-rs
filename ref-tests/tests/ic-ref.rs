@@ -62,10 +62,16 @@ mod management_canister {
     };
     use sha2::{Digest, Sha256};
     use std::collections::HashSet;
+    use std::convert::TryInto;
 
     mod create_canister {
         use super::with_agent;
-        use ic_agent::{export::Principal, AgentError};
+        use ic_agent::{
+            agent::{RejectCode, RejectResponse},
+            export::Principal,
+            AgentError,
+        };
+
         use ic_utils::interfaces::ManagementCanister;
         use ref_tests::get_effective_canister_id;
         use std::str::FromStr;
@@ -103,13 +109,14 @@ mod management_canister {
                     .call_and_wait()
                     .await;
 
-                let payload_content =
-                    "canister does not exist: 75hes-oqbaa-aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-q"
-                        .to_string();
-
                 assert!(matches!(result,
-                    Err(AgentError::HttpError(payload))
-                        if String::from_utf8(payload.content.clone()).expect("Expected utf8") == payload_content));
+                    Err(AgentError::ReplicaError(RejectResponse {
+                    reject_code: RejectCode::DestinationInvalid,
+                    reject_message,
+                    error_code: Some(ref error_code)
+                })) if reject_message == "Canister 75hes-oqbaa-aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-q not found" &&
+                        error_code == "IC0301"));
+
                 Ok(())
             })
         }
@@ -164,7 +171,7 @@ mod management_canister {
                 .with_mode(InstallMode::Reinstall)
                 .call_and_wait()
                 .await;
-            assert!(matches!(result, Err(AgentError::HttpError(..))));
+            assert!(matches!(result, Err(AgentError::ReplicaError(..))));
 
             // Upgrade should succeed.
             ic00.install_code(&canister_id, &canister_wasm)
@@ -178,7 +185,7 @@ mod management_canister {
                 .with_mode(InstallMode::Upgrade)
                 .call_and_wait()
                 .await;
-            assert!(matches!(result, Err(AgentError::HttpError(..))));
+            assert!(matches!(result, Err(AgentError::ReplicaError(..))));
 
             // Change controller.
             ic00.update_settings(&canister_id)
@@ -192,9 +199,14 @@ mod management_canister {
                 .with_controller(other_agent_principal)
                 .call_and_wait()
                 .await;
-            assert!(matches!(result, Err(AgentError::HttpError(payload))
-                if String::from_utf8(payload.content.clone()).expect("Expected utf8")
-                    == *"Wrong sender"));
+            assert!(
+                matches!(result, Err(AgentError::ReplicaError(RejectResponse{
+                reject_code: RejectCode::CanisterError,
+                reject_message,
+                error_code: Some(ref error_code),
+            })) if reject_message == format!("Only controllers of canister {} can call ic00 method update_settings", canister_id) &&
+                    error_code == "IC0512")
+            );
 
             // Reinstall as new controller
             other_ic00
@@ -411,8 +423,8 @@ mod management_canister {
                 matches!(result, Err(AgentError::ReplicaError(RejectResponse{
                 reject_code: RejectCode::CanisterError,
                 reject_message,
-                ..
-            })) if reject_message == "canister is not running")
+                error_code: None,
+            })) if reject_message == format!("Canister {} is stopped", canister_id))
             );
 
             // Can't call query on a stopped canister
@@ -421,8 +433,9 @@ mod management_canister {
                 matches!(result, Err(AgentError::ReplicaError(RejectResponse{
                 reject_code: RejectCode::CanisterError,
                 reject_message,
-                ..
-            })) if reject_message == "canister is stopped")
+                error_code: Some(ref error_code),
+            })) if reject_message == format!("IC0508: Canister {} is stopped and therefore does not have a CallContextManager", canister_id) &&
+                    error_code == "IC0508")
             );
 
             // Upgrade should succeed
@@ -444,8 +457,8 @@ mod management_canister {
                 matches!(result, Err(AgentError::ReplicaError(RejectResponse{
                 reject_code: RejectCode::DestinationInvalid,
                 reject_message,
-                ..
-            })) if reject_message == "method does not exist: update")
+                error_code: None,
+            })) if reject_message == format!("Canister {} has no update method 'update'", canister_id))
             );
 
             // Can call query
@@ -454,16 +467,13 @@ mod management_canister {
                 matches!(result, Err(AgentError::ReplicaError(RejectResponse{
                 reject_code: RejectCode::DestinationInvalid,
                 reject_message,
-                ..
-            })) if reject_message == "query method does not exist")
+                error_code: Some(ref error_code),
+            })) if reject_message == format!("IC0302: Canister {} has no query method 'query'", canister_id) &&
+                    error_code == "IC0302")
             );
 
             // Another start is a noop
             ic00.start_canister(&canister_id).call_and_wait().await?;
-
-            // Delete a running canister should fail.
-            let result = ic00.delete_canister(&canister_id).call_and_wait().await;
-            assert!(matches!(result, Err(AgentError::ReplicaError { .. })));
 
             // Stop should succeed.
             ic00.stop_canister(&canister_id).call_and_wait().await?;
@@ -473,9 +483,14 @@ mod management_canister {
 
             // Cannot call update
             let result = agent.update(&canister_id, "update").call_and_wait().await;
-            assert!(matches!(result, Err(AgentError::HttpError(payload))
-                if String::from_utf8(payload.content.clone()).expect("Expected utf8")
-                    == format!("canister no longer exists: {}", canister_id.to_text())));
+            assert!(
+                matches!(result, Err(AgentError::ReplicaError(RejectResponse{
+                reject_code: RejectCode::DestinationInvalid,
+                reject_message,
+                error_code: Some(ref error_code),
+            })) if reject_message == format!("Canister {} not found", canister_id) &&
+                    error_code == "IC0301")
+            );
 
             // Cannot call query
             let result = agent.query(&canister_id, "query").with_arg([]).call().await;
@@ -483,17 +498,21 @@ mod management_canister {
                 matches!(result, Err(AgentError::ReplicaError(RejectResponse{
                 reject_code: RejectCode::DestinationInvalid,
                 reject_message,
-                ..
-            })) if reject_message
-                    == format!("canister no longer exists: {}", canister_id.to_text()))
+                error_code: Some(ref error_code)
+            })) if reject_message == format!("IC0301: Canister {} not found", canister_id) &&
+                    error_code == "IC0301")
             );
 
             // Cannot query canister status
             let result = ic00.canister_status(&canister_id).call_and_wait().await;
             assert!(match result {
-                Err(AgentError::HttpError(payload))
-                    if String::from_utf8(payload.content.clone()).expect("Expected utf8")
-                        == format!("canister no longer exists: {}", canister_id.to_text()) =>
+                Err(AgentError::ReplicaError(RejectResponse{
+                                                 reject_code: RejectCode::DestinationInvalid,
+                                                 reject_message,
+                                                 error_code: Some(ref error_code)
+                                             }))
+                        if reject_message == format!("Canister {} not found", canister_id) &&
+                            error_code == "IC0301" =>
                     true,
                 Ok((_status_call_result,)) => false,
                 _ => false,
@@ -501,9 +520,14 @@ mod management_canister {
 
             // Delete a deleted canister should fail.
             let result = ic00.delete_canister(&canister_id).call_and_wait().await;
-            assert!(matches!(result, Err(AgentError::HttpError(payload))
-                if String::from_utf8(payload.content.clone()).expect("Expected utf8")
-                    == format!("canister no longer exists: {}", canister_id.to_text())));
+            assert!(
+                matches!(result, Err(AgentError::ReplicaError(RejectResponse{
+                reject_code: RejectCode::DestinationInvalid,
+                reject_message,
+                error_code: Some(ref error_code)
+            })) if reject_message == format!("Canister {} not found", canister_id) &&
+                    error_code == "IC0301")
+            );
             Ok(())
         })
     }
@@ -538,33 +562,51 @@ mod management_canister {
                 .start_canister(&canister_id)
                 .call_and_wait()
                 .await;
-            assert!(matches!(result, Err(AgentError::HttpError(payload))
-                if String::from_utf8(payload.content.clone()).expect("Expected utf8")
-                    == *"Wrong sender"));
+            assert!(matches!(result,
+                    Err(AgentError::ReplicaError(RejectResponse {
+                    reject_code: RejectCode::CanisterError,
+                    reject_message,
+                    error_code: Some(ref error_code)
+                })) if reject_message == format!("Only controllers of canister {} can call ic00 method start_canister", canister_id) &&
+                        error_code == "IC0512"));
 
             // Stop as a wrong controller should fail.
             let result = other_ic00.stop_canister(&canister_id).call_and_wait().await;
-            assert!(matches!(result, Err(AgentError::HttpError(payload))
-                if String::from_utf8(payload.content.clone()).expect("Expected utf8")
-                    == *"Wrong sender"));
+            assert!(
+                matches!(result,
+                    Err(AgentError::ReplicaError(RejectResponse {
+                    reject_code: RejectCode::CanisterError,
+                    reject_message,
+                    error_code: Some(ref error_code)
+                })) if reject_message == format!("Only controllers of canister {} can call ic00 method stop_canister", canister_id) &&
+                        error_code == "IC0512")
+            );
 
             // Get canister status as a wrong controller should fail.
             let result = other_ic00
                 .canister_status(&canister_id)
                 .call_and_wait()
                 .await;
-            assert!(matches!(result, Err(AgentError::HttpError(payload))
-                if String::from_utf8(payload.content.clone()).expect("Expected utf8")
-                    == *"Wrong sender"));
+            assert!(matches!(result,
+                    Err(AgentError::ReplicaError(RejectResponse {
+                    reject_code: RejectCode::CanisterError,
+                    reject_message,
+                    error_code: Some(ref error_code)
+                })) if reject_message == format!("Only controllers of canister {} can call ic00 method canister_status", canister_id) &&
+                        error_code == "IC0512"));
 
             // Delete as a wrong controller should fail.
             let result = other_ic00
                 .delete_canister(&canister_id)
                 .call_and_wait()
                 .await;
-            assert!(matches!(result, Err(AgentError::HttpError(payload))
-                if String::from_utf8(payload.content.clone()).expect("Expected utf8")
-                    == *"Wrong sender"));
+            assert!(matches!(result,
+                    Err(AgentError::ReplicaError(RejectResponse {
+                    reject_code: RejectCode::CanisterError,
+                    reject_message,
+                    error_code: Some(ref error_code)
+                })) if reject_message == format!("Only controllers of canister {} can call ic00 method delete_canister", canister_id) &&
+                        error_code == "IC0512"));
 
             Ok(())
         })
@@ -591,13 +633,20 @@ mod management_canister {
                     compute_allocation: None,
                     memory_allocation: None,
                     freezing_threshold: None,
+                    reserved_cycles_limit: None,
                 },
             };
 
             let args = Argument::from_candid((create_args,));
 
+            let creation_fee = 8000000000;
             let (create_result,): (CreateResult,) = wallet
-                .call(Principal::management_canister(), "create_canister", args, 0)
+                .call(
+                    Principal::management_canister(),
+                    "create_canister",
+                    args,
+                    creation_fee,
+                )
                 .call_and_wait()
                 .await?;
             let canister_id = create_result.canister_id;
@@ -614,7 +663,7 @@ mod management_canister {
                 .call_and_wait()
                 .await?;
 
-            assert_eq!(result.cycles, 0_u64);
+            assert!(result.cycles > 0_u64 && result.cycles < creation_fee);
 
             let ic00 = ManagementCanister::create(&agent);
             // cycle balance is default_canister_balance when creating with
@@ -626,7 +675,10 @@ mod management_canister {
                 .call_and_wait()
                 .await?;
             let result = ic00.canister_status(&canister_id_1).call_and_wait().await?;
-            assert_eq!(result.0.cycles, default_canister_balance);
+            // assume some cycles are already burned
+            let cycles: i128 = result.0.cycles.0.try_into().unwrap();
+            let burned = default_canister_balance as i128 - cycles;
+            assert!(burned > 0 && burned < 100_000_000);
 
             // cycle balance should be amount specified to
             // provisional_create_canister_with_cycles call
@@ -638,7 +690,9 @@ mod management_canister {
                 .call_and_wait()
                 .await?;
             let result = ic00.canister_status(&canister_id_2).call_and_wait().await?;
-            assert_eq!(result.0.cycles, amount);
+            let cycles: i128 = result.0.cycles.0.try_into().unwrap();
+            let burned = amount as i128 - cycles;
+            assert!(burned > 0 && burned < 100_000_000);
 
             Ok(())
         })
@@ -814,6 +868,7 @@ mod extras {
                 .with_compute_allocation(1_u64)
                 .with_memory_allocation(1024 * 1024_u64)
                 .with_freezing_threshold(1_000_000_u64)
+                .with_reserved_cycles_limit(2_500_800_000_000u128)
                 .call_and_wait()
                 .await?;
 
@@ -826,6 +881,10 @@ mod extras {
             assert_eq!(
                 result.0.settings.freezing_threshold,
                 Nat::from(1_000_000_u64)
+            );
+            assert_eq!(
+                result.0.settings.reserved_cycles_limit,
+                Some(Nat::from(2_500_800_000_000u128))
             );
 
             Ok(())
@@ -901,6 +960,78 @@ mod extras {
 
     #[ignore]
     #[test]
+    fn create_with_reserved_cycles_limit() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
+                .with_reserved_cycles_limit(2u128.pow(70))
+                .call_and_wait()
+                .await
+                .unwrap();
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.reserved_cycles_limit,
+                Some(Nat::from(2u128.pow(70)))
+            );
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn update_reserved_cycles_limit() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
+                .with_effective_canister_id(get_effective_canister_id())
+                .with_reserved_cycles_limit(2_500_800_000_000u128)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.reserved_cycles_limit,
+                Some(Nat::from(2_500_800_000_000u128))
+            );
+
+            ic00.update_settings(&canister_id)
+                .with_reserved_cycles_limit(3_400_200_000_000u128)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.reserved_cycles_limit,
+                Some(Nat::from(3_400_200_000_000u128))
+            );
+
+            let no_change: Option<u128> = None;
+            ic00.update_settings(&canister_id)
+                .with_optional_reserved_cycles_limit(no_change)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.reserved_cycles_limit,
+                Some(Nat::from(3_400_200_000_000u128))
+            );
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
     fn specified_id() {
         with_agent(|agent| async move {
             let ic00 = ManagementCanister::create(&agent);
@@ -928,8 +1059,8 @@ mod extras {
                     Err(AgentError::ReplicaError(RejectResponse {
                     reject_code: RejectCode::DestinationInvalid,
                     reject_message,
-                    ..
-                })) if reject_message == "The specified_id of the created canister is already in use."));
+                    error_code: None,
+                })) if reject_message == "Canister iimsn-6yaaa-aaaaa-afiaa-cai is already installed"));
 
             Ok(())
         })

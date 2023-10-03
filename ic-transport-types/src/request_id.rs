@@ -1,17 +1,21 @@
 //! This module deals with computing Request IDs based on the content of a
 //! message.
 //!
-//! We compute the `RequestId` according to the public spec, which
-//! specifies it as a "sha256" digest.
-//!
-//! A single method is exported, to_request_id, which returns a RequestId
-//! (a 256 bits slice) or an error.
+//! A request ID is a SHA256 hash of the request's body. See
+//! [Representation-independent Hashing of Structured Data](https://internetcomputer.org/docs/current/references/ic-interface-spec#hash-of-map)
+//! from the IC spec for the method of calculation.
 use error::RequestIdFromStringError;
-use serde::{ser, Deserialize, Serialize};
+use serde::{
+    ser::{
+        SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant, SerializeTuple,
+        SerializeTupleStruct, SerializeTupleVariant,
+    },
+    Deserialize, Serialize, Serializer,
+};
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, iter::Extend, ops::Deref, str::FromStr};
+use std::{io::Write, ops::Deref, str::FromStr};
 
-pub mod error;
+mod error;
 #[doc(inline)]
 pub use error::RequestIdError;
 
@@ -19,6 +23,31 @@ const IC_REQUEST_DOMAIN_SEPARATOR: &[u8; 11] = b"\x0Aic-request";
 
 /// Type alias for a sha256 result (ie. a u256).
 type Sha256Hash = [u8; 32];
+
+/// Derive the request ID from a serializable data structure. This does not include the `ic-request` domain prefix.
+///
+/// See [Representation-independent Hashing of Structured Data](https://internetcomputer.org/docs/current/references/ic-interface-spec#hash-of-map)
+/// from the IC spec for the method of calculation.
+///
+/// # Serialization
+///
+/// This section is only relevant if you're using this function to hash your own types.
+///
+/// * Per the spec, neither of bools, floats, or nulls are supported.
+/// * Enum variants are serialized identically to `serde_json`.
+/// * `Option::None` fields are omitted entirely.
+/// * Byte strings are serialized *differently* to arrays of bytes -
+///   use of `serde_bytes` is required for correctness.
+pub fn to_request_id<'a, V>(value: &V) -> Result<RequestId, RequestIdError>
+where
+    V: 'a + Serialize,
+{
+    value
+        .serialize(RequestIdSerializer)
+        .transpose()
+        .unwrap_or(Err(RequestIdError::EmptySerializer))
+        .map(RequestId)
+}
 
 /// A Request ID.
 #[derive(Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq, Deserialize, Serialize)]
@@ -31,7 +60,7 @@ impl RequestId {
     }
 
     /// Returns the signable form of the request ID, by prepending `"\x0Aic-request"` to it,
-    /// for use in [`Identity::sign`](crate::identity::Identity::sign).
+    /// for use in [`Identity::sign`](https://docs.rs/ic-agent/latest/ic_agent/trait.Identity.html#tymethod.sign).
     pub fn signable(&self) -> Vec<u8> {
         let mut signable = Vec::with_capacity(43);
         signable.extend_from_slice(IC_REQUEST_DOMAIN_SEPARATOR);
@@ -69,656 +98,446 @@ impl From<RequestId> for String {
     }
 }
 
-enum Hasher {
-    /// The hasher for the overall request id.  This is the only part
-    /// that may directly contain a Struct.
-    RequestId(Sha256),
+// Request ID hashing in all contexts is implemented as a serde Serializer to eliminate any special-casing.
+struct RequestIdSerializer;
 
-    /// A structure to be included in the hash.  May not contain other structures.
-    Struct {
-        // We use a BTreeMap here as there is no indication that keys might not be duplicated,
-        // and we want to make sure they're overwritten in that case.
-        fields: BTreeMap<Sha256Hash, Sha256Hash>,
-        parent: Box<Hasher>,
-    },
-
-    /// The hasher for a value.  Array elements will append the hash of their
-    /// contents into the hasher of the array.
-    Value(Sha256),
-}
-
-impl Hasher {
-    fn request_id() -> Hasher {
-        Hasher::RequestId(Sha256::new())
-    }
-
-    fn fields(parent: Box<Hasher>) -> Hasher {
-        Hasher::Struct {
-            fields: BTreeMap::new(),
-            parent,
-        }
-    }
-
-    fn value() -> Hasher {
-        Hasher::Value(Sha256::new())
-    }
-}
-
-/// A Serde Serializer that collects fields and values in order to hash them later.
-/// We serialize the type to this structure, then use the trait to hash its content.
-/// It is a simple state machine that contains 3 states:
-///   1. The root value, which is a structure. If a value other than a structure is
-///      serialized, this errors. This is determined by whether `fields` is Some(_).
-///   2. The structure is being processed, and the value of a field is being
-///      serialized. The field_value_hash will be set to Some(_).
-///   3. The finish() function has been called and the hasher cannot be reused. The
-///      hash should have been gotten at this point.
-///
-/// Inconsistent state are when a field is being serialized and `fields` is None, or
-/// when a value (not struct) is being serialized and field_value_hash is None.
-///
-/// This will always fail on types that are unknown to the Request format (e.g. i8).
-/// An UnsupportedTypeXXX error will be returned.
-///
-/// The only types that are supported right now are:
-///   . Strings and string slices.
-///   . Vector of u8 (byte strings).
-///   . A structure as the base level. Its typename and fields are not validated.
-///
-/// Additionally, this will fail if there are unsupported data structure, for example
-/// if a UnitVariant of another type than Blob is used, or a structure inside a
-/// structure.
-///
-/// This does not validate whether a message is valid. This is very important as
-/// the message format might change faster than the ID calculation.
-struct RequestIdSerializer {
-    element_encoder: Option<Hasher>,
-}
-
-impl RequestIdSerializer {
-    pub fn new() -> RequestIdSerializer {
-        Default::default()
-    }
-
-    /// Finish the hashing and returns the RequestId for the structure that was
-    /// serialized.
-    ///
-    /// This can only be called once (it borrows self). Since this whole class is not public,
-    /// it should not be a problem.
-    pub fn finish(self) -> Result<RequestId, RequestIdError> {
-        match self.element_encoder {
-            Some(Hasher::RequestId(hasher)) => Ok(RequestId(hasher.finalize().into())),
-            _ => Err(RequestIdError::EmptySerializer),
-        }
-    }
-
-    /// Hash a single value, returning its sha256_hash. If there is already a value
-    /// being hashed it will return an InvalidState. This cannot happen currently
-    /// as we don't allow embedded structures, but is left as a safeguard when
-    /// making changes.
-    fn hash_value<T>(&mut self, value: &T) -> Result<Sha256Hash, RequestIdError>
-    where
-        T: ?Sized + Serialize,
-    {
-        let prev_encoder = self.element_encoder.take();
-
-        self.element_encoder = Some(Hasher::value());
-
-        value.serialize(&mut *self)?;
-        let result = match self.element_encoder.take() {
-            Some(Hasher::Value(hasher)) => Ok(hasher.finalize().into()),
-            _ => Err(RequestIdError::InvalidState),
-        };
-        self.element_encoder = prev_encoder;
-        result
-    }
-
-    fn hash_fields(&mut self) -> Result<(), RequestIdError> {
-        match self.element_encoder.take() {
-            Some(Hasher::Struct { fields, parent }) => {
-                // Sort the fields.
-                let mut keyvalues: Vec<Vec<u8>> = fields
-                    .keys()
-                    .zip(fields.values())
-                    .map(|(k, v)| {
-                        let mut x = k.to_vec();
-                        x.extend(v);
-                        x
-                    })
-                    .collect();
-                keyvalues.sort();
-
-                let mut parent = *parent;
-
-                match &mut parent {
-                    Hasher::RequestId(hasher) => {
-                        for kv in keyvalues {
-                            hasher.update(&kv);
-                        }
-                        Ok(())
-                    }
-                    _ => Err(RequestIdError::InvalidState),
-                }?;
-
-                self.element_encoder = Some(parent);
-                Ok(())
-            }
-            _ => Err(RequestIdError::InvalidState),
-        }
-    }
-}
-
-impl Default for RequestIdSerializer {
-    fn default() -> RequestIdSerializer {
-        RequestIdSerializer {
-            element_encoder: Some(Hasher::request_id()),
-        }
-    }
-}
-
-/// See https://serde.rs/data-format.html for more information on how to implement a
-/// custom data format.
-impl<'a> ser::Serializer for &'a mut RequestIdSerializer {
-    /// The output type produced by this `Serializer` during successful
-    /// serialization. Most serializers that produce text or binary output
-    /// should set `Ok = ()` and serialize into an [`io::Write`] or buffer
-    /// contained within the `Serializer` instance. Serializers that build
-    /// in-memory data structures may be simplified by using `Ok` to propagate
-    /// the data structure around.
-    ///
-    /// [`io::Write`]: https://doc.rust-lang.org/std/io/trait.Write.html
-    type Ok = ();
-
-    /// The error type when some error occurs during serialization.
+impl Serializer for RequestIdSerializer {
+    // Serde conveniently allows us to have each serialization operation return a value.
+    // Since this serializer is a hash function, this eliminates any need for a state-machine.
+    type Ok = Option<Sha256Hash>;
     type Error = RequestIdError;
 
-    // Associated types for keeping track of additional state while serializing
-    // compound data structures like sequences and maps. In this case no
-    // additional state is required beyond what is already stored in the
-    // Serializer struct.
-    type SerializeSeq = Self;
-    type SerializeTuple = Self;
-    type SerializeTupleStruct = Self;
-    type SerializeTupleVariant = Self;
-    type SerializeMap = Self;
-    type SerializeStruct = Self;
-    type SerializeStructVariant = Self;
+    // We support neither floats nor bools nor nulls.
 
-    /// Serialize a `bool` value.
     fn serialize_bool(self, _v: bool) -> Result<Self::Ok, Self::Error> {
         Err(RequestIdError::UnsupportedTypeBool)
     }
-
-    /// Serialize an `i8` value.
-    fn serialize_i8(self, _v: i8) -> Result<Self::Ok, Self::Error> {
-        Err(RequestIdError::UnsupportedTypeI8)
+    fn serialize_f32(self, _v: f32) -> Result<Self::Ok, Self::Error> {
+        Err(RequestIdError::UnsupportedTypeF32)
+    }
+    fn serialize_f64(self, _v: f64) -> Result<Self::Ok, Self::Error> {
+        Err(RequestIdError::UnsupportedTypeF64)
+    }
+    fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
+        Err(RequestIdError::UnsupportedTypeUnit)
+    }
+    fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
+        Err(RequestIdError::UnsupportedTypeUnitStruct)
     }
 
-    /// Serialize an `i16` value.
-    fn serialize_i16(self, _v: i16) -> Result<Self::Ok, Self::Error> {
-        Err(RequestIdError::UnsupportedTypeI16)
+    // Ints are serialized using signed LEB128 encoding.
+
+    fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error> {
+        let mut arr = [0u8; 10];
+        let n = leb128::write::signed(&mut &mut arr[..], v).unwrap();
+        Ok(Some(Sha256::digest(&arr[..n]).into()))
+    }
+    fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error> {
+        self.serialize_i64(v as i64)
+    }
+    fn serialize_i16(self, v: i16) -> Result<Self::Ok, Self::Error> {
+        self.serialize_i64(v as i64)
+    }
+    fn serialize_i32(self, v: i32) -> Result<Self::Ok, Self::Error> {
+        self.serialize_i64(v as i64)
     }
 
-    /// Serialize an `i32` value.
-    fn serialize_i32(self, _v: i32) -> Result<Self::Ok, Self::Error> {
-        Err(RequestIdError::UnsupportedTypeI32)
-    }
+    // Uints are serialized using unsigned LEB128 encoding.
 
-    /// Serialize an `i64` value.
-    fn serialize_i64(self, _v: i64) -> Result<Self::Ok, Self::Error> {
-        Err(RequestIdError::UnsupportedTypeI64)
+    fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
+        let mut arr = [0u8; 10];
+        let n = leb128::write::unsigned(&mut &mut arr[..], v).unwrap();
+        Ok(Some(Sha256::digest(&arr[..n]).into()))
     }
-
-    /// Serialize a `u8` value.
     fn serialize_u8(self, v: u8) -> Result<Self::Ok, Self::Error> {
         self.serialize_u64(v as u64)
     }
-
-    /// Serialize a `u16` value.
     fn serialize_u16(self, v: u16) -> Result<Self::Ok, Self::Error> {
         self.serialize_u64(v as u64)
     }
-
-    /// Serialize a `u32` value.
     fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
         self.serialize_u64(v as u64)
     }
 
-    /// Serialize a `u64` value.
-    fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
-        // 10 bytes is enough for a 64-bit number in leb128.
-        let mut buffer = [0; 10];
-        let mut writable = &mut buffer[..];
-        let n_bytes =
-            leb128::write::unsigned(&mut writable, v).expect("Could not serialize number.");
-        self.serialize_bytes(&buffer[..n_bytes])
+    // Bytes are serialized as-is.
+
+    fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
+        Ok(Some(Sha256::digest(v).into()))
     }
 
-    /// Serialize an `f32` value.
-    fn serialize_f32(self, _v: f32) -> Result<Self::Ok, Self::Error> {
-        Err(RequestIdError::UnsupportedTypeF32)
-    }
+    // Strings are serialized as UTF-8 bytes.
 
-    /// Serialize an `f64` value.
-    fn serialize_f64(self, _v: f64) -> Result<Self::Ok, Self::Error> {
-        Err(RequestIdError::UnsupportedTypeF64)
-    }
-
-    /// Serialize a character.
-    fn serialize_char(self, _v: char) -> Result<Self::Ok, Self::Error> {
-        Err(RequestIdError::UnsupportedTypeChar)
-    }
-
-    /// Serialize a `&str`.
     fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
         self.serialize_bytes(v.as_bytes())
     }
-
-    /// Serialize a chunk of raw byte data.
-    fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
-        match &mut self.element_encoder {
-            Some(Hasher::RequestId(hasher)) => {
-                hasher.update(v);
-                Ok(())
-            }
-            Some(Hasher::Value(hasher)) => {
-                hasher.update(v);
-                Ok(())
-            }
-            _ => Err(RequestIdError::InvalidState),
-        }
+    fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
+        let mut utf8 = [0u8; 4];
+        let str = v.encode_utf8(&mut utf8);
+        self.serialize_bytes(str.as_bytes())
     }
-
-    /// Serialize a [`None`] value.
-    fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        // Compute the hash as if it was empty string or blob.
-        Ok(())
-    }
-
-    /// Serialize a [`Some(T)`] value.
-    fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: Serialize,
-    {
-        // Compute the hash as if it was the value itself.
-        value.serialize(self)
-    }
-
-    /// Serialize a `()` value.
-    fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        Err(RequestIdError::UnsupportedTypeUnit)
-    }
-
-    /// Serialize a unit struct like `struct Unit` or `PhantomData<T>`.
-    fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
-        Err(RequestIdError::UnsupportedTypePhantomData)
-    }
-
-    /// Serialize a unit variant like `E::A` in `enum E { A, B }`.
     fn serialize_unit_variant(
         self,
         _name: &'static str,
         _variant_index: u32,
-        _variant: &'static str,
+        variant: &'static str,
     ) -> Result<Self::Ok, Self::Error> {
-        Err(RequestIdError::UnsupportedTypeUnitVariant)
+        self.serialize_str(variant)
     }
 
-    /// Serialize a newtype struct like `struct Millimeters(u8)`.
+    // Newtypes, including Option::Some, are transparent.
+
+    fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
+    where
+        T: Serialize,
+    {
+        value.serialize(self)
+    }
     fn serialize_newtype_struct<T: ?Sized>(
         self,
-        name: &'static str,
-        _value: &T,
-    ) -> Result<Self::Ok, Self::Error>
-    where
-        T: Serialize,
-    {
-        Err(RequestIdError::UnsupportedTypeNewtypeStruct(
-            name.to_owned(),
-        ))
-    }
-
-    /// Serialize a newtype variant like `E::N` in `enum E { N(u8) }`.
-    fn serialize_newtype_variant<T: ?Sized>(
-        self,
         _name: &'static str,
-        _variant_index: u32,
-        _variant: &'static str,
-        _value: &T,
+        value: &T,
     ) -> Result<Self::Ok, Self::Error>
     where
         T: Serialize,
     {
-        Err(RequestIdError::UnsupportedTypeNewTypeVariant)
+        value.serialize(self)
     }
 
-    /// Begin to serialize a variably sized sequence. This call must be
-    /// followed by zero or more calls to `serialize_element`, then a call to
-    /// `end`.
-    fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
-        Ok(self)
+    // Fields containing None are omitted from the containing struct or array.
+
+    fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
+        Ok(None)
     }
 
-    /// Begin to serialize a statically sized sequence whose length will be
-    /// known at deserialization time without looking at the serialized data.
-    /// This call must be followed by zero or more calls to `serialize_element`,
-    /// then a call to `end`.
-    fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
-        Err(RequestIdError::UnsupportedTypeTuple)
-    }
+    // Arrays, tuples, and tuple structs are treated identically.
 
-    /// Begin to serialize a tuple struct like `struct Rgb(u8, u8, u8)`. This
-    /// call must be followed by zero or more calls to `serialize_field`, then a
-    /// call to `end`.
+    type SerializeSeq = SeqSerializer;
+    fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
+        self.serialize_tuple(len.unwrap_or(8))
+    }
+    type SerializeTuple = SeqSerializer;
+    fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, Self::Error> {
+        Ok(SeqSerializer {
+            elems: Vec::with_capacity(len),
+        })
+    }
+    type SerializeTupleStruct = SeqSerializer;
     fn serialize_tuple_struct(
         self,
         _name: &'static str,
-        _len: usize,
+        len: usize,
     ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-        Err(RequestIdError::UnsupportedTypeTupleStruct)
+        self.serialize_tuple(len)
     }
 
-    /// Begin to serialize a tuple variant like `E::T` in `enum E { T(u8, u8)
-    /// }`. This call must be followed by zero or more calls to
-    /// `serialize_field`, then a call to `end`.
+    // Maps and structs are treated identically.
+
+    type SerializeMap = StructSerializer;
+    fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
+        self.serialize_struct("", len.unwrap_or(8))
+    }
+    type SerializeStruct = StructSerializer;
+    fn serialize_struct(
+        self,
+        _name: &'static str,
+        len: usize,
+    ) -> Result<Self::SerializeStruct, Self::Error> {
+        Ok(StructSerializer {
+            fields: Vec::with_capacity(len),
+            field_name: <_>::default(),
+        })
+    }
+
+    // We apply serde_json's handling of complex variants. That is,
+    // the body is placed within a struct with one field, named the same thing as the variant.
+
+    fn serialize_newtype_variant<T: ?Sized>(
+        self,
+        name: &'static str,
+        _variant_index: u32,
+        variant: &'static str,
+        value: &T,
+    ) -> Result<Self::Ok, Self::Error>
+    where
+        T: Serialize,
+    {
+        let mut s = self.serialize_struct(name, 1)?;
+        SerializeStruct::serialize_field(&mut s, variant, value)?;
+        SerializeStruct::end(s)
+    }
+    type SerializeTupleVariant = TupleVariantSerializer;
     fn serialize_tuple_variant(
         self,
         _name: &'static str,
         _variant_index: u32,
-        _variant: &'static str,
-        _len: usize,
+        variant: &'static str,
+        len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        Err(RequestIdError::UnsupportedTypeTupleVariant)
+        Ok(TupleVariantSerializer {
+            name: variant,
+            seq_ser: SeqSerializer {
+                elems: Vec::with_capacity(len),
+            },
+        })
     }
-
-    /// Begin to serialize a map. This call must be followed by zero or more
-    /// calls to `serialize_key` and `serialize_value`, then a call to `end`.
-    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        Err(RequestIdError::UnsupportedTypeMap)
-    }
-
-    /// Begin to serialize a struct like `struct Rgb { r: u8, g: u8, b: u8 }`.
-    /// This call must be followed by zero or more calls to `serialize_field`,
-    /// then a call to `end`.
-    fn serialize_struct(
-        self,
-        _name: &'static str,
-        _len: usize,
-    ) -> Result<Self::SerializeStruct, Self::Error> {
-        let parent_encoder = self.element_encoder.take();
-        match &parent_encoder {
-            Some(Hasher::RequestId(_)) => {
-                self.element_encoder = Some(Hasher::fields(Box::new(parent_encoder.unwrap())));
-                Ok(self)
-            }
-            _ => Err(RequestIdError::UnsupportedStructInsideStruct),
-        }
-    }
-
-    /// Begin to serialize a struct variant like `E::S` in `enum E { S { r: u8,
-    /// g: u8, b: u8 } }`. This call must be followed by zero or more calls to
-    /// `serialize_field`, then a call to `end`.
+    type SerializeStructVariant = StructVariantSerializer;
     fn serialize_struct_variant(
         self,
         _name: &'static str,
         _variant_index: u32,
-        _variant: &'static str,
-        _len: usize,
+        variant: &'static str,
+        len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        Err(RequestIdError::UnsupportedTypeStructVariant)
+        Ok(StructVariantSerializer {
+            name: variant,
+            struct_ser: StructSerializer {
+                fields: Vec::with_capacity(len),
+                field_name: <_>::default(),
+            },
+        })
     }
 
+    // We opt into the binary encoding for Principal and other such types.
     fn is_human_readable(&self) -> bool {
         false
     }
-}
-
-// The following 7 impls deal with the serialization of compound types like
-// sequences and maps. Serialization of such types is begun by a Serializer
-// method and followed by zero or more calls to serialize individual elements of
-// the compound type and one call to end the compound type.
-//
-// This impl is SerializeSeq so these methods are called after `serialize_seq`
-// is called on the Serializer.
-impl<'a> ser::SerializeSeq for &'a mut RequestIdSerializer {
-    // Must match the `Ok` type of the serializer.
-    type Ok = ();
-    // Must match the `Error` type of the serializer.
-    type Error = RequestIdError;
-
-    // Serialize a single element of the sequence.
-    fn serialize_element<T>(&mut self, value: &T) -> Result<Self::Ok, Self::Error>
+    // Optimized version of serialize_str for types that serialize by rendering themselves to strings.
+    fn collect_str<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
     where
-        T: ?Sized + Serialize,
+        T: std::fmt::Display,
     {
-        let mut prev_encoder = self.element_encoder.take();
-
-        self.element_encoder = Some(Hasher::value());
-
-        value.serialize(&mut **self)?;
-
-        let value_encoder = self.element_encoder.take();
-        let hash = match value_encoder {
-            Some(Hasher::Value(hasher)) => Ok(hasher.finalize()),
-            _ => Err(RequestIdError::InvalidState),
-        }?;
-
-        self.element_encoder = prev_encoder.take();
-        match &mut self.element_encoder {
-            Some(Hasher::Value(hasher)) => {
-                hasher.update(hash);
-                Ok(())
-            }
-            _ => Err(RequestIdError::InvalidState),
-        }
-    }
-
-    // Close the sequence.
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
+        let mut hasher = Sha256::new();
+        write!(hasher, "{value}").map_err(|e| RequestIdError::CustomSerdeError(format!("{e}")))?;
+        Ok(Some(hasher.finalize().into()))
     }
 }
 
-// Same thing but for tuples.
-impl<'a> ser::SerializeTuple for &'a mut RequestIdSerializer {
-    type Ok = ();
-    type Error = RequestIdError;
-
-    fn serialize_element<T>(&mut self, _value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: ?Sized + Serialize,
-    {
-        Err(RequestIdError::UnsupportedTypeTuple)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
+struct StructSerializer {
+    fields: Vec<(Sha256Hash, Sha256Hash)>,
+    field_name: Sha256Hash,
 }
 
-// Same thing but for tuple structs.
-impl<'a> ser::SerializeTupleStruct for &'a mut RequestIdSerializer {
-    type Ok = ();
+// Structs are hashed by hashing each key-value pair, sorting them, concatenating them, and hashing the result.
+
+impl SerializeStruct for StructSerializer {
+    type Ok = Option<Sha256Hash>;
     type Error = RequestIdError;
-
-    fn serialize_field<T>(&mut self, _value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: ?Sized + Serialize,
-    {
-        Err(RequestIdError::UnsupportedTypeTupleStruct)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-
-// Tuple variants are a little different. Refer back to the
-// `serialize_tuple_variant` method above:
-//
-//    self.output += "{";
-//    variant.serialize(&mut *self)?;
-//    self.output += ":[";
-//
-// So the `end` method in this impl is responsible for closing both the `]` and
-// the `}`.
-impl<'a> ser::SerializeTupleVariant for &'a mut RequestIdSerializer {
-    type Ok = ();
-    type Error = RequestIdError;
-
-    fn serialize_field<T>(&mut self, _value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: ?Sized + Serialize,
-    {
-        Err(RequestIdError::UnsupportedTypeTupleVariant)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-
-// Some `Serialize` types are not able to hold a key and value in memory at the
-// same time so `SerializeMap` implementations are required to support
-// `serialize_key` and `serialize_value` individually.
-//
-// There is a third optional method on the `SerializeMap` trait. The
-// `serialize_entry` method allows serializers to optimize for the case where
-// key and value are both available simultaneously. In JSON it doesn't make a
-// difference so the default behavior for `serialize_entry` is fine.
-impl<'a> ser::SerializeMap for &'a mut RequestIdSerializer {
-    type Ok = ();
-    type Error = RequestIdError;
-
-    // The Serde data model allows map keys to be any serializable type. JSON
-    // only allows string keys so the implementation below will produce invalid
-    // JSON if the key serializes as something other than a string.
-    //
-    // A real JSON serializer would need to validate that map keys are strings.
-    // This can be done by using a different Serializer to serialize the key
-    // (instead of `&mut **self`) and having that other serializer only
-    // implement `serialize_str` and return an error on any other data type.
-    fn serialize_key<T>(&mut self, _key: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: ?Sized + Serialize,
-    {
-        Err(RequestIdError::UnsupportedTypeMap)
-    }
-
-    // It doesn't make a difference whether the colon is printed at the end of
-    // `serialize_key` or at the beginning of `serialize_value`. In this case
-    // the code is a bit simpler having it here.
-    fn serialize_value<T>(&mut self, _value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: ?Sized + Serialize,
-    {
-        Err(RequestIdError::UnsupportedTypeMap)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        self.hash_fields()
-    }
-}
-
-// Structs are like maps in which the keys are constrained to be compile-time
-// constant strings.
-impl<'a> ser::SerializeStruct for &'a mut RequestIdSerializer {
-    type Ok = ();
-    type Error = RequestIdError;
-
-    fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: ?Sized + Serialize,
-    {
-        let key_hash = self.hash_value(key)?;
-        let value_hash = self.hash_value(value)?;
-        match &mut self.element_encoder {
-            Some(Hasher::Struct { fields, .. }) => {
-                fields.insert(key_hash, value_hash);
-                Ok(())
-            }
-            _ => Err(RequestIdError::InvalidState),
-        }
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        self.hash_fields()
-    }
-}
-
-// Similar to `SerializeTupleVariant`, here the `end` method is responsible for
-// closing both of the curly braces opened by `serialize_struct_variant`.
-impl<'a> ser::SerializeStructVariant for &'a mut RequestIdSerializer {
-    type Ok = ();
-    type Error = RequestIdError;
-
-    fn serialize_field<T>(
+    fn serialize_field<T: ?Sized>(
         &mut self,
-        _key: &'static str,
-        _value: &T,
-    ) -> Result<Self::Ok, Self::Error>
+        key: &'static str,
+        value: &T,
+    ) -> Result<(), Self::Error>
     where
-        T: ?Sized + Serialize,
+        T: Serialize,
     {
-        Err(RequestIdError::UnsupportedTypeStructVariant)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
+        if let Some(hash) = value.serialize(RequestIdSerializer)? {
+            self.fields
+                .push((Sha256::digest(key.as_bytes()).into(), hash));
+        }
         Ok(())
+    }
+    fn end(mut self) -> Result<Self::Ok, Self::Error> {
+        self.fields.sort();
+        let mut hasher = Sha256::new();
+        for (key, value) in self.fields {
+            hasher.update(key);
+            hasher.update(value);
+        }
+        Ok(Some(hasher.finalize().into()))
     }
 }
 
-/// Derive the request ID from a serializable data structure.
-///
-/// See [Representation-independent Hashing of Structured Data](https://internetcomputer.org/docs/current/references/ic-interface-spec#hash-of-map)
-/// from the IC spec for the method of calculation.
-///
-/// # Warnings
-///
-/// The argument type simply needs to be serializable; the function
-/// does NOT sift between fields to include them or not and assumes
-/// the passed value only includes fields that are not part of the
-/// envelope and should be included in the calculation of the request
-/// id.
-///
-/// # Panics
-///
-/// This function panics if the value provided is not a struct or a map.
-pub fn to_request_id<'a, V>(value: &V) -> Result<RequestId, RequestIdError>
-where
-    V: 'a + Serialize,
-{
-    let mut serializer = RequestIdSerializer::new();
-    value.serialize(&mut serializer)?;
-    serializer.finish()
+impl SerializeMap for StructSerializer {
+    type Ok = Option<Sha256Hash>;
+    type Error = RequestIdError;
+    // This implementation naïvely assumes serialize_key is called before serialize_value, with no checks.
+    // SerializeMap's documentation states that such a case is 'allowed to panic or produce bogus results.'
+    fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<(), Self::Error>
+    where
+        T: Serialize,
+    {
+        match key.serialize(RequestIdSerializer)? {
+            Some(hash) => {
+                self.field_name = hash;
+                Ok(())
+            }
+            None => Err(RequestIdError::KeyWasNone),
+        }
+    }
+    fn serialize_value<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    where
+        T: Serialize,
+    {
+        if let Some(hash) = value.serialize(RequestIdSerializer)? {
+            self.fields.push((self.field_name, hash));
+        }
+        Ok(())
+    }
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        SerializeStruct::end(self)
+    }
+}
+
+struct SeqSerializer {
+    elems: Vec<Sha256Hash>,
+}
+
+// Sequences are hashed by hashing each element, concatenating the hashes, and hashing the result.
+
+impl SerializeSeq for SeqSerializer {
+    type Ok = Option<Sha256Hash>;
+    type Error = RequestIdError;
+    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    where
+        T: Serialize,
+    {
+        if let Some(hash) = value.serialize(RequestIdSerializer)? {
+            self.elems.push(hash);
+        }
+        Ok(())
+    }
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        let mut hasher = Sha256::new();
+        for elem in self.elems {
+            hasher.update(elem);
+        }
+        Ok(Some(hasher.finalize().into()))
+    }
+}
+
+impl SerializeTuple for SeqSerializer {
+    type Ok = Option<Sha256Hash>;
+    type Error = RequestIdError;
+    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    where
+        T: Serialize,
+    {
+        SerializeSeq::serialize_element(self, value)
+    }
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        SerializeSeq::end(self)
+    }
+}
+
+impl SerializeTupleStruct for SeqSerializer {
+    type Ok = Option<Sha256Hash>;
+    type Error = RequestIdError;
+    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    where
+        T: Serialize,
+    {
+        SerializeSeq::serialize_element(self, value)
+    }
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        SerializeSeq::end(self)
+    }
+}
+
+struct StructVariantSerializer {
+    name: &'static str,
+    struct_ser: StructSerializer,
+}
+
+// Struct variants are serialized like structs, but then placed within another struct
+// under a key corresponding to the variant name.
+
+impl SerializeStructVariant for StructVariantSerializer {
+    type Ok = Option<Sha256Hash>;
+    type Error = RequestIdError;
+    fn serialize_field<T: ?Sized>(
+        &mut self,
+        key: &'static str,
+        value: &T,
+    ) -> Result<(), Self::Error>
+    where
+        T: Serialize,
+    {
+        SerializeStruct::serialize_field(&mut self.struct_ser, key, value)
+    }
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        let Some(inner_struct_hash) = SerializeStruct::end(self.struct_ser)? else { return Ok(None) };
+        let outer_struct = StructSerializer {
+            field_name: <_>::default(),
+            fields: vec![(Sha256::digest(self.name).into(), inner_struct_hash)],
+        };
+        SerializeStruct::end(outer_struct)
+    }
+}
+
+struct TupleVariantSerializer {
+    name: &'static str,
+    seq_ser: SeqSerializer,
+}
+
+// Tuple variants are serialized like tuples, but then placed within another struct
+// under a key corresponding to the variant name.
+
+impl SerializeTupleVariant for TupleVariantSerializer {
+    type Ok = Option<Sha256Hash>;
+    type Error = RequestIdError;
+    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    where
+        T: Serialize,
+    {
+        SerializeSeq::serialize_element(&mut self.seq_ser, value)
+    }
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        let Some(inner_seq_hash) = SerializeSeq::end(self.seq_ser)? else { return Ok(None) };
+        let outer_struct = StructSerializer {
+            field_name: <_>::default(),
+            fields: vec![(Sha256::digest(self.name).into(), inner_seq_hash)],
+        };
+        SerializeStruct::end(outer_struct)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use candid::Principal;
-    use std::convert::TryFrom;
+    use std::{collections::HashMap, convert::TryFrom};
 
     /// The actual example used in the public spec in the Request ID section.
     #[test]
-    fn public_spec_example() {
+    fn public_spec_example_old() {
         #[derive(Serialize)]
         struct PublicSpecExampleStruct {
             request_type: &'static str,
             canister_id: Principal,
             method_name: &'static str,
             #[serde(with = "serde_bytes")]
-            arg: Vec<u8>,
+            arg: &'static [u8],
+            sender: Option<Principal>,
+            ingress_expiry: Option<u64>,
         }
-        let data = PublicSpecExampleStruct {
+        // The current example
+        let current = PublicSpecExampleStruct {
             request_type: "call",
-            canister_id: Principal::try_from(&vec![0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
+            sender: Some(Principal::anonymous()),
+            ingress_expiry: Some(1685570400000000000),
+            canister_id: Principal::from_slice(b"\x00\x00\x00\x00\x00\x00\x04\xD2"),
             method_name: "hello",
-            arg: b"DIDL\x00\xFD*".to_vec(),
+            arg: b"DIDL\x00\xFD*",
         };
 
         // Hash taken from the example on the public spec.
-        let request_id = to_request_id(&data).unwrap();
+        let request_id = to_request_id(&current).unwrap();
+        assert_eq!(
+            hex::encode(request_id.0),
+            "1d1091364d6bb8a6c16b203ee75467d59ead468f523eb058880ae8ec80e2b101"
+        );
+
+        // A previous example
+        let old = PublicSpecExampleStruct {
+            request_type: "call",
+            canister_id: Principal::from_slice(b"\x00\x00\x00\x00\x00\x00\x04\xD2"), // 1234 in u64
+            method_name: "hello",
+            arg: b"DIDL\x00\xFD*",
+            ingress_expiry: None,
+            sender: None,
+        };
+
+        let request_id = to_request_id(&old).unwrap();
         assert_eq!(
             hex::encode(request_id.0),
             "8781291c347db32a9d8c10eb62b710fce5a93be676474c42babc74c51858f94b"
@@ -737,16 +556,32 @@ mod tests {
                 method_name: String,
                 #[serde(with = "serde_bytes")]
                 arg: Option<Vec<u8>>,
+                sender: Option<Principal>,
+                ingress_expiry: Option<u64>,
             },
         }
-        let data = PublicSpec::Call {
-            canister_id: Principal::try_from(&vec![0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
+        let current = PublicSpec::Call {
+            sender: Some(Principal::anonymous()),
+            ingress_expiry: Some(1685570400000000000),
+            canister_id: Principal::from_slice(b"\x00\x00\x00\x00\x00\x00\x04\xD2"),
             method_name: "hello".to_owned(),
             arg: Some(b"DIDL\x00\xFD*".to_vec()),
         };
-
         // Hash taken from the example on the public spec.
-        let request_id = to_request_id(&data).unwrap();
+        let request_id = to_request_id(&current).unwrap();
+        assert_eq!(
+            hex::encode(request_id.0),
+            "1d1091364d6bb8a6c16b203ee75467d59ead468f523eb058880ae8ec80e2b101"
+        );
+
+        let old = PublicSpec::Call {
+            canister_id: Principal::from_slice(b"\x00\x00\x00\x00\x00\x00\x04\xD2"), // 1234 in u64
+            method_name: "hello".to_owned(),
+            arg: Some(b"DIDL\x00\xFD*".to_vec()),
+            ingress_expiry: None,
+            sender: None,
+        };
+        let request_id = to_request_id(&old).unwrap();
         assert_eq!(
             hex::encode(request_id.0),
             "8781291c347db32a9d8c10eb62b710fce5a93be676474c42babc74c51858f94b"
@@ -854,20 +689,186 @@ mod tests {
         */
     }
 
-    /// We do not support creating a request id from a map.
-    /// It adds complexity, and isn't that useful anyway because a real request would
-    /// have to have different kinds of values (strings, principals, arrays) and
-    /// we don't support the wrappers that would be required to make that work
-    /// with rust maps.
     #[test]
-    fn maps_are_not_supported() {
-        let mut data = BTreeMap::new();
-        data.insert("request_type", "call");
-        data.insert("canister_id", "a principal / the canister id");
-        data.insert("method_name", "hello");
-        data.insert("arg", "some argument value");
+    fn nested_map() {
+        #[derive(Serialize)]
+        struct Outer {
+            foo: Inner,
+            #[serde(with = "serde_bytes")]
+            bar: &'static [u8],
+        }
+        #[derive(Serialize)]
+        struct Inner {
+            baz: &'static str,
+            quux: u64,
+        }
+        let outer = Outer {
+            foo: Inner {
+                baz: "hello",
+                quux: 3,
+            },
+            bar: b"world",
+        };
+        assert_eq!(
+            hex::encode(to_request_id(&outer).unwrap().0),
+            "3d447339cc0c2b894ee215c8141770bf4b86c72b6c37d9873213a786ec7f9f31"
+        );
+    }
 
-        let error = to_request_id(&data).unwrap_err();
-        assert_eq!(error, RequestIdError::UnsupportedTypeMap);
+    #[test]
+    fn structural_equivalence_collections() {
+        #[derive(Serialize)]
+        struct Maplike {
+            foo: i32,
+        }
+        let hashed_struct = to_request_id(&Maplike { foo: 73 }).unwrap();
+        assert_eq!(
+            hashed_struct,
+            to_request_id(&HashMap::from([("foo", 73_i32)])).unwrap(),
+            "map hashed identically to struct"
+        );
+
+        assert_eq!(
+            hex::encode(&hashed_struct[..]),
+            "7b3d327026e6bb5b4c13b898a6ca8fff6fd6838f44f6c27d9adf34542add75a0"
+        );
+
+        #[derive(Serialize)]
+        struct Seqlike(u8, u8, u8);
+        let hashed_array = to_request_id(&[1, 2, 3]).unwrap();
+        assert_eq!(
+            hashed_array,
+            to_request_id(&Seqlike(1, 2, 3)).unwrap(),
+            "tuple struct hashed identically to array"
+        );
+        assert_eq!(
+            hashed_array,
+            to_request_id(&(1, 2, 3)).unwrap(),
+            "tuple hashed identically to array"
+        );
+        assert_eq!(
+            hex::encode(&hashed_array[..]),
+            "2628a7cbda257cd0dc45779e43080e0a93037468fe270faae515f7c7941069e3"
+        );
+    }
+
+    #[test]
+    fn structural_equivalence_option() {
+        #[derive(Serialize)]
+        struct WithOpt {
+            x: u64,
+            y: Option<&'static str>,
+        }
+
+        #[derive(Serialize)]
+        struct WithoutOptSome {
+            x: u64,
+            y: &'static str,
+        }
+
+        #[derive(Serialize)]
+        struct WithoutOptNone {
+            x: u64,
+        }
+        let without_some = to_request_id(&WithoutOptSome { x: 3, y: "hello" }).unwrap();
+        assert_eq!(
+            without_some,
+            to_request_id(&WithOpt {
+                x: 3,
+                y: Some("hello")
+            })
+            .unwrap(),
+            "Option::Some(x) hashed identically to x"
+        );
+        assert_eq!(
+            hex::encode(&without_some[..]),
+            "f9532efd31fe55f5013d84fa4e1585b9a52e6cf82842adabe22fd3ac359c4143"
+        );
+        let without_none = to_request_id(&WithoutOptNone { x: 7_000_000 }).unwrap();
+        assert_eq!(
+            without_none,
+            to_request_id(&WithOpt {
+                x: 7_000_000,
+                y: None
+            })
+            .unwrap(),
+            "Option::None field deleted from struct"
+        );
+        assert_eq!(
+            hex::encode(&without_none[..]),
+            "fe4c9222ee2bffbc3ff7f25510d5b258adfa38a16740050a112ccc98eb886de5"
+        );
+    }
+
+    #[test]
+    fn structural_equivalence_variant() {
+        #[derive(Serialize)]
+        #[serde(rename_all = "snake_case")]
+        enum Complex {
+            Newtype(u64),
+            Tuple(&'static str, [u64; 2]),
+            Struct {
+                #[serde(with = "serde_bytes")]
+                field: &'static [u8],
+            },
+        }
+        #[derive(Serialize)]
+        struct NewtypeWrapper {
+            newtype: u64,
+        }
+        #[derive(Serialize)]
+        struct TupleWrapper {
+            tuple: (&'static str, [u64; 2]),
+        }
+        #[derive(Serialize)]
+        struct Inner {
+            #[serde(with = "serde_bytes")]
+            field: &'static [u8],
+        }
+        #[derive(Serialize)]
+        struct StructWrapper {
+            r#struct: Inner,
+        }
+        let newtype = to_request_id(&NewtypeWrapper { newtype: 673 }).unwrap();
+        assert_eq!(
+            newtype,
+            to_request_id(&Complex::Newtype(673)).unwrap(),
+            "newtype variant serialized as field"
+        );
+        assert_eq!(
+            hex::encode(&newtype[..]),
+            "87371cb37e4a28512e898a691ccbd8cd33efb902a5ac9ecf3a73e5e97f9c23f8"
+        );
+        let tuple = to_request_id(&TupleWrapper {
+            tuple: ("four", [5, 6]),
+        })
+        .unwrap();
+        assert_eq!(
+            tuple,
+            to_request_id(&Complex::Tuple("four", [5, 6])).unwrap(),
+            "tuple variant serialized as field"
+        );
+        assert_eq!(
+            hex::encode(&tuple[..]),
+            "729d2b57c442203f83b347ec644c8b38277076b5a9ebb3c2873ac64ddd793304"
+        );
+        let r#struct = to_request_id(&StructWrapper {
+            r#struct: Inner {
+                field: b"\x0Aic-request",
+            },
+        })
+        .unwrap();
+        assert_eq!(
+            r#struct,
+            to_request_id(&Complex::Struct {
+                field: b"\x0Aic-request"
+            })
+            .unwrap(),
+            "struct variant serialized as field"
+        );
+        assert_eq!(
+            hex::encode(&r#struct[..]),
+            "c2b325a8f7633df8054e9bd538ac8d26dc85cba4ad542cdbfca7109e1a60cf0c"
+        );
     }
 }
