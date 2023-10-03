@@ -499,24 +499,45 @@ mod tests {
 
     /// The actual example used in the public spec in the Request ID section.
     #[test]
-    fn public_spec_example() {
+    fn public_spec_example_old() {
         #[derive(Serialize)]
         struct PublicSpecExampleStruct {
             request_type: &'static str,
             canister_id: Principal,
             method_name: &'static str,
             #[serde(with = "serde_bytes")]
-            arg: Vec<u8>,
+            arg: &'static [u8],
+            sender: Option<Principal>,
+            ingress_expiry: Option<u64>,
         }
-        let data = PublicSpecExampleStruct {
+        // The current example
+        let current = PublicSpecExampleStruct {
             request_type: "call",
-            canister_id: Principal::try_from(&vec![0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
+            sender: Some(Principal::anonymous()),
+            ingress_expiry: Some(1685570400000000000),
+            canister_id: Principal::from_slice(b"\x00\x00\x00\x00\x00\x00\x04\xD2"),
             method_name: "hello",
-            arg: b"DIDL\x00\xFD*".to_vec(),
+            arg: b"DIDL\x00\xFD*",
         };
 
         // Hash taken from the example on the public spec.
-        let request_id = to_request_id(&data).unwrap();
+        let request_id = to_request_id(&current).unwrap();
+        assert_eq!(
+            hex::encode(request_id.0),
+            "1d1091364d6bb8a6c16b203ee75467d59ead468f523eb058880ae8ec80e2b101"
+        );
+
+        // A previous example
+        let old = PublicSpecExampleStruct {
+            request_type: "call",
+            canister_id: Principal::from_slice(b"\x00\x00\x00\x00\x00\x00\x04\xD2"), // 1234 in u64
+            method_name: "hello",
+            arg: b"DIDL\x00\xFD*",
+            ingress_expiry: None,
+            sender: None,
+        };
+
+        let request_id = to_request_id(&old).unwrap();
         assert_eq!(
             hex::encode(request_id.0),
             "8781291c347db32a9d8c10eb62b710fce5a93be676474c42babc74c51858f94b"
@@ -535,16 +556,32 @@ mod tests {
                 method_name: String,
                 #[serde(with = "serde_bytes")]
                 arg: Option<Vec<u8>>,
+                sender: Option<Principal>,
+                ingress_expiry: Option<u64>,
             },
         }
-        let data = PublicSpec::Call {
-            canister_id: Principal::try_from(&vec![0, 0, 0, 0, 0, 0, 0x04, 0xD2]).unwrap(), // 1234 in u64
+        let current = PublicSpec::Call {
+            sender: Some(Principal::anonymous()),
+            ingress_expiry: Some(1685570400000000000),
+            canister_id: Principal::from_slice(b"\x00\x00\x00\x00\x00\x00\x04\xD2"),
             method_name: "hello".to_owned(),
             arg: Some(b"DIDL\x00\xFD*".to_vec()),
         };
-
         // Hash taken from the example on the public spec.
-        let request_id = to_request_id(&data).unwrap();
+        let request_id = to_request_id(&current).unwrap();
+        assert_eq!(
+            hex::encode(request_id.0),
+            "1d1091364d6bb8a6c16b203ee75467d59ead468f523eb058880ae8ec80e2b101"
+        );
+
+        let old = PublicSpec::Call {
+            canister_id: Principal::from_slice(b"\x00\x00\x00\x00\x00\x00\x04\xD2"), // 1234 in u64
+            method_name: "hello".to_owned(),
+            arg: Some(b"DIDL\x00\xFD*".to_vec()),
+            ingress_expiry: None,
+            sender: None,
+        };
+        let request_id = to_request_id(&old).unwrap();
         assert_eq!(
             hex::encode(request_id.0),
             "8781291c347db32a9d8c10eb62b710fce5a93be676474c42babc74c51858f94b"
@@ -684,11 +721,16 @@ mod tests {
         struct Maplike {
             foo: i32,
         }
-
+        let hashed_struct = to_request_id(&Maplike { foo: 73 }).unwrap();
         assert_eq!(
-            to_request_id(&Maplike { foo: 73 }).unwrap(),
+            hashed_struct,
             to_request_id(&HashMap::from([("foo", 73_i32)])).unwrap(),
             "map hashed identically to struct"
+        );
+
+        assert_eq!(
+            hex::encode(&hashed_struct[..]),
+            "7b3d327026e6bb5b4c13b898a6ca8fff6fd6838f44f6c27d9adf34542add75a0"
         );
 
         #[derive(Serialize)]
@@ -703,6 +745,10 @@ mod tests {
             hashed_array,
             to_request_id(&(1, 2, 3)).unwrap(),
             "tuple hashed identically to array"
+        );
+        assert_eq!(
+            hex::encode(&hashed_array[..]),
+            "2628a7cbda257cd0dc45779e43080e0a93037468fe270faae515f7c7941069e3"
         );
     }
 
@@ -724,24 +770,33 @@ mod tests {
         struct WithoutOptNone {
             x: u64,
         }
-
+        let without_some = to_request_id(&WithoutOptSome { x: 3, y: "hello" }).unwrap();
         assert_eq!(
+            without_some,
             to_request_id(&WithOpt {
                 x: 3,
                 y: Some("hello")
             })
             .unwrap(),
-            to_request_id(&WithoutOptSome { x: 3, y: "hello" }).unwrap(),
             "Option::Some(x) hashed identically to x"
         );
         assert_eq!(
+            hex::encode(&without_some[..]),
+            "f9532efd31fe55f5013d84fa4e1585b9a52e6cf82842adabe22fd3ac359c4143"
+        );
+        let without_none = to_request_id(&WithoutOptNone { x: 7_000_000 }).unwrap();
+        assert_eq!(
+            without_none,
             to_request_id(&WithOpt {
                 x: 7_000_000,
                 y: None
             })
             .unwrap(),
-            to_request_id(&WithoutOptNone { x: 7_000_000 }).unwrap(),
             "Option::None field deleted from struct"
+        );
+        assert_eq!(
+            hex::encode(&without_none[..]),
+            "fe4c9222ee2bffbc3ff7f25510d5b258adfa38a16740050a112ccc98eb886de5"
         );
     }
 
@@ -774,32 +829,46 @@ mod tests {
         struct StructWrapper {
             r#struct: Inner,
         }
-
+        let newtype = to_request_id(&NewtypeWrapper { newtype: 673 }).unwrap();
         assert_eq!(
+            newtype,
             to_request_id(&Complex::Newtype(673)).unwrap(),
-            to_request_id(&NewtypeWrapper { newtype: 673 }).unwrap(),
             "newtype variant serialized as field"
         );
         assert_eq!(
+            hex::encode(&newtype[..]),
+            "87371cb37e4a28512e898a691ccbd8cd33efb902a5ac9ecf3a73e5e97f9c23f8"
+        );
+        let tuple = to_request_id(&TupleWrapper {
+            tuple: ("four", [5, 6]),
+        })
+        .unwrap();
+        assert_eq!(
+            tuple,
             to_request_id(&Complex::Tuple("four", [5, 6])).unwrap(),
-            to_request_id(&TupleWrapper {
-                tuple: ("four", [5, 6])
-            })
-            .unwrap(),
             "tuple variant serialized as field"
         );
         assert_eq!(
+            hex::encode(&tuple[..]),
+            "729d2b57c442203f83b347ec644c8b38277076b5a9ebb3c2873ac64ddd793304"
+        );
+        let r#struct = to_request_id(&StructWrapper {
+            r#struct: Inner {
+                field: b"\x0Aic-request",
+            },
+        })
+        .unwrap();
+        assert_eq!(
+            r#struct,
             to_request_id(&Complex::Struct {
                 field: b"\x0Aic-request"
             })
             .unwrap(),
-            to_request_id(&StructWrapper {
-                r#struct: Inner {
-                    field: b"\x0Aic-request"
-                }
-            })
-            .unwrap(),
             "struct variant serialized as field"
+        );
+        assert_eq!(
+            hex::encode(&r#struct[..]),
+            "c2b325a8f7633df8054e9bd538ac8d26dc85cba4ad542cdbfca7109e1a60cf0c"
         );
     }
 }
