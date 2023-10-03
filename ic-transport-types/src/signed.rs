@@ -4,7 +4,8 @@ use crate::request_id::RequestId;
 use candid::Principal;
 use serde::{Deserialize, Serialize};
 
-/// A signed query request message. Produced by [`QueryBuilder::sign`](super::QueryBuilder::sign).
+/// A signed query request message. Produced by
+/// [`QueryBuilder::sign`](https://docs.rs/ic-agent/latest/ic_agent/agent/struct.QueryBuilder.html#method.sign).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SignedQuery {
     /// The Unix timestamp that the request will expire at.
@@ -25,7 +26,8 @@ pub struct SignedQuery {
     pub signed_query: Vec<u8>,
 }
 
-/// A signed update request message. Produced by [`UpdateBuilder::sign`](super::UpdateBuilder::sign).
+/// A signed update request message. Produced by
+/// [`UpdateBuilder::sign`](https://docs.rs/ic-agent/latest/ic_agent/agent/struct.UpdateBuilder.html#method.sign).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SignedUpdate {
     /// A nonce to uniquely identify this update call.
@@ -53,7 +55,8 @@ pub struct SignedUpdate {
     pub request_id: RequestId,
 }
 
-/// A signed request-status request message. Produced by [`Agent::sign_request_status`](super::Agent::sign_request_status).
+/// A signed request-status request message. Produced by
+/// [`Agent::sign_request_status`](https://docs.rs/ic-agent/latest/ic_agent/agent/struct.Agent.html#method.sign_request_status).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SignedRequestStatus {
     /// The Unix timestamp that the request will expire at.

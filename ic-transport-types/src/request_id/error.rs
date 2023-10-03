@@ -26,72 +26,25 @@ pub enum RequestIdError {
     /// The serializer was not given any data.
     #[error("Need to provide data to serialize")]
     EmptySerializer,
-    /// The serializer was in an invalid state.
-    #[error("RequestId Serializer was in an invalid state")]
-    InvalidState,
-    /// The serializer received a nested struct, which it does not support.
-    #[error("RequestId does not support struct inside other structs")]
-    UnsupportedStructInsideStruct,
+    /// A map was serialized with a key of `None`.
+    #[error("Struct serializer received a key of None")]
+    KeyWasNone,
     /// The serializer received a `bool`, which it does not support.
     #[error("Unsupported type: Bool")]
     UnsupportedTypeBool,
-    /// The serializer received a `i8`, which it does not support.
-    #[error("Unsupported type: I8")]
-    UnsupportedTypeI8,
-    /// The serializer received a `i16`, which it does not support.
-    #[error("Unsupported type: I16")]
-    UnsupportedTypeI16,
-    /// The serializer received a `i32`, which it does not support.
-    #[error("Unsupported type: I32")]
-    UnsupportedTypeI32,
-    /// The serializer received a `i64`, which it does not support.
-    #[error("Unsupported type: I64")]
-    UnsupportedTypeI64,
     /// The serializer received a `f32`, which it does not support.
-    #[error("Unsupported type: F32")]
+    #[error("Unsupported type: f32")]
     UnsupportedTypeF32,
     /// The serializer received a `f64`, which it does not support.
-    #[error("Unsupported type: F64")]
+    #[error("Unsupported type: f64")]
     UnsupportedTypeF64,
-    /// The serializer received a `char`, which it does not support.
-    #[error("Unsupported type: Char")]
-    UnsupportedTypeChar,
-    // UnsupportedTypeStr, // Supported
-    // UnsupportedTypeNone, // Supported
-    // UnsupportedTypeSome, // Supported
     /// The serializer received a `()`, which it does not support.
-    #[error("Unsupported type: Unit")]
+    #[error("Unsupported type: ()")]
     UnsupportedTypeUnit,
-    /// The serializer received a `PhantomData`, which it does not support.
-    #[error("Unsupported type: PhantomData")]
-    UnsupportedTypePhantomData,
-
     // Variants and complex types.
     /// The serializer received an enum unit variant, which it does not support.
-    #[error("Unsupported type: UnitVariant")]
-    UnsupportedTypeUnitVariant,
-    /// The serializer received a newtype struct, which it does not support.
-    #[error("Unsupported type: NewtypeStruct")]
-    UnsupportedTypeNewtypeStruct(String),
-    /// The serializer received an enum newtype variant, which it does not support.
-    #[error("Unsupported type: NewTypeVariant")]
-    UnsupportedTypeNewTypeVariant,
-    /// The serializer received a tuple, which it does not support.
-    #[error("Unsupported type: Tuple")]
-    UnsupportedTypeTuple,
-    /// The serializer received a tuple struct, which it does not support.
-    #[error("Unsupported type: TupleStruct")]
-    UnsupportedTypeTupleStruct,
-    /// The serializer received an enum tuple variant, which it does not support.
-    #[error("Unsupported type: TupleVariant")]
-    UnsupportedTypeTupleVariant,
-    /// The serializer received a map, which it does not support.
-    #[error("Unsupported type: Map")]
-    UnsupportedTypeMap,
-    // UnsupportedTypeStruct, // Supported
-    /// The serializer received an enum struct variant, which it does not support.
-    #[error("Unsupported type: StructVariant")]
-    UnsupportedTypeStructVariant,
+    #[error("Unsupported type: unit struct")]
+    UnsupportedTypeUnitStruct,
 }
 
 impl serde::ser::Error for RequestIdError {
