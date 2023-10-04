@@ -141,19 +141,16 @@ pub(crate) fn lookup_reply<Storage: AsRef<[u8]>>(
     Ok(RequestStatusResponse::Replied(ReplyResponse { arg }))
 }
 
-// tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe
-const ROOT_SUBNET: &[u8] = b"\xcf\xf2\x80\xe3\x2d\x7f\x5c\xcd\x22\x46\x88\x2f\x94\xaf\xb2\x0f\x54\xca\x61\xa2\x17\x65\xe7\x12\xd4\x3d\x27\x89\x02";
-
 pub(crate) fn lookup_subnet<Storage: AsRef<[u8]> + Clone>(
     certificate: &Certificate<Storage>,
+    root_key: &[u8],
 ) -> Result<(Principal, Subnet), AgentError> {
     let subnet_id = if let Some(delegation) = &certificate.delegation {
-        delegation.subnet_id.as_ref()
+        Principal::from_slice(delegation.subnet_id.as_ref())
     } else {
-        ROOT_SUBNET
+        Principal::self_authenticating(root_key)
     };
-
-    let subnet_tree = lookup_tree(&certificate.tree, [b"subnet", subnet_id])?;
+    let subnet_tree = lookup_tree(&certificate.tree, [b"subnet", subnet_id.as_slice()])?;
     let key = lookup_value(&subnet_tree, [b"public_key".as_ref()])?.to_vec();
     let canister_ranges = lookup_value(&subnet_tree, [b"canister_ranges".as_ref()])?;
     let canister_ranges: Vec<(Principal, Principal)> = serde_cbor::from_slice(canister_ranges)?;
@@ -186,7 +183,7 @@ pub(crate) fn lookup_subnet<Storage: AsRef<[u8]> + Clone>(
         _key: key,
         node_keys,
     };
-    Ok((Principal::from_slice(subnet_id), subnet))
+    Ok((subnet_id, subnet))
 }
 
 /// The path to [`lookup_value`]

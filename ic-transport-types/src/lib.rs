@@ -148,7 +148,8 @@ impl QueryResponse {
         #[serde(tag = "status", rename_all = "snake_case")]
         enum QueryResponseSignable<'a> {
             Replied {
-                reply: &'a ReplyResponse,
+                #[serde(with = "serde_bytes")]
+                reply: &'a Vec<u8>,
                 request_id: RequestId,
                 timestamp: u64,
             },
@@ -163,7 +164,7 @@ impl QueryResponse {
         }
         let response = match self {
             Self::Replied { reply, .. } => QueryResponseSignable::Replied {
-                reply,
+                reply: &reply.arg,
                 request_id,
                 timestamp,
             },
@@ -300,7 +301,7 @@ impl Delegation {
     }
 }
 
-/// A [`Delegation`] that has been signed by an [`Identity`](https://docs.rs/ic-agent/latest/ic_agent/trait.Identity.html).
+/// A [`Delegation`] that has been signed by an [`Identity`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignedDelegation {
     /// The signed delegation.

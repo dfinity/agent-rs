@@ -17,6 +17,7 @@ pub use ic_transport_types::{
 use moka::sync::{Cache, CacheBuilder};
 pub use nonce::{NonceFactory, NonceGenerator};
 use rangemap::{RangeInclusiveMap, StepFns};
+use ring::signature::{EdDSAParameters, VerificationAlgorithm};
 use time::OffsetDateTime;
 
 #[cfg(test)]
@@ -450,12 +451,29 @@ impl Agent {
                 .node_keys
                 .get(&signature.identity)
                 .ok_or(AgentError::CertificateNotAuthorized())?;
-            ic_verify_bls_signature::verify_bls_signature(
-                &signature.signature,
-                &signable,
-                node_key,
-            )
-            .map_err(|_| AgentError::CertificateVerificationFailed())?;
+            if node_key.len() != 44 {
+                return Err(AgentError::DerKeyLengthMismatch {
+                    expected: 44,
+                    actual: node_key.len(),
+                });
+            }
+            const DER_PREFIX: [u8; 12] = [48, 42, 48, 5, 6, 3, 43, 101, 112, 3, 33, 0];
+            if node_key[..12] != DER_PREFIX {
+                return Err(AgentError::DerPrefixMismatch {
+                    expected: DER_PREFIX.to_vec(),
+                    actual: node_key[..12].to_vec(),
+                });
+            }
+            if EdDSAParameters
+                .verify(
+                    <_>::from(&node_key[12..]),
+                    <_>::from(&signable[..]),
+                    <_>::from(&signature.signature[..]),
+                )
+                .is_err()
+            {
+                return Err(AgentError::CertificateVerificationFailed());
+            }
         }
 
         match response {
@@ -838,7 +856,7 @@ impl Agent {
             let cert = self
                 .read_state_raw(vec![vec!["subnet".into()]], *canister)
                 .await?;
-            let (subnet_id, subnet) = lookup_subnet(&cert)?;
+            let (subnet_id, subnet) = lookup_subnet(&cert, &self.root_key.read().unwrap())?;
             let subnet = Arc::new(subnet);
             self.subnet_key_cache
                 .write()
