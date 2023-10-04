@@ -101,6 +101,10 @@ pub enum AgentError {
     #[error("Certificate is not authorized to respond to queries for this canister. While developing: Did you forget to set effective_canister_id?")]
     CertificateNotAuthorized(),
 
+    /// The query response did not contain any node signatures.
+    #[error("Query response did not contain any node signatures")]
+    MissingSignature,
+
     /// There was a length mismatch between the expected and actual length of the BLS DER-encoded public key.
     #[error(
         r#"BLS DER-encoded public key must be ${expected} bytes long, but is {actual} bytes long."#

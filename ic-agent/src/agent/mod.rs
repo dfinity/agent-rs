@@ -445,6 +445,9 @@ impl Agent {
             self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query),
             self.get_subnet_by_canister(&effective_canister_id)
         )?;
+        if response.signatures().is_empty() {
+            return Err(AgentError::MissingSignature);
+        }
         for signature in response.signatures() {
             let signable = response.signable(request_id, signature.timestamp);
             let node_key = subnet
