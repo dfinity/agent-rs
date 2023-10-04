@@ -301,7 +301,7 @@ impl Delegation {
     }
 }
 
-/// A [`Delegation`] that has been signed by an [`Identity`].
+/// A [`Delegation`] that has been signed by an [`Identity`](https://docs.rs/ic-agent/latest/ic_agent/trait.Identity.html).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignedDelegation {
     /// The signed delegation.
