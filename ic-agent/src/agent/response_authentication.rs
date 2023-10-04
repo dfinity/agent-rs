@@ -161,15 +161,15 @@ pub(crate) fn lookup_subnet<Storage: AsRef<[u8]> + Clone>(
             // if it's absent, it's because this is the wrong subnet
             return Err(AgentError::CertificateNotAuthorized());
         }
+        if path[1].as_bytes() != b"public_key" {
+            continue;
+        }
         if path.len() > 2 {
             return Err(AgentError::LookupPathError(
                 path.into_iter()
                     .map(|label| label.as_bytes().to_vec().into())
                     .collect(),
             ));
-        }
-        if path[1].as_bytes() != b"public_key" {
-            continue;
         }
         let node_id = Principal::from_slice(path[0].as_bytes());
         let node_key = lookup_value(&node_keys_subtree, [node_id.as_slice(), b"public_key"])?;
