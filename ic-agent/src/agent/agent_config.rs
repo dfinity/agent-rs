@@ -12,8 +12,10 @@ pub struct AgentConfig {
     pub identity: Arc<dyn Identity>,
     /// See [`with_ingress_expiry`](super::AgentBuilder::with_ingress_expiry).
     pub ingress_expiry: Option<Duration>,
-    /// The [`with_transport`](super::AgentBuilder::with_transport).
+    /// See [`with_transport`](super::AgentBuilder::with_transport).
     pub transport: Option<Arc<dyn Transport>>,
+    /// See [`verify_query_signatures`](super::AgentBuilder::with_verify_query_signatures).
+    pub verify_query_signatures: bool,
 }
 
 impl Default for AgentConfig {
@@ -23,6 +25,7 @@ impl Default for AgentConfig {
             identity: Arc::new(AnonymousIdentity {}),
             ingress_expiry: None,
             transport: None,
+            verify_query_signatures: false,
         }
     }
 }

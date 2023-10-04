@@ -16,6 +16,14 @@ use wasm_bindgen_test::wasm_bindgen_test;
 #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
+fn make_agent(url: &str) -> Agent {
+    Agent::builder()
+        .with_transport(ReqwestTransport::create(url).unwrap())
+        .with_verify_query_signatures(false)
+        .build()
+        .unwrap()
+}
+
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn query() -> Result<(), AgentError> {
@@ -34,9 +42,7 @@ async fn query() -> Result<(), AgentError> {
     )
     .await;
 
-    let agent = Agent::builder()
-        .with_transport(ReqwestTransport::create(&url)?)
-        .build()?;
+    let agent = make_agent(&url);
     let result = agent
         .query_raw(
             Principal::management_canister(),
@@ -59,9 +65,7 @@ async fn query() -> Result<(), AgentError> {
 async fn query_error() -> Result<(), AgentError> {
     let (query_mock, url) =
         mock("POST", "/api/v2/canister/aaaaa-aa/query", 500, vec![], None).await;
-    let agent = Agent::builder()
-        .with_transport(ReqwestTransport::create(url)?)
-        .build()?;
+    let agent = make_agent(&url);
 
     let result = agent
         .query_raw(
@@ -101,9 +105,7 @@ async fn query_rejected() -> Result<(), AgentError> {
     )
     .await;
 
-    let agent = Agent::builder()
-        .with_transport(ReqwestTransport::create(&url)?)
-        .build()?;
+    let agent = make_agent(&url);
 
     let result = agent
         .query_raw(
@@ -134,9 +136,7 @@ async fn query_rejected() -> Result<(), AgentError> {
 async fn call_error() -> Result<(), AgentError> {
     let (call_mock, url) = mock("POST", "/api/v2/canister/aaaaa-aa/call", 500, vec![], None).await;
 
-    let agent = Agent::builder()
-        .with_transport(ReqwestTransport::create(&url)?)
-        .build()?;
+    let agent = make_agent(&url);
 
     let result = agent
         .update(&Principal::management_canister(), "greet")
@@ -171,9 +171,7 @@ async fn call_rejected() -> Result<(), AgentError> {
     )
     .await;
 
-    let agent = Agent::builder()
-        .with_transport(ReqwestTransport::create(&url)?)
-        .build()?;
+    let agent = make_agent(&url);
 
     let result = agent
         .update(&Principal::management_canister(), "greet")
@@ -209,9 +207,7 @@ async fn call_rejected_without_error_code() -> Result<(), AgentError> {
     )
     .await;
 
-    let agent = Agent::builder()
-        .with_transport(ReqwestTransport::create(&url)?)
-        .build()?;
+    let agent = make_agent(&url);
 
     let result = agent
         .update(&Principal::management_canister(), "greet")
@@ -246,9 +242,7 @@ async fn status() -> Result<(), AgentError> {
     )
     .await;
 
-    let agent = Agent::builder()
-        .with_transport(ReqwestTransport::create(&url)?)
-        .build()?;
+    let agent = make_agent(&url);
     let result = agent.status().await;
 
     assert_mock(read_mock).await;
@@ -275,9 +269,7 @@ async fn status_okay() -> Result<(), AgentError> {
     )
     .await;
 
-    let agent = Agent::builder()
-        .with_transport(ReqwestTransport::create(&url)?)
-        .build()?;
+    let agent = make_agent(&url);
     let result = agent.status().await;
 
     assert_mock(read_mock).await;
@@ -298,9 +290,7 @@ async fn status_error() -> Result<(), AgentError> {
     // it is called.
     let (_read_mock, url) = mock("GET", "/api/v2/status", 500, vec![], None).await;
 
-    let agent = Agent::builder()
-        .with_transport(ReqwestTransport::create(&url)?)
-        .build()?;
+    let agent = make_agent(&url);
     let result = agent.status().await;
 
     assert!(result.is_err());
@@ -440,10 +430,7 @@ async fn check_subnet_range_with_valid_range() {
         Some("application/cbor"),
     )
     .await;
-    let agent = Agent::builder()
-        .with_transport(ReqwestTransport::create(&url).unwrap())
-        .build()
-        .unwrap();
+    let agent = make_agent(&url);
     let _result = agent
         .read_state_raw(
             vec![REQ_WITH_DELEGATED_CERT_PATH
@@ -472,10 +459,7 @@ async fn check_subnet_range_with_unauthorized_range() {
         Some("application/cbor"),
     )
     .await;
-    let agent = Agent::builder()
-        .with_transport(ReqwestTransport::create(&url).unwrap())
-        .build()
-        .unwrap();
+    let agent = make_agent(&url);
     let result = agent
         .read_state_raw(
             vec![REQ_WITH_DELEGATED_CERT_PATH
@@ -503,10 +487,7 @@ async fn check_subnet_range_with_pruned_range() {
         Some("application/cbor"),
     )
     .await;
-    let agent = Agent::builder()
-        .with_transport(ReqwestTransport::create(&url).unwrap())
-        .build()
-        .unwrap();
+    let agent = make_agent(&url);
     let result = agent
         .read_state_raw(
             vec![REQ_WITH_DELEGATED_CERT_PATH

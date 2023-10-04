@@ -245,6 +245,7 @@ pub struct Agent {
     root_key: Arc<RwLock<Vec<u8>>>,
     transport: Arc<dyn Transport>,
     subnet_key_cache: Arc<RwLock<SubnetCache>>,
+    verify_query_signatures: bool,
 }
 
 impl fmt::Debug for Agent {
@@ -275,6 +276,7 @@ impl Agent {
                 .transport
                 .ok_or_else(AgentError::MissingReplicaTransport)?,
             subnet_key_cache: Arc::new(RwLock::new(SubnetCache::new())),
+            verify_query_signatures: config.verify_query_signatures,
         })
     }
 
@@ -441,43 +443,49 @@ impl Agent {
         signed_query: Vec<u8>,
         request_id: RequestId,
     ) -> Result<Vec<u8>, AgentError> {
-        let (response, subnet) = futures_util::try_join!(
-            self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query),
-            self.get_subnet_by_canister(&effective_canister_id)
-        )?;
-        if response.signatures().is_empty() {
-            return Err(AgentError::MissingSignature);
-        }
-        for signature in response.signatures() {
-            let signable = response.signable(request_id, signature.timestamp);
-            let node_key = subnet
-                .node_keys
-                .get(&signature.identity)
-                .ok_or(AgentError::CertificateNotAuthorized())?;
-            if node_key.len() != 44 {
-                return Err(AgentError::DerKeyLengthMismatch {
-                    expected: 44,
-                    actual: node_key.len(),
-                });
+        let response = if self.verify_query_signatures {
+            let (response, subnet) = futures_util::try_join!(
+                self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query),
+                self.get_subnet_by_canister(&effective_canister_id)
+            )?;
+            if response.signatures().is_empty() {
+                return Err(AgentError::MissingSignature);
             }
-            const DER_PREFIX: [u8; 12] = [48, 42, 48, 5, 6, 3, 43, 101, 112, 3, 33, 0];
-            if node_key[..12] != DER_PREFIX {
-                return Err(AgentError::DerPrefixMismatch {
-                    expected: DER_PREFIX.to_vec(),
-                    actual: node_key[..12].to_vec(),
-                });
+            for signature in response.signatures() {
+                let signable = response.signable(request_id, signature.timestamp);
+                let node_key = subnet
+                    .node_keys
+                    .get(&signature.identity)
+                    .ok_or(AgentError::CertificateNotAuthorized())?;
+                if node_key.len() != 44 {
+                    return Err(AgentError::DerKeyLengthMismatch {
+                        expected: 44,
+                        actual: node_key.len(),
+                    });
+                }
+                const DER_PREFIX: [u8; 12] = [48, 42, 48, 5, 6, 3, 43, 101, 112, 3, 33, 0];
+                if node_key[..12] != DER_PREFIX {
+                    return Err(AgentError::DerPrefixMismatch {
+                        expected: DER_PREFIX.to_vec(),
+                        actual: node_key[..12].to_vec(),
+                    });
+                }
+                if EdDSAParameters
+                    .verify(
+                        <_>::from(&node_key[12..]),
+                        <_>::from(&signable[..]),
+                        <_>::from(&signature.signature[..]),
+                    )
+                    .is_err()
+                {
+                    return Err(AgentError::CertificateVerificationFailed());
+                }
             }
-            if EdDSAParameters
-                .verify(
-                    <_>::from(&node_key[12..]),
-                    <_>::from(&signable[..]),
-                    <_>::from(&signature.signature[..]),
-                )
-                .is_err()
-            {
-                return Err(AgentError::CertificateVerificationFailed());
-            }
-        }
+            response
+        } else {
+            self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query)
+                .await?
+        };
 
         match response {
             QueryResponse::Replied { reply, .. } => Ok(reply.arg),

@@ -87,4 +87,11 @@ impl AgentBuilder {
         self.config.ingress_expiry = ingress_expiry;
         self
     }
+
+    /// Allows disabling query signature verification. Query signatures improve resilience but require
+    /// a separate read-state call to fetch node keys.
+    pub fn with_verify_query_signatures(mut self, verify_query_signatures: bool) -> Self {
+        self.config.verify_query_signatures = verify_query_signatures;
+        self
+    }
 }
