@@ -107,7 +107,10 @@ fn canister_reject_call() {
                 reject_message,
                 error_code: None,
                 ..
-            })) if reject_message == "method does not exist: wallet_send"
+            })) if reject_message == format!(
+                "Canister {} has no update method 'wallet_send'",
+                alice.canister_id()
+            )
         ));
 
         Ok(())
