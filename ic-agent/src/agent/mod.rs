@@ -696,7 +696,18 @@ impl Agent {
         let key = extract_der(der_key)?;
 
         ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
-            .map_err(|_| AgentError::CertificateVerificationFailed())
+            .map_err(|_| AgentError::CertificateVerificationFailed())?;
+
+        let time = leb128::read::unsigned(&mut lookup_value(&cert.tree, [b"time".as_ref()])?)?;
+        if (OffsetDateTime::now_utc()
+            - OffsetDateTime::from_unix_timestamp_nanos(time as _).unwrap())
+        .whole_minutes()
+            > 1
+        {
+            Err(AgentError::CertificateOutdated)
+        } else {
+            Ok(())
+        }
     }
 
     fn check_delegation(

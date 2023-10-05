@@ -101,6 +101,10 @@ pub enum AgentError {
     #[error("Certificate is not authorized to respond to queries for this canister. While developing: Did you forget to set effective_canister_id?")]
     CertificateNotAuthorized(),
 
+    /// The certificate was over two minutes old.
+    #[error("Certificate is stale (over two minutes old). Is the computer's clock synchronized?")]
+    CertificateOutdated,
+
     /// The query response did not contain any node signatures.
     #[error("Query response did not contain any node signatures")]
     MissingSignature,
