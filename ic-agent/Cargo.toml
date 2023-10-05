@@ -104,6 +104,7 @@ wasm-bindgen = [
     "dep:web-sys",
     "time/wasm-bindgen",
     "backoff/wasm-bindgen",
+    "ring/wasm32_c",
 ]
 
 [package.metadata.docs.rs]
