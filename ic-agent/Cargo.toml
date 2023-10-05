@@ -16,7 +16,9 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
 backoff = "0.4.0"
+cached = { version = "0.46", features = ["ahash"], default-features = false }
 candid = { workspace = true }
+ed25519-dalek = { version = "2" }
 futures-util = "0.3.21"
 hex = { workspace = true }
 http = "0.2.6"
@@ -26,7 +28,6 @@ ic-transport-types = { workspace = true }
 ic-verify-bls-signature = "0.1"
 k256 = { version = "0.13.1", features = ["pem"] }
 leb128 = { workspace = true }
-moka = { version = "0.12", features = ["sync"] }
 pkcs8 = { version = "0.10.2", features = ["std"] }
 sec1 = { version = "0.7.2", features = ["pem"] }
 rand = "0.8.5"
@@ -104,7 +105,7 @@ wasm-bindgen = [
     "dep:web-sys",
     "time/wasm-bindgen",
     "backoff/wasm-bindgen",
-    "ring/wasm32_c",
+    "cached/wasm",
 ]
 
 [package.metadata.docs.rs]

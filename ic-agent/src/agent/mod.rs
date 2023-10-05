@@ -10,14 +10,14 @@ pub mod status;
 pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
 pub use builder::AgentBuilder;
+use cached::{Cached, TimedCache};
+use ed25519_dalek::{Signature, SigningKey};
 #[doc(inline)]
 pub use ic_transport_types::{
     signed, EnvelopeContent, RejectCode, RejectResponse, ReplyResponse, RequestStatusResponse,
 };
-use moka::sync::{Cache, CacheBuilder};
 pub use nonce::{NonceFactory, NonceGenerator};
 use rangemap::{RangeInclusiveMap, StepFns};
-use ring::signature::{EdDSAParameters, VerificationAlgorithm};
 use time::OffsetDateTime;
 
 #[cfg(test)]
@@ -48,7 +48,7 @@ use std::{
     future::Future,
     ops::RangeInclusive,
     pin::Pin,
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex, RwLock},
     task::{Context, Poll},
     time::Duration,
 };
@@ -244,7 +244,7 @@ pub struct Agent {
     ingress_expiry: Duration,
     root_key: Arc<RwLock<Vec<u8>>>,
     transport: Arc<dyn Transport>,
-    subnet_key_cache: Arc<RwLock<SubnetCache>>,
+    subnet_key_cache: Arc<Mutex<SubnetCache>>,
     verify_query_signatures: bool,
 }
 
@@ -275,7 +275,7 @@ impl Agent {
             transport: config
                 .transport
                 .ok_or_else(AgentError::MissingReplicaTransport)?,
-            subnet_key_cache: Arc::new(RwLock::new(SubnetCache::new())),
+            subnet_key_cache: Arc::new(Mutex::new(SubnetCache::new())),
             verify_query_signatures: config.verify_query_signatures,
         })
     }
@@ -470,14 +470,14 @@ impl Agent {
                         actual: node_key[..12].to_vec(),
                     });
                 }
-                if EdDSAParameters
-                    .verify(
-                        <_>::from(&node_key[12..]),
-                        <_>::from(&signable[..]),
-                        <_>::from(&signature.signature[..]),
-                    )
-                    .is_err()
-                {
+                let pubkey = SigningKey::from_bytes(node_key[12..].try_into().unwrap());
+                let sig = Signature::from_bytes(
+                    signature.signature[..]
+                        .try_into()
+                        .map_err(|_| AgentError::CertificateVerificationFailed())?,
+                );
+
+                if pubkey.verify(&signable, &sig).is_err() {
                     return Err(AgentError::CertificateVerificationFailed());
                 }
             }
@@ -858,7 +858,7 @@ impl Agent {
     ) -> Result<Arc<Subnet>, AgentError> {
         let subnet = self
             .subnet_key_cache
-            .read()
+            .lock()
             .unwrap()
             .get_subnet_by_canister(canister);
         if let Some(subnet) = subnet {
@@ -870,7 +870,7 @@ impl Agent {
             let (subnet_id, subnet) = lookup_subnet(&cert, &self.root_key.read().unwrap())?;
             let subnet = Arc::new(subnet);
             self.subnet_key_cache
-                .write()
+                .lock()
                 .unwrap()
                 .insert_subnet(subnet_id, subnet.clone());
             Ok(subnet)
@@ -1116,28 +1116,26 @@ pub fn signed_request_status_inspect(
 
 #[derive(Clone)]
 struct SubnetCache {
-    subnets: Cache<Principal, Arc<Subnet>>,
+    subnets: TimedCache<Principal, Arc<Subnet>>,
     canister_index: RangeInclusiveMap<Principal, Principal, PrincipalStep>,
 }
 
 impl SubnetCache {
     fn new() -> Self {
         Self {
-            subnets: CacheBuilder::new(64)
-                .time_to_live(Duration::from_secs(300))
-                .build(),
+            subnets: TimedCache::with_lifespan(300),
             canister_index: RangeInclusiveMap::new_with_step_fns(),
         }
     }
 
-    fn get_subnet_by_canister(&self, canister: &Principal) -> Option<Arc<Subnet>> {
+    fn get_subnet_by_canister(&mut self, canister: &Principal) -> Option<Arc<Subnet>> {
         self.canister_index
             .get(canister)
-            .and_then(|subnet_id| self.subnets.get(subnet_id))
+            .and_then(|subnet_id| self.subnets.cache_get(subnet_id).cloned())
     }
 
     fn insert_subnet(&mut self, subnet_id: Principal, subnet: Arc<Subnet>) {
-        self.subnets.insert(subnet_id, subnet.clone());
+        self.subnets.cache_set(subnet_id, subnet.clone());
         for range in &subnet.canister_ranges {
             self.canister_index.insert(range.clone(), subnet_id);
         }
