@@ -700,10 +700,9 @@ impl Agent {
         let time = leb128::read::unsigned(&mut lookup_value(&cert.tree, [b"time".as_ref()])?)?;
         if (OffsetDateTime::now_utc()
             - OffsetDateTime::from_unix_timestamp_nanos(time as _).unwrap())
-        .whole_minutes()
-            > 1
+            > self.ingress_expiry
         {
-            Err(AgentError::CertificateOutdated)
+            Err(AgentError::CertificateOutdated(self.ingress_expiry))
         } else {
             Ok(())
         }

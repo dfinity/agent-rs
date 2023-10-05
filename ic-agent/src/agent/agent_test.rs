@@ -9,7 +9,7 @@ use crate::{
 };
 use ic_certification::Label;
 use ic_transport_types::{QueryResponse, RejectCode, RejectResponse, ReplyResponse};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, time::Duration};
 #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -20,6 +20,15 @@ fn make_agent(url: &str) -> Agent {
     Agent::builder()
         .with_transport(ReqwestTransport::create(url).unwrap())
         .with_verify_query_signatures(false)
+        .build()
+        .unwrap()
+}
+
+fn make_untimed_agent(url: &str) -> Agent {
+    Agent::builder()
+        .with_transport(ReqwestTransport::create(url).unwrap())
+        .with_verify_query_signatures(false)
+        .with_ingress_expiry(Some(Duration::from_secs(u32::MAX as _)))
         .build()
         .unwrap()
 }
@@ -430,7 +439,7 @@ async fn check_subnet_range_with_valid_range() {
         Some("application/cbor"),
     )
     .await;
-    let agent = make_agent(&url);
+    let agent = make_untimed_agent(&url);
     let _result = agent
         .read_state_raw(
             vec![REQ_WITH_DELEGATED_CERT_PATH
@@ -459,7 +468,7 @@ async fn check_subnet_range_with_unauthorized_range() {
         Some("application/cbor"),
     )
     .await;
-    let agent = make_agent(&url);
+    let agent = make_untimed_agent(&url);
     let result = agent
         .read_state_raw(
             vec![REQ_WITH_DELEGATED_CERT_PATH
@@ -487,7 +496,7 @@ async fn check_subnet_range_with_pruned_range() {
         Some("application/cbor"),
     )
     .await;
-    let agent = make_agent(&url);
+    let agent = make_untimed_agent(&url);
     let result = agent
         .read_state_raw(
             vec![REQ_WITH_DELEGATED_CERT_PATH

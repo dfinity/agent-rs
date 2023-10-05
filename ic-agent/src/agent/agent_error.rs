@@ -4,6 +4,7 @@ use crate::{agent::status::Status, RequestIdError};
 use ic_certification::Label;
 use ic_transport_types::{InvalidRejectCodeError, RejectResponse};
 use leb128::read;
+use std::time::Duration;
 use std::{
     fmt::{Debug, Display, Formatter},
     str::Utf8Error,
@@ -101,9 +102,9 @@ pub enum AgentError {
     #[error("Certificate is not authorized to respond to queries for this canister. While developing: Did you forget to set effective_canister_id?")]
     CertificateNotAuthorized(),
 
-    /// The certificate was over two minutes old.
-    #[error("Certificate is stale (over two minutes old). Is the computer's clock synchronized?")]
-    CertificateOutdated,
+    /// The certificate was older than allowed by the `ingress_expiry`.
+    #[error("Certificate is stale (over {0:?}). Is the computer's clock synchronized?")]
+    CertificateOutdated(Duration),
 
     /// The query response did not contain any node signatures.
     #[error("Query response did not contain any node signatures")]
