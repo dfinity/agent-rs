@@ -11,7 +11,7 @@ pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
 pub use builder::AgentBuilder;
 use cached::{Cached, TimedCache};
-use ed25519_dalek::{Signature, SigningKey};
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 #[doc(inline)]
 pub use ic_transport_types::{
     signed, EnvelopeContent, RejectCode, RejectResponse, ReplyResponse, RequestStatusResponse,
@@ -470,7 +470,7 @@ impl Agent {
                         actual: node_key[..12].to_vec(),
                     });
                 }
-                let pubkey = SigningKey::from_bytes(node_key[12..].try_into().unwrap());
+                let pubkey = VerifyingKey::from_bytes(node_key[12..].try_into().unwrap()).unwrap();
                 let sig = Signature::from_bytes(
                     signature.signature[..]
                         .try_into()

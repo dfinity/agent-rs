@@ -25,7 +25,7 @@ impl Default for AgentConfig {
             identity: Arc::new(AnonymousIdentity {}),
             ingress_expiry: None,
             transport: None,
-            verify_query_signatures: false,
+            verify_query_signatures: true,
         }
     }
 }
