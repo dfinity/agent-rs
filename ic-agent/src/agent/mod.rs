@@ -17,7 +17,7 @@ pub use ic_transport_types::{
     signed, EnvelopeContent, RejectCode, RejectResponse, ReplyResponse, RequestStatusResponse,
 };
 pub use nonce::{NonceFactory, NonceGenerator};
-use rangemap::{RangeInclusiveMap, StepFns};
+use rangemap::{RangeInclusiveMap, RangeInclusiveSet, StepFns};
 use time::OffsetDateTime;
 
 #[cfg(test)]
@@ -46,7 +46,6 @@ use std::{
     convert::TryFrom,
     fmt,
     future::Future,
-    ops::RangeInclusive,
     pin::Pin,
     sync::{Arc, Mutex, RwLock},
     task::{Context, Poll},
@@ -1143,11 +1142,12 @@ impl SubnetCache {
         self.canister_index
             .get(canister)
             .and_then(|subnet_id| self.subnets.cache_get(subnet_id).cloned())
+            .filter(|subnet| subnet.canister_ranges.contains(canister))
     }
 
     fn insert_subnet(&mut self, subnet_id: Principal, subnet: Arc<Subnet>) {
         self.subnets.cache_set(subnet_id, subnet.clone());
-        for range in &subnet.canister_ranges {
+        for range in subnet.canister_ranges.iter() {
             self.canister_index.insert(range.clone(), subnet_id);
         }
     }
@@ -1187,7 +1187,7 @@ impl StepFns<Principal> for PrincipalStep {
 pub(crate) struct Subnet {
     _key: Vec<u8>,
     node_keys: HashMap<Principal, Vec<u8>>,
-    canister_ranges: Vec<RangeInclusive<Principal>>,
+    canister_ranges: RangeInclusiveSet<Principal, PrincipalStep>,
 }
 
 /// A Query Request Builder.

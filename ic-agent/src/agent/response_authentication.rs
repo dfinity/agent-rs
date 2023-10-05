@@ -3,6 +3,7 @@ use crate::{export::Principal, AgentError, RequestId};
 use ic_certification::hash_tree::{HashTree, SubtreeLookupResult};
 use ic_certification::{certificate::Certificate, hash_tree::Label, LookupResult};
 use ic_transport_types::ReplyResponse;
+use rangemap::RangeInclusiveSet;
 use std::collections::HashMap;
 use std::str::from_utf8;
 
@@ -175,11 +176,12 @@ pub(crate) fn lookup_subnet<Storage: AsRef<[u8]> + Clone>(
         let node_key = lookup_value(&node_keys_subtree, [node_id.as_slice(), b"public_key"])?;
         node_keys.insert(node_id, node_key.to_vec());
     }
+    let mut range_set = RangeInclusiveSet::new_with_step_fns();
+    for (low, high) in canister_ranges {
+        range_set.insert(low..=high);
+    }
     let subnet = Subnet {
-        canister_ranges: canister_ranges
-            .into_iter()
-            .map(|(lower, upper)| lower..=upper)
-            .collect(),
+        canister_ranges: range_set,
         _key: key,
         node_keys,
     };
