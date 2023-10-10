@@ -1172,7 +1172,7 @@ impl StepFns<Principal> for PrincipalStep {
         let bytes = start.as_slice();
         let mut arr = [0; 29];
         arr[..bytes.len()].copy_from_slice(bytes);
-        for byte in arr[..bytes.len() - 1].iter_mut() {
+        for byte in arr[..bytes.len() - 1].iter_mut().rev() {
             *byte = byte.wrapping_sub(1);
             if *byte != 255 {
                 break;
