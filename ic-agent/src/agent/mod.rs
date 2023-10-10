@@ -1285,7 +1285,7 @@ impl<'agent> UpdateBuilder<'agent> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "reqwest"))]
 mod offline_tests {
     use super::*;
     // Any tests that involve the network should go in agent_test, not here.
