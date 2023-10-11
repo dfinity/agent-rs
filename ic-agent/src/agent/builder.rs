@@ -84,9 +84,9 @@ impl AgentBuilder {
     /// at the time an update or query is made. The default expiry cannot be a
     /// fixed system time.
     ///
-    /// This duration may be rounded in order to reduce cache misses. The current
-    /// implementation rounds to the nearest minute if the expiry is more than a minute,
-    /// but this is not guaranteed.
+    /// The timestamp corresponding to this duration may be rounded in order to reduce
+    /// cache misses. The current implementation rounds to the nearest minute if the
+    /// expiry is more than a minute, but this is not guaranteed.
     pub fn with_ingress_expiry(mut self, ingress_expiry: Option<std::time::Duration>) -> Self {
         self.config.ingress_expiry = ingress_expiry;
         self

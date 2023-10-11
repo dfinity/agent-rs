@@ -331,19 +331,13 @@ impl Agent {
 
     fn get_expiry_date(&self) -> u64 {
         let expiry_raw = OffsetDateTime::now_utc() + self.ingress_expiry;
-        let rounded = if self.ingress_expiry.as_secs() > 60 {
-            let mut rounded_minute = expiry_raw
-                .replace_second(0)
-                .unwrap()
-                .replace_nanosecond(0)
-                .unwrap();
+        let mut rounded = expiry_raw.replace_nanosecond(0).unwrap();
+        if self.ingress_expiry.as_secs() > 60 {
+            rounded = rounded.replace_second(0).unwrap();
             if expiry_raw.second() >= 30 {
-                rounded_minute += Duration::from_secs(60);
+                rounded += Duration::from_secs(60);
             }
-            rounded_minute
-        } else {
-            expiry_raw.replace_nanosecond(0).unwrap()
-        };
+        }
         rounded.unix_timestamp_nanos() as u64
     }
 
