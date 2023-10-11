@@ -330,12 +330,15 @@ impl Agent {
     }
 
     fn get_expiry_date(&self) -> u64 {
-        // TODO(hansl): evaluate if we need this on the agent side (my hunch is we don't).
-        let permitted_drift = Duration::from_secs(60);
-        self.ingress_expiry
-            .as_nanos()
-            .saturating_add(OffsetDateTime::now_utc().unix_timestamp_nanos() as u128)
-            .saturating_sub(permitted_drift.as_nanos()) as u64
+        let expiry_raw = OffsetDateTime::now_utc() + self.ingress_expiry;
+        let mut rounded = expiry_raw.replace_nanosecond(0).unwrap();
+        if self.ingress_expiry.as_secs() > 60 {
+            rounded = rounded.replace_second(0).unwrap();
+            if expiry_raw.second() >= 30 {
+                rounded += Duration::from_secs(60);
+            }
+        }
+        rounded.unix_timestamp_nanos() as u64
     }
 
     /// Return the principal of the identity.
@@ -1273,5 +1276,33 @@ impl<'agent> UpdateBuilder<'agent> {
             signed_update,
             request_id,
         })
+    }
+}
+
+#[cfg(all(test, feature = "reqwest"))]
+mod offline_tests {
+    use super::*;
+    // Any tests that involve the network should go in agent_test, not here.
+
+    #[test]
+    fn rounded_expiry() {
+        let agent = Agent::builder()
+            .with_url("http://not-a-real-url")
+            .build()
+            .unwrap();
+        let mut prev_expiry = None;
+        let mut num_timestamps = 0;
+        for _ in 0..6 {
+            let update = agent
+                .update(&Principal::management_canister(), "not_a_method")
+                .sign()
+                .unwrap();
+            if prev_expiry < Some(update.ingress_expiry) {
+                prev_expiry = Some(update.ingress_expiry);
+                num_timestamps += 1;
+            }
+        }
+        // in six requests, there should be no more than two timestamps
+        assert!(num_timestamps <= 2, "num_timestamps:{num_timestamps} > 2");
     }
 }
