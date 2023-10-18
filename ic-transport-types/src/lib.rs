@@ -246,3 +246,16 @@ pub struct SignedDelegation {
     #[serde(with = "serde_bytes")]
     pub signature: Vec<u8>,
 }
+
+/// A list of subnet metrics.
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+pub struct SubnetMetrics {
+    /// The number of canisters on this subnet.
+    pub num_canisters: u64,
+    /// The total size of the state in bytes taken by canisters on this subnet since this subnet was created.
+    pub canister_state_bytes: u64,
+    /// The total number of cycles consumed by all current and deleted canisters on this subnet.
+    pub consumed_cycles_total: u128,
+    /// The total number of transactions processed on this subnet since this subnet was created.
+    pub update_transactions_total: u128,
+}

@@ -1,7 +1,7 @@
 use crate::agent::{RejectCode, RejectResponse, RequestStatusResponse};
 use crate::{export::Principal, AgentError, RequestId};
 use ic_certification::{certificate::Certificate, hash_tree::Label, LookupResult};
-use ic_transport_types::ReplyResponse;
+use ic_transport_types::{ReplyResponse, SubnetMetrics};
 use std::str::from_utf8;
 
 const DER_PREFIX: &[u8; 37] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00";
@@ -54,6 +54,15 @@ pub(crate) fn lookup_canister_metadata<Storage: AsRef<[u8]>>(
     ];
 
     lookup_value(&certificate, path_canister).map(<[u8]>::to_vec)
+}
+
+pub(crate) fn lookup_subnet_metrics<Storage: AsRef<[u8]>>(
+    certificate: Certificate<Storage>,
+    subnet_id: Principal,
+) -> Result<SubnetMetrics, AgentError> {
+    let path_stats = [b"subnet", subnet_id.as_slice(), b"metrics"];
+    let metrics = lookup_value(&certificate, path_stats)?;
+    Ok(serde_cbor::from_slice(metrics)?)
 }
 
 pub(crate) fn lookup_request_status<Storage: AsRef<[u8]>>(
