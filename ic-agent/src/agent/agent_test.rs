@@ -1,14 +1,15 @@
 // Disable these tests without the reqwest feature.
 #![cfg(feature = "reqwest")]
 
-use self::mock::{assert_mock, mock};
+use self::mock::{assert_mock, mock, mock_additional};
 use crate::{
     agent::{http_transport::ReqwestTransport, Status},
     export::Principal,
     Agent, AgentError,
 };
+use candid::{Encode, Nat};
 use ic_certification::Label;
-use ic_transport_types::{QueryResponse, RejectCode, RejectResponse, ReplyResponse};
+use ic_transport_types::{NodeSignature, QueryResponse, RejectCode, RejectResponse, ReplyResponse};
 use std::{collections::BTreeMap, time::Duration};
 #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -28,6 +29,14 @@ fn make_untimed_agent(url: &str) -> Agent {
     Agent::builder()
         .with_transport(ReqwestTransport::create(url).unwrap())
         .with_verify_query_signatures(false)
+        .with_ingress_expiry(Some(Duration::from_secs(u32::MAX as _)))
+        .build()
+        .unwrap()
+}
+
+fn make_certifying_agent(url: &str) -> Agent {
+    Agent::builder()
+        .with_transport(ReqwestTransport::create(url).unwrap())
         .with_ingress_expiry(Some(Duration::from_secs(u32::MAX as _)))
         .build()
         .unwrap()
@@ -315,116 +324,12 @@ const REQ_WITH_DELEGATED_CERT_PATH: [&str; 2] = [
     "92F03ABDDC774EE97882320CF15F2029A868FFCFE3BE48FEF84FC97B5A13E04A",
 ];
 const REQ_WITH_DELEGATED_CERT_CANISTER: &str = "ivg37-qiaaa-aaaab-aaaga-cai";
-const REQ_WITH_DELEGATED_CERT_RESPONSE: [u8; 1074] = [
-    217, 217, 247, 161, 107, 99, 101, 114, 116, 105, 102, 105, 99, 97, 116, 101, 89, 4, 31, 217,
-    217, 247, 163, 100, 116, 114, 101, 101, 131, 1, 131, 1, 130, 4, 88, 32, 37, 15, 94, 38, 134,
-    141, 156, 30, 167, 171, 41, 203, 233, 193, 91, 241, 196, 124, 13, 118, 5, 232, 3, 227, 158, 55,
-    90, 127, 224, 156, 110, 187, 131, 1, 131, 2, 78, 114, 101, 113, 117, 101, 115, 116, 95, 115,
-    116, 97, 116, 117, 115, 131, 1, 130, 4, 88, 32, 75, 38, 130, 39, 119, 78, 199, 127, 242, 179,
-    126, 203, 18, 21, 115, 41, 213, 76, 243, 118, 105, 75, 221, 89, 222, 215, 128, 62, 253, 130,
-    56, 111, 131, 2, 88, 32, 237, 173, 81, 14, 170, 160, 142, 210, 172, 212, 120, 19, 36, 230, 68,
-    98, 105, 218, 103, 83, 236, 23, 118, 15, 32, 107, 190, 129, 196, 101, 255, 82, 131, 1, 131, 1,
-    131, 2, 75, 114, 101, 106, 101, 99, 116, 95, 99, 111, 100, 101, 130, 3, 65, 3, 131, 2, 78, 114,
-    101, 106, 101, 99, 116, 95, 109, 101, 115, 115, 97, 103, 101, 130, 3, 88, 68, 67, 97, 110, 105,
-    115, 116, 101, 114, 32, 105, 118, 103, 51, 55, 45, 113, 105, 97, 97, 97, 45, 97, 97, 97, 97,
-    98, 45, 97, 97, 97, 103, 97, 45, 99, 97, 105, 32, 104, 97, 115, 32, 110, 111, 32, 117, 112,
-    100, 97, 116, 101, 32, 109, 101, 116, 104, 111, 100, 32, 39, 114, 101, 103, 105, 115, 116, 101,
-    114, 39, 131, 2, 70, 115, 116, 97, 116, 117, 115, 130, 3, 72, 114, 101, 106, 101, 99, 116, 101,
-    100, 130, 4, 88, 32, 151, 35, 47, 49, 246, 171, 124, 164, 254, 83, 235, 101, 104, 252, 62, 2,
-    188, 34, 254, 148, 171, 49, 208, 16, 229, 251, 60, 100, 35, 1, 241, 96, 131, 1, 130, 4, 88, 32,
-    58, 72, 209, 252, 33, 61, 73, 48, 113, 3, 16, 79, 125, 114, 194, 181, 147, 14, 219, 168, 120,
-    123, 144, 99, 31, 52, 59, 58, 166, 138, 95, 10, 131, 2, 68, 116, 105, 109, 101, 130, 3, 73,
-    226, 220, 147, 144, 145, 198, 150, 235, 22, 105, 115, 105, 103, 110, 97, 116, 117, 114, 101,
-    88, 48, 137, 162, 190, 33, 181, 250, 138, 201, 250, 177, 82, 126, 4, 19, 39, 206, 137, 157,
-    125, 169, 113, 67, 106, 31, 33, 101, 57, 57, 71, 180, 217, 66, 54, 91, 254, 84, 136, 113, 14,
-    97, 166, 25, 186, 72, 56, 138, 33, 177, 106, 100, 101, 108, 101, 103, 97, 116, 105, 111, 110,
-    162, 105, 115, 117, 98, 110, 101, 116, 95, 105, 100, 88, 29, 215, 123, 42, 47, 113, 153, 185,
-    168, 174, 201, 63, 230, 251, 88, 134, 97, 53, 140, 241, 34, 35, 233, 163, 175, 123, 78, 186,
-    196, 2, 107, 99, 101, 114, 116, 105, 102, 105, 99, 97, 116, 101, 89, 2, 49, 217, 217, 247, 162,
-    100, 116, 114, 101, 101, 131, 1, 130, 4, 88, 32, 174, 2, 63, 40, 195, 185, 217, 102, 200, 251,
-    9, 249, 237, 117, 92, 130, 138, 173, 181, 21, 46, 0, 170, 247, 0, 177, 140, 156, 6, 114, 148,
-    180, 131, 1, 131, 2, 70, 115, 117, 98, 110, 101, 116, 131, 1, 130, 4, 88, 32, 232, 59, 176, 37,
-    246, 87, 76, 143, 49, 35, 61, 192, 254, 40, 159, 245, 70, 223, 161, 228, 155, 214, 17, 109,
-    214, 232, 137, 109, 144, 164, 148, 110, 131, 1, 130, 4, 88, 32, 231, 130, 97, 144, 146, 214,
-    157, 91, 235, 240, 146, 65, 56, 189, 65, 22, 176, 21, 107, 90, 149, 226, 92, 53, 142, 168, 207,
-    126, 113, 97, 166, 97, 131, 1, 131, 1, 130, 4, 88, 32, 98, 81, 63, 169, 38, 201, 169, 239, 128,
-    58, 194, 132, 214, 32, 243, 3, 24, 149, 136, 225, 211, 144, 67, 73, 171, 99, 182, 71, 8, 86,
-    252, 72, 131, 1, 130, 4, 88, 32, 96, 233, 163, 68, 206, 210, 201, 196, 169, 106, 1, 151, 253,
-    88, 95, 45, 37, 157, 189, 25, 62, 78, 173, 165, 98, 57, 202, 194, 96, 135, 249, 197, 131, 2,
-    88, 29, 215, 123, 42, 47, 113, 153, 185, 168, 174, 201, 63, 230, 251, 88, 134, 97, 53, 140,
-    241, 34, 35, 233, 163, 175, 123, 78, 186, 196, 2, 131, 1, 131, 2, 79, 99, 97, 110, 105, 115,
-    116, 101, 114, 95, 114, 97, 110, 103, 101, 115, 130, 3, 88, 27, 217, 217, 247, 129, 130, 74, 0,
-    0, 0, 0, 0, 32, 0, 0, 1, 1, 74, 0, 0, 0, 0, 0, 47, 255, 255, 1, 1, 131, 2, 74, 112, 117, 98,
-    108, 105, 99, 95, 107, 101, 121, 130, 3, 88, 133, 48, 129, 130, 48, 29, 6, 13, 43, 6, 1, 4, 1,
-    130, 220, 124, 5, 3, 1, 2, 1, 6, 12, 43, 6, 1, 4, 1, 130, 220, 124, 5, 3, 2, 1, 3, 97, 0, 153,
-    51, 225, 248, 158, 138, 60, 77, 127, 220, 204, 219, 213, 24, 8, 158, 43, 212, 216, 24, 10, 38,
-    31, 24, 217, 194, 71, 165, 39, 104, 235, 206, 152, 220, 115, 40, 163, 152, 20, 168, 249, 17, 8,
-    106, 29, 213, 12, 190, 1, 94, 42, 83, 183, 191, 120, 181, 82, 136, 137, 61, 170, 21, 195, 70,
-    100, 14, 136, 49, 215, 42, 18, 189, 237, 217, 121, 210, 132, 112, 195, 72, 35, 184, 209, 195,
-    244, 121, 93, 156, 57, 132, 162, 71, 19, 46, 148, 254, 130, 4, 88, 32, 153, 111, 23, 187, 146,
-    107, 227, 49, 87, 69, 222, 167, 40, 32, 5, 167, 147, 181, 142, 118, 175, 235, 93, 67, 209, 162,
-    140, 226, 157, 45, 21, 133, 131, 2, 68, 116, 105, 109, 101, 130, 3, 73, 149, 184, 170, 192,
-    228, 237, 162, 234, 22, 105, 115, 105, 103, 110, 97, 116, 117, 114, 101, 88, 48, 172, 233, 252,
-    221, 155, 201, 119, 224, 93, 99, 40, 248, 137, 220, 78, 124, 153, 17, 76, 115, 122, 73, 70, 83,
-    203, 39, 161, 245, 92, 6, 244, 85, 94, 15, 22, 9, 128, 175, 94, 173, 9, 138, 204, 25, 80, 16,
-    178, 247,
-];
+const REQ_WITH_DELEGATED_CERT_RESPONSE: &[u8] =
+    include_bytes!("agent_test/req_with_delegated_cert_response.bin");
 
 // this is the same response as REQ_WITH_DELEGATED_CERT_RESPONSE, but with a manually pruned
 // /subnet/<subnetid>/canister_ranges field
-const PRUNED_SUBNET: [u8; 1064] = [
-    161, 107, 99, 101, 114, 116, 105, 102, 105, 99, 97, 116, 101, 89, 4, 24, 163, 100, 116, 114,
-    101, 101, 131, 1, 131, 1, 130, 4, 88, 32, 37, 15, 94, 38, 134, 141, 156, 30, 167, 171, 41, 203,
-    233, 193, 91, 241, 196, 124, 13, 118, 5, 232, 3, 227, 158, 55, 90, 127, 224, 156, 110, 187,
-    131, 1, 131, 2, 78, 114, 101, 113, 117, 101, 115, 116, 95, 115, 116, 97, 116, 117, 115, 131, 1,
-    130, 4, 88, 32, 75, 38, 130, 39, 119, 78, 199, 127, 242, 179, 126, 203, 18, 21, 115, 41, 213,
-    76, 243, 118, 105, 75, 221, 89, 222, 215, 128, 62, 253, 130, 56, 111, 131, 2, 88, 32, 237, 173,
-    81, 14, 170, 160, 142, 210, 172, 212, 120, 19, 36, 230, 68, 98, 105, 218, 103, 83, 236, 23,
-    118, 15, 32, 107, 190, 129, 196, 101, 255, 82, 131, 1, 131, 1, 131, 2, 75, 114, 101, 106, 101,
-    99, 116, 95, 99, 111, 100, 101, 130, 3, 65, 3, 131, 2, 78, 114, 101, 106, 101, 99, 116, 95,
-    109, 101, 115, 115, 97, 103, 101, 130, 3, 88, 68, 67, 97, 110, 105, 115, 116, 101, 114, 32,
-    105, 118, 103, 51, 55, 45, 113, 105, 97, 97, 97, 45, 97, 97, 97, 97, 98, 45, 97, 97, 97, 103,
-    97, 45, 99, 97, 105, 32, 104, 97, 115, 32, 110, 111, 32, 117, 112, 100, 97, 116, 101, 32, 109,
-    101, 116, 104, 111, 100, 32, 39, 114, 101, 103, 105, 115, 116, 101, 114, 39, 131, 2, 70, 115,
-    116, 97, 116, 117, 115, 130, 3, 72, 114, 101, 106, 101, 99, 116, 101, 100, 130, 4, 88, 32, 151,
-    35, 47, 49, 246, 171, 124, 164, 254, 83, 235, 101, 104, 252, 62, 2, 188, 34, 254, 148, 171, 49,
-    208, 16, 229, 251, 60, 100, 35, 1, 241, 96, 131, 1, 130, 4, 88, 32, 58, 72, 209, 252, 33, 61,
-    73, 48, 113, 3, 16, 79, 125, 114, 194, 181, 147, 14, 219, 168, 120, 123, 144, 99, 31, 52, 59,
-    58, 166, 138, 95, 10, 131, 2, 68, 116, 105, 109, 101, 130, 3, 73, 226, 220, 147, 144, 145, 198,
-    150, 235, 22, 105, 115, 105, 103, 110, 97, 116, 117, 114, 101, 88, 48, 137, 162, 190, 33, 181,
-    250, 138, 201, 250, 177, 82, 126, 4, 19, 39, 206, 137, 157, 125, 169, 113, 67, 106, 31, 33,
-    101, 57, 57, 71, 180, 217, 66, 54, 91, 254, 84, 136, 113, 14, 97, 166, 25, 186, 72, 56, 138,
-    33, 177, 106, 100, 101, 108, 101, 103, 97, 116, 105, 111, 110, 162, 105, 115, 117, 98, 110,
-    101, 116, 95, 105, 100, 88, 29, 215, 123, 42, 47, 113, 153, 185, 168, 174, 201, 63, 230, 251,
-    88, 134, 97, 53, 140, 241, 34, 35, 233, 163, 175, 123, 78, 186, 196, 2, 107, 99, 101, 114, 116,
-    105, 102, 105, 99, 97, 116, 101, 89, 2, 45, 163, 100, 116, 114, 101, 101, 131, 1, 130, 4, 88,
-    32, 174, 2, 63, 40, 195, 185, 217, 102, 200, 251, 9, 249, 237, 117, 92, 130, 138, 173, 181, 21,
-    46, 0, 170, 247, 0, 177, 140, 156, 6, 114, 148, 180, 131, 1, 131, 2, 70, 115, 117, 98, 110,
-    101, 116, 131, 1, 130, 4, 88, 32, 232, 59, 176, 37, 246, 87, 76, 143, 49, 35, 61, 192, 254, 40,
-    159, 245, 70, 223, 161, 228, 155, 214, 17, 109, 214, 232, 137, 109, 144, 164, 148, 110, 131, 1,
-    130, 4, 88, 32, 231, 130, 97, 144, 146, 214, 157, 91, 235, 240, 146, 65, 56, 189, 65, 22, 176,
-    21, 107, 90, 149, 226, 92, 53, 142, 168, 207, 126, 113, 97, 166, 97, 131, 1, 131, 1, 130, 4,
-    88, 32, 98, 81, 63, 169, 38, 201, 169, 239, 128, 58, 194, 132, 214, 32, 243, 3, 24, 149, 136,
-    225, 211, 144, 67, 73, 171, 99, 182, 71, 8, 86, 252, 72, 131, 1, 130, 4, 88, 32, 96, 233, 163,
-    68, 206, 210, 201, 196, 169, 106, 1, 151, 253, 88, 95, 45, 37, 157, 189, 25, 62, 78, 173, 165,
-    98, 57, 202, 194, 96, 135, 249, 197, 131, 2, 88, 29, 215, 123, 42, 47, 113, 153, 185, 168, 174,
-    201, 63, 230, 251, 88, 134, 97, 53, 140, 241, 34, 35, 233, 163, 175, 123, 78, 186, 196, 2, 131,
-    1, 130, 4, 88, 32, 32, 38, 201, 161, 171, 93, 204, 127, 80, 161, 230, 124, 235, 148, 89, 31, 6,
-    180, 77, 141, 245, 169, 134, 51, 104, 168, 66, 91, 121, 228, 125, 38, 131, 2, 74, 112, 117, 98,
-    108, 105, 99, 95, 107, 101, 121, 130, 3, 88, 133, 48, 129, 130, 48, 29, 6, 13, 43, 6, 1, 4, 1,
-    130, 220, 124, 5, 3, 1, 2, 1, 6, 12, 43, 6, 1, 4, 1, 130, 220, 124, 5, 3, 2, 1, 3, 97, 0, 153,
-    51, 225, 248, 158, 138, 60, 77, 127, 220, 204, 219, 213, 24, 8, 158, 43, 212, 216, 24, 10, 38,
-    31, 24, 217, 194, 71, 165, 39, 104, 235, 206, 152, 220, 115, 40, 163, 152, 20, 168, 249, 17, 8,
-    106, 29, 213, 12, 190, 1, 94, 42, 83, 183, 191, 120, 181, 82, 136, 137, 61, 170, 21, 195, 70,
-    100, 14, 136, 49, 215, 42, 18, 189, 237, 217, 121, 210, 132, 112, 195, 72, 35, 184, 209, 195,
-    244, 121, 93, 156, 57, 132, 162, 71, 19, 46, 148, 254, 130, 4, 88, 32, 153, 111, 23, 187, 146,
-    107, 227, 49, 87, 69, 222, 167, 40, 32, 5, 167, 147, 181, 142, 118, 175, 235, 93, 67, 209, 162,
-    140, 226, 157, 45, 21, 133, 131, 2, 68, 116, 105, 109, 101, 130, 3, 73, 149, 184, 170, 192,
-    228, 237, 162, 234, 22, 105, 115, 105, 103, 110, 97, 116, 117, 114, 101, 88, 48, 172, 233, 252,
-    221, 155, 201, 119, 224, 93, 99, 40, 248, 137, 220, 78, 124, 153, 17, 76, 115, 122, 73, 70, 83,
-    203, 39, 161, 245, 92, 6, 244, 85, 94, 15, 22, 9, 128, 175, 94, 173, 9, 138, 204, 25, 80, 16,
-    178, 247, 106, 100, 101, 108, 101, 103, 97, 116, 105, 111, 110, 246,
-];
+const PRUNED_SUBNET: &[u8] = include_bytes!("agent_test/pruned_subnet.bin");
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
@@ -509,6 +414,82 @@ async fn check_subnet_range_with_pruned_range() {
     assert!(result.is_err());
 }
 
+const WRONG_SUBNET_CERT: &[u8] = include_bytes!("agent_test/wrong_subnet.bin");
+
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+async fn wrong_subnet_query_certificate() {
+    let canister = Principal::from_text("224od-giaaa-aaaao-ae5vq-cai").unwrap();
+    let (mut read_mock, url) = mock(
+        "POST",
+        "/api/v2/canister/224od-giaaa-aaaao-ae5vq-cai/read_state",
+        200,
+        WRONG_SUBNET_CERT.into(),
+        Some("application/cbor"),
+    )
+    .await;
+    let blob = Encode!(&Nat::from(12)).unwrap();
+    let response = QueryResponse::Replied {
+        reply: ReplyResponse { arg: blob.clone() },
+        signatures: vec![NodeSignature {
+            timestamp: 1697831349698624964,
+            signature: hex::decode("4bb6ba316623395d56d8e2834ece39d2c81d47e76a9fd122e1457963be6a83a5589e2c98c7b4d8b3c6c7b11c74b8ce9dcb345b5d1bd91706a643f33c7b509b0b").unwrap(),
+            identity: "oo4np-rrvnz-5vram-kglex-enhkp-uew6q-vdf6z-whj4x-v44jd-tebaw-nqe".parse().unwrap()
+        }],
+    };
+    mock_additional(
+        &mut read_mock,
+        "POST",
+        "/api/v2/canister/224od-giaaa-aaaao-ae5vq-cai/query",
+        200,
+        serde_cbor::to_vec(&response).unwrap(),
+        Some("application/cbor"),
+    )
+    .await;
+    let agent = make_certifying_agent(&url);
+    let result = agent.query(&canister, "getVersion").call().await;
+    assert!(matches!(
+        result.unwrap_err(),
+        AgentError::CertificateNotAuthorized()
+    ));
+    assert_mock(read_mock).await;
+}
+
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+async fn no_cert() {
+    let canister = Principal::from_text("224od-giaaa-aaaao-ae5vq-cai").unwrap();
+    let (mut read_mock, url) = mock(
+        "POST",
+        "/api/v2/canister/224od-giaaa-aaaao-ae5vq-cai/read_state",
+        200,
+        WRONG_SUBNET_CERT.into(),
+        Some("application/cbor"),
+    )
+    .await;
+    let blob = Encode!(&Nat::from(12)).unwrap();
+    let response = QueryResponse::Replied {
+        reply: ReplyResponse { arg: blob.clone() },
+        signatures: vec![],
+    };
+    mock_additional(
+        &mut read_mock,
+        "POST",
+        "/api/v2/canister/224od-giaaa-aaaao-ae5vq-cai/query",
+        200,
+        serde_cbor::to_vec(&response).unwrap(),
+        Some("application/cbor"),
+    )
+    .await;
+    let agent = make_certifying_agent(&url);
+    let result = agent.query(&canister, "getVersion").call().await;
+    assert!(matches!(
+        result.unwrap_err(),
+        AgentError::CertificateNotAuthorized()
+    ));
+    assert_mock(read_mock).await;
+}
+
 #[cfg(not(target_family = "wasm"))]
 mod mock {
 
@@ -520,7 +501,7 @@ mod mock {
         status_code: u16,
         body: Vec<u8>,
         content_type: Option<&str>,
-    ) -> ((ServerGuard, Mock), String) {
+    ) -> ((ServerGuard, Vec<Mock>), String) {
         let mut server = Server::new_async().await;
         let mut mock = server
             .mock(method, path)
@@ -531,11 +512,32 @@ mod mock {
         }
         let mock = mock.create_async().await;
         let url = server.url();
-        ((server, mock), url)
+        ((server, vec![mock]), url)
     }
 
-    pub async fn assert_mock((_, mock): (ServerGuard, Mock)) {
-        mock.assert_async().await;
+    pub async fn mock_additional(
+        orig: &mut (ServerGuard, Vec<Mock>),
+        method: &str,
+        path: &str,
+        status_code: u16,
+        body: Vec<u8>,
+        content_type: Option<&str>,
+    ) {
+        let mut mock = orig
+            .0
+            .mock(method, path)
+            .with_status(status_code as _)
+            .with_body(body);
+        if let Some(content_type) = content_type {
+            mock = mock.with_header("Content-Type", content_type);
+        }
+        orig.1.push(mock.create_async().await);
+    }
+
+    pub async fn assert_mock((_, mocks): (ServerGuard, Vec<Mock>)) {
+        for mock in mocks {
+            mock.assert_async().await;
+        }
     }
 }
 
@@ -557,7 +559,6 @@ mod mock {
         pub kind: String,
         pub method: String,
         pub path: String,
-        pub nonce: String,
         pub status_code: u16,
         pub headers: Option<HashMap<String, String>>,
         pub body: Vec<u8>,
@@ -583,7 +584,6 @@ mod mock {
         let nonce = hex::encode(nonce);
         let config = MockConfig {
             kind: "config".into(),
-            nonce: nonce.clone(),
             method: method.into(),
             path: path.into(),
             status_code,
@@ -596,7 +596,7 @@ mod mock {
                 .unwrap();
         }
         Client::new()
-            .post("http://mock_configure")
+            .post(&format!("http://mock_configure/{nonce}"))
             .json(&config)
             .send()
             .await
@@ -606,17 +606,43 @@ mod mock {
         (nonce.clone(), format!("http://mock_{}/", nonce))
     }
 
+    pub async fn mock_additional(
+        orig: &mut String,
+        method: &str,
+        path: &str,
+        status_code: u16,
+        body: Vec<u8>,
+        content_type: Option<&str>,
+    ) {
+        let config = MockConfig {
+            kind: "config".into(),
+            method: method.into(),
+            path: path.into(),
+            status_code,
+            body,
+            headers: content_type.map(|c| HashMap::from([("Content-Type".into(), c.into())])),
+        };
+        Client::new()
+            .post(&format!("http://mock_configure/{orig}"))
+            .json(&config)
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap();
+    }
+
     pub async fn assert_mock(nonce: String) {
-        let hits = Client::new()
+        let hits: HashMap<String, i64> = Client::new()
             .get(&format!("http://mock_assert/{}", nonce))
             .send()
             .await
             .unwrap()
             .error_for_status()
             .unwrap()
-            .text()
+            .json()
             .await
             .unwrap();
-        assert!(hits.parse::<i32>().unwrap() >= 1);
+        assert!(hits.values().all(|x| x > 0));
     }
 }
