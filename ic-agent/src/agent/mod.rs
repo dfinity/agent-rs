@@ -700,15 +700,7 @@ impl Agent {
         ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
             .map_err(|_| AgentError::CertificateVerificationFailed())?;
 
-        let time = leb128::read::unsigned(&mut lookup_value(&cert.tree, [b"time".as_ref()])?)?;
-        if (OffsetDateTime::now_utc()
-            - OffsetDateTime::from_unix_timestamp_nanos(time as _).unwrap())
-            > self.ingress_expiry
-        {
-            Err(AgentError::CertificateOutdated(self.ingress_expiry))
-        } else {
-            Ok(())
-        }
+        Ok(())
     }
 
     fn check_delegation(
@@ -879,13 +871,21 @@ impl Agent {
             let cert = self
                 .read_state_raw(vec![vec!["subnet".into()]], *canister)
                 .await?;
-            let (subnet_id, subnet) = lookup_subnet(&cert, &self.root_key.read().unwrap())?;
-            let subnet = Arc::new(subnet);
-            self.subnet_key_cache
-                .lock()
-                .unwrap()
-                .insert_subnet(subnet_id, subnet.clone());
-            Ok(subnet)
+            let time = leb128::read::unsigned(&mut lookup_value(&cert.tree, [b"time".as_ref()])?)?;
+            if (OffsetDateTime::now_utc()
+                - OffsetDateTime::from_unix_timestamp_nanos(time as _).unwrap())
+                > self.ingress_expiry
+            {
+                Err(AgentError::CertificateOutdated(self.ingress_expiry))
+            } else {
+                let (subnet_id, subnet) = lookup_subnet(&cert, &self.root_key.read().unwrap())?;
+                let subnet = Arc::new(subnet);
+                self.subnet_key_cache
+                    .lock()
+                    .unwrap()
+                    .insert_subnet(subnet_id, subnet.clone());
+                Ok(subnet)
+            }
         }
     }
 }
