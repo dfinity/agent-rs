@@ -11,7 +11,7 @@ pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
 pub use builder::AgentBuilder;
 use cached::{Cached, TimedCache};
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use ed25519_consensus::{Signature, VerificationKey};
 #[doc(inline)]
 pub use ic_transport_types::{
     signed, EnvelopeContent, RejectCode, RejectResponse, ReplyResponse, RequestStatusResponse,
@@ -472,15 +472,16 @@ impl Agent {
                         actual: node_key[..12].to_vec(),
                     });
                 }
-                let pubkey = VerifyingKey::from_bytes(node_key[12..].try_into().unwrap()).unwrap();
-                let sig = Signature::from_bytes(
-                    signature.signature[..]
-                        .try_into()
-                        .map_err(|_| AgentError::CertificateVerificationFailed())?,
+                let pubkey =
+                    VerificationKey::try_from(<[u8; 32]>::try_from(&node_key[12..]).unwrap())
+                        .map_err(|_| AgentError::QuerySignatureVerificationFailed)?;
+                let sig = Signature::from(
+                    <[u8; 64]>::try_from(&signature.signature[..])
+                        .map_err(|_| AgentError::QuerySignatureVerificationFailed)?,
                 );
 
-                if pubkey.verify(&signable, &sig).is_err() {
-                    return Err(AgentError::CertificateVerificationFailed());
+                if pubkey.verify(&sig, &signable).is_err() {
+                    return Err(AgentError::QuerySignatureVerificationFailed);
                 }
             }
             response

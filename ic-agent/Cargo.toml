@@ -18,7 +18,7 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 backoff = "0.4.0"
 cached = { version = "0.46", features = ["ahash"], default-features = false }
 candid = { workspace = true }
-ed25519-dalek = { version = "2" }
+ed25519-consensus = { version = "2" }
 futures-util = "0.3.21"
 hex = { workspace = true }
 http = "0.2.6"

@@ -94,9 +94,13 @@ pub enum AgentError {
     #[error("The request status ({1}) at path {0:?} is invalid.")]
     InvalidRequestStatus(Vec<Label>, String),
 
-    /// The certificate verification failed.
+    /// The certificate verification for a read_state call failed.
     #[error("Certificate verification failed.")]
     CertificateVerificationFailed(),
+
+    /// The signature verification for a query call failed.
+    #[error("Query signature verification failed.")]
+    QuerySignatureVerificationFailed,
 
     /// The certificate contained a delegation that does not include the effective_canister_id in the canister_ranges field.
     #[error("Certificate is not authorized to respond to queries for this canister. While developing: Did you forget to set effective_canister_id?")]
