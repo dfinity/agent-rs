@@ -643,6 +643,6 @@ mod mock {
             .json()
             .await
             .unwrap();
-        assert!(hits.values().all(|x| x > 0));
+        assert!(hits.values().all(|x| *x > 0));
     }
 }
