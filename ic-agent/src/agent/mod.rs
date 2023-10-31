@@ -12,7 +12,8 @@ pub use agent_error::AgentError;
 pub use builder::AgentBuilder;
 #[doc(inline)]
 pub use ic_transport_types::{
-    signed, EnvelopeContent, RejectCode, RejectResponse, ReplyResponse, RequestStatusResponse,
+    signed, Envelope, EnvelopeContent, RejectCode, RejectResponse, ReplyResponse,
+    RequestStatusResponse,
 };
 pub use nonce::{NonceFactory, NonceGenerator};
 use time::OffsetDateTime;
