@@ -34,7 +34,7 @@ use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
 use ic_certification::{Certificate, Delegation, Label};
 use ic_transport_types::{
     signed::{SignedQuery, SignedRequestStatus, SignedUpdate},
-    Envelope, QueryResponse, ReadStateResponse, SubnetMetrics,
+    QueryResponse, ReadStateResponse, SubnetMetrics,
 };
 use serde::Serialize;
 use status::Status;
