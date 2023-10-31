@@ -14,7 +14,8 @@ use cached::{Cached, TimedCache};
 use ed25519_consensus::{Signature, VerificationKey};
 #[doc(inline)]
 pub use ic_transport_types::{
-    signed, EnvelopeContent, RejectCode, RejectResponse, ReplyResponse, RequestStatusResponse,
+    signed, Envelope, EnvelopeContent, RejectCode, RejectResponse, ReplyResponse,
+    RequestStatusResponse,
 };
 pub use nonce::{NonceFactory, NonceGenerator};
 use rangemap::{RangeInclusiveMap, RangeInclusiveSet, StepFns};
@@ -26,7 +27,7 @@ mod agent_test;
 use crate::{
     agent::response_authentication::{
         extract_der, lookup_canister_info, lookup_canister_metadata, lookup_request_status,
-        lookup_value,
+        lookup_subnet, lookup_subnet_metrics, lookup_value,
     },
     export::Principal,
     identity::Identity,
@@ -36,7 +37,7 @@ use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
 use ic_certification::{Certificate, Delegation, Label};
 use ic_transport_types::{
     signed::{SignedQuery, SignedRequestStatus, SignedUpdate},
-    Envelope, QueryResponse, ReadStateResponse,
+    QueryResponse, ReadStateResponse, SubnetMetrics,
 };
 use serde::Serialize;
 use status::Status;
@@ -51,8 +52,6 @@ use std::{
     task::{Context, Poll},
     time::Duration,
 };
-
-use self::response_authentication::lookup_subnet;
 
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 
@@ -74,7 +73,7 @@ type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + '
 ///
 /// Any error returned by these methods will bubble up to the code that called the [Agent].
 pub trait Transport: Send + Sync {
-    /// Sends an asynchronous request to a Replica. The Request ID is non-mutable and
+    /// Sends an asynchronous request to a replica. The Request ID is non-mutable and
     /// depends on the content of the envelope.
     ///
     /// This normally corresponds to the `/api/v2/canister/<effective_canister_id>/call` endpoint.
@@ -85,7 +84,7 @@ pub trait Transport: Send + Sync {
         request_id: RequestId,
     ) -> AgentFuture<()>;
 
-    /// Sends a synchronous request to a Replica. This call includes the body of the request message
+    /// Sends a synchronous request to a replica. This call includes the body of the request message
     /// itself (envelope).
     ///
     /// This normally corresponds to the `/api/v2/canister/<effective_canister_id>/read_state` endpoint.
@@ -95,13 +94,19 @@ pub trait Transport: Send + Sync {
         envelope: Vec<u8>,
     ) -> AgentFuture<Vec<u8>>;
 
-    /// Sends a synchronous request to a Replica. This call includes the body of the request message
+    /// Sends a synchronous request to a replica. This call includes the body of the request message
+    /// itself (envelope).
+    ///
+    /// This normally corresponds to the `/api/v2/subnet/<subnet_id>/read_state` endpoint.
+    fn read_subnet_state(&self, subnet_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>>;
+
+    /// Sends a synchronous request to a replica. This call includes the body of the request message
     /// itself (envelope).
     ///
     /// This normally corresponds to the `/api/v2/canister/<effective_canister_id>/query` endpoint.
     fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>>;
 
-    /// Sends a status request to the Replica, returning whatever the replica returns.
+    /// Sends a status request to the replica, returning whatever the replica returns.
     /// In the current spec v2, this is a CBOR encoded status message, but we are not
     /// making this API attach semantics to the response.
     fn status(&self) -> AgentFuture<Vec<u8>>;
@@ -129,6 +134,9 @@ impl<I: Transport + ?Sized> Transport for Box<I> {
     fn status(&self) -> AgentFuture<Vec<u8>> {
         (**self).status()
     }
+    fn read_subnet_state(&self, subnet_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
+        (**self).read_subnet_state(subnet_id, envelope)
+    }
 }
 impl<I: Transport + ?Sized> Transport for Arc<I> {
     fn call(
@@ -151,6 +159,9 @@ impl<I: Transport + ?Sized> Transport for Arc<I> {
     }
     fn status(&self) -> AgentFuture<Vec<u8>> {
         (**self).status()
+    }
+    fn read_subnet_state(&self, subnet_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
+        (**self).read_subnet_state(subnet_id, envelope)
     }
 }
 
@@ -382,6 +393,21 @@ impl Agent {
         let bytes = self
             .transport
             .read_state(effective_canister_id, serialized_bytes)
+            .await?;
+        serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
+    }
+
+    async fn read_subnet_state_endpoint<A>(
+        &self,
+        subnet_id: Principal,
+        serialized_bytes: Vec<u8>,
+    ) -> Result<A, AgentError>
+    where
+        A: serde::de::DeserializeOwned,
+    {
+        let bytes = self
+            .transport
+            .read_subnet_state(subnet_id, serialized_bytes)
             .await?;
         serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
     }
@@ -661,7 +687,8 @@ impl Agent {
         }
     }
 
-    /// Request the raw state tree directly. See [the protocol docs](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-read-state) for more information.
+    /// Request the raw state tree directly, under an effective canister ID.
+    /// See [the protocol docs](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-read-state) for more information.
     pub async fn read_state_raw(
         &self,
         paths: Vec<Vec<Label>>,
@@ -676,6 +703,25 @@ impl Agent {
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
         self.verify(&cert, effective_canister_id)?;
+        Ok(cert)
+    }
+
+    /// Request the raw state tree directly, under a subnet ID.
+    /// See [the protocol docs](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-read-state) for more information.
+    pub async fn read_subnet_state_raw(
+        &self,
+        paths: Vec<Vec<Label>>,
+        subnet_id: Principal,
+    ) -> Result<Certificate, AgentError> {
+        let content = self.read_state_content(paths)?;
+        let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
+
+        let read_state_response: ReadStateResponse = self
+            .read_subnet_state_endpoint(subnet_id, serialized_bytes)
+            .await?;
+        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
+            .map_err(AgentError::InvalidCborData)?;
+        self.verify_for_subnet(&cert, subnet_id)?;
         Ok(cert)
     }
 
@@ -710,6 +756,27 @@ impl Agent {
         Ok(())
     }
 
+    /// Verify a certificate, checking delegation if present.
+    /// Only passes if the certificate is for the specified subnet.
+    pub fn verify_for_subnet(
+        &self,
+        cert: &Certificate,
+        subnet_id: Principal,
+    ) -> Result<(), AgentError> {
+        let sig = &cert.signature;
+
+        let root_hash = cert.tree.digest();
+        let mut msg = vec![];
+        msg.extend_from_slice(IC_STATE_ROOT_DOMAIN_SEPARATOR);
+        msg.extend_from_slice(&root_hash);
+
+        let der_key = self.check_delegation_for_subnet(&cert.delegation, subnet_id)?;
+        let key = extract_der(der_key)?;
+
+        ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
+            .map_err(|_| AgentError::CertificateVerificationFailed())
+    }
+
     fn check_delegation(
         &self,
         delegation: &Option<Delegation>,
@@ -740,6 +807,30 @@ impl Agent {
                     "public_key".as_bytes(),
                 ];
                 lookup_value(&cert.tree, public_key_path).map(|pk| pk.to_vec())
+            }
+        }
+    }
+
+    fn check_delegation_for_subnet(
+        &self,
+        delegation: &Option<Delegation>,
+        subnet_id: Principal,
+    ) -> Result<Vec<u8>, AgentError> {
+        match delegation {
+            None => Ok(self.read_root_key()),
+            Some(delegation) => {
+                let cert = serde_cbor::from_slice(&delegation.certificate)
+                    .map_err(AgentError::InvalidCborData)?;
+                self.verify_for_subnet(&cert, subnet_id)?;
+                let public_key_path = [
+                    "subnet".as_bytes(),
+                    delegation.subnet_id.as_ref(),
+                    "public_key".as_bytes(),
+                ];
+                let pk = lookup_value(&cert.tree, public_key_path)
+                    .map_err(|_| AgentError::CertificateNotAuthorized())?
+                    .to_vec();
+                Ok(pk)
             }
         }
     }
@@ -778,6 +869,20 @@ impl Agent {
         let cert = self.read_state_raw(paths, canister_id).await?;
 
         lookup_canister_metadata(cert, canister_id, path)
+    }
+
+    /// Request a list of metrics about the subnet.
+    pub async fn read_state_subnet_metrics(
+        &self,
+        subnet_id: Principal,
+    ) -> Result<SubnetMetrics, AgentError> {
+        let paths = vec![vec![
+            "subnet".into(),
+            Label::from_bytes(subnet_id.as_slice()),
+            "metrics".into(),
+        ]];
+        let cert = self.read_subnet_state_raw(paths, subnet_id).await?;
+        lookup_subnet_metrics(cert, subnet_id)
     }
 
     /// Fetches the status of a particular request by its ID.
@@ -1289,8 +1394,11 @@ impl<'agent> QueryBuilder<'agent> {
             sender,
             canister_id,
             method_name,
-            arg
-        } = content else { unreachable!() };
+            arg,
+        } = content
+        else {
+            unreachable!()
+        };
         Ok(SignedQuery {
             ingress_expiry,
             sender,
@@ -1442,8 +1550,11 @@ impl<'agent> UpdateBuilder<'agent> {
             sender,
             canister_id,
             method_name,
-            arg
-        } = content else { unreachable!() };
+            arg,
+        } = content
+        else {
+            unreachable!()
+        };
         Ok(SignedUpdate {
             nonce,
             ingress_expiry,

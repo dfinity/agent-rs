@@ -2,7 +2,7 @@ use crate::agent::{RejectCode, RejectResponse, RequestStatusResponse};
 use crate::{export::Principal, AgentError, RequestId};
 use ic_certification::hash_tree::{HashTree, SubtreeLookupResult};
 use ic_certification::{certificate::Certificate, hash_tree::Label, LookupResult};
-use ic_transport_types::ReplyResponse;
+use ic_transport_types::{ReplyResponse, SubnetMetrics};
 use rangemap::RangeInclusiveSet;
 use std::collections::HashMap;
 use std::str::from_utf8;
@@ -59,6 +59,15 @@ pub(crate) fn lookup_canister_metadata<Storage: AsRef<[u8]>>(
     ];
 
     lookup_value(&certificate.tree, path_canister).map(<[u8]>::to_vec)
+}
+
+pub(crate) fn lookup_subnet_metrics<Storage: AsRef<[u8]>>(
+    certificate: Certificate<Storage>,
+    subnet_id: Principal,
+) -> Result<SubnetMetrics, AgentError> {
+    let path_stats = [b"subnet", subnet_id.as_slice(), b"metrics"];
+    let metrics = lookup_value(&certificate.tree, path_stats)?;
+    Ok(serde_cbor::from_slice(metrics)?)
 }
 
 pub(crate) fn lookup_request_status<Storage: AsRef<[u8]>>(
