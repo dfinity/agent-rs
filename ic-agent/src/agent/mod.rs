@@ -1299,6 +1299,8 @@ impl StepFns<Principal> for PrincipalStep {
 
 #[derive(Clone)]
 pub(crate) struct Subnet {
+    // This key is just fetched for completeness. Do not actually use this value as it is not authoritative in case of a rogue subnet.
+    // If a future agent needs to know the subnet key then it should fetch /subnet from the *root* subnet.
     _key: Vec<u8>,
     node_keys: HashMap<Principal, Vec<u8>>,
     canister_ranges: RangeInclusiveSet<Principal, PrincipalStep>,
