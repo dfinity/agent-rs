@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Added node signature certification to query calls, for protection against rogue boundary nodes. This can be disabled with `with_verify_query_signatures`.
+* Added `with_nonce_generation` to `QueryBuilder` for precise cache control.
 * Added `read_subnet_state_raw` to `Agent` and `read_subnet_state` to `Transport` for looking up raw state by subnet ID instead of canister ID.
 * Added `read_state_subnet_metrics` to `Agent` to access subnet metrics, such as total spent cycles.
 * Types passed to the `to_request_id` function can now contain nested structs, signed integers, and externally tagged enums.

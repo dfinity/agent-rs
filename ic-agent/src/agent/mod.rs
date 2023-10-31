@@ -433,8 +433,15 @@ impl Agent {
         method_name: String,
         arg: Vec<u8>,
         ingress_expiry_datetime: Option<u64>,
+        use_nonce: bool,
     ) -> Result<Vec<u8>, AgentError> {
-        let content = self.query_content(canister_id, method_name, arg, ingress_expiry_datetime)?;
+        let content = self.query_content(
+            canister_id,
+            method_name,
+            arg,
+            ingress_expiry_datetime,
+            use_nonce,
+        )?;
         let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
         self.query_inner(
             effective_canister_id,
@@ -534,6 +541,7 @@ impl Agent {
         method_name: String,
         arg: Vec<u8>,
         ingress_expiry_datetime: Option<u64>,
+        use_nonce: bool,
     ) -> Result<EnvelopeContent, AgentError> {
         Ok(EnvelopeContent::Query {
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
@@ -541,6 +549,7 @@ impl Agent {
             method_name,
             arg,
             ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
+            nonce: use_nonce.then(|| self.nonce_factory.generate()).flatten(),
         })
     }
 
@@ -1050,6 +1059,7 @@ pub fn signed_query_inspect(
             canister_id: canister_id_cbor,
             method_name: method_name_cbor,
             arg: arg_cbor,
+            nonce: _nonce,
         } => {
             if ingress_expiry != *ingress_expiry_cbor {
                 return Err(AgentError::CallDataMismatch {
@@ -1310,6 +1320,7 @@ pub(crate) struct Subnet {
 ///
 /// This makes it easier to do query calls without actually passing all arguments.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct QueryBuilder<'agent> {
     agent: &'agent Agent,
     /// The [effective canister ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-canister-id) of the destination.
@@ -1322,6 +1333,8 @@ pub struct QueryBuilder<'agent> {
     pub arg: Vec<u8>,
     /// The Unix timestamp that the request will expire at.
     pub ingress_expiry_datetime: Option<u64>,
+    /// Whether to include a nonce with the message.
+    pub use_nonce: bool,
 }
 
 impl<'agent> QueryBuilder<'agent> {
@@ -1334,6 +1347,7 @@ impl<'agent> QueryBuilder<'agent> {
             method_name,
             arg: vec![],
             ingress_expiry_datetime: None,
+            use_nonce: false,
         }
     }
 
@@ -1368,6 +1382,13 @@ impl<'agent> QueryBuilder<'agent> {
         self
     }
 
+    /// Uses a nonce generated with the agent's configured nonce factory. By default queries do not use nonces,
+    /// and thus may get a (briefly) cached response.
+    pub fn with_nonce_generation(mut self) -> Self {
+        self.use_nonce = true;
+        self
+    }
+
     /// Make a query call. This will return a byte vector.
     pub async fn call(self) -> Result<Vec<u8>, AgentError> {
         self.agent
@@ -1377,6 +1398,7 @@ impl<'agent> QueryBuilder<'agent> {
                 self.method_name,
                 self.arg,
                 self.ingress_expiry_datetime,
+                self.use_nonce,
             )
             .await
     }
@@ -1389,6 +1411,7 @@ impl<'agent> QueryBuilder<'agent> {
             self.method_name,
             self.arg,
             self.ingress_expiry_datetime,
+            self.use_nonce,
         )?;
         let signed_query = sign_envelope(&content, self.agent.identity.clone())?;
         let EnvelopeContent::Query {
@@ -1397,6 +1420,7 @@ impl<'agent> QueryBuilder<'agent> {
             canister_id,
             method_name,
             arg,
+            nonce,
         } = content
         else {
             unreachable!()
@@ -1409,6 +1433,7 @@ impl<'agent> QueryBuilder<'agent> {
             arg,
             effective_canister_id: self.effective_canister_id,
             signed_query,
+            nonce,
         })
     }
 }

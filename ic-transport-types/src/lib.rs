@@ -77,6 +77,9 @@ pub enum EnvelopeContent {
         /// The argument to pass to the canister method.
         #[serde(with = "serde_bytes")]
         arg: Vec<u8>,
+        /// A random series of bytes to uniquely identify this message.
+        #[serde(default, skip_serializing_if = "Option::is_none", with = "serde_bytes")]
+        nonce: Option<Vec<u8>>,
     },
 }
 

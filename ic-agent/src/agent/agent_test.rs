@@ -68,6 +68,7 @@ async fn query() -> Result<(), AgentError> {
             "main".to_string(),
             vec![],
             None,
+            false,
         )
         .await;
 
@@ -92,6 +93,7 @@ async fn query_error() -> Result<(), AgentError> {
             "greet".to_string(),
             vec![],
             None,
+            false,
         )
         .await;
 
@@ -132,6 +134,7 @@ async fn query_rejected() -> Result<(), AgentError> {
             "greet".to_string(),
             vec![],
             None,
+            false,
         )
         .await;
 
