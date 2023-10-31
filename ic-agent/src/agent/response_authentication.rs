@@ -153,8 +153,17 @@ pub(crate) fn lookup_subnet<Storage: AsRef<[u8]> + Clone>(
     };
     let subnet_tree = lookup_tree(&certificate.tree, [b"subnet", subnet_id.as_slice()])?;
     let key = lookup_value(&subnet_tree, [b"public_key".as_ref()])?.to_vec();
-    let canister_ranges = lookup_value(&subnet_tree, [b"canister_ranges".as_ref()])?;
-    let canister_ranges: Vec<(Principal, Principal)> = serde_cbor::from_slice(canister_ranges)?;
+    let canister_ranges: Vec<(Principal, Principal)> =
+        if let Some(delegation) = &certificate.delegation {
+            let delegation: Certificate<Vec<u8>> =
+                serde_cbor::from_slice(delegation.certificate.as_ref())?;
+            serde_cbor::from_slice(lookup_value(
+                &delegation.tree,
+                [b"subnet", subnet_id.as_slice(), b"canister_ranges"],
+            )?)?
+        } else {
+            serde_cbor::from_slice(lookup_value(&subnet_tree, [b"canister_ranges".as_ref()])?)?
+        };
     let node_keys_subtree = lookup_tree(&subnet_tree, [b"node".as_ref()])?;
     let mut node_keys = HashMap::new();
     for path in node_keys_subtree.list_paths() {
