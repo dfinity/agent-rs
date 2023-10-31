@@ -454,6 +454,12 @@ impl Agent {
                 return Err(AgentError::MissingSignature);
             }
             for signature in response.signatures() {
+                if OffsetDateTime::now_utc()
+                    - OffsetDateTime::from_unix_timestamp_nanos(signature.timestamp as _).unwrap()
+                    > self.ingress_expiry
+                {
+                    return Err(AgentError::CertificateOutdated(self.ingress_expiry));
+                }
                 let signable = response.signable(request_id, signature.timestamp);
                 let node_key = subnet
                     .node_keys
