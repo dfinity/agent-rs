@@ -455,7 +455,9 @@ impl SerializeStructVariant for StructVariantSerializer {
         SerializeStruct::serialize_field(&mut self.struct_ser, key, value)
     }
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        let Some(inner_struct_hash) = SerializeStruct::end(self.struct_ser)? else { return Ok(None) };
+        let Some(inner_struct_hash) = SerializeStruct::end(self.struct_ser)? else {
+            return Ok(None);
+        };
         let outer_struct = StructSerializer {
             field_name: <_>::default(),
             fields: vec![(Sha256::digest(self.name).into(), inner_struct_hash)],
@@ -482,7 +484,9 @@ impl SerializeTupleVariant for TupleVariantSerializer {
         SerializeSeq::serialize_element(&mut self.seq_ser, value)
     }
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        let Some(inner_seq_hash) = SerializeSeq::end(self.seq_ser)? else { return Ok(None) };
+        let Some(inner_seq_hash) = SerializeSeq::end(self.seq_ser)? else {
+            return Ok(None);
+        };
         let outer_struct = StructSerializer {
             field_name: <_>::default(),
             fields: vec![(Sha256::digest(self.name).into(), inner_seq_hash)],
