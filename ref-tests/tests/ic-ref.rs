@@ -55,11 +55,11 @@ mod management_canister {
         },
         Argument,
     };
-    use ref_tests::get_effective_canister_id;
     use ref_tests::{
         create_agent, create_basic_identity, create_secp256k1_identity, with_agent,
         with_wallet_canister,
     };
+    use ref_tests::{get_effective_canister_id, with_universal_canister};
     use sha2::{Digest, Sha256};
     use std::collections::HashSet;
     use std::convert::TryInto;
@@ -758,11 +758,11 @@ mod management_canister {
     #[ignore]
     #[test]
     fn subnet_metrics() {
-        with_agent(|agent| async move {
-            agent
+        with_universal_canister(|agent, _| async move {
+            let metrics = agent
                 .read_state_subnet_metrics(Principal::self_authenticating(&agent.read_root_key()))
                 .await?;
-
+            assert!(metrics.num_canisters >= 1);
             Ok(())
         })
     }
