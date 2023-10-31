@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 * Types passed to the `to_request_id` function can now contain nested structs, signed integers, and externally tagged enums.
+* `Envelope` struct is public also outside of the crate.
 
 ## [0.29.0] - 2023-09-29
 
