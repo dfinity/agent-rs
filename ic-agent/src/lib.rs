@@ -118,11 +118,9 @@ pub mod agent;
 pub mod export;
 pub mod identity;
 
+use agent::response_authentication::LookupPath;
 #[doc(inline)]
-pub use agent::{
-    agent_error, agent_error::AgentError, response_authentication::lookup_value, Agent,
-    NonceFactory, NonceGenerator,
-};
+pub use agent::{agent_error, agent_error::AgentError, Agent, NonceFactory, NonceGenerator};
 #[doc(inline)]
 pub use ic_transport_types::{to_request_id, RequestId, RequestIdError};
 #[doc(inline)]
@@ -130,3 +128,13 @@ pub use identity::{Identity, Signature};
 
 // Re-export from ic_certification for backward compatibility.
 pub use ic_certification::{hash_tree, Certificate};
+
+/// Looks up a value in the certificate's tree at the specified hash.
+///
+/// Returns the value if it was found; otherwise, errors with `LookupPathAbsent`, `LookupPathUnknown`, or `LookupPathError`.
+pub fn lookup_value<P: LookupPath, Storage: AsRef<[u8]>>(
+    tree: &ic_certification::certificate::Certificate<Storage>,
+    path: P,
+) -> Result<&[u8], AgentError> {
+    agent::response_authentication::lookup_value(&tree.tree, path)
+}
