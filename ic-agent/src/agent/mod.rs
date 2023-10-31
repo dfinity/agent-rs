@@ -1219,8 +1219,11 @@ impl<'agent> QueryBuilder<'agent> {
             sender,
             canister_id,
             method_name,
-            arg
-        } = content else { unreachable!() };
+            arg,
+        } = content
+        else {
+            unreachable!()
+        };
         Ok(SignedQuery {
             ingress_expiry,
             sender,
@@ -1372,8 +1375,11 @@ impl<'agent> UpdateBuilder<'agent> {
             sender,
             canister_id,
             method_name,
-            arg
-        } = content else { unreachable!() };
+            arg,
+        } = content
+        else {
+            unreachable!()
+        };
         Ok(SignedUpdate {
             nonce,
             ingress_expiry,
