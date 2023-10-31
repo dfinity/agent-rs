@@ -754,6 +754,18 @@ mod management_canister {
             Ok(())
         })
     }
+
+    #[ignore]
+    #[test]
+    fn subnet_metrics() {
+        with_agent(|agent| async move {
+            agent
+                .read_state_subnet_metrics(Principal::self_authenticating(&agent.read_root_key()))
+                .await?;
+
+            Ok(())
+        })
+    }
 }
 
 mod simple_calls {
