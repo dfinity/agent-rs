@@ -26,3 +26,5 @@ pub use hyper_transport::*; // remove after 0.25
 const IC0_DOMAIN: &str = "ic0.app";
 #[allow(dead_code)]
 const IC0_SUB_DOMAIN: &str = ".ic0.app";
+
+pub mod route_provider;

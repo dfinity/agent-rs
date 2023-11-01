@@ -3,21 +3,17 @@ pub use hyper;
 
 use std::{any, error::Error, future::Future, marker::PhantomData, sync::atomic::AtomicPtr};
 
-use http::uri::{Authority, PathAndQuery};
 use http_body::{LengthLimitError, Limited};
 use hyper::{
-    body::{Bytes, HttpBody},
-    client::HttpConnector,
-    header::CONTENT_TYPE,
-    service::Service,
-    Client, Method, Request, Response, Uri,
+    body::HttpBody, client::HttpConnector, header::CONTENT_TYPE, service::Service, Client, Method,
+    Request, Response,
 };
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 
 use crate::{
     agent::{
         agent_error::HttpErrorPayload,
-        http_transport::{IC0_DOMAIN, IC0_SUB_DOMAIN},
+        http_transport::route_provider::{RoundRobinRouteProvider, RouteProvider},
         AgentFuture, Transport,
     },
     export::Principal,
@@ -28,7 +24,7 @@ use crate::{
 #[derive(Debug)]
 pub struct HyperTransport<B1, S = Client<HttpsConnector<HttpConnector>, B1>> {
     _marker: PhantomData<AtomicPtr<B1>>,
-    url: Uri,
+    route_provider: Box<dyn RouteProvider>,
     max_response_body_size: Option<usize>,
     service: S,
 }
@@ -87,7 +83,7 @@ where
 
 impl<B1: HyperBody> HyperTransport<B1> {
     /// Creates a replica transport from a HTTP URL.
-    pub fn create<U: Into<Uri>>(url: U) -> Result<Self, AgentError> {
+    pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
         let connector = HttpsConnectorBuilder::new()
             .with_webpki_roots()
             .https_or_http()
@@ -104,49 +100,19 @@ where
     S: HyperService<B1>,
 {
     /// Creates a replica transport from a HTTP URL and a [`HyperService`].
-    pub fn create_with_service<U: Into<Uri>>(url: U, service: S) -> Result<Self, AgentError> {
-        // Parse the url
-        let url = url.into();
-        let mut parts = url.clone().into_parts();
-        parts.authority = parts
-            .authority
-            .map(|v| {
-                let host = v.host();
-                let host = match host.len().checked_sub(IC0_SUB_DOMAIN.len()) {
-                    None => host,
-                    Some(start) if host[start..].eq_ignore_ascii_case(IC0_SUB_DOMAIN) => IC0_DOMAIN,
-                    Some(_) => host,
-                };
-                let port = v.port();
-                let (colon, port) = match port.as_ref() {
-                    Some(v) => (":", v.as_str()),
-                    None => ("", ""),
-                };
-                Authority::from_maybe_shared(Bytes::from(format!("{host}{colon}{port}")))
-            })
-            .transpose()
-            .map_err(|_| AgentError::InvalidReplicaUrl(format!("{url}")))?;
-        parts.path_and_query = Some(
-            parts
-                .path_and_query
-                .map_or(Ok(PathAndQuery::from_static("/api/v2")), |v| {
-                    let mut found = false;
-                    fn replace<T>(a: T, b: &mut T) -> T {
-                        std::mem::replace(b, a)
-                    }
-                    let v = v
-                        .path()
-                        .trim_end_matches(|c| !replace(found || c == '/', &mut found));
-                    PathAndQuery::from_maybe_shared(Bytes::from(format!("{v}/api/v2")))
-                })
-                .map_err(|_| AgentError::InvalidReplicaUrl(format!("{url}")))?,
-        );
-        let url =
-            Uri::from_parts(parts).map_err(|_| AgentError::InvalidReplicaUrl(format!("{url}")))?;
+    pub fn create_with_service<U: Into<String>>(url: U, service: S) -> Result<Self, AgentError> {
+        let route_provider = Box::new(RoundRobinRouteProvider::new(vec![url.into()])?);
+        Self::create_with_service_route(route_provider, service)
+    }
 
+    /// Creates a replica transport from a [`RouteProvider`] and a [`HyperService`].
+    pub fn create_with_service_route(
+        route_provider: Box<dyn RouteProvider>,
+        service: S,
+    ) -> Result<Self, AgentError> {
         Ok(Self {
             _marker: PhantomData,
-            url,
+            route_provider,
             service,
             max_response_body_size: None,
         })
@@ -243,7 +209,10 @@ where
         _request_id: RequestId,
     ) -> AgentFuture<()> {
         Box::pin(async move {
-            let url = format!("{}/canister/{effective_canister_id}/call", self.url);
+            let url = format!(
+                "{}/canister/{effective_canister_id}/call",
+                self.route_provider.route()?
+            );
             self.request(Method::POST, url, Some(envelope)).await?;
             Ok(())
         })
@@ -255,28 +224,37 @@ where
         envelope: Vec<u8>,
     ) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let url = format!("{}/canister/{effective_canister_id}/read_state", self.url);
+            let url = format!(
+                "{}/canister/{effective_canister_id}/read_state",
+                self.route_provider.route()?
+            );
             self.request(Method::POST, url, Some(envelope)).await
         })
     }
 
     fn read_subnet_state(&self, subnet_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let url = format!("{}/subnet/{subnet_id}/read_state", self.url);
+            let url = format!(
+                "{}/subnet/{subnet_id}/read_state",
+                self.route_provider.route()?
+            );
             self.request(Method::POST, url, Some(envelope)).await
         })
     }
 
     fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let url = format!("{}/canister/{effective_canister_id}/query", self.url);
+            let url = format!(
+                "{}/canister/{effective_canister_id}/query",
+                self.route_provider.route()?
+            );
             self.request(Method::POST, url, Some(envelope)).await
         })
     }
 
     fn status(&self) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let url = format!("{}/status", self.url);
+            let url = format!("{}/status", self.route_provider.route()?);
             self.request(Method::GET, url, None).await
         })
     }
