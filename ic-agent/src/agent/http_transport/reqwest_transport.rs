@@ -21,6 +21,7 @@ use crate::{
 };
 
 /// A [`Transport`] using [`reqwest`] to make HTTP calls to the Internet Computer.
+#[derive(Debug)]
 pub struct ReqwestTransport {
     route_provider: Box<dyn RouteProvider>,
     client: Client,
