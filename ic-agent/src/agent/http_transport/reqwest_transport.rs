@@ -241,6 +241,10 @@ mod test {
         test("https://foo.bar.ic0.app", "https://ic0.app/api/v2/");
         test("https://ic0.app/foo/", "https://ic0.app/foo/api/v2/");
         test("https://foo.ic0.app/foo/", "https://ic0.app/foo/api/v2/");
+        test(
+            "https://ryjl3-tyaaa-aaaaa-aaaba-cai.ic0.app",
+            "https://ic0.app/api/v2/",
+        );
 
         test("https://ic1.app", "https://ic1.app/api/v2/");
         test("https://foo.ic1.app", "https://foo.ic1.app/api/v2/");
@@ -248,5 +252,25 @@ mod test {
 
         test("https://fooic0.app", "https://fooic0.app/api/v2/");
         test("https://fooic0.app.ic0.app", "https://ic0.app/api/v2/");
+
+        test("https://icp0.io", "https://icp0.io/api/v2/");
+        test(
+            "https://ryjl3-tyaaa-aaaaa-aaaba-cai.icp0.io",
+            "https://icp0.io/api/v2/",
+        );
+        test("https://ic0.app.icp0.io", "https://icp0.io/api/v2/");
+
+        test("https://icp-api.io", "https://icp-api.io/api/v2/");
+        test(
+            "https://ryjl3-tyaaa-aaaaa-aaaba-cai.icp-api.io",
+            "https://icp-api.io/api/v2/",
+        );
+        test("https://icp0.io.icp-api.io", "https://icp-api.io/api/v2/");
+
+        test("http://localhost:4943", "http://localhost:4943/api/v2/");
+        test(
+            "http://ryjl3-tyaaa-aaaaa-aaaba-cai.localhost:4943",
+            "https://localhost:4943/api/v2",
+        );
     }
 }
