@@ -6,7 +6,10 @@ use std::{
 use url::Url;
 
 use crate::agent::{
-    http_transport::{IC0_DOMAIN, IC0_SUB_DOMAIN},
+    http_transport::{
+        IC0_DOMAIN, IC0_SUB_DOMAIN, ICP0_DOMAIN, ICP0_SUB_DOMAIN, ICP_API_DOMAIN,
+        ICP_API_SUB_DOMAIN, LOCALHOST_DOMAIN, LOCALHOST_SUB_DOMAIN,
+    },
     AgentError,
 };
 
@@ -47,6 +50,13 @@ impl RoundRobinRouteProvider {
                     if let Some(domain) = url.domain() {
                         if domain.ends_with(IC0_SUB_DOMAIN) {
                             url.set_host(Some(IC0_DOMAIN))?
+                        } else if domain.ends_with(ICP0_SUB_DOMAIN) {
+                            url.set_host(Some(ICP0_DOMAIN))?
+                        } else if domain.ends_with(ICP_API_SUB_DOMAIN) {
+                            url.set_host(Some(ICP_API_DOMAIN))?
+                        } else if domain.ends_with(LOCALHOST_SUB_DOMAIN) {
+                            url.set_host(Some(LOCALHOST_DOMAIN))?;
+                            url.set_scheme("https").unwrap()
                         }
                     }
                     url.join("api/v2/")

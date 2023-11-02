@@ -25,6 +25,17 @@ pub use hyper_transport::*; // remove after 0.25
 #[allow(dead_code)]
 const IC0_DOMAIN: &str = "ic0.app";
 #[allow(dead_code)]
+const ICP0_DOMAIN: &str = "icp0.io";
+#[allow(dead_code)]
+const ICP_API_DOMAIN: &str = "icp-api.io";
+#[allow(dead_code)]
+const LOCALHOST_DOMAIN: &str = "localhost";
+#[allow(dead_code)]
 const IC0_SUB_DOMAIN: &str = ".ic0.app";
-
+#[allow(dead_code)]
+const ICP0_SUB_DOMAIN: &str = ".icp0.io";
+#[allow(dead_code)]
+const ICP_API_SUB_DOMAIN: &str = ".icp-api.io";
+#[allow(dead_code)]
+const LOCALHOST_SUB_DOMAIN: &str = ".localhost";
 pub mod route_provider;
