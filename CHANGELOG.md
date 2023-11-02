@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Added `read_state_subnet_metrics` to `Agent` to access subnet metrics, such as total spent cycles.
 * Types passed to the `to_request_id` function can now contain nested structs, signed integers, and externally tagged enums.
 * `Envelope` struct is public also outside of the crate.
+* Remove non-optional `ic_api_version` field (whose value is not meaningfully populated by the replica) and optional `impl_source` and `impl_revision` fields (that are not populated by the replica) from the expected `/api/v2/status` endpoint response.
 
 ## [0.29.0] - 2023-09-29
 
