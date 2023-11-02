@@ -13,8 +13,6 @@
 //! use case being tested).
 use ref_tests::{universal_canister, with_agent};
 
-const EXPECTED_IC_API_VERSION: &str = "0.18.0";
-
 #[ignore]
 #[test]
 fn status_endpoint() {
@@ -22,18 +20,6 @@ fn status_endpoint() {
         agent.status().await?;
         Ok(())
     })
-}
-
-#[ignore]
-#[test]
-fn spec_compliance_claimed() {
-    with_agent(|agent| async move {
-        let status = agent.status().await?;
-
-        assert_eq!(status.ic_api_version, EXPECTED_IC_API_VERSION);
-
-        Ok(())
-    });
 }
 
 mod management_canister {

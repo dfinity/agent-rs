@@ -42,23 +42,8 @@ impl std::fmt::Display for Value {
 /// by the status endpoint of a replica.
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq)]
 pub struct Status {
-    /// Identifies the interface version supported, i.e. the version of the present document that
-    /// the internet computer aims to support, e.g. 0.8.1. The implementation may also return
-    /// unversioned to indicate that it does not comply to a particular version, e.g. in between
-    /// releases.
-    pub ic_api_version: String,
-
-    /// Optional. Identifies the implementation of the Internet Computer, by convention with the
-    /// canonical location of the source code.
-    pub impl_source: Option<String>,
-
-    /// Optional. If the user is talking to a released version of an Internet Computer
-    /// implementation, this is the version number. For non-released versions, output of
-    /// `git describe` like 0.1.13-13-g2414721 would also be very suitable.
+    /// Optional. The precise git revision of the Internet Computer Protocol implementation.
     pub impl_version: Option<String>,
-
-    /// Optional. The precise git revision of the Internet Computer implementation.
-    pub impl_revision: Option<String>,
 
     /// Optional.  The health status of the replica.  One hopes it's "healthy".
     pub replica_health_status: Option<String>,
@@ -121,29 +106,7 @@ impl std::convert::TryFrom<&serde_cbor::Value> for Status {
 
         match v {
             Value::Map(map) => {
-                // This field is not optional.
-                let ic_api_version = map.get("ic_api_version").ok_or(()).and_then(|v| {
-                    if let Value::String(s) = v.as_ref() {
-                        Ok(s.to_owned())
-                    } else {
-                        Err(())
-                    }
-                })?;
-                let impl_source = map.get("impl_source").and_then(|v| {
-                    if let Value::String(s) = v.as_ref() {
-                        Some(s.to_owned())
-                    } else {
-                        None
-                    }
-                });
                 let impl_version: Option<String> = map.get("impl_version").and_then(|v| {
-                    if let Value::String(s) = v.as_ref() {
-                        Some(s.to_owned())
-                    } else {
-                        None
-                    }
-                });
-                let impl_revision: Option<String> = map.get("impl_revision").and_then(|v| {
                     if let Value::String(s) = v.as_ref() {
                         Some(s.to_owned())
                     } else {
@@ -167,10 +130,7 @@ impl std::convert::TryFrom<&serde_cbor::Value> for Status {
                 });
 
                 Ok(Status {
-                    ic_api_version,
-                    impl_source,
                     impl_version,
-                    impl_revision,
                     replica_health_status,
                     root_key,
                     values: map,
