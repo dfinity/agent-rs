@@ -218,9 +218,6 @@ pub struct Delegation {
     /// If present, this delegation only applies to requests sent to one of these canisters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub targets: Option<Vec<Principal>>,
-    /// If present, this delegation only applies to requests originating from one of these principals.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub senders: Option<Vec<Principal>>,
 }
 
 const IC_REQUEST_DELEGATION_DOMAIN_SEPARATOR: &[u8] = b"\x1Aic-request-auth-delegation";
