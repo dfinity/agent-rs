@@ -263,32 +263,38 @@ where
 #[cfg(test)]
 mod test {
     use super::HyperTransport;
-    use hyper::{Client, Uri};
+    use hyper::Client;
+    use url::Url;
 
     #[test]
     fn redirect() {
         fn test(base: &str, result: &str) {
             let client: Client<_> = Client::builder().build_http();
-            let uri: Uri = base.parse().unwrap();
-            let t = HyperTransport::create_with_service(uri, client).unwrap();
-            assert_eq!(t.url, result, "{}", base);
+            let url: Url = base.parse().unwrap();
+            let t = HyperTransport::create_with_service(url, client).unwrap();
+            assert_eq!(
+                t.route_provider.route().unwrap().as_str(),
+                result,
+                "{}",
+                base
+            );
         }
 
-        test("https://ic0.app", "https://ic0.app/api/v2");
-        test("https://IC0.app", "https://ic0.app/api/v2");
-        test("https://foo.ic0.app", "https://ic0.app/api/v2");
-        test("https://foo.IC0.app", "https://ic0.app/api/v2");
-        test("https://foo.Ic0.app", "https://ic0.app/api/v2");
-        test("https://foo.iC0.app", "https://ic0.app/api/v2");
-        test("https://foo.bar.ic0.app", "https://ic0.app/api/v2");
-        test("https://ic0.app/foo/", "https://ic0.app/foo/api/v2");
-        test("https://foo.ic0.app/foo/", "https://ic0.app/foo/api/v2");
+        test("https://ic0.app", "https://ic0.app/api/v2/");
+        test("https://IC0.app", "https://ic0.app/api/v2/");
+        test("https://foo.ic0.app", "https://ic0.app/api/v2/");
+        test("https://foo.IC0.app", "https://ic0.app/api/v2/");
+        test("https://foo.Ic0.app", "https://ic0.app/api/v2/");
+        test("https://foo.iC0.app", "https://ic0.app/api/v2/");
+        test("https://foo.bar.ic0.app", "https://ic0.app/api/v2/");
+        test("https://ic0.app/foo/", "https://ic0.app/foo/api/v2/");
+        test("https://foo.ic0.app/foo/", "https://ic0.app/foo/api/v2/");
 
-        test("https://ic1.app", "https://ic1.app/api/v2");
-        test("https://foo.ic1.app", "https://foo.ic1.app/api/v2");
-        test("https://ic0.app.ic1.app", "https://ic0.app.ic1.app/api/v2");
+        test("https://ic1.app", "https://ic1.app/api/v2/");
+        test("https://foo.ic1.app", "https://foo.ic1.app/api/v2/");
+        test("https://ic0.app.ic1.app", "https://ic0.app.ic1.app/api/v2/");
 
-        test("https://fooic0.app", "https://fooic0.app/api/v2");
-        test("https://fooic0.app.ic0.app", "https://ic0.app/api/v2");
+        test("https://fooic0.app", "https://fooic0.app/api/v2/");
+        test("https://fooic0.app.ic0.app", "https://ic0.app/api/v2/");
     }
 }
