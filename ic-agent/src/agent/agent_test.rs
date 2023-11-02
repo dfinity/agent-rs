@@ -226,12 +226,7 @@ async fn call_rejected_without_error_code() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn status() -> Result<(), AgentError> {
-    let ic_api_version = "1.2.3".to_string();
-    let mut map = BTreeMap::new();
-    map.insert(
-        serde_cbor::Value::Text("ic_api_version".to_owned()),
-        serde_cbor::Value::Text(ic_api_version.clone()),
-    );
+    let map = BTreeMap::new();
     let response = serde_cbor::Value::Map(map);
     let (read_mock, url) = mock(
         "GET",
@@ -248,7 +243,7 @@ async fn status() -> Result<(), AgentError> {
     let result = agent.status().await;
 
     assert_mock(read_mock).await;
-    assert!(matches!(result, Ok(Status { ic_api_version: v, .. }) if v == ic_api_version));
+    assert!(matches!(result, Ok(Status { .. })));
 
     Ok(())
 }
@@ -256,11 +251,7 @@ async fn status() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn status_okay() -> Result<(), AgentError> {
-    let mut map = BTreeMap::new();
-    map.insert(
-        serde_cbor::Value::Text("ic_api_version".to_owned()),
-        serde_cbor::Value::Text("1.2.3".to_owned()),
-    );
+    let map = BTreeMap::new();
     let response = serde_cbor::Value::Map(map);
     let (read_mock, url) = mock(
         "GET",
