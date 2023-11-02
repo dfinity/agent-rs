@@ -16,7 +16,7 @@ pub trait RouteProvider: std::fmt::Debug + Send + Sync {
     fn route(&self) -> Result<Url, AgentError>;
 }
 
-/// A simple implementation of the [`RouteProvider``] which produces an even distribution of the urls from the input ones.
+/// A simple implementation of the [`RouteProvider`] which produces an even distribution of the urls from the input ones.
 #[derive(Debug)]
 pub struct RoundRobinRouteProvider {
     routes: Vec<Url>,
