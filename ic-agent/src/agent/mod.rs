@@ -394,6 +394,7 @@ impl Agent {
             .transport
             .read_state(effective_canister_id, serialized_bytes)
             .await?;
+        dbg!(hex::encode(&bytes));
         serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
     }
 

@@ -1,7 +1,7 @@
 // Disable these tests without the reqwest feature.
 #![cfg(feature = "reqwest")]
 
-use self::mock::{assert_mock, mock, mock_additional};
+use self::mock::{assert_mock, assert_single_mock, mock, mock_additional};
 use crate::{
     agent::{http_transport::ReqwestTransport, Status},
     export::Principal,
@@ -446,8 +446,15 @@ async fn wrong_subnet_query_certificate() {
         result.unwrap_err(),
         AgentError::CertificateNotAuthorized()
     ));
-    assert_mock(read_mock).await;
+    assert_single_mock(
+        "POST",
+        "/api/v2/canister/224od-giaaa-aaaao-ae5vq-cai/read_state",
+        &read_mock,
+    )
+    .await;
 }
+
+const GOOD_SUBNET_KEYS: &[u8] = include_bytes!("agent_test/subnet_keys.bin");
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
@@ -457,7 +464,7 @@ async fn no_cert() {
         "POST",
         "/api/v2/canister/224od-giaaa-aaaao-ae5vq-cai/read_state",
         200,
-        WRONG_SUBNET_CERT.into(),
+        GOOD_SUBNET_KEYS.into(),
         Some("application/cbor"),
     )
     .await;
@@ -487,6 +494,8 @@ async fn no_cert() {
 #[cfg(not(target_family = "wasm"))]
 mod mock {
 
+    use std::collections::HashMap;
+
     use mockito::{Mock, Server, ServerGuard};
 
     pub async fn mock(
@@ -495,7 +504,7 @@ mod mock {
         status_code: u16,
         body: Vec<u8>,
         content_type: Option<&str>,
-    ) -> ((ServerGuard, Vec<Mock>), String) {
+    ) -> ((ServerGuard, HashMap<String, Mock>), String) {
         let mut server = Server::new_async().await;
         let mut mock = server
             .mock(method, path)
@@ -506,11 +515,14 @@ mod mock {
         }
         let mock = mock.create_async().await;
         let url = server.url();
-        ((server, vec![mock]), url)
+        (
+            (server, HashMap::from([(format!("{method} {path}"), mock)])),
+            url,
+        )
     }
 
     pub async fn mock_additional(
-        orig: &mut (ServerGuard, Vec<Mock>),
+        orig: &mut (ServerGuard, HashMap<String, Mock>),
         method: &str,
         path: &str,
         status_code: u16,
@@ -525,13 +537,22 @@ mod mock {
         if let Some(content_type) = content_type {
             mock = mock.with_header("Content-Type", content_type);
         }
-        orig.1.push(mock.create_async().await);
+        orig.1
+            .insert(format!("{method} {path}"), mock.create_async().await);
     }
 
-    pub async fn assert_mock((_, mocks): (ServerGuard, Vec<Mock>)) {
-        for mock in mocks {
+    pub async fn assert_mock((_, mocks): (ServerGuard, HashMap<String, Mock>)) {
+        for mock in mocks.values() {
             mock.assert_async().await;
         }
+    }
+
+    pub async fn assert_single_mock(
+        method: &str,
+        path: &str,
+        (_, mocks): &(ServerGuard, HashMap<String, Mock>),
+    ) {
+        mocks[&format!("{method} {path}")].assert_async().await;
     }
 }
 
@@ -638,5 +659,19 @@ mod mock {
             .await
             .unwrap();
         assert!(hits.values().all(|x| *x > 0));
+    }
+
+    pub async fn assert_single_mock(method: &str, path: &str, nonce: &String) {
+        let hits: HashMap<String, i64> = Client::new()
+            .get(&format!("http://mock_assert/{}", nonce))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert!(hits[&format!("{method} {path}")] > 0);
     }
 }
