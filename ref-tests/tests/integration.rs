@@ -608,7 +608,6 @@ mod identity {
             expiration: i64::MAX as u64,
             pubkey: signing_identity.public_key().unwrap(),
             targets: None,
-            senders: None,
         };
         let signature = sending_identity.sign_delegation(&delegation).unwrap();
         let delegated_identity = DelegatedIdentity::new(
