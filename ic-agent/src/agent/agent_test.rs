@@ -484,10 +484,7 @@ async fn no_cert() {
     .await;
     let agent = make_certifying_agent(&url);
     let result = agent.query(&canister, "getVersion").call().await;
-    assert!(matches!(
-        result.unwrap_err(),
-        AgentError::CertificateNotAuthorized()
-    ));
+    assert!(matches!(result.unwrap_err(), AgentError::MissingSignature));
     assert_mock(read_mock).await;
 }
 
