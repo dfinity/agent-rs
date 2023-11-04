@@ -56,7 +56,6 @@ impl RoundRobinRouteProvider {
                             url.set_host(Some(ICP_API_DOMAIN))?
                         } else if domain.ends_with(LOCALHOST_SUB_DOMAIN) {
                             url.set_host(Some(LOCALHOST_DOMAIN))?;
-                            url.set_scheme("https").unwrap()
                         }
                     }
                     url.join("api/v2/")

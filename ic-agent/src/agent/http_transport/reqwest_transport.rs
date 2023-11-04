@@ -270,7 +270,7 @@ mod test {
         test("http://localhost:4943", "http://localhost:4943/api/v2/");
         test(
             "http://ryjl3-tyaaa-aaaaa-aaaba-cai.localhost:4943",
-            "https://localhost:4943/api/v2/",
+            "http://localhost:4943/api/v2/",
         );
     }
 }
