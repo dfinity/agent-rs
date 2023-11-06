@@ -151,7 +151,7 @@ impl QueryResponse {
         #[serde(tag = "status", rename_all = "snake_case")]
         enum QueryResponseSignable<'a> {
             Replied {
-                reply: RequestId, // polyfill until hash_of_map is figured out
+                reply: &'a ReplyResponse, // polyfill until hash_of_map is figured out
                 request_id: RequestId,
                 timestamp: u64,
             },
@@ -165,14 +165,11 @@ impl QueryResponse {
             },
         }
         let response = match self {
-            Self::Replied { reply, .. } => {
-                let reply = to_request_id(&reply).unwrap();
-                QueryResponseSignable::Replied {
-                    reply,
-                    request_id,
-                    timestamp,
-                }
-            }
+            Self::Replied { reply, .. } => QueryResponseSignable::Replied {
+                reply,
+                request_id,
+                timestamp,
+            },
             Self::Rejected { reject, .. } => QueryResponseSignable::Rejected {
                 error_code: reject.error_code.as_ref(),
                 reject_code: reject.reject_code,
