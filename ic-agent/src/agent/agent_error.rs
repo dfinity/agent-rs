@@ -114,6 +114,23 @@ pub enum AgentError {
     #[error("Query response did not contain any node signatures")]
     MissingSignature,
 
+    /// The query response contained a malformed signature.
+    #[error("Query response contained a malformed signature")]
+    MalformedSignature,
+
+    /// The read-state response contained a malformed public key.
+    #[error("Read state response contained a malformed public key")]
+    MalformedPublicKey,
+
+    /// The query response contained more node signatures than the subnet has nodes.
+    #[error("Query response contained too many signatures ({had}, exceeding the subnet's total nodes: {needed})")]
+    TooManySignatures {
+        /// The number of provided signatures.
+        had: usize,
+        /// The number of nodes on the subnet.
+        needed: usize,
+    },
+
     /// There was a length mismatch between the expected and actual length of the BLS DER-encoded public key.
     #[error(
         r#"BLS DER-encoded public key must be ${expected} bytes long, but is {actual} bytes long."#

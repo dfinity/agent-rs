@@ -485,6 +485,11 @@ impl Agent {
             )?;
             if response.signatures().is_empty() {
                 return Err(AgentError::MissingSignature);
+            } else if response.signatures().len() > subnet.node_keys.len() {
+                return Err(AgentError::TooManySignatures {
+                    had: response.signatures().len(),
+                    needed: subnet.node_keys.len(),
+                });
             }
             for signature in response.signatures() {
                 if OffsetDateTime::now_utc()
@@ -513,10 +518,10 @@ impl Agent {
                 }
                 let pubkey =
                     VerificationKey::try_from(<[u8; 32]>::try_from(&node_key[12..]).unwrap())
-                        .map_err(|_| AgentError::QuerySignatureVerificationFailed)?;
+                        .map_err(|_| AgentError::MalformedPublicKey)?;
                 let sig = Signature::from(
                     <[u8; 64]>::try_from(&signature.signature[..])
-                        .map_err(|_| AgentError::QuerySignatureVerificationFailed)?,
+                        .map_err(|_| AgentError::MalformedSignature)?,
                 );
 
                 if pubkey.verify(&sig, &signable).is_err() {
