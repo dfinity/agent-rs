@@ -7,13 +7,13 @@ pub use reqwest;
 use futures_util::StreamExt;
 use reqwest::{
     header::{HeaderMap, CONTENT_TYPE},
-    Body, Client, Method, Request, StatusCode, Url,
+    Body, Client, Method, Request, StatusCode,
 };
 
 use crate::{
     agent::{
         agent_error::HttpErrorPayload,
-        http_transport::{IC0_DOMAIN, IC0_SUB_DOMAIN},
+        http_transport::route_provider::{RoundRobinRouteProvider, RouteProvider},
         AgentFuture, Transport,
     },
     export::Principal,
@@ -23,7 +23,7 @@ use crate::{
 /// A [`Transport`] using [`reqwest`] to make HTTP calls to the Internet Computer.
 #[derive(Debug)]
 pub struct ReqwestTransport {
-    url: Url,
+    route_provider: Box<dyn RouteProvider>,
     client: Client,
     max_response_body_size: Option<usize>,
 }
@@ -52,19 +52,17 @@ impl ReqwestTransport {
 
     /// Creates a replica transport from a HTTP URL and a [`reqwest::Client`].
     pub fn create_with_client<U: Into<String>>(url: U, client: Client) -> Result<Self, AgentError> {
-        let url = url.into();
+        let route_provider = Box::new(RoundRobinRouteProvider::new(vec![url.into()])?);
+        Self::create_with_client_route(route_provider, client)
+    }
+
+    /// Creates a replica transport from a [`RouteProvider`] and a [`reqwest::Client`].
+    pub fn create_with_client_route(
+        route_provider: Box<dyn RouteProvider>,
+        client: Client,
+    ) -> Result<Self, AgentError> {
         Ok(Self {
-            url: Url::parse(&url)
-                .and_then(|mut url| {
-                    // rewrite *.ic0.app to ic0.app
-                    if let Some(domain) = url.domain() {
-                        if domain.ends_with(IC0_SUB_DOMAIN) {
-                            url.set_host(Some(IC0_DOMAIN))?;
-                        }
-                    }
-                    url.join("api/v2/")
-                })
-                .map_err(|_| AgentError::InvalidReplicaUrl(url.clone()))?,
+            route_provider,
             client,
             max_response_body_size: None,
         })
@@ -127,7 +125,7 @@ impl ReqwestTransport {
         endpoint: &str,
         body: Option<Vec<u8>>,
     ) -> Result<Vec<u8>, AgentError> {
-        let url = self.url.join(endpoint)?;
+        let url = self.route_provider.route()?.join(endpoint)?;
         let mut http_request = Request::new(method, url);
         http_request
             .headers_mut()
@@ -226,7 +224,12 @@ mod test {
     fn redirect() {
         fn test(base: &str, result: &str) {
             let t = ReqwestTransport::create(base).unwrap();
-            assert_eq!(t.url.as_str(), result, "{}", base);
+            assert_eq!(
+                t.route_provider.route().unwrap().as_str(),
+                result,
+                "{}",
+                base
+            );
         }
 
         test("https://ic0.app", "https://ic0.app/api/v2/");
@@ -238,6 +241,10 @@ mod test {
         test("https://foo.bar.ic0.app", "https://ic0.app/api/v2/");
         test("https://ic0.app/foo/", "https://ic0.app/foo/api/v2/");
         test("https://foo.ic0.app/foo/", "https://ic0.app/foo/api/v2/");
+        test(
+            "https://ryjl3-tyaaa-aaaaa-aaaba-cai.ic0.app",
+            "https://ic0.app/api/v2/",
+        );
 
         test("https://ic1.app", "https://ic1.app/api/v2/");
         test("https://foo.ic1.app", "https://foo.ic1.app/api/v2/");
@@ -245,5 +252,25 @@ mod test {
 
         test("https://fooic0.app", "https://fooic0.app/api/v2/");
         test("https://fooic0.app.ic0.app", "https://ic0.app/api/v2/");
+
+        test("https://icp0.io", "https://icp0.io/api/v2/");
+        test(
+            "https://ryjl3-tyaaa-aaaaa-aaaba-cai.icp0.io",
+            "https://icp0.io/api/v2/",
+        );
+        test("https://ic0.app.icp0.io", "https://icp0.io/api/v2/");
+
+        test("https://icp-api.io", "https://icp-api.io/api/v2/");
+        test(
+            "https://ryjl3-tyaaa-aaaaa-aaaba-cai.icp-api.io",
+            "https://icp-api.io/api/v2/",
+        );
+        test("https://icp0.io.icp-api.io", "https://icp-api.io/api/v2/");
+
+        test("http://localhost:4943", "http://localhost:4943/api/v2/");
+        test(
+            "http://ryjl3-tyaaa-aaaaa-aaaba-cai.localhost:4943",
+            "http://localhost:4943/api/v2/",
+        );
     }
 }

@@ -163,6 +163,10 @@ pub enum AgentError {
     /// The rejected call had an invalid reject code (valid range 1..5).
     #[error(transparent)]
     InvalidRejectCode(#[from] InvalidRejectCodeError),
+
+    /// Route provider failed to generate a url for some reason.
+    #[error("Route provider failed to generate url: {0}")]
+    RouteProviderError(String),
 }
 
 impl PartialEq for AgentError {
