@@ -11,7 +11,7 @@ pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
 pub use builder::AgentBuilder;
 use cached::{Cached, TimedCache};
-use ed25519_consensus::{Signature, VerificationKey};
+use ed25519_consensus::{Error as Ed25519Error, Signature, VerificationKey};
 #[doc(inline)]
 pub use ic_transport_types::{
     signed, Envelope, EnvelopeContent, RejectCode, RejectResponse, ReplyResponse,
@@ -524,8 +524,18 @@ impl Agent {
                         .map_err(|_| AgentError::MalformedSignature)?,
                 );
 
-                if pubkey.verify(&sig, &signable).is_err() {
-                    return Err(AgentError::QuerySignatureVerificationFailed);
+                match pubkey.verify(&sig, &signable) {
+                    Err(Ed25519Error::InvalidSignature) => {
+                        return Err(AgentError::QuerySignatureVerificationFailed)
+                    }
+                    Err(Ed25519Error::InvalidSliceLength) => {
+                        return Err(AgentError::MalformedSignature)
+                    }
+                    Err(Ed25519Error::MalformedPublicKey) => {
+                        return Err(AgentError::MalformedPublicKey)
+                    }
+                    Ok(()) => (),
+                    _ => unreachable!(),
                 }
             }
             response
