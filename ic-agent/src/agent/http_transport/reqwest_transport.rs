@@ -29,7 +29,8 @@ pub struct ReqwestTransport {
 }
 
 #[doc(hidden)]
-pub use ReqwestTransport as ReqwestHttpReplicaV2Transport; // deprecate after 0.24
+#[deprecated(since = "0.30.0", note = "use ReqwestTransport")]
+pub use ReqwestTransport as ReqwestHttpReplicaV2Transport; // delete after 0.31
 
 impl ReqwestTransport {
     /// Creates a replica transport from a HTTP URL.

@@ -8,9 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.30.0] = 2023-11-07
+
 * Added node signature certification to query calls, for protection against rogue boundary nodes. This can be disabled with `with_verify_query_signatures`.
 * Added `with_nonce_generation` to `QueryBuilder` for precise cache control.
-* feat: An instance of the `Agent` can now dispatch subsequent requests to URLs, which are generated dynamically, thanks to the new `RouteProvider` trait, which is added to the `HyperTransport` and `ReqwestTransport`. Also a simple `RoundRobinRouteProvider` implementation of the `RouteProvider` trait is provided. This provider generates routing URLs from an input list in a simple, fair and predictable way.
+* Added the ability to dispatch to multiple URLs to `ReqwestTransport` and `HyperTransport`, with a `RouteProvider` trait and a provided `RoundRobinRouteProvider` implementation.
 * Added `read_subnet_state_raw` to `Agent` and `read_subnet_state` to `Transport` for looking up raw state by subnet ID instead of canister ID.
 * Added `read_state_subnet_metrics` to `Agent` to access subnet metrics, such as total spent cycles.
 * Types passed to the `to_request_id` function can now contain nested structs, signed integers, and externally tagged enums.
