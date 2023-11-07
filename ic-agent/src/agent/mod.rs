@@ -43,6 +43,7 @@ use serde::Serialize;
 use status::Status;
 use std::{
     borrow::Cow,
+    cmp,
     collections::HashMap,
     convert::TryFrom,
     fmt,
@@ -280,7 +281,9 @@ impl Agent {
             identity: config.identity,
             ingress_expiry: config
                 .ingress_expiry
-                .unwrap_or_else(|| Duration::from_secs(300)),
+                .map_or(DEFAULT_INGRESS_EXPIRY, |configured| {
+                    cmp::min(configured, DEFAULT_INGRESS_EXPIRY)
+                }),
             root_key: Arc::new(RwLock::new(IC_ROOT_KEY.to_vec())),
             transport: config
                 .transport
@@ -353,11 +356,8 @@ impl Agent {
     fn get_expiry_date(&self) -> u64 {
         let expiry_raw = OffsetDateTime::now_utc() + self.ingress_expiry;
         let mut rounded = expiry_raw.replace_nanosecond(0).unwrap();
-        if self.ingress_expiry.as_secs() > 60 {
+        if self.ingress_expiry.as_secs() > 90 {
             rounded = rounded.replace_second(0).unwrap();
-            if expiry_raw.second() >= 30 {
-                rounded += Duration::from_secs(60);
-            }
         }
         rounded.unix_timestamp_nanos() as u64
     }
@@ -1026,6 +1026,8 @@ impl Agent {
     }
 }
 
+const DEFAULT_INGRESS_EXPIRY: Duration = Duration::from_secs(240);
+
 // Checks if a principal is contained within a list of principal ranges
 // A range is a tuple: (low: Principal, high: Principal), as described here: https://internetcomputer.org/docs/current/references/ic-interface-spec#state-tree-subnet
 fn principal_is_within_ranges(principal: &Principal, ranges: &[(Principal, Principal)]) -> bool {
@@ -1384,15 +1386,16 @@ impl<'agent> QueryBuilder<'agent> {
         self
     }
 
-    /// Sets ingress_expiry_datetime to `now + duration - drift`, where `drift` is a
-    /// permitted drift from the duration to account for using system time and not block time.
+    /// Sets ingress_expiry_datetime to `max(now, 4min)`.
     pub fn expire_after(mut self, duration: Duration) -> Self {
-        let permitted_drift = Duration::from_secs(60);
         self.ingress_expiry_datetime = Some(
-            (duration
-                .as_nanos()
-                .saturating_add(OffsetDateTime::now_utc().unix_timestamp_nanos() as u128)
-                .saturating_sub(permitted_drift.as_nanos())) as u64,
+            OffsetDateTime::now_utc()
+                .saturating_add(
+                    cmp::min(duration, DEFAULT_INGRESS_EXPIRY)
+                        .try_into()
+                        .expect("negative duration"),
+                )
+                .unix_timestamp_nanos() as u64,
         );
         self
     }
@@ -1533,15 +1536,16 @@ impl<'agent> UpdateBuilder<'agent> {
         self
     }
 
-    /// Sets ingress_expiry_datetime to `now + duration - drift`, where `drift` is a
-    /// permitted drift from the duration to account for using system time and not block time.
+    /// Sets ingress_expiry_datetime to `min(now, 4min)`.
     pub fn expire_after(mut self, duration: Duration) -> Self {
-        let permitted_drift = Duration::from_secs(60);
         self.ingress_expiry_datetime = Some(
-            (duration
-                .as_nanos()
-                .saturating_add(OffsetDateTime::now_utc().unix_timestamp_nanos() as u128)
-                .saturating_sub(permitted_drift.as_nanos())) as u64,
+            OffsetDateTime::now_utc()
+                .saturating_add(
+                    cmp::min(duration, DEFAULT_INGRESS_EXPIRY)
+                        .try_into()
+                        .expect("negative duration"),
+                )
+                .unix_timestamp_nanos() as u64,
         );
         self
     }
