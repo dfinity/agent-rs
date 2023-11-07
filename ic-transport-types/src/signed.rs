@@ -24,6 +24,11 @@ pub struct SignedQuery {
     /// The CBOR-encoded [authentication envelope](https://internetcomputer.org/docs/current/references/ic-interface-spec#authentication) for the request.
     #[serde(with = "serde_bytes")]
     pub signed_query: Vec<u8>,
+    /// A nonce to uniquely identify this query call.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(with = "serde_bytes")]
+    pub nonce: Option<Vec<u8>>,
 }
 
 /// A signed update request message. Produced by
@@ -87,6 +92,7 @@ mod tests {
             arg: vec![0, 1],
             effective_canister_id: Principal::management_canister(),
             signed_query: vec![0, 1, 2, 3],
+            nonce: None,
         };
         let serialized = serde_json::to_string(&query).unwrap();
         let deserialized = serde_json::from_str::<SignedQuery>(&serialized);

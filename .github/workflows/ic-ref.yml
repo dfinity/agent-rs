@@ -28,7 +28,7 @@ jobs:
       - name: Install dfx
         uses: dfinity/setup-dfx@main
         with:
-          dfx-version: "0.15.2-beta.0"
+          dfx-version: "0.15.2-beta.1"
 
       - name: Cargo cache
         uses: actions/cache@v2

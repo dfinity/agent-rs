@@ -16,7 +16,9 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
 backoff = "0.4.0"
+cached = { version = "0.46", features = ["ahash"], default-features = false }
 candid = { workspace = true }
+ed25519-consensus = { version = "2" }
 futures-util = "0.3.21"
 hex = { workspace = true }
 http = "0.2.6"
@@ -29,6 +31,7 @@ leb128 = { workspace = true }
 pkcs8 = { version = "0.10.2", features = ["std"] }
 sec1 = { version = "0.7.2", features = ["pem"] }
 rand = "0.8.5"
+rangemap = "1.4"
 ring = { workspace = true, features = ["std"] }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
@@ -102,6 +105,7 @@ wasm-bindgen = [
     "dep:web-sys",
     "time/wasm-bindgen",
     "backoff/wasm-bindgen",
+    "cached/wasm",
 ]
 
 [package.metadata.docs.rs]

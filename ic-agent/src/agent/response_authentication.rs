@@ -1,8 +1,13 @@
 use crate::agent::{RejectCode, RejectResponse, RequestStatusResponse};
 use crate::{export::Principal, AgentError, RequestId};
+use ic_certification::hash_tree::{HashTree, SubtreeLookupResult};
 use ic_certification::{certificate::Certificate, hash_tree::Label, LookupResult};
 use ic_transport_types::{ReplyResponse, SubnetMetrics};
+use rangemap::RangeInclusiveSet;
+use std::collections::HashMap;
 use std::str::from_utf8;
+
+use super::Subnet;
 
 const DER_PREFIX: &[u8; 37] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00";
 const KEY_LENGTH: usize = 96;
@@ -38,7 +43,7 @@ pub(crate) fn lookup_canister_info<Storage: AsRef<[u8]>>(
         canister_id.as_slice(),
         path.as_bytes(),
     ];
-    lookup_value(&certificate, path_canister).map(<[u8]>::to_vec)
+    lookup_value(&certificate.tree, path_canister).map(<[u8]>::to_vec)
 }
 
 pub(crate) fn lookup_canister_metadata<Storage: AsRef<[u8]>>(
@@ -53,7 +58,7 @@ pub(crate) fn lookup_canister_metadata<Storage: AsRef<[u8]>>(
         path.as_bytes(),
     ];
 
-    lookup_value(&certificate, path_canister).map(<[u8]>::to_vec)
+    lookup_value(&certificate.tree, path_canister).map(<[u8]>::to_vec)
 }
 
 pub(crate) fn lookup_subnet_metrics<Storage: AsRef<[u8]>>(
@@ -61,7 +66,7 @@ pub(crate) fn lookup_subnet_metrics<Storage: AsRef<[u8]>>(
     subnet_id: Principal,
 ) -> Result<SubnetMetrics, AgentError> {
     let path_stats = [b"subnet", subnet_id.as_slice(), b"metrics"];
-    let metrics = lookup_value(&certificate, path_stats)?;
+    let metrics = lookup_value(&certificate.tree, path_stats)?;
     Ok(serde_cbor::from_slice(metrics)?)
 }
 
@@ -113,7 +118,7 @@ pub(crate) fn lookup_reject_code<Storage: AsRef<[u8]>>(
         request_id.as_slice(),
         "reject_code".as_bytes(),
     ];
-    let code = lookup_value(certificate, path)?;
+    let code = lookup_value(&certificate.tree, path)?;
     let mut readable = code;
     let code_digit = leb128::read::unsigned(&mut readable)?;
     Ok(RejectCode::try_from(code_digit)?)
@@ -128,7 +133,7 @@ pub(crate) fn lookup_reject_message<Storage: AsRef<[u8]>>(
         request_id.as_slice(),
         "reject_message".as_bytes(),
     ];
-    let msg = lookup_value(certificate, path)?;
+    let msg = lookup_value(&certificate.tree, path)?;
     Ok(from_utf8(msg)?.to_string())
 }
 
@@ -141,17 +146,70 @@ pub(crate) fn lookup_reply<Storage: AsRef<[u8]>>(
         request_id.as_slice(),
         "reply".as_bytes(),
     ];
-    let reply_data = lookup_value(certificate, path)?;
+    let reply_data = lookup_value(&certificate.tree, path)?;
     let arg = Vec::from(reply_data);
     Ok(RequestStatusResponse::Replied(ReplyResponse { arg }))
 }
 
+pub(crate) fn lookup_subnet<Storage: AsRef<[u8]> + Clone>(
+    certificate: &Certificate<Storage>,
+    root_key: &[u8],
+) -> Result<(Principal, Subnet), AgentError> {
+    let subnet_id = if let Some(delegation) = &certificate.delegation {
+        Principal::from_slice(delegation.subnet_id.as_ref())
+    } else {
+        Principal::self_authenticating(root_key)
+    };
+    let subnet_tree = lookup_tree(&certificate.tree, [b"subnet", subnet_id.as_slice()])?;
+    let key = lookup_value(&subnet_tree, [b"public_key".as_ref()])?.to_vec();
+    let canister_ranges: Vec<(Principal, Principal)> =
+        if let Some(delegation) = &certificate.delegation {
+            let delegation: Certificate<Vec<u8>> =
+                serde_cbor::from_slice(delegation.certificate.as_ref())?;
+            serde_cbor::from_slice(lookup_value(
+                &delegation.tree,
+                [b"subnet", subnet_id.as_slice(), b"canister_ranges"],
+            )?)?
+        } else {
+            serde_cbor::from_slice(lookup_value(&subnet_tree, [b"canister_ranges".as_ref()])?)?
+        };
+    let node_keys_subtree = lookup_tree(&subnet_tree, [b"node".as_ref()])?;
+    let mut node_keys = HashMap::new();
+    for path in node_keys_subtree.list_paths() {
+        if path.len() < 2 {
+            // if it's absent, it's because this is the wrong subnet
+            return Err(AgentError::CertificateNotAuthorized());
+        }
+        if path[1].as_bytes() != b"public_key" {
+            continue;
+        }
+        if path.len() > 2 {
+            return Err(AgentError::LookupPathError(
+                path.into_iter()
+                    .map(|label| label.as_bytes().to_vec().into())
+                    .collect(),
+            ));
+        }
+        let node_id = Principal::from_slice(path[0].as_bytes());
+        let node_key = lookup_value(&node_keys_subtree, [node_id.as_slice(), b"public_key"])?;
+        node_keys.insert(node_id, node_key.to_vec());
+    }
+    let mut range_set = RangeInclusiveSet::new_with_step_fns();
+    for (low, high) in canister_ranges {
+        range_set.insert(low..=high);
+    }
+    let subnet = Subnet {
+        canister_ranges: range_set,
+        _key: key,
+        node_keys,
+    };
+    Ok((subnet_id, subnet))
+}
+
 /// The path to [`lookup_value`]
 pub trait LookupPath {
-    type Item<'a>: AsRef<[u8]>
-    where
-        Self: 'a;
-    type Iter<'a>: Iterator<Item = Self::Item<'a>>
+    type Item: AsRef<[u8]>;
+    type Iter<'a>: Iterator<Item = &'a Self::Item>
     where
         Self: 'a;
     fn iter(&self) -> Self::Iter<'_>;
@@ -159,7 +217,7 @@ pub trait LookupPath {
 }
 
 impl<'b, const N: usize> LookupPath for [&'b [u8]; N] {
-    type Item<'a> = &'a &'b [u8] where Self: 'a;
+    type Item = &'b [u8];
     type Iter<'a> = std::slice::Iter<'a, &'b [u8]> where Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         self.as_slice().iter()
@@ -169,7 +227,7 @@ impl<'b, const N: usize> LookupPath for [&'b [u8]; N] {
     }
 }
 impl<'b, 'c> LookupPath for &'c [&'b [u8]] {
-    type Item<'a> = &'a &'b [u8] where Self: 'a;
+    type Item = &'b [u8];
     type Iter<'a> = std::slice::Iter<'a, &'b [u8]> where Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         <[_]>::iter(self)
@@ -179,7 +237,7 @@ impl<'b, 'c> LookupPath for &'c [&'b [u8]] {
     }
 }
 impl<'b> LookupPath for Vec<&'b [u8]> {
-    type Item<'a> = &'a &'b [u8] where Self: 'a;
+    type Item = &'b [u8];
     type Iter<'a> = std::slice::Iter<'a, &'b [u8]> where Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         <[_]>::iter(self.as_slice())
@@ -190,7 +248,7 @@ impl<'b> LookupPath for Vec<&'b [u8]> {
 }
 
 impl<const N: usize> LookupPath for [Vec<u8>; N] {
-    type Item<'a> = &'a Vec<u8> where Self: 'a;
+    type Item = Vec<u8>;
     type Iter<'a> = std::slice::Iter<'a, Vec<u8>> where Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         self.as_slice().iter()
@@ -200,7 +258,7 @@ impl<const N: usize> LookupPath for [Vec<u8>; N] {
     }
 }
 impl<'c> LookupPath for &'c [Vec<u8>] {
-    type Item<'a> = &'a Vec<u8> where Self: 'a;
+    type Item = Vec<u8>;
     type Iter<'a> = std::slice::Iter<'a, Vec<u8>> where Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         <[_]>::iter(self)
@@ -210,7 +268,7 @@ impl<'c> LookupPath for &'c [Vec<u8>] {
     }
 }
 impl LookupPath for Vec<Vec<u8>> {
-    type Item<'a> = &'a Vec<u8> where Self: 'a;
+    type Item = Vec<u8>;
     type Iter<'a> = std::slice::Iter<'a, Vec<u8>> where Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         <[_]>::iter(self.as_slice())
@@ -221,7 +279,7 @@ impl LookupPath for Vec<Vec<u8>> {
 }
 
 impl<Storage: AsRef<[u8]> + Into<Vec<u8>>, const N: usize> LookupPath for [Label<Storage>; N] {
-    type Item<'a> = &'a Label<Storage> where Self: 'a;
+    type Item = Label<Storage>;
     type Iter<'a> = std::slice::Iter<'a, Label<Storage>> where Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         self.as_slice().iter()
@@ -231,7 +289,7 @@ impl<Storage: AsRef<[u8]> + Into<Vec<u8>>, const N: usize> LookupPath for [Label
     }
 }
 impl<'c, Storage: AsRef<[u8]> + Into<Vec<u8>>> LookupPath for &'c [Label<Storage>] {
-    type Item<'a> = &'a Label<Storage> where Self: 'a;
+    type Item = Label<Storage>;
     type Iter<'a> = std::slice::Iter<'a, Label<Storage>> where Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         <[_]>::iter(self)
@@ -243,7 +301,7 @@ impl<'c, Storage: AsRef<[u8]> + Into<Vec<u8>>> LookupPath for &'c [Label<Storage
     }
 }
 impl LookupPath for Vec<Label<Vec<u8>>> {
-    type Item<'a> = &'a Label<Vec<u8>> where Self: 'a;
+    type Item = Label<Vec<u8>>;
     type Iter<'a> = std::slice::Iter<'a, Label<Vec<u8>>> where Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         <[_]>::iter(self.as_slice())
@@ -257,14 +315,29 @@ impl LookupPath for Vec<Label<Vec<u8>>> {
 ///
 /// Returns the value if it was found; otherwise, errors with `LookupPathAbsent`, `LookupPathUnknown`, or `LookupPathError`.
 pub fn lookup_value<P: LookupPath, Storage: AsRef<[u8]>>(
-    certificate: &Certificate<Storage>,
+    tree: &HashTree<Storage>,
     path: P,
 ) -> Result<&[u8], AgentError> {
     use AgentError::*;
-    match certificate.tree.lookup_path(path.iter()) {
+    match tree.lookup_path(path.iter()) {
         LookupResult::Absent => Err(LookupPathAbsent(path.into_vec())),
         LookupResult::Unknown => Err(LookupPathUnknown(path.into_vec())),
         LookupResult::Found(value) => Ok(value),
         LookupResult::Error => Err(LookupPathError(path.into_vec())),
+    }
+}
+
+/// Looks up a subtree in the certificate's tree at the specified hash.
+///
+/// Returns the value if it was found; otherwise, errors with `LookupPathAbsent` or `LookupPathUnknown`.
+pub fn lookup_tree<P: LookupPath, Storage: AsRef<[u8]> + Clone>(
+    tree: &HashTree<Storage>,
+    path: P,
+) -> Result<HashTree<Storage>, AgentError> {
+    use AgentError::*;
+    match tree.lookup_subtree(path.iter()) {
+        SubtreeLookupResult::Absent => Err(LookupPathAbsent(path.into_vec())),
+        SubtreeLookupResult::Unknown => Err(LookupPathUnknown(path.into_vec())),
+        SubtreeLookupResult::Found(value) => Ok(value),
     }
 }

@@ -10,12 +10,15 @@ pub mod status;
 pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
 pub use builder::AgentBuilder;
+use cached::{Cached, TimedCache};
+use ed25519_consensus::{Error as Ed25519Error, Signature, VerificationKey};
 #[doc(inline)]
 pub use ic_transport_types::{
     signed, Envelope, EnvelopeContent, RejectCode, RejectResponse, ReplyResponse,
     RequestStatusResponse,
 };
 pub use nonce::{NonceFactory, NonceGenerator};
+use rangemap::{RangeInclusiveMap, RangeInclusiveSet, StepFns};
 use time::OffsetDateTime;
 
 #[cfg(test)]
@@ -24,7 +27,7 @@ mod agent_test;
 use crate::{
     agent::response_authentication::{
         extract_der, lookup_canister_info, lookup_canister_metadata, lookup_request_status,
-        lookup_value,
+        lookup_subnet, lookup_subnet_metrics, lookup_value,
     },
     export::Principal,
     identity::Identity,
@@ -40,16 +43,15 @@ use serde::Serialize;
 use status::Status;
 use std::{
     borrow::Cow,
+    collections::HashMap,
     convert::TryFrom,
     fmt,
     future::Future,
     pin::Pin,
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex, RwLock},
     task::{Context, Poll},
     time::Duration,
 };
-
-use self::response_authentication::lookup_subnet_metrics;
 
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 
@@ -252,6 +254,8 @@ pub struct Agent {
     ingress_expiry: Duration,
     root_key: Arc<RwLock<Vec<u8>>>,
     transport: Arc<dyn Transport>,
+    subnet_key_cache: Arc<Mutex<SubnetCache>>,
+    verify_query_signatures: bool,
 }
 
 impl fmt::Debug for Agent {
@@ -274,13 +278,13 @@ impl Agent {
         Ok(Agent {
             nonce_factory: config.nonce_factory,
             identity: config.identity,
-            ingress_expiry: config
-                .ingress_expiry
-                .unwrap_or_else(|| Duration::from_secs(300)),
+            ingress_expiry: config.ingress_expiry.unwrap_or(DEFAULT_INGRESS_EXPIRY),
             root_key: Arc::new(RwLock::new(IC_ROOT_KEY.to_vec())),
             transport: config
                 .transport
                 .ok_or_else(AgentError::MissingReplicaTransport)?,
+            subnet_key_cache: Arc::new(Mutex::new(SubnetCache::new())),
+            verify_query_signatures: config.verify_query_signatures,
         })
     }
 
@@ -347,11 +351,8 @@ impl Agent {
     fn get_expiry_date(&self) -> u64 {
         let expiry_raw = OffsetDateTime::now_utc() + self.ingress_expiry;
         let mut rounded = expiry_raw.replace_nanosecond(0).unwrap();
-        if self.ingress_expiry.as_secs() > 60 {
+        if self.ingress_expiry.as_secs() > 90 {
             rounded = rounded.replace_second(0).unwrap();
-            if expiry_raw.second() >= 30 {
-                rounded += Duration::from_secs(60);
-            }
         }
         rounded.unix_timestamp_nanos() as u64
     }
@@ -427,15 +428,22 @@ impl Agent {
         method_name: String,
         arg: Vec<u8>,
         ingress_expiry_datetime: Option<u64>,
+        use_nonce: bool,
     ) -> Result<Vec<u8>, AgentError> {
-        let content = self.query_content(canister_id, method_name, arg, ingress_expiry_datetime)?;
+        let content = self.query_content(
+            canister_id,
+            method_name,
+            arg,
+            ingress_expiry_datetime,
+            use_nonce,
+        )?;
         let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
-        self.query_endpoint::<QueryResponse>(effective_canister_id, serialized_bytes)
-            .await
-            .and_then(|response| match response {
-                QueryResponse::Replied { reply } => Ok(reply.arg),
-                QueryResponse::Rejected(response) => Err(AgentError::ReplicaError(response)),
-            })
+        self.query_inner(
+            effective_canister_id,
+            serialized_bytes,
+            content.to_request_id(),
+        )
+        .await
     }
 
     /// Send the signed query to the network. Will return a byte vector.
@@ -446,14 +454,95 @@ impl Agent {
         effective_canister_id: Principal,
         signed_query: Vec<u8>,
     ) -> Result<Vec<u8>, AgentError> {
-        let _envelope: Envelope =
+        let envelope: Envelope =
             serde_cbor::from_slice(&signed_query).map_err(AgentError::InvalidCborData)?;
-        self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query)
-            .await
-            .and_then(|response| match response {
-                QueryResponse::Replied { reply } => Ok(reply.arg),
-                QueryResponse::Rejected(response) => Err(AgentError::ReplicaError(response)),
-            })
+        self.query_inner(
+            effective_canister_id,
+            signed_query,
+            envelope.content.to_request_id(),
+        )
+        .await
+    }
+
+    /// Helper function for performing both the query call and possibly a read_state to check the subnet node keys.
+    ///
+    /// This should be used instead of `query_endpoint`. No validation is performed on `signed_query`.
+    async fn query_inner(
+        &self,
+        effective_canister_id: Principal,
+        signed_query: Vec<u8>,
+        request_id: RequestId,
+    ) -> Result<Vec<u8>, AgentError> {
+        let response = if self.verify_query_signatures {
+            let (response, subnet) = futures_util::try_join!(
+                self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query),
+                self.get_subnet_by_canister(&effective_canister_id)
+            )?;
+            if response.signatures().is_empty() {
+                return Err(AgentError::MissingSignature);
+            } else if response.signatures().len() > subnet.node_keys.len() {
+                return Err(AgentError::TooManySignatures {
+                    had: response.signatures().len(),
+                    needed: subnet.node_keys.len(),
+                });
+            }
+            for signature in response.signatures() {
+                if OffsetDateTime::now_utc()
+                    - OffsetDateTime::from_unix_timestamp_nanos(signature.timestamp as _).unwrap()
+                    > self.ingress_expiry
+                {
+                    return Err(AgentError::CertificateOutdated(self.ingress_expiry));
+                }
+                let signable = response.signable(request_id, signature.timestamp);
+                let node_key = subnet
+                    .node_keys
+                    .get(&signature.identity)
+                    .ok_or(AgentError::CertificateNotAuthorized())?;
+                if node_key.len() != 44 {
+                    return Err(AgentError::DerKeyLengthMismatch {
+                        expected: 44,
+                        actual: node_key.len(),
+                    });
+                }
+                const DER_PREFIX: [u8; 12] = [48, 42, 48, 5, 6, 3, 43, 101, 112, 3, 33, 0];
+                if node_key[..12] != DER_PREFIX {
+                    return Err(AgentError::DerPrefixMismatch {
+                        expected: DER_PREFIX.to_vec(),
+                        actual: node_key[..12].to_vec(),
+                    });
+                }
+                let pubkey =
+                    VerificationKey::try_from(<[u8; 32]>::try_from(&node_key[12..]).unwrap())
+                        .map_err(|_| AgentError::MalformedPublicKey)?;
+                let sig = Signature::from(
+                    <[u8; 64]>::try_from(&signature.signature[..])
+                        .map_err(|_| AgentError::MalformedSignature)?,
+                );
+
+                match pubkey.verify(&sig, &signable) {
+                    Err(Ed25519Error::InvalidSignature) => {
+                        return Err(AgentError::QuerySignatureVerificationFailed)
+                    }
+                    Err(Ed25519Error::InvalidSliceLength) => {
+                        return Err(AgentError::MalformedSignature)
+                    }
+                    Err(Ed25519Error::MalformedPublicKey) => {
+                        return Err(AgentError::MalformedPublicKey)
+                    }
+                    Ok(()) => (),
+                    _ => unreachable!(),
+                }
+            }
+            response
+        } else {
+            self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query)
+                .await?
+        };
+
+        match response {
+            QueryResponse::Replied { reply, .. } => Ok(reply.arg),
+            QueryResponse::Rejected { reject, .. } => Err(AgentError::ReplicaError(reject)),
+        }
     }
 
     fn query_content(
@@ -462,6 +551,7 @@ impl Agent {
         method_name: String,
         arg: Vec<u8>,
         ingress_expiry_datetime: Option<u64>,
+        use_nonce: bool,
     ) -> Result<EnvelopeContent, AgentError> {
         Ok(EnvelopeContent::Query {
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
@@ -469,6 +559,7 @@ impl Agent {
             method_name,
             arg,
             ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
+            nonce: use_nonce.then(|| self.nonce_factory.generate()).flatten(),
         })
     }
 
@@ -546,7 +637,9 @@ impl Agent {
                 Ok(PollResult::Accepted)
             }
 
-            RequestStatusResponse::Replied(ReplyResponse { arg }) => Ok(PollResult::Completed(arg)),
+            RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => {
+                Ok(PollResult::Completed(arg))
+            }
 
             RequestStatusResponse::Rejected(response) => Err(AgentError::ReplicaError(response)),
 
@@ -677,7 +770,9 @@ impl Agent {
         let key = extract_der(der_key)?;
 
         ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
-            .map_err(|_| AgentError::CertificateVerificationFailed())
+            .map_err(|_| AgentError::CertificateVerificationFailed())?;
+
+        Ok(())
     }
 
     /// Verify a certificate, checking delegation if present.
@@ -717,7 +812,7 @@ impl Agent {
                     delegation.subnet_id.as_ref(),
                     "canister_ranges".as_bytes(),
                 ];
-                let canister_range = lookup_value(&cert, canister_range_lookup)?;
+                let canister_range = lookup_value(&cert.tree, canister_range_lookup)?;
                 let ranges: Vec<(Principal, Principal)> =
                     serde_cbor::from_slice(canister_range).map_err(AgentError::InvalidCborData)?;
                 if !principal_is_within_ranges(&effective_canister_id, &ranges[..]) {
@@ -730,7 +825,7 @@ impl Agent {
                     delegation.subnet_id.as_ref(),
                     "public_key".as_bytes(),
                 ];
-                lookup_value(&cert, public_key_path).map(|pk| pk.to_vec())
+                lookup_value(&cert.tree, public_key_path).map(|pk| pk.to_vec())
             }
         }
     }
@@ -751,7 +846,7 @@ impl Agent {
                     delegation.subnet_id.as_ref(),
                     "public_key".as_bytes(),
                 ];
-                let pk = lookup_value(&cert, public_key_path)
+                let pk = lookup_value(&cert.tree, public_key_path)
                     .map_err(|_| AgentError::CertificateNotAuthorized())?
                     .to_vec();
                 Ok(pk)
@@ -891,7 +986,42 @@ impl Agent {
             signed_request_status,
         })
     }
+
+    async fn get_subnet_by_canister(
+        &self,
+        canister: &Principal,
+    ) -> Result<Arc<Subnet>, AgentError> {
+        let subnet = self
+            .subnet_key_cache
+            .lock()
+            .unwrap()
+            .get_subnet_by_canister(canister);
+        if let Some(subnet) = subnet {
+            Ok(subnet)
+        } else {
+            let cert = self
+                .read_state_raw(vec![vec!["subnet".into()]], *canister)
+                .await?;
+            let time = leb128::read::unsigned(&mut lookup_value(&cert.tree, [b"time".as_ref()])?)?;
+            if (OffsetDateTime::now_utc()
+                - OffsetDateTime::from_unix_timestamp_nanos(time as _).unwrap())
+                > self.ingress_expiry
+            {
+                Err(AgentError::CertificateOutdated(self.ingress_expiry))
+            } else {
+                let (subnet_id, subnet) = lookup_subnet(&cert, &self.root_key.read().unwrap())?;
+                let subnet = Arc::new(subnet);
+                self.subnet_key_cache
+                    .lock()
+                    .unwrap()
+                    .insert_subnet(subnet_id, subnet.clone());
+                Ok(subnet)
+            }
+        }
+    }
 }
+
+const DEFAULT_INGRESS_EXPIRY: Duration = Duration::from_secs(240);
 
 // Checks if a principal is contained within a list of principal ranges
 // A range is a tuple: (low: Principal, high: Principal), as described here: https://internetcomputer.org/docs/current/references/ic-interface-spec#state-tree-subnet
@@ -941,6 +1071,7 @@ pub fn signed_query_inspect(
             canister_id: canister_id_cbor,
             method_name: method_name_cbor,
             arg: arg_cbor,
+            nonce: _nonce,
         } => {
             if ingress_expiry != *ingress_expiry_cbor {
                 return Err(AgentError::CallDataMismatch {
@@ -1129,10 +1260,79 @@ pub fn signed_request_status_inspect(
     Ok(())
 }
 
+#[derive(Clone)]
+struct SubnetCache {
+    subnets: TimedCache<Principal, Arc<Subnet>>,
+    canister_index: RangeInclusiveMap<Principal, Principal, PrincipalStep>,
+}
+
+impl SubnetCache {
+    fn new() -> Self {
+        Self {
+            subnets: TimedCache::with_lifespan(300),
+            canister_index: RangeInclusiveMap::new_with_step_fns(),
+        }
+    }
+
+    fn get_subnet_by_canister(&mut self, canister: &Principal) -> Option<Arc<Subnet>> {
+        self.canister_index
+            .get(canister)
+            .and_then(|subnet_id| self.subnets.cache_get(subnet_id).cloned())
+            .filter(|subnet| subnet.canister_ranges.contains(canister))
+    }
+
+    fn insert_subnet(&mut self, subnet_id: Principal, subnet: Arc<Subnet>) {
+        self.subnets.cache_set(subnet_id, subnet.clone());
+        for range in subnet.canister_ranges.iter() {
+            self.canister_index.insert(range.clone(), subnet_id);
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct PrincipalStep;
+
+impl StepFns<Principal> for PrincipalStep {
+    fn add_one(start: &Principal) -> Principal {
+        let bytes = start.as_slice();
+        let mut arr = [0; 29];
+        arr[..bytes.len()].copy_from_slice(bytes);
+        for byte in arr[..bytes.len() - 1].iter_mut().rev() {
+            *byte = byte.wrapping_add(1);
+            if *byte != 0 {
+                break;
+            }
+        }
+        Principal::from_slice(&arr[..bytes.len()])
+    }
+    fn sub_one(start: &Principal) -> Principal {
+        let bytes = start.as_slice();
+        let mut arr = [0; 29];
+        arr[..bytes.len()].copy_from_slice(bytes);
+        for byte in arr[..bytes.len() - 1].iter_mut().rev() {
+            *byte = byte.wrapping_sub(1);
+            if *byte != 255 {
+                break;
+            }
+        }
+        Principal::from_slice(&arr[..bytes.len()])
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct Subnet {
+    // This key is just fetched for completeness. Do not actually use this value as it is not authoritative in case of a rogue subnet.
+    // If a future agent needs to know the subnet key then it should fetch /subnet from the *root* subnet.
+    _key: Vec<u8>,
+    node_keys: HashMap<Principal, Vec<u8>>,
+    canister_ranges: RangeInclusiveSet<Principal, PrincipalStep>,
+}
+
 /// A Query Request Builder.
 ///
 /// This makes it easier to do query calls without actually passing all arguments.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct QueryBuilder<'agent> {
     agent: &'agent Agent,
     /// The [effective canister ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-canister-id) of the destination.
@@ -1145,6 +1345,8 @@ pub struct QueryBuilder<'agent> {
     pub arg: Vec<u8>,
     /// The Unix timestamp that the request will expire at.
     pub ingress_expiry_datetime: Option<u64>,
+    /// Whether to include a nonce with the message.
+    pub use_nonce: bool,
 }
 
 impl<'agent> QueryBuilder<'agent> {
@@ -1157,6 +1359,7 @@ impl<'agent> QueryBuilder<'agent> {
             method_name,
             arg: vec![],
             ingress_expiry_datetime: None,
+            use_nonce: false,
         }
     }
 
@@ -1178,16 +1381,20 @@ impl<'agent> QueryBuilder<'agent> {
         self
     }
 
-    /// Sets ingress_expiry_datetime to `now + duration - drift`, where `drift` is a
-    /// permitted drift from the duration to account for using system time and not block time.
+    /// Sets ingress_expiry_datetime to `max(now, 4min)`.
     pub fn expire_after(mut self, duration: Duration) -> Self {
-        let permitted_drift = Duration::from_secs(60);
         self.ingress_expiry_datetime = Some(
-            (duration
-                .as_nanos()
-                .saturating_add(OffsetDateTime::now_utc().unix_timestamp_nanos() as u128)
-                .saturating_sub(permitted_drift.as_nanos())) as u64,
+            OffsetDateTime::now_utc()
+                .saturating_add(duration.try_into().expect("negative duration"))
+                .unix_timestamp_nanos() as u64,
         );
+        self
+    }
+
+    /// Uses a nonce generated with the agent's configured nonce factory. By default queries do not use nonces,
+    /// and thus may get a (briefly) cached response.
+    pub fn with_nonce_generation(mut self) -> Self {
+        self.use_nonce = true;
         self
     }
 
@@ -1200,6 +1407,7 @@ impl<'agent> QueryBuilder<'agent> {
                 self.method_name,
                 self.arg,
                 self.ingress_expiry_datetime,
+                self.use_nonce,
             )
             .await
     }
@@ -1212,6 +1420,7 @@ impl<'agent> QueryBuilder<'agent> {
             self.method_name,
             self.arg,
             self.ingress_expiry_datetime,
+            self.use_nonce,
         )?;
         let signed_query = sign_envelope(&content, self.agent.identity.clone())?;
         let EnvelopeContent::Query {
@@ -1220,6 +1429,7 @@ impl<'agent> QueryBuilder<'agent> {
             canister_id,
             method_name,
             arg,
+            nonce,
         } = content
         else {
             unreachable!()
@@ -1232,6 +1442,7 @@ impl<'agent> QueryBuilder<'agent> {
             arg,
             effective_canister_id: self.effective_canister_id,
             signed_query,
+            nonce,
         })
     }
 }
@@ -1316,15 +1527,12 @@ impl<'agent> UpdateBuilder<'agent> {
         self
     }
 
-    /// Sets ingress_expiry_datetime to `now + duration - drift`, where `drift` is a
-    /// permitted drift from the duration to account for using system time and not block time.
+    /// Sets ingress_expiry_datetime to `min(now, 4min)`.
     pub fn expire_after(mut self, duration: Duration) -> Self {
-        let permitted_drift = Duration::from_secs(60);
         self.ingress_expiry_datetime = Some(
-            (duration
-                .as_nanos()
-                .saturating_add(OffsetDateTime::now_utc().unix_timestamp_nanos() as u128)
-                .saturating_sub(permitted_drift.as_nanos())) as u64,
+            OffsetDateTime::now_utc()
+                .saturating_add(duration.try_into().expect("negative duration"))
+                .unix_timestamp_nanos() as u64,
         );
         self
     }

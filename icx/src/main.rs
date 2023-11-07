@@ -399,6 +399,7 @@ async fn main() -> Result<()> {
                         result.unwrap_or(Err(AgentError::TimeoutWaitingForResponse()))
                     }
                     SubCommand::Query(_) => {
+                        fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
                         let mut builder = agent.query(&t.canister_id, &t.method_name);
                         if let Some(d) = expire_after {
                             builder = builder.expire_after(d);
@@ -477,6 +478,7 @@ async fn main() -> Result<()> {
                         println!("{}", serialized);
                     }
                     &SubCommand::Query(_) => {
+                        fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
                         let mut builder = agent.query(&t.canister_id, &t.method_name);
                         if let Some(d) = expire_after {
                             builder = builder.expire_after(d);

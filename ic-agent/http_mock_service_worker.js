@@ -38,30 +38,47 @@ async function getMock(nonce) {
     });
 }
 
+// Status codes are chosen to avoid being picked up as successes by tests expecting a 404 or 500.
+
 self.addEventListener("fetch", (event) => {
     event.respondWith((async () => {
         try {
             const request = event.request;
             const url = new URL(request.url);
             if (url.host === "mock_configure") {
-                const { method, path, status_code, nonce, body, headers } = await request.json();
-                await setMock({ method, path, status_code, nonce, body, headers, hits: 0 });
+                const nonce = url.pathname.substring(1);
+                const { method, path, status_code, body, headers } = await request.json();
+                const mock = await getMock(nonce) ?? { nonce, routes: [] };
+                mock.routes.push({ method, path, status_code, body, headers, hits: 0 });
+                await setMock(mock);
                 return new Response(null, { status: 204 });
             } else if (url.host === "mock_assert") {
                 const nonce = url.pathname.substring(1);
-                const { hits } = await getMock(nonce);
-                return new Response(hits, { status: 200 });
+                const mock = await getMock(nonce);
+                if (mock === undefined) {
+                    return new Response(`no such mock id ${nonce}`, { status: 421 });
+                }
+                const hitsMap = Object.fromEntries(mock.routes.map(route => [`${route.method} ${route.path}`, route.hits]));
+                return new Response(JSON.stringify(hitsMap), { status: 200, headers: { 'Content-Type': 'application/json' } });
             } else {
                 const nonce = url.host.split('_')[1];
-                const { method, path, status_code, body, headers, hits } = await getMock(nonce);
-                if (request.method !== method) {
-                    return new Response(`expected ${method}, got ${request.method}`, { status: 405 });
+                const mock = await getMock(nonce);
+                if (mock === undefined) {
+                    return new Response(`no such mock id ${nonce}`, { status: 421 });
                 }
-                if (url.pathname !== path) {
-                    return new Response(`expcted ${path}, got ${url.pathname}`, { status: 404 });
+                for (const route of mock.routes) {
+                    if (request.method === route.method && url.pathname === route.path) {
+                        route.hits += 1;
+                        await setMock(mock);
+                        return new Response(Uint8Array.from(route.body), { status: route.status_code, headers: route.headers });
+                    }
                 }
-                await setMock({ method, path, status_code, nonce, body, headers, hits: hits + 1 });
-                return new Response(Uint8Array.from(body), { status: status_code, headers });
+                const possiblyMeant = mock.routes.find(route => route.path === url.pathname);
+                if (possiblyMeant !== undefined) {
+                    return new Response(`expected ${possiblyMeant.method}, got ${request.method}`, { status: 405 })
+                } else {
+                    return new Response(`expected ${mock.routes.map(route => route.path).join(' | ')}, got ${url.pathname}`, { status: 410 });
+                }
             }
         } catch (e) {
             return new Response(e.toString(), { status: 503 });

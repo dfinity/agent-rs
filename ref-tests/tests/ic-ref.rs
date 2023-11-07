@@ -846,7 +846,16 @@ mod simple_calls {
             let arg = payload().reply_data(b"hello").build();
             let result = agent
                 .query(&canister_id, "query")
+                .with_arg(arg.clone())
+                .call()
+                .await?;
+
+            assert_eq!(result, b"hello");
+
+            let result = agent
+                .query(&canister_id, "query")
                 .with_arg(arg)
+                .with_nonce_generation()
                 .call()
                 .await?;
 

@@ -4,6 +4,7 @@ use crate::{agent::status::Status, RequestIdError};
 use ic_certification::Label;
 use ic_transport_types::{InvalidRejectCodeError, RejectResponse};
 use leb128::read;
+use std::time::Duration;
 use std::{
     fmt::{Debug, Display, Formatter},
     str::Utf8Error,
@@ -93,13 +94,42 @@ pub enum AgentError {
     #[error("The request status ({1}) at path {0:?} is invalid.")]
     InvalidRequestStatus(Vec<Label>, String),
 
-    /// The certificate verification failed.
+    /// The certificate verification for a read_state call failed.
     #[error("Certificate verification failed.")]
     CertificateVerificationFailed(),
+
+    /// The signature verification for a query call failed.
+    #[error("Query signature verification failed.")]
+    QuerySignatureVerificationFailed,
 
     /// The certificate contained a delegation that does not include the effective_canister_id in the canister_ranges field.
     #[error("Certificate is not authorized to respond to queries for this canister. While developing: Did you forget to set effective_canister_id?")]
     CertificateNotAuthorized(),
+
+    /// The certificate was older than allowed by the `ingress_expiry`.
+    #[error("Certificate is stale (over {0:?}). Is the computer's clock synchronized?")]
+    CertificateOutdated(Duration),
+
+    /// The query response did not contain any node signatures.
+    #[error("Query response did not contain any node signatures")]
+    MissingSignature,
+
+    /// The query response contained a malformed signature.
+    #[error("Query response contained a malformed signature")]
+    MalformedSignature,
+
+    /// The read-state response contained a malformed public key.
+    #[error("Read state response contained a malformed public key")]
+    MalformedPublicKey,
+
+    /// The query response contained more node signatures than the subnet has nodes.
+    #[error("Query response contained too many signatures ({had}, exceeding the subnet's total nodes: {needed})")]
+    TooManySignatures {
+        /// The number of provided signatures.
+        had: usize,
+        /// The number of nodes on the subnet.
+        needed: usize,
+    },
 
     /// There was a length mismatch between the expected and actual length of the BLS DER-encoded public key.
     #[error(

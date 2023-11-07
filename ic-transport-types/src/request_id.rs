@@ -6,11 +6,12 @@
 //! from the IC spec for the method of calculation.
 use error::RequestIdFromStringError;
 use serde::{
+    de::{self, Error as _, Visitor},
     ser::{
         SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant, SerializeTuple,
         SerializeTupleStruct, SerializeTupleVariant,
     },
-    Deserialize, Serialize, Serializer,
+    Deserialize, Deserializer, Serialize, Serializer,
 };
 use sha2::{Digest, Sha256};
 use std::{io::Write, ops::Deref, str::FromStr};
@@ -50,7 +51,7 @@ where
 }
 
 /// A Request ID.
-#[derive(Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq)]
 pub struct RequestId(Sha256Hash);
 
 impl RequestId {
@@ -874,5 +875,86 @@ mod tests {
             hex::encode(&r#struct[..]),
             "c2b325a8f7633df8054e9bd538ac8d26dc85cba4ad542cdbfca7109e1a60cf0c"
         );
+    }
+}
+
+// can't use serde_bytes on by-value arrays
+// these impls are effectively #[serde(with = "serde_bytes")]
+impl Serialize for RequestId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if serializer.is_human_readable() {
+            let mut text = [0u8; 64];
+            hex::encode_to_slice(self.0, &mut text).unwrap();
+            serializer.serialize_str(std::str::from_utf8(&text).unwrap())
+        } else {
+            serializer.serialize_bytes(&self.0)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for RequestId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            deserializer.deserialize_str(RequestIdVisitor)
+        } else {
+            deserializer.deserialize_bytes(RequestIdVisitor)
+        }
+    }
+}
+
+struct RequestIdVisitor;
+
+impl<'de> Visitor<'de> for RequestIdVisitor {
+    type Value = RequestId;
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("a sha256 hash")
+    }
+
+    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(RequestId::new(v.try_into().map_err(|_| {
+            E::custom(format_args!("must be 32 bytes long, was {}", v.len()))
+        })?))
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: de::SeqAccess<'de>,
+    {
+        let mut arr = Sha256Hash::default();
+        for (i, byte) in arr.iter_mut().enumerate() {
+            *byte = seq.next_element()?.ok_or(A::Error::custom(format_args!(
+                "must be 32 bytes long, was {}",
+                i - 1
+            )))?;
+        }
+        if seq.next_element::<u8>()?.is_some() {
+            Err(A::Error::custom("must be 32 bytes long, was more"))
+        } else {
+            Ok(RequestId(arr))
+        }
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        if v.len() != 64 {
+            return Err(E::custom(format_args!(
+                "must be 32 bytes long, was {}",
+                v.len() / 2
+            )));
+        }
+        let mut arr = Sha256Hash::default();
+        hex::decode_to_slice(v, &mut arr).map_err(E::custom)?;
+        Ok(RequestId(arr))
     }
 }
