@@ -43,7 +43,6 @@ use serde::Serialize;
 use status::Status;
 use std::{
     borrow::Cow,
-    cmp,
     collections::HashMap,
     convert::TryFrom,
     fmt,
@@ -279,11 +278,7 @@ impl Agent {
         Ok(Agent {
             nonce_factory: config.nonce_factory,
             identity: config.identity,
-            ingress_expiry: config
-                .ingress_expiry
-                .map_or(DEFAULT_INGRESS_EXPIRY, |configured| {
-                    cmp::min(configured, DEFAULT_INGRESS_EXPIRY)
-                }),
+            ingress_expiry: config.ingress_expiry.unwrap_or(DEFAULT_INGRESS_EXPIRY),
             root_key: Arc::new(RwLock::new(IC_ROOT_KEY.to_vec())),
             transport: config
                 .transport
@@ -1390,11 +1385,7 @@ impl<'agent> QueryBuilder<'agent> {
     pub fn expire_after(mut self, duration: Duration) -> Self {
         self.ingress_expiry_datetime = Some(
             OffsetDateTime::now_utc()
-                .saturating_add(
-                    cmp::min(duration, DEFAULT_INGRESS_EXPIRY)
-                        .try_into()
-                        .expect("negative duration"),
-                )
+                .saturating_add(duration.try_into().expect("negative duration"))
                 .unix_timestamp_nanos() as u64,
         );
         self
@@ -1540,11 +1531,7 @@ impl<'agent> UpdateBuilder<'agent> {
     pub fn expire_after(mut self, duration: Duration) -> Self {
         self.ingress_expiry_datetime = Some(
             OffsetDateTime::now_utc()
-                .saturating_add(
-                    cmp::min(duration, DEFAULT_INGRESS_EXPIRY)
-                        .try_into()
-                        .expect("negative duration"),
-                )
+                .saturating_add(duration.try_into().expect("negative duration"))
                 .unix_timestamp_nanos() as u64,
         );
         self
