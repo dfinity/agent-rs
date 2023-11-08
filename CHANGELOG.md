@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-## [0.30.0] = 2023-11-07
+## [0.30.0] - 2023-11-07
 
 * Added node signature certification to query calls, for protection against rogue boundary nodes. This can be disabled with `with_verify_query_signatures`.
 * Added `with_nonce_generation` to `QueryBuilder` for precise cache control.
