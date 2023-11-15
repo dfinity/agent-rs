@@ -665,6 +665,10 @@ pub struct InstallBuilder<'agent, 'canister, 'builder> {
 }
 
 impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'canister, 'builder> {
+    // Messages are a maximum of 2MiB. Thus basic installation should cap the wasm and arg size at 1.85MiB, since
+    // the current API is definitely not going to produce 150KiB of framing data for it.
+    const CHUNK_CUTOFF: usize = (1.85 * 1024. * 1024.) as usize;
+
     /// Create a canister installation builder.
     pub fn builder(
         canister: &'canister ManagementCanister<'agent>,
@@ -721,7 +725,7 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
         let stream_res = /* try { */ (move || {
             let arg = self.arg.serialize()?;
             let stream: BoxStream<'_, _> =
-                if self.wasm.len() + arg.len() < (1.85 * 1024. * 1024.) as usize {
+                if self.wasm.len() + arg.len() < Self::CHUNK_CUTOFF {
                     Box::pin(
                         async move {
                             self.canister
