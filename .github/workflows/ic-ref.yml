@@ -28,7 +28,7 @@ jobs:
       - name: Install dfx
         uses: dfinity/setup-dfx@main
         with:
-          dfx-version: "0.15.2-largewasms.1"
+          dfx-version: "0.15.2-largewasms.0"
 
       - name: Cargo cache
         uses: actions/cache@v2
