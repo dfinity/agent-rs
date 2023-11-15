@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Added the chunked wasm API to ic-utils. Existing code that uses `install_code` should probably update to `install`, which works the same but silently handles large wasm modules.
+
 ## [0.30.0] - 2023-11-07
 
 * Added node signature certification to query calls, for protection against rogue boundary nodes. This can be disabled with `with_verify_query_signatures`.
