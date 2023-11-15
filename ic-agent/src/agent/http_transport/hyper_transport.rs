@@ -211,7 +211,7 @@ where
     ) -> AgentFuture<()> {
         Box::pin(async move {
             let url = format!(
-                "{}/canister/{effective_canister_id}/call",
+                "{}canister/{effective_canister_id}/call",
                 self.route_provider.route()?
             );
             self.request(Method::POST, url, Some(envelope)).await?;
@@ -226,7 +226,7 @@ where
     ) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
             let url = format!(
-                "{}/canister/{effective_canister_id}/read_state",
+                "{}canister/{effective_canister_id}/read_state",
                 self.route_provider.route()?
             );
             self.request(Method::POST, url, Some(envelope)).await
@@ -236,7 +236,7 @@ where
     fn read_subnet_state(&self, subnet_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
             let url = format!(
-                "{}/subnet/{subnet_id}/read_state",
+                "{}subnet/{subnet_id}/read_state",
                 self.route_provider.route()?
             );
             self.request(Method::POST, url, Some(envelope)).await
@@ -246,7 +246,7 @@ where
     fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
             let url = format!(
-                "{}/canister/{effective_canister_id}/query",
+                "{}canister/{effective_canister_id}/query",
                 self.route_provider.route()?
             );
             self.request(Method::POST, url, Some(envelope)).await
@@ -255,7 +255,7 @@ where
 
     fn status(&self) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let url = format!("{}/status", self.route_provider.route()?);
+            let url = format!("{}status", self.route_provider.route()?);
             self.request(Method::GET, url, None).await
         })
     }
