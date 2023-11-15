@@ -11,10 +11,10 @@ use crate::{
 use async_trait::async_trait;
 use candid::utils::ArgumentEncoder;
 use candid::{CandidType, Deserialize, Nat};
-use futures_util::stream::BoxStream;
 use futures_util::{
-    future::ready, stream::FuturesUnordered, FutureExt, Stream, StreamExt, TryFutureExt,
-    TryStreamExt,
+    future::ready,
+    stream::{self, BoxStream, FuturesUnordered},
+    FutureExt, Stream, StreamExt, TryStreamExt,
 };
 use ic_agent::{export::Principal, AgentError, RequestId};
 use sha2::{Digest, Sha256};
@@ -704,7 +704,7 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
         Self { mode, ..self }
     }
 
-    /// Invoke the installation process. This may result in many calls which take several seconds;
+    /// Invoke the installation process. This may result in many calls which may take several seconds;
     /// use [`call_and_wait_with_progress`](Self::call_and_wait_with_progress) if you want progress reporting.
     pub async fn call_and_wait(self) -> Result<(), AgentError> {
         self.call_and_wait_with_progress()
@@ -718,7 +718,7 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
     pub fn call_and_wait_with_progress(
         self,
     ) -> impl Stream<Item = Result<(), AgentError>> + 'builder {
-        async move {
+        let stream_res = /* try { */ (move || {
             let arg = self.arg.serialize()?;
             let stream: BoxStream<'_, _> =
                 if self.wasm.len() + arg.len() < (1.85 * 1024. * 1024.) as usize {
@@ -781,8 +781,11 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
                     )
                 };
             Ok(stream)
+        })();
+        match stream_res {
+            Ok(stream) => stream,
+            Err(err) => Box::pin(stream::once(async { Err(err) })),
         }
-        .try_flatten_stream()
     }
 }
 
