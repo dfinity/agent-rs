@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Added the chunked wasm API to ic-utils. Existing code that uses `install_code` should probably update to `install`, which works the same but silently handles large wasm modules.
 
+## [0.30.1] - 2023-11-15
+
+* Fixed `HyperTransport` endpoint construction (`//` in the format `/api/v2//canister/5v3p4-iyaaa-aaaaa-qaaaa-cai/query`)
+
 ## [0.30.0] - 2023-11-07
 
 * Added node signature certification to query calls, for protection against rogue boundary nodes. This can be disabled with `with_verify_query_signatures`.
