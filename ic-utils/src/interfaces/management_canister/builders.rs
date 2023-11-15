@@ -13,12 +13,13 @@ use candid::utils::ArgumentEncoder;
 use candid::{CandidType, Deserialize, Nat};
 use futures_util::{
     future::ready,
-    stream::{self, BoxStream, FuturesUnordered},
+    stream::{self, FuturesUnordered},
     FutureExt, Stream, StreamExt, TryStreamExt,
 };
 use ic_agent::{export::Principal, AgentError, RequestId};
 use sha2::{Digest, Sha256};
 use std::convert::{From, TryInto};
+use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
@@ -1032,3 +1033,8 @@ impl<'agent, 'canister: 'agent> AsyncCall<()> for UpdateCanisterBuilder<'agent, 
         self.build()?.call_and_wait().await
     }
 }
+
+#[cfg(not(target_family = "wasm"))]
+type BoxStream<'a, T> = Pin<Box<dyn Stream<Item = T> + Send + 'a>>;
+#[cfg(target_family = "wasm")]
+type BoxStream<'a, T> = Pin<Box<dyn Stream<Item = T> + 'a>>;
