@@ -795,6 +795,35 @@ mod management_canister {
 
     #[ignore]
     #[test]
+    fn chunked_wasm() {
+        with_agent(|agent| async move {
+            let asm = b"\0asm\x01\0\0\0";
+            let asm_hash = Sha256::digest(asm).into();
+            let mgmt = ManagementCanister::create(&agent);
+            let (canister,) = mgmt
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
+                .call_and_wait()
+                .await?;
+            let (pt1,) = mgmt
+                .upload_chunk(&canister, &asm[0..4])
+                .call_and_wait()
+                .await?;
+            let (pt2,) = mgmt
+                .upload_chunk(&canister, &asm[4..8])
+                .call_and_wait()
+                .await?;
+            mgmt.install_chunked_code(&canister, asm_hash)
+                .with_chunk_hashes(vec![pt1, pt2])
+                .call_and_wait()
+                .await?;
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
     // makes sure that calling fetch_root_key twice by accident does not break
     fn multi_fetch_root_key() {
         with_agent(|agent| async move {
