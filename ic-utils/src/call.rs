@@ -293,7 +293,7 @@ where
     R: Future<Output = Result<Out2, AgentError>> + Send,
     AndThen: Send + Fn(Out) -> R + fmt::Debug,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AndThenAsyncCaller")
             .field("inner", &self.inner)
             .field("and_then", &self.and_then)
@@ -398,7 +398,7 @@ where
     Inner: AsyncCall<Out> + Send + fmt::Debug,
     Map: Send + Fn(Out) -> Out2 + fmt::Debug,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("MappedAsyncCaller")
             .field("inner", &self.inner)
             .field("map", &self.map)

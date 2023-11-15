@@ -28,6 +28,7 @@ ic-transport-types = { path = "ic-transport-types", version = "0.30.0" }
 ic-certification = "1.2.0"
 candid = "0.9.5"
 clap = "4.4.3"
+futures-util = "0.3.21"
 hex = "0.4.3"
 leb128 = "0.2.5"
 ring = "0.16.20"

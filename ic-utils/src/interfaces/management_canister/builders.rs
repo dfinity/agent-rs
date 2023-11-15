@@ -1,16 +1,26 @@
 //! Builder interfaces for some method calls of the management canister.
 
+#[doc(inline)]
 pub use super::attributes::{
     ComputeAllocation, FreezingThreshold, MemoryAllocation, ReservedCyclesLimit,
 };
+use super::{ChunkHash, ManagementCanister};
 use crate::{
     call::AsyncCall, canister::Argument, interfaces::management_canister::MgmtMethod, Canister,
 };
 use async_trait::async_trait;
+use candid::utils::ArgumentEncoder;
 use candid::{CandidType, Deserialize, Nat};
+use futures_util::stream::BoxStream;
+use futures_util::{
+    future::ready, stream::FuturesUnordered, FutureExt, Stream, StreamExt, TryFutureExt,
+    TryStreamExt,
+};
 use ic_agent::{export::Principal, AgentError, RequestId};
+use sha2::{Digest, Sha256};
 use std::convert::{From, TryInto};
 use std::str::FromStr;
+use std::sync::{Arc, Mutex};
 
 /// The set of possible canister settings. Similar to [`DefiniteCanisterSettings`](super::DefiniteCanisterSettings),
 /// but all the fields are optional.
@@ -379,7 +389,10 @@ pub enum InstallMode {
     Reinstall,
     /// Upgrade the canister with this module.
     #[serde(rename = "upgrade")]
-    Upgrade,
+    Upgrade {
+        /// If true, skip a canister's `#[pre_upgrade]` function.
+        skip_pre_upgrade: bool,
+    },
 }
 
 /// A prepared call to `install_code`.
@@ -404,7 +417,9 @@ impl FromStr for InstallMode {
         match s {
             "install" => Ok(InstallMode::Install),
             "reinstall" => Ok(InstallMode::Reinstall),
-            "upgrade" => Ok(InstallMode::Upgrade),
+            "upgrade" => Ok(InstallMode::Upgrade {
+                skip_pre_upgrade: false,
+            }),
             &_ => Err(format!("Invalid install mode: {}", s)),
         }
     }
@@ -438,7 +453,7 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
 
     /// Set the argument to the installation, which will be passed to the init
     /// method of the canister. Can be called at most once.
-    pub fn with_arg<Argument: CandidType + Sync + Send>(
+    pub fn with_arg<Argument: CandidType>(
         mut self,
         arg: Argument,
     ) -> InstallCodeBuilder<'agent, 'canister> {
@@ -447,10 +462,8 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
     }
     /// Set the argument with multiple arguments as tuple to the installation,
     /// which will be passed to the init method of the canister. Can be called at most once.
-    pub fn with_args(mut self, tuple: impl candid::utils::ArgumentEncoder) -> Self {
-        if self.arg.0.is_some() {
-            panic!("argument is being set more than once");
-        }
+    pub fn with_args(mut self, tuple: impl ArgumentEncoder) -> Self {
+        assert!(self.arg.0.is_none(), "argument is being set more than once");
         self.arg = Argument::from_candid(tuple);
         self
     }
@@ -504,6 +517,272 @@ impl<'agent, 'canister: 'agent> AsyncCall<()> for InstallCodeBuilder<'agent, 'ca
 
     async fn call_and_wait(self) -> Result<(), AgentError> {
         self.build()?.call_and_wait().await
+    }
+}
+
+/// A builder for an `install_chunked_code` call.
+#[derive(Debug)]
+pub struct InstallChunkedCodeBuilder<'agent, 'canister> {
+    canister: &'canister Canister<'agent>,
+    target_canister: Principal,
+    storage_canister: Principal,
+    chunk_hashes_list: Vec<ChunkHash>,
+    wasm_module_hash: ChunkHash,
+    arg: Argument,
+    mode: InstallMode,
+}
+
+impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> {
+    /// Create an `InstallChunkedCodeBuilder`.
+    pub fn builder(
+        canister: &'canister Canister<'agent>,
+        target_canister: Principal,
+        wasm_module_hash: ChunkHash,
+    ) -> Self {
+        Self {
+            canister,
+            target_canister,
+            wasm_module_hash,
+            storage_canister: target_canister,
+            chunk_hashes_list: vec![],
+            arg: Argument::new(),
+            mode: InstallMode::Install,
+        }
+    }
+
+    /// Set the chunks to install. These must previously have been set with [`ManagementCanister::upload_chunk`].
+    pub fn with_chunk_hashes(mut self, chunk_hashes: Vec<ChunkHash>) -> Self {
+        self.chunk_hashes_list = chunk_hashes;
+        self
+    }
+
+    /// Set the canister to pull uploaded chunks from. By default this is the same as the target canister.
+    pub fn with_storage_canister(mut self, storage_canister: Principal) -> Self {
+        self.storage_canister = storage_canister;
+        self
+    }
+
+    /// Set the argument to the installation, which will be passed to the init
+    /// method of the canister. Can be called at most once.
+    pub fn with_arg(mut self, argument: impl CandidType) -> Self {
+        self.arg.set_idl_arg(argument);
+        self
+    }
+
+    /// Set the argument with multiple arguments as tuple to the installation,
+    /// which will be passed to the init method of the canister. Can be called at most once.
+    pub fn with_args(mut self, argument: impl ArgumentEncoder) -> Self {
+        assert!(self.arg.0.is_none(), "argument is being set more than once");
+        self.arg = Argument::from_candid(argument);
+        self
+    }
+
+    /// Set the argument passed in to the canister with raw bytes. Can be called at most once.
+    pub fn with_raw_arg(mut self, argument: Vec<u8>) -> Self {
+        self.arg.set_raw_arg(argument);
+        self
+    }
+
+    /// Set the [`InstallMode`].
+    pub fn with_install_mode(mut self, mode: InstallMode) -> Self {
+        self.mode = mode;
+        self
+    }
+
+    /// Create an [`AsyncCall`] implementation that, when called, will install the canister.
+    pub fn build(self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
+        #[derive(CandidType)]
+        struct In {
+            mode: InstallMode,
+            target_canister: Principal,
+            storage_canister: Principal,
+            chunk_hashes_list: Vec<ChunkHash>,
+            wasm_module_hash: ChunkHash,
+            arg: Vec<u8>,
+            sender_canister_version: Option<u64>,
+        }
+        let Self {
+            mode,
+            target_canister,
+            storage_canister,
+            chunk_hashes_list,
+            wasm_module_hash,
+            arg,
+            ..
+        } = self;
+        Ok(self
+            .canister
+            .update(MgmtMethod::InstallChunkedCode.as_ref())
+            .with_arg(In {
+                mode,
+                target_canister,
+                storage_canister,
+                chunk_hashes_list,
+                wasm_module_hash,
+                arg: arg.serialize()?,
+                sender_canister_version: None,
+            })
+            .with_effective_canister_id(target_canister)
+            .build())
+    }
+
+    /// Make the call. This is equivalent to [`AsyncCall::call`].
+    pub async fn call(self) -> Result<RequestId, AgentError> {
+        self.build()?.call().await
+    }
+
+    /// Make the call. This is equivalent to [`AsyncCall::call_and_wait`].
+    pub async fn call_and_wait(self) -> Result<(), AgentError> {
+        self.build()?.call_and_wait().await
+    }
+}
+
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
+impl<'agent, 'canister: 'agent> AsyncCall<()> for InstallChunkedCodeBuilder<'agent, 'canister> {
+    async fn call(self) -> Result<RequestId, AgentError> {
+        self.call().await
+    }
+    async fn call_and_wait(self) -> Result<(), AgentError> {
+        self.call_and_wait().await
+    }
+}
+
+/// A builder for a [`ManagementCanister::install`] call. This automatically selects one-shot installation or chunked installation depending on module size.
+///
+/// # Warnings
+///
+/// This will clear chunked code storage if chunked installation is used. Do not use with canisters that you are manually uploading chunked code to.
+#[derive(Debug)]
+pub struct InstallBuilder<'agent, 'canister, 'builder> {
+    canister: &'canister ManagementCanister<'agent>,
+    canister_id: Principal,
+    // more precise lifetimes are used here at risk of annoying the user
+    // because `wasm` may be memory-mapped which is tricky to lifetime
+    wasm: &'builder [u8],
+    arg: Argument,
+    mode: InstallMode,
+}
+
+impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'canister, 'builder> {
+    /// Create a canister installation builder.
+    pub fn builder(
+        canister: &'canister ManagementCanister<'agent>,
+        canister_id: &Principal,
+        wasm: &'builder [u8],
+    ) -> Self {
+        Self {
+            canister,
+            canister_id: *canister_id,
+            wasm,
+            arg: Default::default(),
+            mode: InstallMode::Install,
+        }
+    }
+
+    /// Set the argument to the installation, which will be passed to the init
+    /// method of the canister. Can be called at most once.
+    pub fn with_arg<Argument: CandidType>(mut self, arg: Argument) -> Self {
+        self.arg.set_idl_arg(arg);
+        self
+    }
+    /// Set the argument with multiple arguments as tuple to the installation,
+    /// which will be passed to the init method of the canister. Can be called at most once.
+    pub fn with_args(mut self, tuple: impl ArgumentEncoder) -> Self {
+        assert!(self.arg.0.is_none(), "argument is being set more than once");
+        self.arg = Argument::from_candid(tuple);
+        self
+    }
+    /// Set the argument passed in to the canister with raw bytes. Can be called at most once.
+    pub fn with_raw_arg(mut self, arg: Vec<u8>) -> Self {
+        self.arg.set_raw_arg(arg);
+        self
+    }
+
+    /// Pass in the [InstallMode].
+    pub fn with_mode(self, mode: InstallMode) -> Self {
+        Self { mode, ..self }
+    }
+
+    /// Invoke the installation process. This may result in many calls which take several seconds;
+    /// use [`call_and_wait_with_progress`](Self::call_and_wait_with_progress) if you want progress reporting.
+    pub async fn call_and_wait(self) -> Result<(), AgentError> {
+        self.call_and_wait_with_progress()
+            .try_for_each(|_| ready(Ok(())))
+            .await
+    }
+
+    /// Invoke the installation process. The returned stream must be awaited to completion; it is used to track progress,
+    /// as installation may take arbitrarily long, and is intended to be passed to functions like `indicatif::ProgressBar::wrap_stream`.
+    /// There are exactly [`size_hint().0`](Stream::size_hint) steps.
+    pub fn call_and_wait_with_progress(
+        self,
+    ) -> impl Stream<Item = Result<(), AgentError>> + 'builder {
+        async move {
+            let arg = self.arg.serialize()?;
+            let stream: BoxStream<'_, _> =
+                if self.wasm.len() + arg.len() < (1.85 * 1024. * 1024.) as usize {
+                    Box::pin(
+                        async move {
+                            self.canister
+                                .install_code(&self.canister_id, self.wasm)
+                                .with_raw_arg(arg)
+                                .with_mode(self.mode)
+                                .call_and_wait()
+                                .await
+                        }
+                        .into_stream(),
+                    )
+                } else {
+                    let results = Arc::new(Mutex::new(vec![]));
+                    let chunks_stream = FuturesUnordered::new();
+                    for chunk in self.wasm.chunks(1024 * 1024) {
+                        let results = results.clone();
+                        chunks_stream.push(async move {
+                            let (hash,) = self
+                                .canister
+                                .upload_chunk(&self.canister_id, chunk)
+                                .call_and_wait()
+                                .await?;
+                            results.lock().unwrap().push(hash);
+                            Ok(())
+                        })
+                    }
+                    Box::pin(
+                        chunks_stream
+                            .chain(
+                                async move {
+                                    let results = Arc::into_inner(results)
+                                        .expect("unexpected arc handle left standing")
+                                        .into_inner()
+                                        .unwrap();
+                                    self.canister
+                                        .install_chunked_code(
+                                            &self.canister_id,
+                                            Sha256::digest(self.wasm).into(),
+                                        )
+                                        .with_chunk_hashes(results)
+                                        .with_raw_arg(arg)
+                                        .with_install_mode(self.mode)
+                                        .call_and_wait()
+                                        .await
+                                }
+                                .into_stream(),
+                            )
+                            .chain(
+                                async move {
+                                    self.canister
+                                        .clear_chunk_store(&self.canister_id)
+                                        .call_and_wait()
+                                        .await
+                                }
+                                .into_stream(),
+                            ),
+                    )
+                };
+            Ok(stream)
+        }
+        .try_flatten_stream()
     }
 }
 
