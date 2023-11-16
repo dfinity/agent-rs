@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.30.2] = 20223-11-16
+
+* Fixed a spurious certificate validation error in the five minutes after a node is added to a subnet
+
 ## [0.30.1] - 2023-11-15
 
 * Fixed `HyperTransport` endpoint construction (`//` in the format `/api/v2//canister/5v3p4-iyaaa-aaaaa-qaaaa-cai/query`)
