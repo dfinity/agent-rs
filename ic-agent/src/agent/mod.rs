@@ -474,10 +474,23 @@ impl Agent {
         request_id: RequestId,
     ) -> Result<Vec<u8>, AgentError> {
         let response = if self.verify_query_signatures {
-            let (response, subnet) = futures_util::try_join!(
+            let (response, mut subnet) = futures_util::try_join!(
                 self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query),
                 self.get_subnet_by_canister(&effective_canister_id)
             )?;
+
+            // If any node_id from signatures is not found in the node keys,
+            // it is possible that node membership of that subnet may have changed.
+            // Clear the all cache of node keys and retry fetching node keys one more time.
+            if response
+                .signatures()
+                .iter()
+                .any(|signature| subnet.node_keys.get(&signature.identity).is_none())
+            {
+                self.subnet_key_cache.lock().unwrap().clear();
+                subnet = self.get_subnet_by_canister(&effective_canister_id).await?;
+            };
+
             if response.signatures().is_empty() {
                 return Err(AgentError::MissingSignature);
             } else if response.signatures().len() > subnet.node_keys.len() {
@@ -486,6 +499,7 @@ impl Agent {
                     needed: subnet.node_keys.len(),
                 });
             }
+
             for signature in response.signatures() {
                 if OffsetDateTime::now_utc()
                     - OffsetDateTime::from_unix_timestamp_nanos(signature.timestamp as _).unwrap()
@@ -1286,6 +1300,11 @@ impl SubnetCache {
         for range in subnet.canister_ranges.iter() {
             self.canister_index.insert(range.clone(), subnet_id);
         }
+    }
+
+    fn clear(&mut self) {
+        self.subnets.cache_clear();
+        self.canister_index.clear();
     }
 }
 
