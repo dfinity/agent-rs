@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Bump candid to 0.10
+
 ## [0.30.2] = 20223-11-16
 
 * Fixed a spurious certificate validation error in the five minutes after a node is added to a subnet
