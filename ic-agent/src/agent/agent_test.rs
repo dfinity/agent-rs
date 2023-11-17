@@ -422,7 +422,7 @@ async fn wrong_subnet_query_certificate() {
         Some("application/cbor"),
     )
     .await;
-    let blob = Encode!(&Nat::from(12)).unwrap();
+    let blob = Encode!(&Nat::from(12u8)).unwrap();
     let response = QueryResponse::Replied {
         reply: ReplyResponse { arg: blob.clone() },
         signatures: vec![NodeSignature {
@@ -468,7 +468,7 @@ async fn no_cert() {
         Some("application/cbor"),
     )
     .await;
-    let blob = Encode!(&Nat::from(12)).unwrap();
+    let blob = Encode!(&Nat::from(12u8)).unwrap();
     let response = QueryResponse::Replied {
         reply: ReplyResponse { arg: blob.clone() },
         signatures: vec![],

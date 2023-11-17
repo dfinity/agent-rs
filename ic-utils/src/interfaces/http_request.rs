@@ -594,7 +594,7 @@ mod test {
             }));
             assert!(fields.contains(&IDLField {
                 id: Label::Named("index".into()),
-                val: IDLValue::Nat(42.into())
+                val: IDLValue::Nat(42u8.into())
             }));
             assert!(fields.contains(&IDLField {
                 id: Label::Named("sha256".into()),
@@ -615,7 +615,7 @@ mod test {
                 token: pre_update_legacy::Token {
                     key: "foo".into(),
                     content_encoding: "bar".into(),
-                    index: 42.into(),
+                    index: 42u8.into(),
                     sha256: None,
                 },
             })),
@@ -641,7 +641,7 @@ mod test {
                 token: pre_update_legacy::Token {
                     key: "foo".into(),
                     content_encoding: "bar".into(),
-                    index: 42.into(),
+                    index: 42u8.into(),
                     sha256: None,
                 },
             })),
@@ -661,7 +661,7 @@ mod test {
             token: Some(pre_update_legacy::Token {
                 key: "foo".into(),
                 content_encoding: "bar".into(),
-                index: 42.into(),
+                index: 42u8.into(),
                 sha256: None,
             }),
         })
@@ -683,7 +683,7 @@ mod test {
         }));
         assert!(fields.contains(&IDLField {
             id: Label::Named("index".into()),
-            val: IDLValue::Nat(42.into())
+            val: IDLValue::Nat(42u8.into())
         }));
         assert!(fields.contains(&IDLField {
             id: Label::Named("sha256".into()),
