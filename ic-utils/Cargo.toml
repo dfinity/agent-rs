@@ -18,7 +18,7 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
 async-trait = "0.1.68"
-candid = { workspace = true }
+candid = { workspace = true, features = ["value"] }
 ic-agent = { workspace = true, default-features = false }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
