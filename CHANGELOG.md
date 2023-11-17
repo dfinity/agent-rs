@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-* Bump candid to 0.10
+* Breaking change: Bump candid to 0.10. Downstream libraries need to bump Candid to 0.10 as well.
 
 ## [0.30.2] = 20223-11-16
 
