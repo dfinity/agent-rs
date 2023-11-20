@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 * Breaking change: Bump candid to 0.10. Downstream libraries need to bump Candid to 0.10 as well.
+* Feat: add `idle_cycles_burned_per_day` field to `StatusCallResult`.
 
 ## [0.30.2] = 20223-11-16
 
