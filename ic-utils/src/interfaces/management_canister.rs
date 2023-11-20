@@ -89,6 +89,9 @@ pub struct StatusCallResult {
     pub cycles: Nat,
     /// The canister's reserved cycles balance.
     pub reserved_cycles: Nat,
+    /// The cycles burned by the canister in one day for its resource usage
+    /// (compute and memory allocation and memory usage).
+    pub idle_cycles_burned_per_day: Nat,
 }
 
 /// The concrete settings of a canister.
