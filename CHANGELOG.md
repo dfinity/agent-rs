@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Added query stats to `StatusCallResult`.
+
 ## [0.31.0] - 2023-11-27
 
 * Breaking change: Bump candid to 0.10. Downstream libraries need to bump Candid to 0.10 as well.
