@@ -92,6 +92,21 @@ pub struct StatusCallResult {
     /// The cycles burned by the canister in one day for its resource usage
     /// (compute and memory allocation and memory usage).
     pub idle_cycles_burned_per_day: Nat,
+    /// Additional information relating to query calls.
+    pub query_stats: QueryStats,
+}
+
+/// Statistics relating to query calls.
+#[derive(Clone, Debug, Deserialize, CandidType)]
+pub struct QueryStats {
+    /// The total number of query calls this canister has performed.
+    pub num_calls_total: Nat,
+    /// The total number of instructions this canister has executed during query calls.
+    pub num_instructions_total: Nat,
+    /// The total number of bytes in request payloads sent to this canister's query calls.
+    pub request_payload_bytes_total: Nat,
+    /// The total number of bytes in response payloads returned from this canister's query calls.
+    pub response_payload_bytes_total: Nat,
 }
 
 /// The concrete settings of a canister.
