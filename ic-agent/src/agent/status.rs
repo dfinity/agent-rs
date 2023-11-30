@@ -1,11 +1,13 @@
 //! Types for interacting with the status endpoint of a replica. See [`Status`] for details.
 
+use candid::{CandidType, Deserialize};
 use std::{collections::BTreeMap, fmt::Debug};
+use serde::Serialize;
 
 /// Value returned by the status endpoint of a replica. This is a loose mapping to CBOR values.
 /// Because the agent should not return [`serde_cbor::Value`] directly across API boundaries,
 /// we reimplement it as [`Value`] here.
-#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Clone, Hash)]
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Clone, Hash, CandidType, Serialize, Deserialize)]
 pub enum Value {
     /// See [`Null`](serde_cbor::Value::Null).
     Null,
@@ -40,7 +42,7 @@ impl std::fmt::Display for Value {
 
 /// The structure returned by [`super::Agent::status`], containing the information returned
 /// by the status endpoint of a replica.
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq)]
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, CandidType, Deserialize, Serialize)]
 pub struct Status {
     /// Optional. The precise git revision of the Internet Computer Protocol implementation.
     pub impl_version: Option<String>,
@@ -53,6 +55,17 @@ pub struct Status {
 
     /// Contains any additional values that the replica gave as status.
     pub values: BTreeMap<String, Box<Value>>,
+}
+
+#[test]
+fn can_serilaize_status() {
+    let status = Status {
+        impl_version: None,
+        replica_health_status: None,
+        root_key: None,
+        values: BTreeMap::new(),
+    };
+    serde_json::to_string(&status).expect("Failed to serialize as JSON");
 }
 
 impl std::fmt::Display for Status {
