@@ -193,10 +193,10 @@ fn blob_from_arguments(
     arg_type: &ArgType,
     method_type: &Option<(TypeEnv, Function)>,
 ) -> Result<Vec<u8>> {
-    let mut buffer = Vec::new();
+    let mut buffer = String::new();
     let arguments = if arguments == Some("-") {
-        std::io::stdin().read_to_end(&mut buffer).unwrap();
-        std::str::from_utf8(&buffer).ok()
+        std::io::stdin().read_to_string(&mut buffer)?;
+        Some(&buffer[..])
     } else {
         arguments
     };
@@ -343,19 +343,19 @@ pub fn get_effective_canister_id(
     }
 }
 
-fn create_identity(maybe_pem: Option<PathBuf>) -> impl Identity {
+fn create_identity(maybe_pem: Option<PathBuf>) -> Result<impl Identity> {
     if let Some(pem_path) = maybe_pem {
-        BasicIdentity::from_pem_file(pem_path).expect("Could not read the key pair.")
+        BasicIdentity::from_pem_file(pem_path).context("Could not read the key pair.")
     } else {
         let rng = ring::rand::SystemRandom::new();
         let pkcs8_bytes = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
-            .expect("Could not generate a key pair.")
+            .context("Could not generate a key pair.")?
             .as_ref()
             .to_vec();
 
-        BasicIdentity::from_key_pair(
-            Ed25519KeyPair::from_pkcs8(&pkcs8_bytes).expect("Could not generate the key pair."),
-        )
+        Ok(BasicIdentity::from_key_pair(
+            Ed25519KeyPair::from_pkcs8(&pkcs8_bytes).context("Could not generate the key pair.")?,
+        ))
     }
 }
 
@@ -368,7 +368,7 @@ async fn main() -> Result<()> {
             agent::http_transport::ReqwestTransport::create(opts.replica.clone())
                 .context("Failed to create Transport for Agent")?,
         )
-        .with_boxed_identity(Box::new(create_identity(opts.pem)))
+        .with_boxed_identity(Box::new(create_identity(opts.pem)?))
         .build()
         .context("Failed to build the Agent")?;
 
@@ -493,7 +493,7 @@ async fn main() -> Result<()> {
                             .with_effective_canister_id(effective_canister_id)
                             .sign()
                             .context("Failed to sign the update call")?;
-                        let serialized = serde_json::to_string(&signed_update).unwrap();
+                        let serialized = serde_json::to_string(&signed_update)?;
                         println!("{}", serialized);
 
                         let signed_request_status = agent
@@ -501,7 +501,7 @@ async fn main() -> Result<()> {
                             .context(
                                 "Failed to sign the request_status call accompany with the update",
                             )?;
-                        let serialized = serde_json::to_string(&signed_request_status).unwrap();
+                        let serialized = serde_json::to_string(&signed_request_status)?;
                         println!("{}", serialized);
                     }
                     &SubCommand::Query(_) => {
@@ -515,7 +515,7 @@ async fn main() -> Result<()> {
                             .with_effective_canister_id(effective_canister_id)
                             .sign()
                             .context("Failed to sign the query call")?;
-                        let serialized = serde_json::to_string(&signed_query).unwrap();
+                        let serialized = serde_json::to_string(&signed_query)?;
                         println!("{}", serialized);
                     }
                     _ => unreachable!(),
@@ -531,12 +531,12 @@ async fn main() -> Result<()> {
         }
         SubCommand::PrincipalConvert(t) => {
             if let Some(hex) = &t.from_hex {
-                let p = Principal::try_from(hex::decode(hex).expect("Could not decode hex: {}"))
-                    .expect("Could not transform into a Principal: {}");
+                let p = Principal::try_from(hex::decode(hex).context("Could not decode hex")?)
+                    .context("Could not transform into a principal")?;
                 eprintln!("Principal: {}", p);
             } else if let Some(txt) = &t.to_hex {
                 let p = Principal::from_text(txt.as_str())
-                    .expect("Could not transform into a Principal: {}");
+                    .context("Could not transform into a principal")?;
                 eprintln!("Hexadecimal: {}", hex::encode(p.as_slice()));
             }
         }
