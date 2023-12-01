@@ -133,10 +133,10 @@ struct SendOpts {
 
 #[derive(Parser)]
 struct PrincipalConvertOpts {
-    /// Convert from hexadecimal to the new group-based Principal text.
+    /// Convert from hexadecimal to textual format.
     #[clap(long)]
     from_hex: Option<String>,
-    /// Convert from the new group-based Principal text to hexadecimal.
+    /// Convert from textual format to hexadecimal.
     #[clap(long)]
     to_hex: Option<String>,
 }
@@ -305,7 +305,7 @@ pub fn get_effective_canister_id(
             ),
             MgmtMethod::InstallCode => {
                 let install_args = Decode!(arg_value, CanisterInstall)
-                    .context("Argument is not valid for CanisterInstall")?;
+                    .context("Argument is not valid for install_code")?;
                 Ok(install_args.canister_id)
             }
             MgmtMethod::StartCanister
@@ -320,7 +320,7 @@ pub fn get_effective_canister_id(
                     canister_id: Principal,
                 }
                 let in_args =
-                    Decode!(arg_value, In).context("Argument is not a valid Principal")?;
+                    Decode!(arg_value, In).context("Argument is not a valid principal")?;
                 Ok(in_args.canister_id)
             }
             MgmtMethod::ProvisionalCreateCanisterWithCycles => Ok(Principal::management_canister()),
@@ -331,7 +331,7 @@ pub fn get_effective_canister_id(
                     settings: CanisterSettings,
                 }
                 let in_args =
-                    Decode!(arg_value, In).context("Argument is not valid for UpdateSettings")?;
+                    Decode!(arg_value, In).context("Argument is not valid for update_settings")?;
                 Ok(in_args.canister_id)
             }
         }
