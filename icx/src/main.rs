@@ -5,7 +5,7 @@ use candid::{
     CandidType, Decode, Deserialize, IDLArgs, TypeEnv,
 };
 use candid_parser::{check_prog, parse_idl_args, parse_idl_value, IDLProg};
-use clap::{builder::ArgPredicate, crate_authors, crate_version, Parser, ValueEnum};
+use clap::{crate_authors, crate_version, Parser, ValueEnum};
 use ic_agent::{
     agent::{self, signed::SignedUpdate},
     agent::{
@@ -38,10 +38,7 @@ use url::{Host, Url};
 )]
 struct Opts {
     /// The URL of the replica to connect to.
-    #[clap(
-        default_value = "http://localhost:4943/",
-        default_value_if("ic", ArgPredicate::IsPresent, "https://icp0.io")
-    )]
+    #[clap(default_value = "http://localhost:4943/", conflicts_with = "ic")]
     replica: Url,
 
     /// An optional PEM file to read the identity from. If none is passed,
@@ -55,7 +52,7 @@ struct Opts {
     ttl: Option<humantime::Duration>,
 
     /// Alias for `--replica https://icp0.io`.
-    #[clap(long, conflicts_with = "replica", global = true)]
+    #[clap(long, global = true)]
     ic: bool,
 
     #[clap(subcommand)]
@@ -363,9 +360,15 @@ fn create_identity(maybe_pem: Option<PathBuf>) -> Result<impl Identity> {
 async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
 
+    let replica = if opts.ic {
+        "https://icp0.io".parse().unwrap()
+    } else {
+        opts.replica
+    };
+
     let agent = Agent::builder()
         .with_transport(
-            agent::http_transport::ReqwestTransport::create(opts.replica.clone())
+            agent::http_transport::ReqwestTransport::create(replica.as_str())
                 .context("Failed to create Transport for Agent")?,
         )
         .with_boxed_identity(Box::new(create_identity(opts.pem)?))
@@ -400,7 +403,7 @@ async fn main() -> Result<()> {
                 let result = match &opts.subcommand {
                     SubCommand::Update(_) => {
                         // We need to fetch the root key for updates.
-                        fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
+                        fetch_root_key_from_non_ic(&agent, &replica).await?;
 
                         let mut builder = agent.update(&t.canister_id, &t.method_name);
 
@@ -426,7 +429,7 @@ async fn main() -> Result<()> {
                         result.unwrap_or(Err(AgentError::TimeoutWaitingForResponse()))
                     }
                     SubCommand::Query(_) => {
-                        fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
+                        fetch_root_key_from_non_ic(&agent, &replica).await?;
                         let mut builder = agent.query(&t.canister_id, &t.method_name);
                         if let Some(d) = expire_after {
                             builder = builder.expire_after(d);
@@ -482,7 +485,7 @@ async fn main() -> Result<()> {
                         // For local emulator, we need to fetch the root key for updates.
                         // So on an air-gapped machine, we can only generate message for the IC main net
                         // which agent hard-coded its root key
-                        fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
+                        fetch_root_key_from_non_ic(&agent, &replica).await?;
 
                         let mut builder = agent.update(&t.canister_id, &t.method_name);
                         if let Some(d) = expire_after {
@@ -505,7 +508,7 @@ async fn main() -> Result<()> {
                         println!("{}", serialized);
                     }
                     &SubCommand::Query(_) => {
-                        fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
+                        fetch_root_key_from_non_ic(&agent, &replica).await?;
                         let mut builder = agent.query(&t.canister_id, &t.method_name);
                         if let Some(d) = expire_after {
                             builder = builder.expire_after(d);
@@ -555,7 +558,7 @@ async fn main() -> Result<()> {
             println!("{}", buffer);
 
             if let Ok(signed_update) = serde_json::from_str::<SignedUpdate>(&buffer) {
-                fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
+                fetch_root_key_from_non_ic(&agent, &replica).await?;
                 let request_id = agent
                     .update_signed(
                         signed_update.effective_canister_id,
@@ -577,7 +580,7 @@ async fn main() -> Result<()> {
             } else if let Ok(signed_request_status) =
                 serde_json::from_str::<SignedRequestStatus>(&buffer)
             {
-                fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
+                fetch_root_key_from_non_ic(&agent, &replica).await?;
                 let response = agent
                     .request_status_signed(
                         &signed_request_status.request_id,
