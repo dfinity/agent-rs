@@ -5,7 +5,7 @@ use candid::{
     CandidType, Decode, Deserialize, IDLArgs, TypeEnv,
 };
 use candid_parser::{check_prog, parse_idl_args, parse_idl_value, IDLProg};
-use clap::{crate_authors, crate_version, Parser, ValueEnum};
+use clap::{builder::ArgPredicate, crate_authors, crate_version, Parser, ValueEnum};
 use ic_agent::{
     agent::{self, signed::SignedUpdate},
     agent::{
@@ -22,11 +22,13 @@ use ic_utils::interfaces::management_canister::{
 };
 use ring::signature::Ed25519KeyPair;
 use std::{
-    collections::VecDeque, convert::TryFrom, io::BufRead, path::PathBuf, str::FromStr,
+    convert::TryFrom,
+    io::Read,
+    path::{Path, PathBuf},
+    str::FromStr,
     time::Duration,
 };
-
-const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
+use url::{Host, Url};
 
 #[derive(Parser)]
 #[clap(
@@ -35,19 +37,26 @@ const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
     propagate_version(true),
 )]
 struct Opts {
-    /// Some input. Because this isn't an Option<T> it's required to be used
-    #[clap(default_value = "http://localhost:8000/")]
-    replica: String,
+    /// The URL of the replica to connect to.
+    #[clap(
+        default_value = "http://localhost:4943/",
+        default_value_if("ic", ArgPredicate::IsPresent, "https://icp0.io")
+    )]
+    replica: Url,
 
     /// An optional PEM file to read the identity from. If none is passed,
     /// a random identity will be created.
-    #[clap(long)]
+    #[clap(long, global = true)]
     pem: Option<PathBuf>,
 
     /// An optional field to set the expiry time on requests. Can be a human
     /// readable time (like `100s`) or a number of seconds.
-    #[clap(long)]
+    #[clap(long, global = true)]
     ttl: Option<humantime::Duration>,
+
+    /// Alias for `--replica https://icp0.io`.
+    #[clap(long, conflicts_with = "replica", global = true)]
+    ic: bool,
 
     #[clap(subcommand)]
     subcommand: SubCommand,
@@ -64,10 +73,10 @@ enum SubCommand {
     /// Checks the `status` endpoints of the replica.
     Status,
 
-    /// Send a serialized request, taking from STDIN.
-    Send,
+    /// Send a serialized request, taking from a provided file or STDIN.
+    Send(SendOpts),
 
-    /// Transform Principal from hex to new text.
+    /// Transform a principal between text and hex.
     PrincipalConvert(PrincipalConvertOpts),
 }
 
@@ -116,6 +125,13 @@ impl std::str::FromStr for ArgType {
             other => Err(format!("invalid argument type: {}", other)),
         }
     }
+}
+
+#[derive(Parser)]
+struct SendOpts {
+    /// The input file. Use `-` for STDIN.
+    #[clap(long, short, default_value = "-")]
+    input_file: PathBuf,
 }
 
 #[derive(Parser)]
@@ -179,7 +195,6 @@ fn blob_from_arguments(
 ) -> Result<Vec<u8>> {
     let mut buffer = Vec::new();
     let arguments = if arguments == Some("-") {
-        use std::io::Read;
         std::io::stdin().read_to_end(&mut buffer).unwrap();
         std::str::from_utf8(&buffer).ok()
     } else {
@@ -251,16 +266,28 @@ fn print_idl_blob(
     Ok(())
 }
 
-async fn fetch_root_key_from_non_ic(agent: &Agent, replica: &str) -> Result<()> {
-    let normalized_replica = replica.strip_suffix('/').unwrap_or(replica);
-    if normalized_replica != DEFAULT_IC_GATEWAY {
-        agent
-            .fetch_root_key()
-            .await
-            .context("Failed to fetch root key from replica")?;
+async fn fetch_root_key_from_non_ic(agent: &Agent, replica: &Url) -> Result<()> {
+    if is_mainnet(replica) {
+        agent.fetch_root_key().await?;
     }
     Ok(())
 }
+
+fn is_mainnet(replica: &Url) -> bool {
+    if let Some(Host::Domain(domain)) = replica.host() {
+        let domain = domain.strip_suffix('.').unwrap_or(domain);
+        let subdomain_end = domain.rmatch_indices('.').nth(1);
+        let domain = if let Some((n, _)) = subdomain_end {
+            &domain[n + 1..]
+        } else {
+            domain
+        };
+        ["ic0.app", "icp0.io", "icp-api.io"].contains(&domain)
+    } else {
+        false
+    }
+}
+
 pub fn get_effective_canister_id(
     is_management_canister: bool,
     method_name: &str,
@@ -513,17 +540,18 @@ async fn main() -> Result<()> {
                 eprintln!("Hexadecimal: {}", hex::encode(p.as_slice()));
             }
         }
-        SubCommand::Send => {
-            let input: VecDeque<String> = std::io::stdin()
-                .lock()
-                .lines()
-                .collect::<Result<VecDeque<String>, std::io::Error>>()
-                .context("Failed to read from stdin")?;
+        SubCommand::Send(t) => {
             let mut buffer = String::new();
-            for line in input {
-                buffer.push_str(&line);
+            if t.input_file == Path::new("-") {
+                std::io::stdin()
+                    .lock()
+                    .read_to_string(&mut buffer)
+                    .context("failed to read from stdin")?;
+            } else {
+                buffer = std::fs::read_to_string(&t.input_file).with_context(|| {
+                    format!("failed to read from file {}", t.input_file.display())
+                })?;
             }
-
             println!("{}", buffer);
 
             if let Ok(signed_update) = serde_json::from_str::<SignedUpdate>(&buffer) {
@@ -585,11 +613,33 @@ async fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::Opts;
+    use crate::{is_mainnet, Opts};
+    use anyhow::Result;
     use clap::CommandFactory;
 
     #[test]
     fn valid_command() {
         Opts::command().debug_assert();
+    }
+
+    #[test]
+    fn detects_mainnet() -> Result<()> {
+        assert!(is_mainnet(&"https://icp-api.io".parse()?));
+        assert!(is_mainnet(&"https://ic0.app".parse()?));
+        assert!(is_mainnet(&"https://icp0.io".parse()?));
+        assert!(is_mainnet(&"https://icp-api.io:443".parse()?));
+        assert!(is_mainnet(&"https://icp-api.io.".parse()?));
+        assert!(is_mainnet(&"https://icp-api.io.:443".parse()?));
+        assert!(is_mainnet(
+            &"https://ryjl3-tyaaa-aaaaa-aaaba-cai.icp0.io".parse()?
+        ));
+
+        assert!(!is_mainnet(&"http://localhost".parse()?));
+        assert!(!is_mainnet(&"http://[::1]".parse()?));
+        assert!(!is_mainnet(&"http://127.0.0.1".parse()?));
+        assert!(!is_mainnet(
+            &"http://ryjl3-tyaaa-aaaaa-aaaba-cai.localhost".parse()?
+        ));
+        Ok(())
     }
 }
