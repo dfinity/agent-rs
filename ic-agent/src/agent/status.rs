@@ -67,21 +67,22 @@ fn can_serilaize_status_as_json() {
         root_key: None,
         values: BTreeMap::new(),
     };
-    let expected_json = r#"{"impl_version":null,"replica_health_status":null,"root_key":null,"values":{}}"#;
+    let expected_json =
+        r#"{"impl_version":null,"replica_health_status":null,"root_key":null,"values":{}}"#;
     let actual_json = serde_json::to_string(&status).expect("Failed to serialize as JSON");
     assert_eq!(expected_json, actual_json);
 }
 #[test]
-fn can_serialize_status_as_candid() {
-      let status = Status {
-        impl_version: None,
+fn can_serialize_status_as_idl() {
+    let status = Status {
+        impl_version: Some("Foo".to_string()),
         replica_health_status: None,
         root_key: None,
         values: BTreeMap::new(),
     };
-      let expected_candid = "";
-      let actual_candid = status.to_idl_value().to_string();
-      assert_eq!(expected_candid, actual_candid);
+    let expected_idl = r#"record {\n  values = vec {};\n  root_key = null;\n  replica_health_status = null;\n  impl_version = opt "Foo";\n}"#;
+    let actual_idl = status.to_string(); // TODO: How can the struct be converted to an IDLValue with names?
+    assert_eq!(expected_idl, actual_idl);
 }
 
 impl std::fmt::Display for Status {
