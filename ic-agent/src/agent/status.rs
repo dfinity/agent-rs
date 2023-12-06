@@ -74,6 +74,7 @@ fn can_serilaize_status_as_json() {
 }
 #[test]
 fn can_serialize_status_as_idl() {
+    use candid::{Decode, Encode, IDLValue};
     let status = Status {
         impl_version: Some("Foo".to_string()),
         replica_health_status: None,
@@ -81,7 +82,11 @@ fn can_serialize_status_as_idl() {
         values: BTreeMap::new(),
     };
     let expected_idl = r#"record {\n  values = vec {};\n  root_key = null;\n  replica_health_status = null;\n  impl_version = opt "Foo";\n}"#;
-    let actual_idl = status.to_string(); // TODO: How can the struct be converted to an IDLValue with names?
+    let actual_idl = {
+        let blob = Encode!(&status).expect("Failed to serialize");
+        let v = Decode!(&blob, IDLValue).expect("Failed to seserialize");
+        format!("{}", v)
+    };
     assert_eq!(expected_idl, actual_idl);
 }
 
