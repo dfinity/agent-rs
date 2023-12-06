@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 * Added query stats to `StatusCallResult`.
-* Added serde and candid serialization traits to the Status type.
+* Added serde and candid serialization traits to the `Status` type.
 
 ## [0.31.0] - 2023-11-27
 
