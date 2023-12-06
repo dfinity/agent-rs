@@ -1,13 +1,15 @@
 //! Types for interacting with the status endpoint of a replica. See [`Status`] for details.
 
 use candid::{CandidType, Deserialize};
-use std::{collections::BTreeMap, fmt::Debug};
 use serde::Serialize;
+use std::{collections::BTreeMap, fmt::Debug};
 
 /// Value returned by the status endpoint of a replica. This is a loose mapping to CBOR values.
 /// Because the agent should not return [`serde_cbor::Value`] directly across API boundaries,
 /// we reimplement it as [`Value`] here.
-#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Clone, Hash, CandidType, Serialize, Deserialize)]
+#[derive(
+    Debug, Ord, PartialOrd, Eq, PartialEq, Clone, Hash, CandidType, Serialize, Deserialize,
+)]
 pub enum Value {
     /// See [`Null`](serde_cbor::Value::Null).
     Null,
