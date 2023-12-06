@@ -74,7 +74,8 @@ fn can_serilaize_status_as_json() {
 }
 #[test]
 fn can_serialize_status_as_idl() {
-    use candid::{Decode, Encode, IDLValue, TypeEnv};
+    use candid::types::value::IDLValue;
+    use candid::{Decode, Encode, TypeEnv};
     let status = Status {
         impl_version: Some("Foo".to_string()),
         replica_health_status: None,
