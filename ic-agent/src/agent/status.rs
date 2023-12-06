@@ -60,14 +60,28 @@ pub struct Status {
 }
 
 #[test]
-fn can_serilaize_status() {
+fn can_serilaize_status_as_json() {
     let status = Status {
         impl_version: None,
         replica_health_status: None,
         root_key: None,
         values: BTreeMap::new(),
     };
-    serde_json::to_string(&status).expect("Failed to serialize as JSON");
+    let expected_json = r#"{"impl_version":null,"replica_health_status":null,"root_key":null,"values":{}}"#;
+    let actual_json = serde_json::to_string(&status).expect("Failed to serialize as JSON");
+    assert_eq!(expected_json, actual_json);
+}
+#[test]
+fn can_serialize_status_as_candid() {
+      let status = Status {
+        impl_version: None,
+        replica_health_status: None,
+        root_key: None,
+        values: BTreeMap::new(),
+    };
+      let expected_candid = "";
+      let actual_candid = status.to_idl_value().to_string();
+      assert_eq!(expected_candid, actual_candid);
 }
 
 impl std::fmt::Display for Status {
