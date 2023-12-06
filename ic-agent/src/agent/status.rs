@@ -81,15 +81,20 @@ fn can_serialize_status_as_idl() {
         root_key: None,
         values: BTreeMap::new(),
     };
-    let expected_idl = "record {\n  values = vec {};\n  replica_health_status = null;\n  impl_version = opt \"Foo\";\n  root_key = null;\n}";
-    let actual_idl = {
-        let blob = Encode!(&status).expect("Failed to serialize");
-        let parsed: IDLValue = Decode!(&blob, IDLValue).expect("Failed to seserialize");
+    // Expresses data as text-form candid.
+    fn as_idl<T>(data: &T) -> Result<String, &'static str>
+    where
+        T: CandidType,
+    {
+        let blob = Encode!(data).map_err(|_| "Failed to serialize")?;
+        let parsed: IDLValue = Decode!(&blob, IDLValue).map_err(|_| "Failed to deserialize")?;
         let annotated: IDLValue = parsed
-            .annotate_type(false, &TypeEnv::default(), &Status::ty())
-            .expect("Failed to annotate");
-        annotated.to_string()
-    };
+            .annotate_type(false, &TypeEnv::default(), &T::ty())
+            .map_err(|_| "Failed to annotate")?;
+        Ok(annotated.to_string())
+    }
+    let expected_idl = "record {\n  values = vec {};\n  replica_health_status = null;\n  impl_version = opt \"Foo\";\n  root_key = null;\n}";
+    let actual_idl = as_idl(&status).expect("Failed to convert to idl");
     assert_eq!(expected_idl, actual_idl);
 }
 
