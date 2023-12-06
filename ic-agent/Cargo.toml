@@ -17,7 +17,7 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 [dependencies]
 backoff = "0.4.0"
 cached = { version = "0.46", features = ["ahash"], default-features = false }
-candid = { workspace = true }
+candid = { workspace = true, features = ["value"] }
 ed25519-consensus = { version = "2" }
 futures-util = "0.3.21"
 hex = { workspace = true }
