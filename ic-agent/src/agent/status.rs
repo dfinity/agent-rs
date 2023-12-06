@@ -74,18 +74,21 @@ fn can_serilaize_status_as_json() {
 }
 #[test]
 fn can_serialize_status_as_idl() {
-    use candid::{Decode, Encode, IDLValue};
+    use candid::{Decode, Encode, IDLValue, TypeEnv};
     let status = Status {
         impl_version: Some("Foo".to_string()),
         replica_health_status: None,
         root_key: None,
         values: BTreeMap::new(),
     };
-    let expected_idl = r#"record {\n  values = vec {};\n  root_key = null;\n  replica_health_status = null;\n  impl_version = opt "Foo";\n}"#;
+    let expected_idl = "record {\n  values = vec {};\n  replica_health_status = null;\n  impl_version = opt \"Foo\";\n  root_key = null;\n}";
     let actual_idl = {
         let blob = Encode!(&status).expect("Failed to serialize");
-        let v = Decode!(&blob, IDLValue).expect("Failed to seserialize");
-        format!("{}", v)
+        let parsed: IDLValue = Decode!(&blob, IDLValue).expect("Failed to seserialize");
+        let annotated: IDLValue = parsed
+            .annotate_type(false, &TypeEnv::default(), &Status::ty())
+            .expect("Failed to annotate");
+        annotated.to_string()
     };
     assert_eq!(expected_idl, actual_idl);
 }
