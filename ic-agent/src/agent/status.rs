@@ -75,27 +75,28 @@ fn can_serilaize_status_as_json() {
 #[test]
 fn can_serialize_status_as_idl() {
     use candid::types::value::IDLValue;
-    use candid::{Decode, Encode, TypeEnv};
+    use candid::{Encode, IDLArgs, Result as CandidResult, TypeEnv};
     let status = Status {
         impl_version: Some("Foo".to_string()),
         replica_health_status: None,
         root_key: None,
         values: BTreeMap::new(),
     };
-    // Expresses data as text-form candid.
-    fn as_idl<T>(data: &T) -> Result<String, &'static str>
+    // Expresses data as IDLValue.  Then use .to_string() to convert to text-form candid.
+    // TODO: This function has been added to the Candid library and will be available in the next
+    // release.  Then, this definition here can be deleted.
+    pub fn try_from_candid_type<T>(data: &T) -> CandidResult<IDLValue>
     where
         T: CandidType,
     {
-        let blob = Encode!(data).map_err(|_| "Failed to serialize")?;
-        let parsed: IDLValue = Decode!(&blob, IDLValue).map_err(|_| "Failed to deserialize")?;
-        let annotated: IDLValue = parsed
-            .annotate_type(false, &TypeEnv::default(), &T::ty())
-            .map_err(|_| "Failed to annotate")?;
-        Ok(annotated.to_string())
+        let blob = Encode!(data)?;
+        let args = IDLArgs::from_bytes_with_types(&blob, &TypeEnv::default(), &[T::ty()])?;
+        Ok(args.args[0].clone())
     }
     let expected_idl = "record {\n  values = vec {};\n  replica_health_status = null;\n  impl_version = opt \"Foo\";\n  root_key = null;\n}";
-    let actual_idl = as_idl(&status).expect("Failed to convert to idl");
+    let actual_idl = try_from_candid_type(&status)
+        .expect("Failed to convert to idl")
+        .to_string();
     assert_eq!(expected_idl, actual_idl);
 }
 
