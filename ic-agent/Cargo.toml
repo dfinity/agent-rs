@@ -17,7 +17,7 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 [dependencies]
 backoff = "0.4.0"
 cached = { version = "0.46", features = ["ahash"], default-features = false }
-candid = { workspace = true, features = ["value"] }
+candid = { workspace = true }
 ed25519-consensus = { version = "2" }
 futures-util = "0.3.21"
 hex = { workspace = true }
@@ -75,6 +75,7 @@ web-sys = { version = "0.3", features = ["Window"], optional = true }
 
 [dev-dependencies]
 serde_json = "1.0.79"
+candid = { workspace = true, features = ["value"]}
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 tokio = { version = "1.24.2", features = ["full"] }
