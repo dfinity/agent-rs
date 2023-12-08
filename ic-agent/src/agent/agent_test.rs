@@ -5,10 +5,10 @@ use self::mock::{assert_mock, assert_single_mock, mock, mock_additional};
 use crate::{
     agent::{http_transport::ReqwestTransport, Status},
     export::Principal,
-    Agent, AgentError,
+    Agent, AgentError, Certificate,
 };
 use candid::{Encode, Nat};
-use ic_certification::Label;
+use ic_certification::{Delegation, Label};
 use ic_transport_types::{NodeSignature, QueryResponse, RejectCode, RejectResponse, ReplyResponse};
 use std::{collections::BTreeMap, time::Duration};
 #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
@@ -486,6 +486,56 @@ async fn no_cert() {
     let result = agent.query(&canister, "getVersion").call().await;
     assert!(matches!(result.unwrap_err(), AgentError::MissingSignature));
     assert_mock(read_mock).await;
+}
+
+const RESP_WITH_SUBNET_KEY: &[u8] = include_bytes!("agent_test/with_subnet_key.bin");
+
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+async fn too_many_delegations() {
+    // Use the certificate as its own delegation, and repeat the process the specified number of times
+    fn self_delegate_cert(subnet_id: Vec<u8>, cert: &Certificate, depth: u32) -> Certificate {
+        let mut current = cert.clone();
+        for _ in 0..depth {
+            current = Certificate {
+                tree: current.tree.clone(),
+                signature: current.signature.clone(),
+                delegation: Some(Delegation {
+                    subnet_id: subnet_id.clone(),
+                    certificate: serde_cbor::to_vec(&current).unwrap(),
+                }),
+            }
+        }
+        current
+    }
+
+    let canister_id_str = "rdmx6-jaaaa-aaaaa-aaadq-cai";
+    let canister_id = Principal::from_text(canister_id_str).unwrap();
+    let subnet_id = Vec::from(
+        Principal::from_text("uzr34-akd3s-xrdag-3ql62-ocgoh-ld2ao-tamcv-54e7j-krwgb-2gm4z-oqe")
+            .unwrap()
+            .as_slice(),
+    );
+
+    let (_read_mock, url) = mock(
+        "POST",
+        format!("/api/v2/canister/{}/read_state", canister_id_str).as_str(),
+        200,
+        RESP_WITH_SUBNET_KEY.into(),
+        Some("application/cbor"),
+    )
+    .await;
+    let path_label = Label::from_bytes("subnet".as_bytes());
+    let agent = make_untimed_agent(&url);
+    let cert = agent
+        .read_state_raw(vec![vec![path_label]], canister_id)
+        .await
+        .expect("read state failed");
+    let new_cert = self_delegate_cert(subnet_id, &cert, 1);
+    assert!(matches!(
+        agent.verify(&new_cert, canister_id).unwrap_err(),
+        AgentError::CertificateHasTooManyDelegations
+    ));
 }
 
 #[cfg(not(target_family = "wasm"))]

@@ -813,6 +813,9 @@ impl Agent {
             Some(delegation) => {
                 let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;
+                if cert.delegation.is_some() {
+                    return Err(AgentError::CertificateHasTooManyDelegations);
+                }
                 self.verify(&cert, effective_canister_id)?;
                 let canister_range_lookup = [
                     "subnet".as_bytes(),
@@ -845,8 +848,11 @@ impl Agent {
         match delegation {
             None => Ok(self.read_root_key()),
             Some(delegation) => {
-                let cert = serde_cbor::from_slice(&delegation.certificate)
+                let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;
+                if cert.delegation.is_some() {
+                    return Err(AgentError::CertificateHasTooManyDelegations);
+                }
                 self.verify_for_subnet(&cert, subnet_id)?;
                 let public_key_path = [
                     "subnet".as_bytes(),

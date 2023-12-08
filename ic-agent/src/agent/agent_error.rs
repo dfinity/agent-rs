@@ -110,6 +110,10 @@ pub enum AgentError {
     #[error("Certificate is stale (over {0:?}). Is the computer's clock synchronized?")]
     CertificateOutdated(Duration),
 
+    /// The certificate contained more than one delegation.
+    #[error("The certificate contained more than one delegation")]
+    CertificateHasTooManyDelegations,
+
     /// The query response did not contain any node signatures.
     #[error("Query response did not contain any node signatures")]
     MissingSignature,
