@@ -161,14 +161,14 @@ mod management_canister {
 
             // Upgrade should succeed.
             ic00.install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Upgrade)
+                .with_mode(InstallMode::Upgrade(None))
                 .call_and_wait()
                 .await?;
 
             // Upgrade with another agent should fail.
             let result = other_ic00
                 .install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Upgrade)
+                .with_mode(InstallMode::Upgrade(None))
                 .call_and_wait()
                 .await;
             assert!(matches!(result, Err(AgentError::ReplicaError(..))));
@@ -435,7 +435,7 @@ mod management_canister {
 
             // Upgrade should succeed
             ic00.install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Upgrade)
+                .with_mode(InstallMode::Upgrade(None))
                 .call_and_wait()
                 .await?;
 
