@@ -739,9 +739,10 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
                         .into_stream(),
                     )
                 } else {
-                    let results = Arc::new(Mutex::new(vec![]));
+                    let chunks_iter = self.wasm.chunks(1024 * 1024);
+                    let results = Arc::new(Mutex::new(vec![<_>::default(); chunks_iter.len()]));
                     let chunks_stream = FuturesUnordered::new();
-                    for chunk in self.wasm.chunks(1024 * 1024) {
+                    for (x, chunk) in chunks_iter.enumerate() {
                         let results = results.clone();
                         chunks_stream.push(async move {
                             let (res,) = self
@@ -749,7 +750,7 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
                                 .upload_chunk(&self.canister_id, chunk)
                                 .call_and_wait()
                                 .await?;
-                            results.lock().unwrap().push(res.hash);
+                            results.lock().unwrap()[x] = res.hash;
                             Ok(())
                         })
                     }
