@@ -815,7 +815,7 @@ mod management_canister {
                 .call_and_wait()
                 .await?;
             mgmt.install_chunked_code(&canister, asm_hash)
-                .with_chunk_hashes(vec![pt1, pt2])
+                .with_chunk_hashes(vec![pt1.hash, pt2.hash])
                 .call_and_wait()
                 .await?;
             Ok(())
