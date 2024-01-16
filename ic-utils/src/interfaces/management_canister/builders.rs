@@ -744,12 +744,12 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
                     for chunk in self.wasm.chunks(1024 * 1024) {
                         let results = results.clone();
                         chunks_stream.push(async move {
-                            let (hash,) = self
+                            let (res,) = self
                                 .canister
                                 .upload_chunk(&self.canister_id, chunk)
                                 .call_and_wait()
                                 .await?;
-                            results.lock().unwrap().push(hash);
+                            results.lock().unwrap().push(res.hash);
                             Ok(())
                         })
                     }

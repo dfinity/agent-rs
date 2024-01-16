@@ -117,6 +117,13 @@ pub struct DefiniteCanisterSettings {
     pub reserved_cycles_limit: Option<Nat>,
 }
 
+/// The result of a [`ManagementCanister::upload_chunk`] call.
+#[derive(Clone, Debug, Deserialize, CandidType)]
+pub struct UploadChunkResult {
+    /// The hash of the uploaded chunk.
+    pub hash: ChunkHash,
+}
+
 impl std::fmt::Display for StatusCallResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Debug::fmt(self, f)
@@ -309,13 +316,14 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
         chunk: &[u8],
-    ) -> impl 'agent + AsyncCall<(ChunkHash,)> {
+    ) -> impl 'agent + AsyncCall<(UploadChunkResult,)> {
         #[derive(CandidType, Deserialize)]
         struct Argument<'a> {
             canister_id: Principal,
             #[serde(with = "serde_bytes")]
             chunk: &'a [u8],
         }
+
         self.update(MgmtMethod::UploadChunk.as_ref())
             .with_arg(Argument {
                 canister_id: *canister_id,
