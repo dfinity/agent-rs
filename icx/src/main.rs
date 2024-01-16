@@ -1,10 +1,10 @@
 use anyhow::{bail, Context, Result};
 use candid::{
-    check_prog,
     types::value::IDLValue,
     types::{Function, Type, TypeInner},
-    CandidType, Decode, Deserialize, IDLArgs, IDLProg, TypeEnv,
+    CandidType, Decode, Deserialize, IDLArgs, TypeEnv,
 };
+use candid_parser::{check_prog, parse_idl_args, parse_idl_value, IDLProg};
 use clap::{crate_authors, crate_version, Parser, ValueEnum};
 use ic_agent::{
     agent::{self, signed::SignedUpdate},
@@ -194,7 +194,7 @@ fn blob_from_arguments(
         }
         ArgType::Idl => {
             let arguments = arguments.unwrap_or("()");
-            let args = arguments.parse::<IDLArgs>();
+            let args = parse_idl_args(arguments);
             let typed_args = match method_type {
                 None => args
                     .context("Failed to parse arguments with no method type info")?
@@ -210,7 +210,7 @@ fn blob_from_arguments(
                             if &TypeInner::Text == func.args[0].as_ref() && !is_quote {
                                 Ok(IDLValue::Text(arguments.to_string()))
                             } else {
-                                arguments.parse::<IDLValue>()
+                                parse_idl_value(arguments)
                             }
                             .map(|v| IDLArgs::new(&[v]))
                         } else {

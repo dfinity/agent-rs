@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 * Added the chunked wasm API to ic-utils. Existing code that uses `install_code` should probably update to `install`, which works the same but silently handles large wasm modules.
+* Added query stats to `StatusCallResult`.
+
+## [0.31.0] - 2023-11-27
+
+* Breaking change: Bump candid to 0.10. Downstream libraries need to bump Candid to 0.10 as well.
+* Feat: add `idle_cycles_burned_per_day` field to `StatusCallResult`.
+
+## [0.30.2] - 2023-11-16
+
+* Fixed a spurious certificate validation error in the five minutes after a node is added to a subnet
 
 ## [0.30.1] - 2023-11-15
 

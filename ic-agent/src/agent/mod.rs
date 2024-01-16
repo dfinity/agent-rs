@@ -474,7 +474,7 @@ impl Agent {
         request_id: RequestId,
     ) -> Result<Vec<u8>, AgentError> {
         let response = if self.verify_query_signatures {
-            let (response, subnet) = futures_util::try_join!(
+            let (response, mut subnet) = futures_util::try_join!(
                 self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query),
                 self.get_subnet_by_canister(&effective_canister_id)
             )?;
@@ -494,10 +494,17 @@ impl Agent {
                     return Err(AgentError::CertificateOutdated(self.ingress_expiry));
                 }
                 let signable = response.signable(request_id, signature.timestamp);
-                let node_key = subnet
-                    .node_keys
-                    .get(&signature.identity)
-                    .ok_or(AgentError::CertificateNotAuthorized())?;
+                let node_key = if let Some(node_key) = subnet.node_keys.get(&signature.identity) {
+                    node_key
+                } else {
+                    subnet = self
+                        .fetch_subnet_by_canister(&effective_canister_id)
+                        .await?;
+                    subnet
+                        .node_keys
+                        .get(&signature.identity)
+                        .ok_or(AgentError::CertificateNotAuthorized())?
+                };
                 if node_key.len() != 44 {
                     return Err(AgentError::DerKeyLengthMismatch {
                         expected: 44,
@@ -806,6 +813,9 @@ impl Agent {
             Some(delegation) => {
                 let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;
+                if cert.delegation.is_some() {
+                    return Err(AgentError::CertificateHasTooManyDelegations);
+                }
                 self.verify(&cert, effective_canister_id)?;
                 let canister_range_lookup = [
                     "subnet".as_bytes(),
@@ -838,8 +848,11 @@ impl Agent {
         match delegation {
             None => Ok(self.read_root_key()),
             Some(delegation) => {
-                let cert = serde_cbor::from_slice(&delegation.certificate)
+                let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;
+                if cert.delegation.is_some() {
+                    return Err(AgentError::CertificateHasTooManyDelegations);
+                }
                 self.verify_for_subnet(&cert, subnet_id)?;
                 let public_key_path = [
                     "subnet".as_bytes(),
@@ -999,24 +1012,31 @@ impl Agent {
         if let Some(subnet) = subnet {
             Ok(subnet)
         } else {
-            let cert = self
-                .read_state_raw(vec![vec!["subnet".into()]], *canister)
-                .await?;
-            let time = leb128::read::unsigned(&mut lookup_value(&cert.tree, [b"time".as_ref()])?)?;
-            if (OffsetDateTime::now_utc()
-                - OffsetDateTime::from_unix_timestamp_nanos(time as _).unwrap())
-                > self.ingress_expiry
-            {
-                Err(AgentError::CertificateOutdated(self.ingress_expiry))
-            } else {
-                let (subnet_id, subnet) = lookup_subnet(&cert, &self.root_key.read().unwrap())?;
-                let subnet = Arc::new(subnet);
-                self.subnet_key_cache
-                    .lock()
-                    .unwrap()
-                    .insert_subnet(subnet_id, subnet.clone());
-                Ok(subnet)
-            }
+            self.fetch_subnet_by_canister(canister).await
+        }
+    }
+
+    async fn fetch_subnet_by_canister(
+        &self,
+        canister: &Principal,
+    ) -> Result<Arc<Subnet>, AgentError> {
+        let cert = self
+            .read_state_raw(vec![vec!["subnet".into()]], *canister)
+            .await?;
+        let time = leb128::read::unsigned(&mut lookup_value(&cert.tree, [b"time".as_ref()])?)?;
+        if (OffsetDateTime::now_utc()
+            - OffsetDateTime::from_unix_timestamp_nanos(time as _).unwrap())
+            > self.ingress_expiry
+        {
+            Err(AgentError::CertificateOutdated(self.ingress_expiry))
+        } else {
+            let (subnet_id, subnet) = lookup_subnet(&cert, &self.root_key.read().unwrap())?;
+            let subnet = Arc::new(subnet);
+            self.subnet_key_cache
+                .lock()
+                .unwrap()
+                .insert_subnet(subnet_id, subnet.clone());
+            Ok(subnet)
         }
     }
 }
