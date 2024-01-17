@@ -11,7 +11,6 @@ use crate::{
 use async_trait::async_trait;
 use candid::utils::ArgumentEncoder;
 use candid::{CandidType, Deserialize, Nat};
-use futures_util::future::BoxFuture;
 use futures_util::{
     future::ready,
     stream::{self, FuturesUnordered},
@@ -750,7 +749,7 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
                             to_upload_chunks.iter()
                                 .filter_map(|(hash, value)| (!existing_chunks.contains(hash)).then_some((*hash, *value)))
                                 .collect(),
-                            Box::pin(ready(Ok(()))) as BoxFuture<'_, _>,
+                            Box::pin(ready(Ok(()))) as _,
                         )
                     } else {
                         (to_upload_chunks.clone(), self.canister.clear_chunk_store(&self.canister_id).call_and_wait())
