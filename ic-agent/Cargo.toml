@@ -19,7 +19,7 @@ backoff = "0.4.0"
 cached = { version = "0.46", features = ["ahash"], default-features = false }
 candid = { workspace = true }
 ed25519-consensus = { version = "2" }
-futures-util = "0.3.21"
+futures-util = { workspace = true }
 hex = { workspace = true }
 http = "0.2.6"
 http-body = "0.4.5"
