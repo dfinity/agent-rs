@@ -723,7 +723,7 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
     /// There are exactly [`size_hint().0`](Stream::size_hint) steps.
     pub async fn call_and_wait_with_progress(
         self,
-    ) -> impl Stream<Item = Result<(), AgentError>> + Send + 'builder {
+    ) -> impl Stream<Item = Result<(), AgentError>> + 'builder {
         let stream_res = /* try { */ async move {
             let arg = self.arg.serialize()?;
             let stream: BoxStream<'_, _> =
