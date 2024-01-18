@@ -8,8 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.32.0] - 2024-01-18
+
 * Added the chunked wasm API to ic-utils. Existing code that uses `install_code` should probably update to `install`, which works the same but silently handles large wasm modules.
 * Added query stats to `StatusCallResult`.
+* Upgraded `ic-certification` to v2.2.
 
 ## [0.31.0] - 2023-11-27
 
