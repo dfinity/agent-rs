@@ -27,6 +27,7 @@ ic-certification = { workspace = true }
 ic-transport-types = { workspace = true }
 ic-verify-bls-signature = "0.1"
 k256 = { version = "0.13.1", features = ["pem"] }
+p256 = { version = "0.13.2", features = ["pem"] }
 leb128 = { workspace = true }
 pkcs8 = { version = "0.10.2", features = ["std"] }
 sec1 = { version = "0.7.2", features = ["pem"] }
