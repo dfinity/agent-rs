@@ -42,8 +42,8 @@ mod management_canister {
         Argument,
     };
     use ref_tests::{
-        create_agent, create_basic_identity, create_secp256k1_identity, with_agent,
-        with_wallet_canister,
+        create_agent, create_basic_identity, create_prime256v1_identity, create_secp256k1_identity,
+        with_agent, with_wallet_canister,
     };
     use ref_tests::{get_effective_canister_id, with_universal_canister};
     use sha2::{Digest, Sha256};
@@ -274,6 +274,12 @@ mod management_canister {
             secp256k1_agent.fetch_root_key().await?;
             let secp256k1_ic00 = ManagementCanister::create(&secp256k1_agent);
 
+            let prime256v1_identity = create_prime256v1_identity()?;
+            let prime256v1_principal = prime256v1_identity.sender()?;
+            let prime256v1_agent = create_agent(prime256v1_identity).await?;
+            prime256v1_agent.fetch_root_key().await?;
+            let prime256v1_ic00 = ManagementCanister::create(&prime256v1_agent);
+
             let ic00 = ManagementCanister::create(&agent);
 
             let (canister_id,) = ic00
@@ -347,6 +353,46 @@ mod management_canister {
                 .await?;
             assert_eq!(result.0.settings.controllers.len(), 1);
             assert_eq!(result.0.settings.controllers[0], secp256k1_principal);
+
+            // Only that controller can change the controller again
+            let result = ic00
+                .update_settings(&canister_id)
+                .with_controller(prime256v1_principal)
+                .call_and_wait()
+                .await;
+            assert_err_or_reject(
+                result,
+                vec![RejectCode::DestinationInvalid, RejectCode::CanisterError],
+            );
+            let result = other_ic00
+                .update_settings(&canister_id)
+                .with_controller(prime256v1_principal)
+                .call_and_wait()
+                .await;
+            assert_err_or_reject(
+                result,
+                vec![RejectCode::DestinationInvalid, RejectCode::CanisterError],
+            );
+
+            secp256k1_ic00
+                .update_settings(&canister_id)
+                .with_controller(prime256v1_principal)
+                .call_and_wait()
+                .await?;
+            let result = secp256k1_ic00
+                .canister_status(&canister_id)
+                .call_and_wait()
+                .await;
+            assert_err_or_reject(
+                result,
+                vec![RejectCode::DestinationInvalid, RejectCode::CanisterError],
+            );
+            let result = prime256v1_ic00
+                .canister_status(&canister_id)
+                .call_and_wait()
+                .await?;
+            assert_eq!(result.0.settings.controllers.len(), 1);
+            assert_eq!(result.0.settings.controllers[0], prime256v1_principal);
 
             Ok(())
         })

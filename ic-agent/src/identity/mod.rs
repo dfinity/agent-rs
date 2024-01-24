@@ -6,6 +6,7 @@ use crate::{agent::EnvelopeContent, export::Principal};
 pub(crate) mod anonymous;
 pub(crate) mod basic;
 pub(crate) mod delegated;
+pub(crate) mod prime256v1;
 pub(crate) mod secp256k1;
 
 #[cfg(feature = "pem")]
@@ -19,6 +20,8 @@ pub use basic::BasicIdentity;
 pub use delegated::DelegatedIdentity;
 #[doc(inline)]
 pub use ic_transport_types::{Delegation, SignedDelegation};
+#[doc(inline)]
+pub use prime256v1::Prime256v1Identity;
 #[doc(inline)]
 pub use secp256k1::Secp256k1Identity;
 
