@@ -1,4 +1,4 @@
-use crate::agent::{RejectCode, RejectResponse, RequestStatusResponse};
+use crate::agent::{ApiBoundaryNode, RejectCode, RejectResponse, RequestStatusResponse};
 use crate::{export::Principal, AgentError, RequestId};
 use ic_certification::hash_tree::{HashTree, SubtreeLookupResult};
 use ic_certification::{certificate::Certificate, hash_tree::Label, LookupResult};
@@ -204,6 +204,52 @@ pub(crate) fn lookup_subnet<Storage: AsRef<[u8]> + Clone>(
         node_keys,
     };
     Ok((subnet_id, subnet))
+}
+
+pub(crate) fn lookup_api_boundary_nodes<Storage: AsRef<[u8]> + Clone>(
+    certificate: Certificate<Storage>,
+) -> Result<Vec<ApiBoundaryNode>, AgentError> {
+    // API Boundary Node paths in the State Tree, as defined in the spec (https://github.com/dfinity/interface-spec/pull/248 to be merged soon).
+    let api_bn_path = "api_boundary_nodes".as_bytes();
+    let domain_path = "domain".as_bytes();
+    let ipv4_path = "ipv4_address".as_bytes();
+    let ipv6_path = "ipv6_address".as_bytes();
+
+    let api_bn_tree = lookup_tree(&certificate.tree, [api_bn_path])?;
+
+    let mut api_bns = Vec::<ApiBoundaryNode>::new();
+
+    for path in api_bn_tree.list_paths() {
+        let node_id = Principal::from_slice(path[0].as_bytes());
+        let node_id = node_id.as_slice();
+
+        let domain =
+            String::from_utf8(lookup_value(&api_bn_tree, [node_id, domain_path])?.to_vec())
+                .map_err(|err| AgentError::Utf8ReadError(err.utf8_error()))?;
+
+        let ipv6_address =
+            String::from_utf8(lookup_value(&api_bn_tree, [node_id, ipv6_path])?.to_vec())
+                .map_err(|err| AgentError::Utf8ReadError(err.utf8_error()))?;
+
+        let ipv4_address = match lookup_value(&api_bn_tree, [node_id, ipv4_path]) {
+            Ok(ipv4) => Some(
+                String::from_utf8(ipv4.to_vec())
+                    .map_err(|err| AgentError::Utf8ReadError(err.utf8_error()))?,
+            ),
+            // By convention an absent path `/api_boundary_nodes/<node_id>/ipv4_address` in the State Tree signifies that ipv4 is None.
+            Err(AgentError::LookupPathAbsent(_)) => None,
+            Err(err) => return Err(err),
+        };
+
+        let api_bn = ApiBoundaryNode {
+            _domain: domain,
+            _ipv6_address: ipv6_address,
+            _ipv4_address: ipv4_address,
+        };
+
+        api_bns.push(api_bn);
+    }
+    Ok(api_bns)
 }
 
 /// The path to [`lookup_value`]
