@@ -1026,7 +1026,7 @@ impl Agent {
     pub async fn fetch_api_boundary_nodes(
         &self,
         effective_canister_id: Principal,
-    ) -> Result<Arc<Vec<ApiBoundaryNode>>, AgentError> {
+    ) -> Result<Vec<ApiBoundaryNode>, AgentError> {
         let certificate = self
             .read_state_raw(
                 vec![vec!["api_boundary_nodes".into()]],
@@ -1034,7 +1034,7 @@ impl Agent {
             )
             .await?;
         let api_boundary_nodes = lookup_api_boundary_nodes(certificate)?;
-        Ok(Arc::new(api_boundary_nodes))
+        Ok(api_boundary_nodes)
     }
 }
 
@@ -1349,11 +1349,11 @@ pub(crate) struct Subnet {
 #[derive(Debug)]
 pub struct ApiBoundaryNode {
     /// Domain name
-    _domain: String,
+    pub domain: String,
     /// IPv6 address in the hexadecimal notation with colons.
-    _ipv6_address: String,
+    pub ipv6_address: String,
     /// IPv4 address in the dotted-decimal notation.
-    _ipv4_address: Option<String>,
+    pub ipv4_address: Option<String>,
 }
 
 /// A Query Request Builder.

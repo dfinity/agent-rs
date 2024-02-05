@@ -242,9 +242,9 @@ pub(crate) fn lookup_api_boundary_nodes<Storage: AsRef<[u8]> + Clone>(
         };
 
         let api_bn = ApiBoundaryNode {
-            _domain: domain,
-            _ipv6_address: ipv6_address,
-            _ipv4_address: ipv4_address,
+            domain,
+            ipv6_address,
+            ipv4_address,
         };
 
         api_bns.push(api_bn);
