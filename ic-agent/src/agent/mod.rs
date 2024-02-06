@@ -656,18 +656,64 @@ impl Agent {
         }
     }
 
+    fn get_retry_policy() -> ExponentialBackoff {
+        ExponentialBackoff {
+            initial_interval: Duration::from_millis(500),
+            max_interval: Duration::from_secs(1),
+            max_elapsed_time: Some(Duration::from_secs(60 * 5)),
+            multiplier: 1.4,
+            current_interval: Duration::from_millis(500),
+            start_time: Instant::now(),
+        }
+    }
+
+    pub async fn wait_signed(
+        &self,
+        request_id: RequestId,
+        effective_canister_id: Principal,
+        signed_request_status: Vec<u8>,
+    ) -> Result<Vec<u8>, AgentError> {
+        let mut retry_policy = get_retry_policy();
+
+            let mut request_accepted = false;
+            loop {
+                match self.request_status_signed(&request_id,effective_canister_id,signed_request_status).await? {
+                        RequestStatusResponse::Unknown => {},
+            
+                        RequestStatusResponse::Received | RequestStatusResponse::Processing => {
+                            if !request_accepted {
+                                retry_policy.reset();
+                                request_accepted = true;
+                            }
+                        }
+            
+                        RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => {
+                            return Ok(arg)
+                        }
+            
+                        RequestStatusResponse::Rejected(response) => Err(AgentError::ReplicaError(response)),
+            
+                        RequestStatusResponse::Done => Err(AgentError::RequestStatusDoneNoReply(String::from(
+                            *request_id,
+                        ))),
+                    };
+    
+                match retry_policy.next_backoff() {
+                    #[cfg(not(target_family = "wasm"))]
+                    Some(duration) => tokio::time::sleep(duration).await,
+                    None => return Err(AgentError::TimeoutWaitingForResponse()),
+                }
+            }
+    }
+
     /// Call request_status on the RequestId in a loop and return the response as a byte vector.
     pub async fn wait(
         &self,
         request_id: RequestId,
         effective_canister_id: Principal,
     ) -> Result<Vec<u8>, AgentError> {
-        let mut retry_policy = ExponentialBackoffBuilder::new()
-            .with_initial_interval(Duration::from_millis(500))
-            .with_max_interval(Duration::from_secs(1))
-            .with_multiplier(1.4)
-            .with_max_elapsed_time(Some(Duration::from_secs(60 * 5)))
-            .build();
+        let mut retry_policy = get_retry_policy();
+
         let mut request_accepted = false;
         loop {
             match self.poll(&request_id, effective_canister_id).await? {

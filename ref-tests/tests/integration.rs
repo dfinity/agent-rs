@@ -2,6 +2,7 @@
 //!
 //! Contrary to ic-ref.rs, these tests are not meant to match any other tests. They're
 //! integration tests with a running IC-Ref.
+use std::{alloc::System, sync::Arc};
 use candid::CandidType;
 use ic_agent::{
     agent::{agent_error::HttpErrorPayload, RejectCode, RejectResponse},
@@ -57,6 +58,72 @@ fn basic_expiry() {
             .expire_after(std::time::Duration::from_secs(120))
             .call_and_wait()
             .await?;
+
+        assert_eq!(result.as_slice(), b"hello");
+
+        Ok(())
+    })
+}
+
+#[ignore]
+#[test]
+fn wait_signed() {
+    with_universal_canister(|agent, canister_id| async move {
+        fn serialized_bytes(envelope:Envelope) -> Vec<u8>{
+            let mut serialized_bytes = Vec::new();
+            let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
+            serializer.self_describe().unwrap();
+            envelope.serialize(&mut serializer).unwrap()
+        }
+
+        let arg = payload().reply_data(b"hello").build();
+        let ingress_expiry = (SystemTime::now() + Duration::from_secs(120)).as_nanos() as u64;
+
+        let agent_identity = Arc:new(create_basic_identity().unwrap());
+        agent.set_arc_identity(agent_identity);
+
+
+        let call_envelope_content = EnvelopeContent::Call {
+            sender: agent.get_principal().unwrap(),
+            arg: arg.clone(),
+            ingress_expiry,
+        };
+
+        let call_request_id = call_envelope_content.to_request_id();
+        let call_signature = agent_identity.sign(call_envelope_content).unwrap();
+
+        let call_envelope = Envelope {
+            content: Cow::Borrowed(call_envelope_content),
+            sender_pubkey: call_signature.public_key,
+            sender_sig: call_signature.signature,
+            sender_delegation: call_signature.delegations,
+        };
+
+        let call_envelope_serialized = serialized_bytes(call_envelope);
+
+        agent.update_signed(canister_id,call_envelope_serialized).unwrap();
+
+
+        let paths: Vec<Vec<Label>> = vec![vec!["request_status".into(), call_request_id.to_vec().into()]];
+        let read_state_envelope_content = EnvelopeContent::ReadState {
+                sender: agent.get_principal().unwrap(),
+                paths,
+                ingress_expiry,
+            };
+
+        let read_signature = agent_identity.sign(read_state_envelope_content).unwrap();
+
+        let read_state_envelope = Envelope {
+            content: Cow::Borrowed(call_envelope_serialized),
+            sender_pubkey: read_signature.public_key,
+            sender_sig: read_signature.signature,
+            sender_delegation: read_signature.delegations,
+        };
+
+        let read_envelope_serialized = serialized_bytes(read_state_envelope);
+
+
+        let result = agent.wait_signed(call_request_id, canister_id, read_envelope_serialized).await.unwrap();
 
         assert_eq!(result.as_slice(), b"hello");
 
