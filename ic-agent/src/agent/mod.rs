@@ -657,14 +657,12 @@ impl Agent {
     }
 
     fn get_retry_policy() -> ExponentialBackoff {
-        ExponentialBackoff {
-            initial_interval: Duration::from_millis(500),
-            max_interval: Duration::from_secs(1),
-            max_elapsed_time: Some(Duration::from_secs(60 * 5)),
-            multiplier: 1.4,
-            current_interval: Duration::from_millis(500),
-            start_time: Instant::now(),
-        }
+        ExponentialBackoffBuilder::new()
+            .with_initial_interval(Duration::from_millis(500))
+            .with_max_interval(Duration::from_secs(1))
+            .with_multiplier(1.4)
+            .with_max_elapsed_time(Some(Duration::from_secs(60 * 5)))
+            .build()
     }
 
     pub async fn wait_signed(
@@ -693,12 +691,14 @@ impl Agent {
                 RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => return Ok(arg),
 
                 RequestStatusResponse::Rejected(response) => {
-                    Err(AgentError::ReplicaError(response))
+                    return Err(AgentError::ReplicaError(response))
                 }
 
-                RequestStatusResponse::Done => Err(AgentError::RequestStatusDoneNoReply(
-                    String::from(*request_id),
-                )),
+                RequestStatusResponse::Done => {
+                    return Err(AgentError::RequestStatusDoneNoReply(String::from(
+                        *request_id,
+                    )))
+                }
             };
 
             match retry_policy.next_backoff() {
