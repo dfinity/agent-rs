@@ -1517,7 +1517,7 @@ pub struct UpdateBuilder<'agent> {
 }
 
 impl<'agent> UpdateBuilder<'agent> {
-    /// Creates a new query builder with an agent for a particular canister method.
+    /// Creates a new update builder with an agent for a particular canister method.
     pub fn new(agent: &'agent Agent, canister_id: Principal, method_name: String) -> Self {
         Self {
             agent,
