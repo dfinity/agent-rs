@@ -671,7 +671,7 @@ impl Agent {
         effective_canister_id: Principal,
         signed_request_status: Vec<u8>,
     ) -> Result<Vec<u8>, AgentError> {
-        let mut retry_policy = get_retry_policy();
+        let mut retry_policy = Self::get_retry_policy();
 
         let mut request_accepted = false;
         loop {
@@ -715,7 +715,7 @@ impl Agent {
         request_id: RequestId,
         effective_canister_id: Principal,
     ) -> Result<Vec<u8>, AgentError> {
-        let mut retry_policy = get_retry_policy();
+        let mut retry_policy = Self::get_retry_policy();
 
         let mut request_accepted = false;
         loop {
