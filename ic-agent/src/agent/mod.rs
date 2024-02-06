@@ -710,6 +710,25 @@ impl Agent {
             match retry_policy.next_backoff() {
                 #[cfg(not(target_family = "wasm"))]
                 Some(duration) => tokio::time::sleep(duration).await,
+
+                #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
+                Some(duration) => {
+                    wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |rs, rj| {
+                        if let Err(e) = web_sys::window()
+                            .expect("global window unavailable")
+                            .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                &rs,
+                                duration.as_millis() as _,
+                            )
+                        {
+                            use wasm_bindgen::UnwrapThrowExt;
+                            rj.call1(&rj, &e).unwrap_throw();
+                        }
+                    }))
+                    .await
+                    .expect("unable to setTimeout");
+                }
+
                 None => return Err(AgentError::TimeoutWaitingForResponse()),
             }
         }
