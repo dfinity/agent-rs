@@ -4,10 +4,11 @@
 //! integration tests with a running IC-Ref.
 use candid::CandidType;
 use ic_agent::{
-    agent::{agent_error::HttpErrorPayload, RejectCode, RejectResponse},
+    agent::{agent_error::HttpErrorPayload, Envelope, EnvelopeContent, RejectCode, RejectResponse},
     export::Principal,
     AgentError, Identity,
 };
+use ic_certification::Label;
 use ic_utils::{
     call::{AsyncCall, SyncCall},
     interfaces::{
@@ -21,7 +22,12 @@ use ref_tests::{
     get_wallet_wasm_from_env, universal_canister::payload, with_universal_canister,
     with_wallet_canister,
 };
-use std::{alloc::System, sync::Arc};
+use serde::Serialize;
+use std::{
+    borrow::Cow,
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 #[ignore]
 #[test]
@@ -68,31 +74,37 @@ fn basic_expiry() {
 #[ignore]
 #[test]
 fn wait_signed() {
-    with_universal_canister(|agent, canister_id| async move {
+    with_universal_canister(|mut agent, canister_id| async move {
         fn serialized_bytes(envelope: Envelope) -> Vec<u8> {
             let mut serialized_bytes = Vec::new();
             let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
             serializer.self_describe().unwrap();
-            envelope.serialize(&mut serializer).unwrap()
+            envelope.serialize(&mut serializer).unwrap();
+            serialized_bytes
         }
 
         let arg = payload().reply_data(b"hello").build();
-        let ingress_expiry = (SystemTime::now() + Duration::from_secs(120)).as_nanos() as u64;
+        let ingress_expiry = (SystemTime::now().duration_since(UNIX_EPOCH).unwrap()
+            + Duration::from_secs(120))
+        .as_nanos() as u64;
 
-        let agent_identity = create_basic_identity().unwrap().into();
-        agent.set_arc_identity(agent_identity);
+        let agent_identity = Arc::new(create_basic_identity().unwrap());
+        agent.set_arc_identity(agent_identity.clone());
 
         let call_envelope_content = EnvelopeContent::Call {
             sender: agent.get_principal().unwrap(),
             arg: arg.clone(),
             ingress_expiry,
+            nonce: None,
+            canister_id,
+            method_name: "update".to_string(),
         };
 
         let call_request_id = call_envelope_content.to_request_id();
-        let call_signature = agent_identity.sign(call_envelope_content).unwrap();
+        let call_signature = agent_identity.sign(&call_envelope_content).unwrap();
 
         let call_envelope = Envelope {
-            content: Cow::Borrowed(call_envelope_content),
+            content: Cow::Borrowed(&call_envelope_content),
             sender_pubkey: call_signature.public_key,
             sender_sig: call_signature.signature,
             sender_delegation: call_signature.delegations,
@@ -102,6 +114,7 @@ fn wait_signed() {
 
         agent
             .update_signed(canister_id, call_envelope_serialized)
+            .await
             .unwrap();
 
         let paths: Vec<Vec<Label>> = vec![vec![
@@ -114,10 +127,10 @@ fn wait_signed() {
             ingress_expiry,
         };
 
-        let read_signature = agent_identity.sign(read_state_envelope_content).unwrap();
+        let read_signature = agent_identity.sign(&read_state_envelope_content).unwrap();
 
         let read_state_envelope = Envelope {
-            content: Cow::Borrowed(call_envelope_serialized),
+            content: Cow::Borrowed(&read_state_envelope_content),
             sender_pubkey: read_signature.public_key,
             sender_sig: read_signature.signature,
             sender_delegation: read_signature.delegations,
@@ -126,7 +139,7 @@ fn wait_signed() {
         let read_envelope_serialized = serialized_bytes(read_state_envelope);
 
         let result = agent
-            .wait_signed(call_request_id, canister_id, read_envelope_serialized)
+            .wait_signed(&call_request_id, canister_id, read_envelope_serialized)
             .await
             .unwrap();
 

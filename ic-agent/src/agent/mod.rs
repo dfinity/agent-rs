@@ -33,8 +33,8 @@ use crate::{
     identity::Identity,
     to_request_id, RequestId,
 };
-use backoff::exponential::ExponentialBackoff;
 use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
+use backoff::{exponential::ExponentialBackoff, SystemClock};
 use ic_certification::{Certificate, Delegation, Label};
 use ic_transport_types::{
     signed::{SignedQuery, SignedRequestStatus, SignedUpdate},
@@ -657,7 +657,7 @@ impl Agent {
         }
     }
 
-    fn get_retry_policy() -> ExponentialBackoff {
+    fn get_retry_policy() -> ExponentialBackoff<SystemClock> {
         ExponentialBackoffBuilder::new()
             .with_initial_interval(Duration::from_millis(500))
             .with_max_interval(Duration::from_secs(1))
@@ -666,6 +666,7 @@ impl Agent {
             .build()
     }
 
+    /// Wait for request_status to return a Replied response and return the arg.
     pub async fn wait_signed(
         &self,
         request_id: &RequestId,
@@ -677,7 +678,11 @@ impl Agent {
         let mut request_accepted = false;
         loop {
             match self
-                .request_status_signed(request_id, effective_canister_id, signed_request_status)
+                .request_status_signed(
+                    request_id,
+                    effective_canister_id,
+                    signed_request_status.clone(),
+                )
                 .await?
             {
                 RequestStatusResponse::Unknown => {}

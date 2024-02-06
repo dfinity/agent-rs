@@ -1822,6 +1822,7 @@ version = "0.0.0"
 dependencies = [
  "candid",
  "ic-agent",
+ "ic-certification",
  "ic-identity-hsm",
  "ic-utils",
  "ring",
