@@ -675,35 +675,38 @@ impl Agent {
     ) -> Result<Vec<u8>, AgentError> {
         let mut retry_policy = get_retry_policy();
 
-            let mut request_accepted = false;
-            loop {
-                match self.request_status_signed(&request_id,effective_canister_id,signed_request_status).await? {
-                        RequestStatusResponse::Unknown => {},
-            
-                        RequestStatusResponse::Received | RequestStatusResponse::Processing => {
-                            if !request_accepted {
-                                retry_policy.reset();
-                                request_accepted = true;
-                            }
-                        }
-            
-                        RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => {
-                            return Ok(arg)
-                        }
-            
-                        RequestStatusResponse::Rejected(response) => Err(AgentError::ReplicaError(response)),
-            
-                        RequestStatusResponse::Done => Err(AgentError::RequestStatusDoneNoReply(String::from(
-                            *request_id,
-                        ))),
-                    };
-    
-                match retry_policy.next_backoff() {
-                    #[cfg(not(target_family = "wasm"))]
-                    Some(duration) => tokio::time::sleep(duration).await,
-                    None => return Err(AgentError::TimeoutWaitingForResponse()),
+        let mut request_accepted = false;
+        loop {
+            match self
+                .request_status_signed(&request_id, effective_canister_id, signed_request_status)
+                .await?
+            {
+                RequestStatusResponse::Unknown => {}
+
+                RequestStatusResponse::Received | RequestStatusResponse::Processing => {
+                    if !request_accepted {
+                        retry_policy.reset();
+                        request_accepted = true;
+                    }
                 }
+
+                RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => return Ok(arg),
+
+                RequestStatusResponse::Rejected(response) => {
+                    Err(AgentError::ReplicaError(response))
+                }
+
+                RequestStatusResponse::Done => Err(AgentError::RequestStatusDoneNoReply(
+                    String::from(*request_id),
+                )),
+            };
+
+            match retry_policy.next_backoff() {
+                #[cfg(not(target_family = "wasm"))]
+                Some(duration) => tokio::time::sleep(duration).await,
+                None => return Err(AgentError::TimeoutWaitingForResponse()),
             }
+        }
     }
 
     /// Call request_status on the RequestId in a loop and return the response as a byte vector.

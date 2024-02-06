@@ -2,7 +2,6 @@
 //!
 //! Contrary to ic-ref.rs, these tests are not meant to match any other tests. They're
 //! integration tests with a running IC-Ref.
-use std::{alloc::System, sync::Arc};
 use candid::CandidType;
 use ic_agent::{
     agent::{agent_error::HttpErrorPayload, RejectCode, RejectResponse},
@@ -22,6 +21,7 @@ use ref_tests::{
     get_wallet_wasm_from_env, universal_canister::payload, with_universal_canister,
     with_wallet_canister,
 };
+use std::{alloc::System, sync::Arc};
 
 #[ignore]
 #[test]
@@ -69,7 +69,7 @@ fn basic_expiry() {
 #[test]
 fn wait_signed() {
     with_universal_canister(|agent, canister_id| async move {
-        fn serialized_bytes(envelope:Envelope) -> Vec<u8>{
+        fn serialized_bytes(envelope: Envelope) -> Vec<u8> {
             let mut serialized_bytes = Vec::new();
             let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
             serializer.self_describe().unwrap();
@@ -79,9 +79,8 @@ fn wait_signed() {
         let arg = payload().reply_data(b"hello").build();
         let ingress_expiry = (SystemTime::now() + Duration::from_secs(120)).as_nanos() as u64;
 
-        let agent_identity = Arc:new(create_basic_identity().unwrap());
+        let agent_identity = create_basic_identity().unwrap().into();
         agent.set_arc_identity(agent_identity);
-
 
         let call_envelope_content = EnvelopeContent::Call {
             sender: agent.get_principal().unwrap(),
@@ -101,15 +100,19 @@ fn wait_signed() {
 
         let call_envelope_serialized = serialized_bytes(call_envelope);
 
-        agent.update_signed(canister_id,call_envelope_serialized).unwrap();
+        agent
+            .update_signed(canister_id, call_envelope_serialized)
+            .unwrap();
 
-
-        let paths: Vec<Vec<Label>> = vec![vec!["request_status".into(), call_request_id.to_vec().into()]];
+        let paths: Vec<Vec<Label>> = vec![vec![
+            "request_status".into(),
+            call_request_id.to_vec().into(),
+        ]];
         let read_state_envelope_content = EnvelopeContent::ReadState {
-                sender: agent.get_principal().unwrap(),
-                paths,
-                ingress_expiry,
-            };
+            sender: agent.get_principal().unwrap(),
+            paths,
+            ingress_expiry,
+        };
 
         let read_signature = agent_identity.sign(read_state_envelope_content).unwrap();
 
@@ -122,8 +125,10 @@ fn wait_signed() {
 
         let read_envelope_serialized = serialized_bytes(read_state_envelope);
 
-
-        let result = agent.wait_signed(call_request_id, canister_id, read_envelope_serialized).await.unwrap();
+        let result = agent
+            .wait_signed(call_request_id, canister_id, read_envelope_serialized)
+            .await
+            .unwrap();
 
         assert_eq!(result.as_slice(), b"hello");
 
