@@ -33,6 +33,7 @@ use crate::{
     identity::Identity,
     to_request_id, RequestId,
 };
+use backoff::exponential::ExponentialBackoff;
 use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
 use ic_certification::{Certificate, Delegation, Label};
 use ic_transport_types::{
@@ -667,7 +668,7 @@ impl Agent {
 
     pub async fn wait_signed(
         &self,
-        request_id: RequestId,
+        request_id: &RequestId,
         effective_canister_id: Principal,
         signed_request_status: Vec<u8>,
     ) -> Result<Vec<u8>, AgentError> {
@@ -676,7 +677,7 @@ impl Agent {
         let mut request_accepted = false;
         loop {
             match self
-                .request_status_signed(&request_id, effective_canister_id, signed_request_status)
+                .request_status_signed(request_id, effective_canister_id, signed_request_status)
                 .await?
             {
                 RequestStatusResponse::Unknown => {}
