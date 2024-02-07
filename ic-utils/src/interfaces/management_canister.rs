@@ -5,11 +5,12 @@
 use crate::{call::AsyncCall, Canister};
 use candid::{CandidType, Deserialize, Nat};
 use ic_agent::{export::Principal, Agent};
-use std::{convert::AsRef, fmt::Debug, ops::Deref};
+use std::{convert::AsRef, ops::Deref};
 use strum_macros::{AsRefStr, EnumString};
 
 pub mod attributes;
 pub mod builders;
+mod serde_impls;
 #[doc(inline)]
 pub use builders::{
     CreateCanisterBuilder, InstallBuilder, InstallChunkedCodeBuilder, InstallCodeBuilder,
@@ -139,6 +140,14 @@ pub struct DefiniteCanisterSettings {
 #[derive(Clone, Debug, Deserialize, CandidType)]
 pub struct UploadChunkResult {
     /// The hash of the uploaded chunk.
+    #[serde(with = "serde_bytes")]
+    pub hash: ChunkHash,
+}
+
+/// The result of a [`ManagementCanister::stored_chunks`] call.
+#[derive(Clone, Debug)]
+pub struct ChunkInfo {
+    /// The hash of the stored chunk.
     pub hash: ChunkHash,
 }
 
@@ -367,7 +376,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn stored_chunks(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<(Vec<ChunkHash>,)> {
+    ) -> impl 'agent + AsyncCall<(Vec<ChunkInfo>,)> {
         #[derive(CandidType)]
         struct Argument<'a> {
             canister_id: &'a Principal,
