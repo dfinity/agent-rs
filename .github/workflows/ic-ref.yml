@@ -32,7 +32,7 @@ jobs:
           dfx-version: "0.16.1"
 
       - name: Cargo cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
