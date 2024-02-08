@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - latest-dfx
   pull_request:
 
 jobs:
@@ -26,7 +27,7 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: Install dfx
-        uses: dfinity/setup-dfx@main
+        uses: dfinity/setup-dfx@use-dfxvm
         with:
           dfx-version: "0.15.3-largewasm.0"
 
