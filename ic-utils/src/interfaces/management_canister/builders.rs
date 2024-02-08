@@ -741,7 +741,7 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
                     )
                 } else {
                     let (existing_chunks,) = self.canister.stored_chunks(&self.canister_id).call_and_wait().await?;
-                    let existing_chunks = existing_chunks.into_iter().collect::<BTreeSet<_>>();
+                    let existing_chunks = existing_chunks.into_iter().map(|c| c.hash).collect::<BTreeSet<_>>();
                     let to_upload_chunks_ordered = self.wasm.chunks(1024 * 1024).map(|x| (<[u8; 32]>::from(Sha256::digest(x)), x)).collect::<Vec<_>>();
                     let to_upload_chunks = to_upload_chunks_ordered.iter().map(|&(k, v)| (k, v)).collect::<BTreeMap<_, _>>();
                     let (new_chunks, setup) = if existing_chunks.iter().all(|hash| to_upload_chunks.contains_key(hash)) {
