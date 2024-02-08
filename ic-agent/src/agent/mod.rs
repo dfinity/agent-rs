@@ -73,6 +73,17 @@ type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + '
 ///
 /// Any error returned by these methods will bubble up to the code that called the [Agent].
 pub trait Transport: Send + Sync {
+    /// Sends a potentially synchronous request to a replica. The Request ID is non-mutable and
+    /// depends on the content of the envelope.
+    ///
+    /// This normally corresponds to the `/api/v2/canister/<effective_canister_id>/sync_call` endpoint.
+    fn sync_call(
+        &self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+        request_id: RequestId,
+    ) -> AgentFuture<Option<Vec<u8>>>;
+
     /// Sends an asynchronous request to a replica. The Request ID is non-mutable and
     /// depends on the content of the envelope.
     ///
@@ -113,6 +124,14 @@ pub trait Transport: Send + Sync {
 }
 
 impl<I: Transport + ?Sized> Transport for Box<I> {
+    fn sync_call(
+        &self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+        request_id: RequestId,
+    ) -> AgentFuture<Option<Vec<u8>>> {
+        (**self).sync_call(effective_canister_id, envelope, request_id)
+    }
     fn call(
         &self,
         effective_canister_id: Principal,
@@ -139,6 +158,14 @@ impl<I: Transport + ?Sized> Transport for Box<I> {
     }
 }
 impl<I: Transport + ?Sized> Transport for Arc<I> {
+    fn sync_call(
+        &self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+        request_id: RequestId,
+    ) -> AgentFuture<Option<Vec<u8>>> {
+        (**self).sync_call(effective_canister_id, envelope, request_id)
+    }
     fn call(
         &self,
         effective_canister_id: Principal,

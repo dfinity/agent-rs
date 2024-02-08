@@ -1,7 +1,7 @@
 //! A [`Transport`] that connects using a [`reqwest`] client.
 #![cfg(feature = "reqwest")]
 
-use ic_transport_types::RejectResponse;
+use ic_transport_types::{CallResponse, RejectResponse};
 pub use reqwest;
 
 use futures_util::StreamExt;
@@ -125,7 +125,7 @@ impl ReqwestTransport {
         method: Method,
         endpoint: &str,
         body: Option<Vec<u8>>,
-    ) -> Result<Vec<u8>, AgentError> {
+    ) -> Result<(Vec<u8>, StatusCode), AgentError> {
         let url = self.route_provider.route()?.join(endpoint)?;
         let mut http_request = Request::new(method, url);
         http_request
@@ -139,19 +139,7 @@ impl ReqwestTransport {
         let headers = request_result.1;
         let body = request_result.2;
 
-        // status == OK means we have an error message for call requests
-        // see https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call
-        if status == StatusCode::OK && endpoint.ends_with("call") {
-            let cbor_decoded_body: Result<RejectResponse, serde_cbor::Error> =
-                serde_cbor::from_slice(&body);
-
-            let agent_error = match cbor_decoded_body {
-                Ok(replica_error) => AgentError::ReplicaError(replica_error),
-                Err(cbor_error) => AgentError::InvalidCborData(cbor_error),
-            };
-
-            Err(agent_error)
-        } else if status.is_client_error() || status.is_server_error() {
+        if status.is_client_error() || status.is_server_error() {
             Err(AgentError::HttpError(HttpErrorPayload {
                 status: status.into(),
                 content_type: headers
@@ -161,7 +149,7 @@ impl ReqwestTransport {
                 content: body,
             }))
         } else {
-            Ok(body)
+            Ok((body, status))
         }
     }
 }
@@ -176,8 +164,54 @@ impl Transport for ReqwestTransport {
         Box::pin(async move {
             let endpoint = format!("canister/{}/call", effective_canister_id.to_text());
             self.execute(Method::POST, &endpoint, Some(envelope))
-                .await?;
-            Ok(())
+                .await
+                .and_then(|(body, status)| {
+                    // status == OK means we have an error message for call requests
+                    // See https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call
+                    if status == StatusCode::OK {
+                        let cbor_decoded_body: Result<RejectResponse, serde_cbor::Error> =
+                            serde_cbor::from_slice(&body);
+
+                        let agent_error = match cbor_decoded_body {
+                            Ok(replica_error) => AgentError::ReplicaError(replica_error),
+                            Err(cbor_error) => AgentError::InvalidCborData(cbor_error),
+                        };
+
+                        Err(agent_error)
+                    } else {
+                        Ok(())
+                    }
+                })
+        })
+    }
+
+    fn sync_call(
+        &self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+        _request_id: RequestId,
+    ) -> AgentFuture<Option<Vec<u8>>> {
+        Box::pin(async move {
+            let endpoint = format!("canister/{}/call", effective_canister_id.to_text());
+            self.execute(Method::POST, &endpoint, Some(envelope))
+                .await
+                .and_then(|(body, status)| {
+                    if status == StatusCode::OK {
+                        let cbor_decoded_body: Result<CallResponse, serde_cbor::Error> =
+                            serde_cbor::from_slice(&body);
+
+                        match cbor_decoded_body {
+                            Ok(CallResponse::Replied { certificate }) => Ok(Some(certificate)),
+                            Ok(CallResponse::Rejected { reject_response }) => {
+                                Err(AgentError::ReplicaError(reject_response))
+                            }
+                            Err(cbor_error) => Err(AgentError::InvalidCborData(cbor_error)),
+                        }
+                    // StatusCode == StatusCode::ACCEPTED
+                    } else {
+                        Ok(None)
+                    }
+                })
         })
     }
 
@@ -188,26 +222,36 @@ impl Transport for ReqwestTransport {
     ) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
             let endpoint = format!("canister/{effective_canister_id}/read_state");
-            self.execute(Method::POST, &endpoint, Some(envelope)).await
+            self.execute(Method::POST, &endpoint, Some(envelope))
+                .await
+                .map(|(body, _)| body)
         })
     }
 
     fn read_subnet_state(&self, subnet_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
             let endpoint = format!("subnet/{subnet_id}/read_state");
-            self.execute(Method::POST, &endpoint, Some(envelope)).await
+            self.execute(Method::POST, &endpoint, Some(envelope))
+                .await
+                .map(|(body, _)| body)
         })
     }
 
     fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
             let endpoint = format!("canister/{effective_canister_id}/query");
-            self.execute(Method::POST, &endpoint, Some(envelope)).await
+            self.execute(Method::POST, &endpoint, Some(envelope))
+                .await
+                .map(|(body, _)| body)
         })
     }
 
     fn status(&self) -> AgentFuture<Vec<u8>> {
-        Box::pin(async move { self.execute(Method::GET, "status", None).await })
+        Box::pin(async move {
+            self.execute(Method::GET, "status", None)
+                .await
+                .map(|(body, _)| body)
+        })
     }
 }
 

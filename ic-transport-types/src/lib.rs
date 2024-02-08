@@ -120,6 +120,26 @@ pub struct ReadStateResponse {
 /// Possible responses to a query call.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
+pub enum CallResponse {
+    /// The request was successfully replied to.
+    Replied {
+        /// A [certificate](https://internetcomputer.org/docs/current/references/ic-interface-spec#certificate), containing
+        /// part of the system state tree as well as a signature to verify its authenticity.
+        /// Use the [`ic-certification`](https://docs.rs/ic-certification) crate to process it.
+        #[serde(with = "serde_bytes")]
+        certificate: Vec<u8>,
+    },
+    /// The request was rejected.
+    Rejected {
+        /// The rejection from the canister.
+        #[serde(flatten)]
+        reject_response: RejectResponse,
+    },
+}
+
+/// Possible responses to a query call.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
 pub enum QueryResponse {
     /// The request was successfully replied to.
     Replied {
