@@ -7,7 +7,7 @@
 use std::borrow::Cow;
 
 use candid::Principal;
-use ic_certification::Label;
+use ic_certification::{certificate, Label};
 pub use request_id::{to_request_id, RequestId, RequestIdError};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -116,25 +116,34 @@ pub struct ReadStateResponse {
     #[serde(with = "serde_bytes")]
     pub certificate: Vec<u8>,
 }
+/// A [certificate](https://internetcomputer.org/docs/current/references/ic-interface-spec#certificate), containing
+/// part of the system state tree as well as a signature to verify its authenticity.
+/// Use the [`ic-certification`](https://docs.rs/ic-certification) crate to process it.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Certificate(#[serde(with = "serde_bytes")] pub Vec<u8>);
 
-/// Possible responses to a query call.
+/// Possible responses from a canister to a call.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
-pub enum CallResponse {
+pub enum SyncCallResponse {
     /// The request was successfully replied to.
-    Replied {
-        /// A [certificate](https://internetcomputer.org/docs/current/references/ic-interface-spec#certificate), containing
-        /// part of the system state tree as well as a signature to verify its authenticity.
-        /// Use the [`ic-certification`](https://docs.rs/ic-certification) crate to process it.
-        #[serde(with = "serde_bytes")]
-        certificate: Vec<u8>,
-    },
+    Replied(ReplyResponse),
     /// The request was rejected.
     Rejected {
         /// The rejection from the canister.
         #[serde(flatten)]
         reject_response: RejectResponse,
     },
+}
+
+/// Possible responses to a query call.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum CallResponse {
+    /// A certified response from the canister.
+    CertifiedResponse(Certificate),
+    /// The replica timed out the sync request. The status of the request must be polled.
+    Accepted(RequestId),
 }
 
 /// Possible responses to a query call.
