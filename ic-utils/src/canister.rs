@@ -88,17 +88,17 @@ pub struct Canister<'agent> {
 impl<'agent> Canister<'agent> {
     /// Get the canister ID of this canister.
     /// Prefer using [`canister_id`](Canister::canister_id) instead.
-    pub fn canister_id_<'canister: 'agent>(&'canister self) -> &Principal {
+    pub fn canister_id_(&self) -> &Principal {
         &self.canister_id
     }
 
     /// Get the canister ID of this canister.
-    pub fn canister_id<'canister: 'agent>(&'canister self) -> &Principal {
+    pub fn canister_id(&self) -> &Principal {
         &self.canister_id
     }
 
     /// Create an AsyncCallBuilder to do an update call.
-    pub fn update_<'canister: 'agent>(
+    pub fn update_<'canister>(
         &'canister self,
         method_name: &str,
     ) -> AsyncCallBuilder<'agent, 'canister> {
@@ -107,7 +107,7 @@ impl<'agent> Canister<'agent> {
 
     /// Create an AsyncCallBuilder to do an update call.
     /// Prefer using [`update`](Canister::update) instead.
-    pub fn update<'canister: 'agent>(
+    pub fn update<'canister>(
         &'canister self,
         method_name: &str,
     ) -> AsyncCallBuilder<'agent, 'canister> {
@@ -116,7 +116,7 @@ impl<'agent> Canister<'agent> {
 
     /// Create a SyncCallBuilder to do a query call.
     /// Prefer using [`query`](Canister::query) instead.
-    pub fn query_<'canister: 'agent>(
+    pub fn query_<'canister>(
         &'canister self,
         method_name: &str,
     ) -> SyncCallBuilder<'agent, 'canister> {
@@ -124,7 +124,7 @@ impl<'agent> Canister<'agent> {
     }
 
     /// Create a SyncCallBuilder to do a query call.
-    pub fn query<'canister: 'agent>(
+    pub fn query<'canister>(
         &'canister self,
         method_name: &str,
     ) -> SyncCallBuilder<'agent, 'canister> {
@@ -132,7 +132,7 @@ impl<'agent> Canister<'agent> {
     }
 
     /// Call request_status on the RequestId in a loop and return the response as a byte vector.
-    pub async fn wait<'canister: 'agent>(
+    pub async fn wait<'canister>(
         &'canister self,
         request_id: RequestId,
     ) -> Result<Vec<u8>, AgentError> {
@@ -232,14 +232,14 @@ impl Argument {
 ///
 /// See [SyncCaller] for a description of this structure once built.
 #[derive(Debug)]
-pub struct SyncCallBuilder<'agent, 'canister: 'agent> {
+pub struct SyncCallBuilder<'agent, 'canister> {
     canister: &'canister Canister<'agent>,
     method_name: String,
     effective_canister_id: Principal,
     arg: Argument,
 }
 
-impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
+impl<'agent: 'canister, 'canister> SyncCallBuilder<'agent, 'canister> {
     /// Create a new instance of an AsyncCallBuilder.
     pub(super) fn new<M: Into<String>>(
         canister: &'canister Canister<'agent>,
@@ -254,9 +254,9 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
     }
 }
 
-impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
+impl<'agent: 'canister, 'canister> SyncCallBuilder<'agent, 'canister> {
     /// Set the argument with candid argument. Can be called at most once.
-    pub fn with_arg<Argument>(mut self, arg: Argument) -> SyncCallBuilder<'agent, 'canister>
+    pub fn with_arg<Argument>(mut self, arg: Argument) -> Self
     where
         Argument: CandidType + Sync + Send,
     {
@@ -264,7 +264,7 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
         self
     }
     /// Set the argument with multiple arguments as tuple. Can be called at most once.
-    pub fn with_args(mut self, tuple: impl ArgumentEncoder) -> SyncCallBuilder<'agent, 'canister> {
+    pub fn with_args(mut self, tuple: impl ArgumentEncoder) -> Self {
         if self.arg.0.is_some() {
             panic!("argument is being set more than once");
         }
@@ -275,28 +275,25 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
     /// Set the argument with IDLValue argument. Can be called at most once.
     ///
     /// TODO: make this method unnecessary ([#132](https://github.com/dfinity/agent-rs/issues/132))
-    pub fn with_value_arg(mut self, arg: IDLValue) -> SyncCallBuilder<'agent, 'canister> {
+    pub fn with_value_arg(mut self, arg: IDLValue) -> Self {
         self.arg.set_value_arg(arg);
         self
     }
 
     /// Set the argument with raw argument bytes. Can be called at most once.
-    pub fn with_arg_raw(mut self, arg: Vec<u8>) -> SyncCallBuilder<'agent, 'canister> {
+    pub fn with_arg_raw(mut self, arg: Vec<u8>) -> Self {
         self.arg.set_raw_arg(arg);
         self
     }
 
     /// Sets the [effective canister ID](https://internetcomputer.org/docs/references/current/ic-interface-spec#http-effective-canister-id) of the destination.
-    pub fn with_effective_canister_id(
-        mut self,
-        canister_id: Principal,
-    ) -> SyncCallBuilder<'agent, 'canister> {
+    pub fn with_effective_canister_id(mut self, canister_id: Principal) -> Self {
         self.effective_canister_id = canister_id;
         self
     }
 
     /// Builds a [SyncCaller] from this builder's state.
-    pub fn build<Output>(self) -> SyncCaller<'canister, Output>
+    pub fn build<Output>(self) -> SyncCaller<'agent, Output>
     where
         Output: for<'de> ArgumentDecoder<'de> + Send + Sync,
     {
@@ -317,14 +314,14 @@ impl<'agent, 'canister: 'agent> SyncCallBuilder<'agent, 'canister> {
 ///
 /// See [AsyncCaller] for a description of this structure.
 #[derive(Debug)]
-pub struct AsyncCallBuilder<'agent, 'canister: 'agent> {
+pub struct AsyncCallBuilder<'agent, 'canister> {
     canister: &'canister Canister<'agent>,
     method_name: String,
     effective_canister_id: Principal,
     arg: Argument,
 }
 
-impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
+impl<'agent: 'canister, 'canister> AsyncCallBuilder<'agent, 'canister> {
     /// Create a new instance of an AsyncCallBuilder.
     pub(super) fn new(
         canister: &'canister Canister<'agent>,
@@ -339,9 +336,9 @@ impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
     }
 }
 
-impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
+impl<'agent: 'canister, 'canister> AsyncCallBuilder<'agent, 'canister> {
     /// Set the argument with Candid argument. Can be called at most once.
-    pub fn with_arg<Argument>(mut self, arg: Argument) -> AsyncCallBuilder<'agent, 'canister>
+    pub fn with_arg<Argument>(mut self, arg: Argument) -> Self
     where
         Argument: CandidType + Sync + Send,
     {
@@ -349,7 +346,7 @@ impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
         self
     }
     /// Set the argument with multiple arguments as tuple. Can be called at most once.
-    pub fn with_args(mut self, tuple: impl ArgumentEncoder) -> AsyncCallBuilder<'agent, 'canister> {
+    pub fn with_args(mut self, tuple: impl ArgumentEncoder) -> Self {
         if self.arg.0.is_some() {
             panic!("argument is being set more than once");
         }
@@ -358,22 +355,19 @@ impl<'agent, 'canister: 'agent> AsyncCallBuilder<'agent, 'canister> {
     }
 
     /// Set the argument with raw argument bytes. Can be called at most once.
-    pub fn with_arg_raw(mut self, arg: Vec<u8>) -> AsyncCallBuilder<'agent, 'canister> {
+    pub fn with_arg_raw(mut self, arg: Vec<u8>) -> Self {
         self.arg.set_raw_arg(arg);
         self
     }
 
     /// Sets the [effective canister ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-canister-id) of the destination.
-    pub fn with_effective_canister_id(
-        mut self,
-        canister_id: Principal,
-    ) -> AsyncCallBuilder<'agent, 'canister> {
+    pub fn with_effective_canister_id(mut self, canister_id: Principal) -> Self {
         self.effective_canister_id = canister_id;
         self
     }
 
     /// Builds an [AsyncCaller] from this builder's state.
-    pub fn build<Output>(self) -> AsyncCaller<'canister, Output>
+    pub fn build<Output>(self) -> AsyncCaller<'agent, Output>
     where
         Output: for<'de> ArgumentDecoder<'de> + Send + Sync,
     {

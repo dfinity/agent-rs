@@ -8,8 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-* Added query stats to `StatusCallResult`.
+* Changed the return type of `stored_chunks` to a struct.
+* Added a prime256v1-based `Identity` impl to complement the ed25519 and secp256k1 `Identity` impls.
 * Added serde and candid serialization traits to the `Status` type.
+* 
+## [0.32.0] - 2024-01-18
+
+* Added the chunked wasm API to ic-utils. Existing code that uses `install_code` should probably update to `install`, which works the same but silently handles large wasm modules.
+* Added query stats to `StatusCallResult`.
+* Upgraded `ic-certification` to v2.2.
 
 ## [0.31.0] - 2023-11-27
 

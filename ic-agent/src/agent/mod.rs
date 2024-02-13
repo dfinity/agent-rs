@@ -34,6 +34,7 @@ use crate::{
     to_request_id, RequestId,
 };
 use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
+use backoff::{exponential::ExponentialBackoff, SystemClock};
 use ic_certification::{Certificate, Delegation, Label};
 use ic_transport_types::{
     signed::{SignedQuery, SignedRequestStatus, SignedUpdate},
@@ -656,18 +657,91 @@ impl Agent {
         }
     }
 
+    fn get_retry_policy() -> ExponentialBackoff<SystemClock> {
+        ExponentialBackoffBuilder::new()
+            .with_initial_interval(Duration::from_millis(500))
+            .with_max_interval(Duration::from_secs(1))
+            .with_multiplier(1.4)
+            .with_max_elapsed_time(Some(Duration::from_secs(60 * 5)))
+            .build()
+    }
+
+    /// Wait for request_status to return a Replied response and return the arg.
+    pub async fn wait_signed(
+        &self,
+        request_id: &RequestId,
+        effective_canister_id: Principal,
+        signed_request_status: Vec<u8>,
+    ) -> Result<Vec<u8>, AgentError> {
+        let mut retry_policy = Self::get_retry_policy();
+
+        let mut request_accepted = false;
+        loop {
+            match self
+                .request_status_signed(
+                    request_id,
+                    effective_canister_id,
+                    signed_request_status.clone(),
+                )
+                .await?
+            {
+                RequestStatusResponse::Unknown => {}
+
+                RequestStatusResponse::Received | RequestStatusResponse::Processing => {
+                    if !request_accepted {
+                        retry_policy.reset();
+                        request_accepted = true;
+                    }
+                }
+
+                RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => return Ok(arg),
+
+                RequestStatusResponse::Rejected(response) => {
+                    return Err(AgentError::ReplicaError(response))
+                }
+
+                RequestStatusResponse::Done => {
+                    return Err(AgentError::RequestStatusDoneNoReply(String::from(
+                        *request_id,
+                    )))
+                }
+            };
+
+            match retry_policy.next_backoff() {
+                #[cfg(not(target_family = "wasm"))]
+                Some(duration) => tokio::time::sleep(duration).await,
+
+                #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
+                Some(duration) => {
+                    wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |rs, rj| {
+                        if let Err(e) = web_sys::window()
+                            .expect("global window unavailable")
+                            .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                &rs,
+                                duration.as_millis() as _,
+                            )
+                        {
+                            use wasm_bindgen::UnwrapThrowExt;
+                            rj.call1(&rj, &e).unwrap_throw();
+                        }
+                    }))
+                    .await
+                    .expect("unable to setTimeout");
+                }
+
+                None => return Err(AgentError::TimeoutWaitingForResponse()),
+            }
+        }
+    }
+
     /// Call request_status on the RequestId in a loop and return the response as a byte vector.
     pub async fn wait(
         &self,
         request_id: RequestId,
         effective_canister_id: Principal,
     ) -> Result<Vec<u8>, AgentError> {
-        let mut retry_policy = ExponentialBackoffBuilder::new()
-            .with_initial_interval(Duration::from_millis(500))
-            .with_max_interval(Duration::from_secs(1))
-            .with_multiplier(1.4)
-            .with_max_elapsed_time(Some(Duration::from_secs(60 * 5)))
-            .build();
+        let mut retry_policy = Self::get_retry_policy();
+
         let mut request_accepted = false;
         loop {
             match self.poll(&request_id, effective_canister_id).await? {
@@ -813,6 +887,9 @@ impl Agent {
             Some(delegation) => {
                 let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;
+                if cert.delegation.is_some() {
+                    return Err(AgentError::CertificateHasTooManyDelegations);
+                }
                 self.verify(&cert, effective_canister_id)?;
                 let canister_range_lookup = [
                     "subnet".as_bytes(),
@@ -845,8 +922,11 @@ impl Agent {
         match delegation {
             None => Ok(self.read_root_key()),
             Some(delegation) => {
-                let cert = serde_cbor::from_slice(&delegation.certificate)
+                let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;
+                if cert.delegation.is_some() {
+                    return Err(AgentError::CertificateHasTooManyDelegations);
+                }
                 self.verify_for_subnet(&cert, subnet_id)?;
                 let public_key_path = [
                     "subnet".as_bytes(),
@@ -1511,7 +1591,7 @@ pub struct UpdateBuilder<'agent> {
 }
 
 impl<'agent> UpdateBuilder<'agent> {
-    /// Creates a new query builder with an agent for a particular canister method.
+    /// Creates a new update builder with an agent for a particular canister method.
     pub fn new(agent: &'agent Agent, canister_id: Principal, method_name: String) -> Self {
         Self {
             agent,
