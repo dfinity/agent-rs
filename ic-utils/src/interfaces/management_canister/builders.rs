@@ -33,7 +33,7 @@ pub struct CanisterSettings {
     pub controllers: Option<Vec<Principal>>,
     /// The allocation percentage (between 0 and 100 inclusive) for *guaranteed* compute capacity.
     ///
-    /// The settings update will be rejected if the IC can't commit to allocating this much compupte capacity.
+    /// The settings update will be rejected if the IC can't commit to allocating this much compute capacity.
     ///
     /// If unspecified and a canister is being created with these settings, defaults to 0, i.e. best-effort.
     pub compute_allocation: Option<Nat>,
@@ -392,7 +392,7 @@ pub enum InstallMode {
     #[serde(rename = "upgrade")]
     Upgrade {
         /// If true, skip a canister's `#[pre_upgrade]` function.
-        skip_pre_upgrade: bool,
+        skip_pre_upgrade: Option<bool>,
     },
 }
 
@@ -419,7 +419,7 @@ impl FromStr for InstallMode {
             "install" => Ok(InstallMode::Install),
             "reinstall" => Ok(InstallMode::Reinstall),
             "upgrade" => Ok(InstallMode::Upgrade {
-                skip_pre_upgrade: false,
+                skip_pre_upgrade: Some(false),
             }),
             &_ => Err(format!("Invalid install mode: {}", s)),
         }

@@ -25,7 +25,7 @@ jobs:
             binary_path: target/x86_64-apple-darwin/release
             binary_files: icx
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v4
 
     - name: Setup environment variables
       run: |
