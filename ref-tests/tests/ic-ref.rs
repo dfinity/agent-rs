@@ -162,7 +162,7 @@ mod management_canister {
             // Upgrade should succeed.
             ic00.install_code(&canister_id, &canister_wasm)
                 .with_mode(InstallMode::Upgrade {
-                    skip_pre_upgrade: false,
+                    skip_pre_upgrade: None,
                 })
                 .call_and_wait()
                 .await?;
@@ -171,7 +171,7 @@ mod management_canister {
             let result = other_ic00
                 .install_code(&canister_id, &canister_wasm)
                 .with_mode(InstallMode::Upgrade {
-                    skip_pre_upgrade: false,
+                    skip_pre_upgrade: None,
                 })
                 .call_and_wait()
                 .await;
@@ -486,7 +486,7 @@ mod management_canister {
             // Upgrade should succeed
             ic00.install_code(&canister_id, &canister_wasm)
                 .with_mode(InstallMode::Upgrade {
-                    skip_pre_upgrade: false,
+                    skip_pre_upgrade: None,
                 })
                 .call_and_wait()
                 .await?;
