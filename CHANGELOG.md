@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [0.33.0] - 2024-02-08
 
 * Changed the return type of `stored_chunks` to a struct.
 * Added a prime256v1-based `Identity` impl to complement the ed25519 and secp256k1 `Identity` impls.
