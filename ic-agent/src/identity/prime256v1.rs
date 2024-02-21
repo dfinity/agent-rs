@@ -3,6 +3,7 @@ use crate::{agent::EnvelopeContent, export::Principal, Identity, Signature};
 #[cfg(feature = "pem")]
 use crate::identity::error::PemError;
 
+use async_trait::async_trait;
 use p256::{
     ecdsa::{self, signature::Signer, SigningKey, VerifyingKey},
     pkcs8::{Document, EncodePublicKey},
@@ -72,6 +73,7 @@ impl Prime256v1Identity {
     }
 }
 
+#[async_trait]
 impl Identity for Prime256v1Identity {
     fn sender(&self) -> Result<Principal, String> {
         Ok(Principal::self_authenticating(
@@ -83,7 +85,7 @@ impl Identity for Prime256v1Identity {
         Some(self.der_encoded_public_key.as_ref().to_vec())
     }
 
-    fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
+    async fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
         self.sign_arbitrary(&content.to_request_id().signable())
     }
 
@@ -188,8 +190,8 @@ Sks4xGbA/ZbazsrMl4v446U5UIVxCGGaKw==
         assert!(DER_ENCODED_PUBLIC_KEY == hex::encode(identity.der_encoded_public_key));
     }
 
-    #[test]
-    fn test_prime256v1_signature() {
+    #[tokio::test]
+    async fn test_prime256v1_signature() {
         // Create a prime256v1 identity from a PEM file.
         let identity = Prime256v1Identity::from_pem(IDENTITY_FILE.as_bytes())
             .expect("Cannot create prime256v1 identity from PEM file.");
@@ -205,6 +207,7 @@ Sks4xGbA/ZbazsrMl4v446U5UIVxCGGaKw==
         };
         let signature = identity
             .sign(&message)
+            .await
             .expect("Cannot create prime256v1 signature.")
             .signature
             .expect("Cannot find prime256v1 signature bytes.");

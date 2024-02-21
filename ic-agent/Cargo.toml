@@ -43,6 +43,7 @@ simple_asn1 = "0.6.1"
 thiserror = { workspace = true }
 time = { workspace = true }
 url = "2.1.0"
+async-trait = "0.1.77"
 
 [dependencies.hyper]
 version = "0.14"
@@ -96,19 +97,8 @@ web-sys = { version = "0.3", features = [
 default = ["pem", "reqwest"]
 reqwest = ["dep:reqwest"]
 hyper = ["dep:hyper", "dep:hyper-rustls"]
-ic_ref_tests = [
-    "default",
-] # Used to separate integration tests for ic-ref which need a server running.
-wasm-bindgen = [
-    "dep:js-sys",
-    "dep:wasm-bindgen",
-    "dep:wasm-bindgen-futures",
-    "dep:getrandom",
-    "dep:web-sys",
-    "time/wasm-bindgen",
-    "backoff/wasm-bindgen",
-    "cached/wasm",
-]
+ic_ref_tests = ["default"] # Used to separate integration tests for ic-ref which need a server running.
+wasm-bindgen = ["dep:js-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:getrandom", "dep:web-sys", "time/wasm-bindgen", "backoff/wasm-bindgen", "cached/wasm"]
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]

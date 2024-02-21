@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use ic_agent::{
     agent::EnvelopeContent, export::Principal, identity::Delegation, Identity, Signature,
 };
@@ -134,6 +135,7 @@ impl HardwareIdentity {
     }
 }
 
+#[async_trait]
 impl Identity for HardwareIdentity {
     fn sender(&self) -> Result<Principal, String> {
         Ok(Principal::self_authenticating(&self.public_key))
@@ -143,7 +145,7 @@ impl Identity for HardwareIdentity {
         Some(self.public_key.clone())
     }
 
-    fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
+    async fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
         self.sign_arbitrary(&content.to_request_id().signable())
     }
 

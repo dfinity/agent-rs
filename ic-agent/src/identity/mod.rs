@@ -14,6 +14,7 @@ pub(crate) mod error;
 
 #[doc(inline)]
 pub use anonymous::AnonymousIdentity;
+use async_trait::async_trait;
 #[doc(inline)]
 pub use basic::BasicIdentity;
 #[doc(inline)]
@@ -44,6 +45,7 @@ pub struct Signature {
 ///
 /// [`Agents`](crate::Agent) are assigned a single `Identity` object, but there can be multiple
 /// identities used.
+#[async_trait]
 pub trait Identity: Send + Sync {
     /// Returns a sender, ie. the Principal ID that is used to sign a request.
     ///
@@ -58,7 +60,7 @@ pub trait Identity: Send + Sync {
     /// Sign a request ID derived from a content map.
     ///
     /// Implementors should call `content.to_request_id().signable()` for the actual bytes that need to be signed.
-    fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String>;
+    async fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String>;
 
     /// Sign a delegation to let another key be used to authenticate [`sender`](Identity::sender).
     ///
@@ -87,7 +89,7 @@ pub trait Identity: Send + Sync {
 
 macro_rules! delegating_impl {
     ($implementor:ty, $name:ident => $self_expr:expr) => {
-        impl Identity for $implementor {
+        impl Identity for $implementor{
             fn sender(&$name) -> Result<Principal, String> {
                 $self_expr.sender()
             }
@@ -96,7 +98,10 @@ macro_rules! delegating_impl {
                 $self_expr.public_key()
             }
 
-            fn sign(&$name, content: &EnvelopeContent) -> Result<Signature, String> {
+            fn sign<'a, 'b, 'async_trait>(&'a $name, content: &'b EnvelopeContent) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Signature, String>> + Send + 'async_trait>>
+            where 'a: 'async_trait,
+                  'b: 'async_trait,
+                  Self: 'async_trait {
                 $self_expr.sign(content)
             }
 

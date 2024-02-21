@@ -101,7 +101,7 @@ fn wait_signed() {
         };
 
         let call_request_id = call_envelope_content.to_request_id();
-        let call_signature = agent_identity.sign(&call_envelope_content).unwrap();
+        let call_signature = agent_identity.sign(&call_envelope_content).await.unwrap();
 
         let call_envelope = Envelope {
             content: Cow::Borrowed(&call_envelope_content),
@@ -127,7 +127,7 @@ fn wait_signed() {
             ingress_expiry,
         };
 
-        let read_signature = agent_identity.sign(&read_state_envelope_content).unwrap();
+        let read_signature = agent_identity.sign(&read_state_envelope_content).await.unwrap();
 
         let read_state_envelope = Envelope {
             content: Cow::Borrowed(&read_state_envelope_content),
@@ -560,7 +560,7 @@ mod sign_send {
     fn query() {
         with_universal_canister(|agent, canister_id| async move {
             let arg = payload().reply_data(b"hello").build();
-            let signed_query = agent.query(&canister_id, "query").with_arg(arg).sign()?;
+            let signed_query = agent.query(&canister_id, "query").with_arg(arg).sign().await?;
 
             assert!(signed_query_inspect(
                 signed_query.sender,
@@ -589,7 +589,7 @@ mod sign_send {
     fn update_then_request_status() {
         with_universal_canister(|agent, canister_id| async move {
             let arg = payload().reply_data(b"hello").build();
-            let signed_update = agent.update(&canister_id, "update").with_arg(arg).sign()?;
+            let signed_update = agent.update(&canister_id, "update").with_arg(arg).sign().await?;
 
             assert!(signed_update_inspect(
                 signed_update.sender,
@@ -604,7 +604,7 @@ mod sign_send {
             let signed_request_status = agent.sign_request_status(
                 signed_update.effective_canister_id,
                 signed_update.request_id,
-            )?;
+            ).await?;
 
             assert!(signed_request_status_inspect(
                 signed_request_status.sender,
@@ -644,7 +644,7 @@ mod sign_send {
     fn forged_query() {
         with_universal_canister(|agent, canister_id| async move {
             let arg = payload().reply_data(b"hello").build();
-            let mut signed_query = agent.query(&canister_id, "query").with_arg(arg).sign()?;
+            let mut signed_query = agent.query(&canister_id, "query").with_arg(arg).sign().await?;
 
             signed_query.method_name = "non_query".to_string();
 

@@ -1,3 +1,5 @@
+use async_trait::async_trait;
+
 use crate::{agent::EnvelopeContent, export::Principal, identity::Identity, Signature};
 
 /// The anonymous identity.
@@ -6,6 +8,7 @@ use crate::{agent::EnvelopeContent, export::Principal, identity::Identity, Signa
 #[derive(Debug, Copy, Clone)]
 pub struct AnonymousIdentity;
 
+#[async_trait]
 impl Identity for AnonymousIdentity {
     fn sender(&self) -> Result<Principal, String> {
         Ok(Principal::anonymous())
@@ -15,7 +18,7 @@ impl Identity for AnonymousIdentity {
         None
     }
 
-    fn sign(&self, _: &EnvelopeContent) -> Result<Signature, String> {
+    async fn sign(&self, _: &EnvelopeContent) -> Result<Signature, String> {
         Ok(Signature {
             signature: None,
             public_key: None,

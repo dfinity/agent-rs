@@ -438,7 +438,7 @@ impl Agent {
             ingress_expiry_datetime,
             use_nonce,
         )?;
-        let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
+        let serialized_bytes = sign_envelope(&content, self.identity.clone()).await?;
         self.query_inner(
             effective_canister_id,
             serialized_bytes,
@@ -590,7 +590,7 @@ impl Agent {
             nonce,
         )?;
         let request_id = to_request_id(&content)?;
-        let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
+        let serialized_bytes = sign_envelope(&content, self.identity.clone()).await?;
 
         self.call_endpoint(effective_canister_id, request_id, serialized_bytes)
             .await
@@ -795,7 +795,7 @@ impl Agent {
         effective_canister_id: Principal,
     ) -> Result<Certificate, AgentError> {
         let content = self.read_state_content(paths)?;
-        let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
+        let serialized_bytes = sign_envelope(&content, self.identity.clone()).await?;
 
         let read_state_response: ReadStateResponse = self
             .read_state_endpoint(effective_canister_id, serialized_bytes)
@@ -814,7 +814,7 @@ impl Agent {
         subnet_id: Principal,
     ) -> Result<Certificate, AgentError> {
         let content = self.read_state_content(paths)?;
-        let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
+        let serialized_bytes = sign_envelope(&content, self.identity.clone()).await?;
 
         let read_state_response: ReadStateResponse = self
             .read_subnet_state_endpoint(subnet_id, serialized_bytes)
@@ -1054,7 +1054,7 @@ impl Agent {
 
     /// Sign a request_status call. This will return a [`signed::SignedRequestStatus`]
     /// which contains all fields of the request_status and the signed request_status in CBOR encoding
-    pub fn sign_request_status(
+    pub async fn sign_request_status(
         &self,
         effective_canister_id: Principal,
         request_id: RequestId,
@@ -1062,7 +1062,8 @@ impl Agent {
         let paths: Vec<Vec<Label>> =
             vec![vec!["request_status".into(), request_id.to_vec().into()]];
         let read_state_content = self.read_state_content(paths)?;
-        let signed_request_status = sign_envelope(&read_state_content, self.identity.clone())?;
+        let signed_request_status =
+            sign_envelope(&read_state_content, self.identity.clone()).await?;
         let ingress_expiry = read_state_content.ingress_expiry();
         let sender = *read_state_content.sender();
         Ok(SignedRequestStatus {
@@ -1125,11 +1126,14 @@ fn principal_is_within_ranges(principal: &Principal, ranges: &[(Principal, Princ
         .any(|r| principal >= &r.0 && principal <= &r.1)
 }
 
-fn sign_envelope(
+async fn sign_envelope(
     content: &EnvelopeContent,
     identity: Arc<dyn Identity>,
 ) -> Result<Vec<u8>, AgentError> {
-    let signature = identity.sign(content).map_err(AgentError::SigningError)?;
+    let signature = identity
+        .sign(content)
+        .await
+        .map_err(AgentError::SigningError)?;
 
     let envelope = Envelope {
         content: Cow::Borrowed(content),
@@ -1508,7 +1512,7 @@ impl<'agent> QueryBuilder<'agent> {
 
     /// Sign a query call. This will return a [`signed::SignedQuery`]
     /// which contains all fields of the query and the signed query in CBOR encoding
-    pub fn sign(self) -> Result<SignedQuery, AgentError> {
+    pub async fn sign(self) -> Result<SignedQuery, AgentError> {
         let content = self.agent.query_content(
             self.canister_id,
             self.method_name,
@@ -1516,7 +1520,7 @@ impl<'agent> QueryBuilder<'agent> {
             self.ingress_expiry_datetime,
             self.use_nonce,
         )?;
-        let signed_query = sign_envelope(&content, self.agent.identity.clone())?;
+        let signed_query = sign_envelope(&content, self.agent.identity.clone()).await?;
         let EnvelopeContent::Query {
             ingress_expiry,
             sender,
@@ -1660,7 +1664,7 @@ impl<'agent> UpdateBuilder<'agent> {
 
     /// Sign a update call. This will return a [`signed::SignedUpdate`]
     /// which contains all fields of the update and the signed update in CBOR encoding
-    pub fn sign(self) -> Result<SignedUpdate, AgentError> {
+    pub async fn sign(self) -> Result<SignedUpdate, AgentError> {
         let nonce = self.agent.nonce_factory.generate();
         let content = self.agent.update_content(
             self.canister_id,
@@ -1669,7 +1673,7 @@ impl<'agent> UpdateBuilder<'agent> {
             self.ingress_expiry_datetime,
             nonce,
         )?;
-        let signed_update = sign_envelope(&content, self.agent.identity.clone())?;
+        let signed_update = sign_envelope(&content, self.agent.identity.clone()).await?;
         let request_id = to_request_id(&content)?;
         let EnvelopeContent::Call {
             nonce,
@@ -1701,8 +1705,8 @@ mod offline_tests {
     use super::*;
     // Any tests that involve the network should go in agent_test, not here.
 
-    #[test]
-    fn rounded_expiry() {
+    #[tokio::test]
+    async fn rounded_expiry() {
         let agent = Agent::builder()
             .with_url("http://not-a-real-url")
             .build()
@@ -1713,6 +1717,7 @@ mod offline_tests {
             let update = agent
                 .update(&Principal::management_canister(), "not_a_method")
                 .sign()
+                .await
                 .unwrap();
             if prev_expiry < Some(update.ingress_expiry) {
                 prev_expiry = Some(update.ingress_expiry);

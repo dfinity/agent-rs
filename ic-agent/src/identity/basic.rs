@@ -3,6 +3,7 @@ use crate::{agent::EnvelopeContent, export::Principal, Identity, Signature};
 #[cfg(feature = "pem")]
 use crate::identity::error::PemError;
 
+use async_trait::async_trait;
 use ring::signature::{Ed25519KeyPair, KeyPair};
 use simple_asn1::{
     oid, to_der,
@@ -57,6 +58,7 @@ impl BasicIdentity {
     }
 }
 
+#[async_trait]
 impl Identity for BasicIdentity {
     fn sender(&self) -> Result<Principal, String> {
         Ok(Principal::self_authenticating(&self.der_encoded_public_key))
@@ -66,7 +68,7 @@ impl Identity for BasicIdentity {
         Some(self.der_encoded_public_key.clone())
     }
 
-    fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
+    async fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
         self.sign_arbitrary(&content.to_request_id().signable())
     }
 

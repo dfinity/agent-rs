@@ -3,6 +3,7 @@ use crate::{agent::EnvelopeContent, export::Principal, Identity, Signature};
 #[cfg(feature = "pem")]
 use crate::identity::error::PemError;
 
+use async_trait::async_trait;
 use k256::{
     ecdsa::{self, signature::Signer, SigningKey, VerifyingKey},
     pkcs8::{Document, EncodePublicKey},
@@ -72,6 +73,7 @@ impl Secp256k1Identity {
     }
 }
 
+#[async_trait]
 impl Identity for Secp256k1Identity {
     fn sender(&self) -> Result<Principal, String> {
         Ok(Principal::self_authenticating(
@@ -83,7 +85,7 @@ impl Identity for Secp256k1Identity {
         Some(self.der_encoded_public_key.as_ref().to_vec())
     }
 
-    fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
+    async fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
         self.sign_arbitrary(&content.to_request_id().signable())
     }
 
@@ -188,8 +190,8 @@ N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
         assert!(DER_ENCODED_PUBLIC_KEY == hex::encode(identity.der_encoded_public_key));
     }
 
-    #[test]
-    fn test_secp256k1_signature() {
+    #[tokio::test]
+    async fn test_secp256k1_signature() {
         // Create a secp256k1 identity from a PEM file.
         let identity = Secp256k1Identity::from_pem(IDENTITY_FILE.as_bytes())
             .expect("Cannot create secp256k1 identity from PEM file.");
@@ -205,6 +207,7 @@ N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
         };
         let signature = identity
             .sign(&message)
+            .await
             .expect("Cannot create secp256k1 signature.")
             .signature
             .expect("Cannot find secp256k1 signature bytes.");

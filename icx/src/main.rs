@@ -477,12 +477,14 @@ async fn main() -> Result<()> {
                             .with_arg(arg)
                             .with_effective_canister_id(effective_canister_id)
                             .sign()
+                            .await
                             .context("Failed to sign the update call")?;
                         let serialized = serde_json::to_string(&signed_update).unwrap();
                         println!("{}", serialized);
 
                         let signed_request_status = agent
                             .sign_request_status(effective_canister_id, signed_update.request_id)
+                            .await
                             .context(
                                 "Failed to sign the request_status call accompany with the update",
                             )?;
@@ -499,6 +501,7 @@ async fn main() -> Result<()> {
                             .with_arg(arg)
                             .with_effective_canister_id(effective_canister_id)
                             .sign()
+                            .await
                             .context("Failed to sign the query call")?;
                         let serialized = serde_json::to_string(&signed_query).unwrap();
                         println!("{}", serialized);
