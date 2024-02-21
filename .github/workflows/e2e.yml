@@ -34,6 +34,10 @@ jobs:
         run: bash .github/workflows/provision-linux.sh
         env:
           INSTALL_DFX_VERSION: ${{ matrix.dfx }}
+      - name: Install DFX
+        uses: dfinity/setup-dfx@main
+        with:
+          dfx-version: "0.16.1"
       - name: Setup for dfx version differences
         run: |
           if [[ "${{ matrix.dfx }}" == "0.8.4" ]]; then
