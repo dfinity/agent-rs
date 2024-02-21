@@ -25,7 +25,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-1
 
       - name: Setup fix
-        uses: dfinity/setup-dfx@vmai
+        uses: dfinity/setup-dfx@main
         with:
           dfx-version: ${{ matrix.dfx }}
       - name: Provision Darwin
