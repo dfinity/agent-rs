@@ -27,17 +27,13 @@ jobs:
       - name: Provision Darwin
         if: contains(matrix.os, 'macos')
         run: bash .github/workflows/provision-darwin.sh
-        env:
-          INSTALL_DFX_VERSION: ${{ matrix.dfx }}
       - name: Provision Linux
         if: contains(matrix.os, 'ubuntu')
         run: bash .github/workflows/provision-linux.sh
-        env:
-          INSTALL_DFX_VERSION: ${{ matrix.dfx }}
       - name: Install DFX
         uses: dfinity/setup-dfx@main
         with:
-          dfx-version: "0.16.1"
+          dfx-version: ${{ matrix.dfx }}
       - name: Setup for dfx version differences
         run: |
           if [[ "${{ matrix.dfx }}" == "0.8.4" ]]; then
