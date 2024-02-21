@@ -322,6 +322,16 @@ pub fn get_effective_canister_id(
                     .context("Argument is not valid for InstallChunkedCode")?;
                 Ok(in_args.target_canister)
             }
+            MgmtMethod::BitcoinGetBalance
+            | MgmtMethod::BitcoinGetBalanceQuery
+            | MgmtMethod::BitcoinGetUtxos
+            | MgmtMethod::BitcoinGetUtxosQuery
+            | MgmtMethod::BitcoinSendTransaction
+            | MgmtMethod::BitcoinGetCurrentFeePercentiles
+            | MgmtMethod::EcdsaPublicKey
+            | MgmtMethod::SignWithEcdsa => {
+                bail!("Management canister method {method_name} can only be run from canisters");
+            }
         }
     } else {
         Ok(canister_id)

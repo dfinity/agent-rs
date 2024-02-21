@@ -6,7 +6,7 @@ use crate::{call::AsyncCall, Canister};
 use candid::{CandidType, Deserialize, Nat};
 use ic_agent::{export::Principal, Agent};
 use std::{convert::AsRef, ops::Deref};
-use strum_macros::{AsRefStr, EnumString};
+use strum_macros::{AsRefStr, Display, EnumString};
 
 pub mod attributes;
 pub mod builders;
@@ -29,7 +29,7 @@ impl<'agent> Deref for ManagementCanister<'agent> {
 }
 
 /// All the known methods of the management canister.
-#[derive(AsRefStr, Debug, EnumString)]
+#[derive(AsRefStr, Debug, EnumString, Display)]
 #[strum(serialize_all = "snake_case")]
 pub enum MgmtMethod {
     /// See [`ManagementCanister::create_canister`].
@@ -64,6 +64,22 @@ pub enum MgmtMethod {
     StoredChunks,
     /// See [`ManagementCanister::install_chunked_code`].
     InstallChunkedCode,
+    /// There is no corresponding agent function as only canisters can call it.
+    EcdsaPublicKey,
+    /// There is no corresponding agent function as only canisters can call it.
+    SignWithEcdsa,
+    /// There is no corresponding agent function as only canisters can call it.
+    BitcoinGetBalance,
+    /// There is no corresponding agent function as only canisters can call it.
+    BitcoinGetBalanceQuery,
+    /// There is no corresponding agent function as only canisters can call it.
+    BitcoinGetUtxos,
+    /// There is no corresponding agent function as only canisters can call it.
+    BitcoinGetUtxosQuery,
+    /// There is no corresponding agent function as only canisters can call it.
+    BitcoinSendTransaction,
+    /// There is no corresponding agent function as only canisters can call it.
+    BitcoinGetCurrentFeePercentiles,
 }
 
 impl<'agent> ManagementCanister<'agent> {
