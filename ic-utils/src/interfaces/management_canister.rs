@@ -211,11 +211,23 @@ pub struct CanisterLogRecord {
     pub content: Vec<u8>,
 }
 
+impl std::fmt::Display for CanisterLogRecord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self, f)
+    }
+}
+
 /// The result of a [`ManagementCanister::fetch_canister_logs`] call.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, CandidType)]
 pub struct FetchCanisterLogsResponse {
     /// The logs of the canister.
     pub canister_log_records: Vec<CanisterLogRecord>,
+}
+
+impl std::fmt::Display for FetchCanisterLogsResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self, f)
+    }
 }
 
 /// A SHA-256 hash of a WASM chunk.
