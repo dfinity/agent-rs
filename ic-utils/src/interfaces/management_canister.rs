@@ -2,7 +2,10 @@
 //!
 //! [spec]: https://internetcomputer.org/docs/current/references/ic-interface-spec#ic-management-canister
 
-use crate::{call::AsyncCall, Canister};
+use crate::{
+    call::{AsyncCall, SyncCall},
+    Canister,
+};
 use candid::{CandidType, Deserialize, Nat};
 use ic_agent::{export::Principal, Agent};
 use std::{convert::AsRef, ops::Deref};
@@ -194,6 +197,19 @@ impl std::fmt::Display for CanisterStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Debug::fmt(self, f)
     }
+}
+
+#[derive(Default, Clone, CandidType, Deserialize, Debug, PartialEq, Eq)]
+pub struct CanisterLogRecord {
+    pub idx: u64,
+    pub timestamp_nanos: u64,
+    #[serde(with = "serde_bytes")]
+    pub content: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, CandidType)]
+pub struct FetchCanisterLogsResponse {
+    pub canister_log_records: Vec<CanisterLogRecord>,
 }
 
 /// A SHA-256 hash of a WASM chunk.
@@ -425,5 +441,23 @@ impl<'agent> ManagementCanister<'agent> {
         wasm: &'builder [u8],
     ) -> InstallBuilder<'agent, 'canister, 'builder> {
         InstallBuilder::builder(self, canister_id, wasm)
+    }
+
+    /// Fetch the logs of a canister.
+    pub fn fetch_canister_logs(
+        &self,
+        canister_id: &Principal,
+    ) -> impl 'agent + SyncCall<(FetchCanisterLogsResponse,)> {
+        #[derive(CandidType)]
+        struct In {
+            canister_id: Principal,
+        }
+
+        self.query(MgmtMethod::FetchCanisterLogs.as_ref())
+            .with_arg(In {
+                canister_id: *canister_id,
+            })
+            .with_effective_canister_id(canister_id.to_owned())
+            .build()
     }
 }
