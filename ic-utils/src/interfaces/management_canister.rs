@@ -459,6 +459,7 @@ impl<'agent> ManagementCanister<'agent> {
             canister_id: Principal,
         }
 
+        // `fetch_canister_logs` is only supported in non-replicated mode.
         self.query(MgmtMethod::FetchCanisterLogs.as_ref())
             .with_arg(In {
                 canister_id: *canister_id,
