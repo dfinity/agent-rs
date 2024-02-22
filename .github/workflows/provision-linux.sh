@@ -21,11 +21,6 @@ sudo mkdir /usr/local/lib/bats-support
 sudo tar --directory /usr/local/lib/bats-support --extract --file bats-support.tar.gz --strip-components 1
 rm bats-support.tar.gz
 
-# Install DFINITY SDK.
-wget --output-document install-dfx.sh "https://sdk.dfinity.org/install.sh"
-DFX_VERSION="$INSTALL_DFX_VERSION" bash install-dfx.sh < <(yes Y)
-rm install-dfx.sh
-
 # Set environment variables.
 BATS_SUPPORT="/usr/local/lib/bats-support"
 echo "BATS_SUPPORT=${BATS_SUPPORT}" >> "$GITHUB_ENV"
