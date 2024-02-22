@@ -2,7 +2,10 @@
 //!
 //! [spec]: https://internetcomputer.org/docs/current/references/ic-interface-spec#ic-management-canister
 
-use crate::{call::AsyncCall, Canister};
+use crate::{
+    call::{AsyncCall, SyncCall},
+    Canister,
+};
 use candid::{CandidType, Deserialize, Nat};
 use ic_agent::{export::Principal, Agent};
 use std::{convert::AsRef, ops::Deref};
@@ -64,6 +67,8 @@ pub enum MgmtMethod {
     StoredChunks,
     /// See [`ManagementCanister::install_chunked_code`].
     InstallChunkedCode,
+    /// See [`ManagementCanister::fetch_canister_logs`].
+    FetchCanisterLogs,
     /// There is no corresponding agent function as only canisters can call it.
     EcdsaPublicKey,
     /// There is no corresponding agent function as only canisters can call it.
@@ -192,6 +197,25 @@ impl std::fmt::Display for CanisterStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Debug::fmt(self, f)
     }
+}
+
+/// A log record of a canister.
+#[derive(Default, Clone, CandidType, Deserialize, Debug, PartialEq, Eq)]
+pub struct CanisterLogRecord {
+    /// The index of the log record.
+    pub idx: u64,
+    /// The timestamp of the log record.
+    pub timestamp_nanos: u64,
+    /// The content of the log record.
+    #[serde(with = "serde_bytes")]
+    pub content: Vec<u8>,
+}
+
+/// The result of a [`ManagementCanister::fetch_canister_logs`] call.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, CandidType)]
+pub struct FetchCanisterLogsResponse {
+    /// The logs of the canister.
+    pub canister_log_records: Vec<CanisterLogRecord>,
 }
 
 /// A SHA-256 hash of a WASM chunk.
@@ -423,5 +447,24 @@ impl<'agent> ManagementCanister<'agent> {
         wasm: &'builder [u8],
     ) -> InstallBuilder<'agent, 'canister, 'builder> {
         InstallBuilder::builder(self, canister_id, wasm)
+    }
+
+    /// Fetch the logs of a canister.
+    pub fn fetch_canister_logs(
+        &self,
+        canister_id: &Principal,
+    ) -> impl 'agent + SyncCall<(FetchCanisterLogsResponse,)> {
+        #[derive(CandidType)]
+        struct In {
+            canister_id: Principal,
+        }
+
+        // `fetch_canister_logs` is only supported in non-replicated mode.
+        self.query(MgmtMethod::FetchCanisterLogs.as_ref())
+            .with_arg(In {
+                canister_id: *canister_id,
+            })
+            .with_effective_canister_id(*canister_id)
+            .build()
     }
 }
