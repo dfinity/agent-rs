@@ -199,16 +199,22 @@ impl std::fmt::Display for CanisterStatus {
     }
 }
 
+/// A log record of a canister.
 #[derive(Default, Clone, CandidType, Deserialize, Debug, PartialEq, Eq)]
 pub struct CanisterLogRecord {
+    /// The index of the log record.
     pub idx: u64,
+    /// The timestamp of the log record.
     pub timestamp_nanos: u64,
+    /// The content of the log record.
     #[serde(with = "serde_bytes")]
     pub content: Vec<u8>,
 }
 
+/// The result of a [`ManagementCanister::fetch_canister_logs`] call.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, CandidType)]
 pub struct FetchCanisterLogsResponse {
+    /// The logs of the canister.
     pub canister_log_records: Vec<CanisterLogRecord>,
 }
 
