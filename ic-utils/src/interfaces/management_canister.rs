@@ -64,6 +64,8 @@ pub enum MgmtMethod {
     StoredChunks,
     /// See [`ManagementCanister::install_chunked_code`].
     InstallChunkedCode,
+    /// See [`ManagementCanister::fetch_canister_logs`].
+    FetchCanisterLogs,
     /// There is no corresponding agent function as only canisters can call it.
     EcdsaPublicKey,
     /// There is no corresponding agent function as only canisters can call it.
@@ -80,8 +82,6 @@ pub enum MgmtMethod {
     BitcoinSendTransaction,
     /// There is no corresponding agent function as only canisters can call it.
     BitcoinGetCurrentFeePercentiles,
-    /// See [`ManagementCanister::fetch_canister_logs`].
-    FetchCanisterLogs,
 }
 
 impl<'agent> ManagementCanister<'agent> {
