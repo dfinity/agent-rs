@@ -464,7 +464,7 @@ impl<'agent> ManagementCanister<'agent> {
             .with_arg(In {
                 canister_id: *canister_id,
             })
-            .with_effective_canister_id(canister_id.to_owned())
+            .with_effective_canister_id(*canister_id)
             .build()
     }
 }
