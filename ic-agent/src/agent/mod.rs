@@ -27,7 +27,7 @@ mod agent_test;
 use crate::{
     agent::response_authentication::{
         extract_der, lookup_canister_info, lookup_canister_metadata, lookup_request_status,
-        lookup_subnet, lookup_subnet_metrics, lookup_value,
+        lookup_subnet, lookup_subnet_metrics, lookup_time, lookup_value,
     },
     export::Principal,
     identity::Identity,
@@ -53,8 +53,6 @@ use std::{
     task::{Context, Poll},
     time::Duration,
 };
-
-use self::response_authentication::lookup_time;
 
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 
