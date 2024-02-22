@@ -54,6 +54,8 @@ use std::{
     time::Duration,
 };
 
+use self::response_authentication::lookup_time;
+
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 
 const IC_ROOT_KEY: &[u8; 133] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00\x81\x4c\x0e\x6e\xc7\x1f\xab\x58\x3b\x08\xbd\x81\x37\x3c\x25\x5c\x3c\x37\x1b\x2e\x84\x86\x3c\x98\xa4\xf1\xe0\x8b\x74\x23\x5d\x14\xfb\x5d\x9c\x0c\xd5\x46\xd9\x68\x5f\x91\x3a\x0c\x0b\x2c\xc5\x34\x15\x83\xbf\x4b\x43\x92\xe4\x67\xdb\x96\xd6\x5b\x9b\xb4\xcb\x71\x71\x12\xf8\x47\x2e\x0d\x5a\x4d\x14\x50\x5f\xfd\x74\x84\xb0\x12\x91\x09\x1c\x5f\x87\xb9\x88\x83\x46\x3f\x98\x09\x1a\x0b\xaa\xae";
@@ -210,11 +212,10 @@ pub enum PollResult {
 /// #     )
 /// # }
 /// #
-/// # const URL: &'static str = concat!("http://localhost:", env!("IC_REF_PORT"));
-/// #
 /// async fn create_a_canister() -> Result<Principal, Box<dyn std::error::Error>> {
+/// # let url = format!("http://localhost:{}", option_env!("IC_REF_PORT").unwrap_or("4943"));
 ///   let agent = Agent::builder()
-///     .with_url(URL)
+///     .with_url(url)
 ///     .with_identity(create_identity())
 ///     .build()?;
 ///
@@ -853,6 +854,8 @@ impl Agent {
         ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
             .map_err(|_| AgentError::CertificateVerificationFailed())?;
 
+        self.verify_cert_timestamp(cert)?;
+
         Ok(())
     }
 
@@ -875,6 +878,18 @@ impl Agent {
 
         ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
             .map_err(|_| AgentError::CertificateVerificationFailed())
+    }
+
+    fn verify_cert_timestamp(&self, cert: &Certificate) -> Result<(), AgentError> {
+        let time = lookup_time(cert)?;
+        if (OffsetDateTime::now_utc()
+            - OffsetDateTime::from_unix_timestamp_nanos(time.into()).unwrap())
+            > self.ingress_expiry
+        {
+            Err(AgentError::CertificateOutdated(self.ingress_expiry))
+        } else {
+            Ok(())
+        }
     }
 
     fn check_delegation(
@@ -1097,21 +1112,14 @@ impl Agent {
         let cert = self
             .read_state_raw(vec![vec!["subnet".into()]], *canister)
             .await?;
-        let time = leb128::read::unsigned(&mut lookup_value(&cert.tree, [b"time".as_ref()])?)?;
-        if (OffsetDateTime::now_utc()
-            - OffsetDateTime::from_unix_timestamp_nanos(time as _).unwrap())
-            > self.ingress_expiry
-        {
-            Err(AgentError::CertificateOutdated(self.ingress_expiry))
-        } else {
-            let (subnet_id, subnet) = lookup_subnet(&cert, &self.root_key.read().unwrap())?;
-            let subnet = Arc::new(subnet);
-            self.subnet_key_cache
-                .lock()
-                .unwrap()
-                .insert_subnet(subnet_id, subnet.clone());
-            Ok(subnet)
-        }
+
+        let (subnet_id, subnet) = lookup_subnet(&cert, &self.root_key.read().unwrap())?;
+        let subnet = Arc::new(subnet);
+        self.subnet_key_cache
+            .lock()
+            .unwrap()
+            .insert_subnet(subnet_id, subnet.clone());
+        Ok(subnet)
     }
 }
 

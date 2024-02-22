@@ -410,7 +410,7 @@ mod tests {
                 .expect("Could not read the key pair."),
         );
 
-        let port = std::env::var("IC_REF_PORT").unwrap_or_else(|_| "8001".into());
+        let port = std::env::var("IC_REF_PORT").unwrap_or_else(|_| "4943".into());
 
         let agent = ic_agent::Agent::builder()
             .with_transport(ReqwestTransport::create(format!("http://localhost:{port}")).unwrap())

@@ -53,11 +53,10 @@
 //! #     )
 //! # }
 //! #
-//! # const URL: &'static str = concat!("http://localhost:", env!("IC_REF_PORT"));
-//! #
 //! async fn create_a_canister() -> Result<Principal, Box<dyn std::error::Error>> {
+//! # let url = format!("http://localhost:{}", option_env!("IC_REF_PORT").unwrap_or("4943"));
 //!   let agent = Agent::builder()
-//!     .with_url(URL)
+//!     .with_url(url)
 //!     .with_identity(create_identity())
 //!     .build()?;
 //!   // Only do the following call when not contacting the IC main net (e.g. a local emulator).

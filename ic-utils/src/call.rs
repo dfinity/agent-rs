@@ -78,11 +78,11 @@ where
     /// #     )
     /// # }
     /// #
-    /// # const URL: &'static str = concat!("http://localhost:", env!("IC_REF_PORT"));
+    /// # let url = format!("http://localhost:{}", option_env!("IC_REF_PORT").unwrap_or("4943"));
     /// #
     /// # let effective_id = Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap();
     ///   let agent = Agent::builder()
-    ///     .with_url(URL)
+    ///     .with_url(url)
     ///     .with_identity(create_identity())
     ///     .build()?;
     ///   agent.fetch_root_key().await?;
