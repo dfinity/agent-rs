@@ -33,6 +33,13 @@ pub fn extract_der(buf: Vec<u8>) -> Result<Vec<u8>, AgentError> {
     Ok(key.to_vec())
 }
 
+pub(crate) fn lookup_time<Storage: AsRef<[u8]>>(
+    certificate: &Certificate<Storage>,
+) -> Result<u64, AgentError> {
+    let mut time = lookup_value(&certificate.tree, ["time".as_bytes()])?;
+    Ok(leb128::read::unsigned(&mut time)?)
+}
+
 pub(crate) fn lookup_canister_info<Storage: AsRef<[u8]>>(
     certificate: Certificate<Storage>,
     canister_id: Principal,

@@ -1227,6 +1227,15 @@ mod extras {
                 "wrong error: {result:?}"
             );
 
+            ic00.stop_canister(&specified_id)
+                .call_and_wait()
+                .await
+                .unwrap();
+            ic00.delete_canister(&specified_id)
+                .call_and_wait()
+                .await
+                .unwrap();
+
             Ok(())
         })
     }

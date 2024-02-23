@@ -82,7 +82,7 @@ impl AgentBuilder {
 
     /// Provides a _default_ ingress expiry. This is the delta that will be applied
     /// at the time an update or query is made. The default expiry cannot be a
-    /// fixed system time.
+    /// fixed system time. This is also used when checking certificate timestamps.
     ///
     /// The timestamp corresponding to this duration may be rounded in order to reduce
     /// cache misses. The current implementation rounds to the nearest minute if the
