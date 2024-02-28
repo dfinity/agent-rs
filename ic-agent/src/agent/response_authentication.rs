@@ -4,7 +4,7 @@ use ic_certification::hash_tree::{HashTree, SubtreeLookupResult};
 use ic_certification::{certificate::Certificate, hash_tree::Label, LookupResult};
 use ic_transport_types::{ReplyResponse, SubnetMetrics};
 use rangemap::RangeInclusiveSet;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::str::from_utf8;
 
 use super::Subnet;
@@ -218,11 +218,10 @@ pub(crate) fn lookup_api_boundary_nodes<Storage: AsRef<[u8]> + Clone>(
     let api_bn_tree = lookup_tree(&certificate.tree, [api_bn_path])?;
 
     let mut api_bns = Vec::<ApiBoundaryNode>::new();
+    let paths = api_bn_tree.list_paths();
+    let node_ids: HashSet<&[u8]> = paths.iter().map(|path| path[0].as_bytes()).collect();
 
-    for path in api_bn_tree.list_paths() {
-        let node_id = Principal::from_slice(path[0].as_bytes());
-        let node_id = node_id.as_slice();
-
+    for node_id in node_ids {
         let domain =
             String::from_utf8(lookup_value(&api_bn_tree, [node_id, domain_path])?.to_vec())
                 .map_err(|err| AgentError::Utf8ReadError(err.utf8_error()))?;
