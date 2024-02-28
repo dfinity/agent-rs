@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 * Timestamps are now being checked in `Agent::verify`. If you were using it with old certificates, increase the expiry timeout to continue to verify them.
-* Added ECDSA and Bitcoin functions to `MgmtMethod`. There are no new wrappers in `ManagementCanister` because only canisters can call these functions.
+* Added node metrics, ECDSA, and Bitcoin functions to `MgmtMethod`. Most do not have wrappers in `ManagementCanister` because only canisters can call these functions.
 * Added `FetchCanisterLogs` function to `MgmtMethod` and a corresponding wrapper to `ManagementCanister`.
 
 ## [0.33.0] - 2024-02-08

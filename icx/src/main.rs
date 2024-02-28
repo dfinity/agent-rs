@@ -18,7 +18,7 @@ use ic_agent::{
 };
 use ic_utils::interfaces::management_canister::{
     builders::{CanisterInstall, CanisterSettings},
-    MgmtMethod,
+    BitcoinNetwork, MgmtMethod,
 };
 use ring::signature::Ed25519KeyPair;
 use std::{
@@ -323,14 +323,22 @@ pub fn get_effective_canister_id(
                     .context("Argument is not valid for InstallChunkedCode")?;
                 Ok(in_args.target_canister)
             }
+            MgmtMethod::BitcoinGetBalanceQuery | MgmtMethod::BitcoinGetUtxosQuery => {
+                #[derive(CandidType, Deserialize)]
+                struct In {
+                    network: BitcoinNetwork,
+                }
+                let in_args = Decode!(arg_value, In)
+                    .with_context(|| format!("Argument is not valid for {method_name}"))?;
+                Ok(in_args.network.effective_canister_id())
+            }
             MgmtMethod::BitcoinGetBalance
-            | MgmtMethod::BitcoinGetBalanceQuery
             | MgmtMethod::BitcoinGetUtxos
-            | MgmtMethod::BitcoinGetUtxosQuery
             | MgmtMethod::BitcoinSendTransaction
             | MgmtMethod::BitcoinGetCurrentFeePercentiles
             | MgmtMethod::EcdsaPublicKey
-            | MgmtMethod::SignWithEcdsa => {
+            | MgmtMethod::SignWithEcdsa
+            | MgmtMethod::NodeMetricsHistory => {
                 bail!("Management canister method {method_name} can only be run from canisters");
             }
         }
