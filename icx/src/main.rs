@@ -1,10 +1,10 @@
 use anyhow::{bail, Context, Result};
 use candid::{
-    check_prog,
     types::value::IDLValue,
     types::{Function, Type, TypeInner},
-    CandidType, Decode, Deserialize, IDLArgs, IDLProg, TypeEnv,
+    CandidType, Decode, Deserialize, IDLArgs, TypeEnv,
 };
+use candid_parser::{check_prog, parse_idl_args, parse_idl_value, IDLProg};
 use clap::{crate_authors, crate_version, Parser, ValueEnum};
 use ic_agent::{
     agent::{self, signed::SignedUpdate},
@@ -194,7 +194,7 @@ fn blob_from_arguments(
         }
         ArgType::Idl => {
             let arguments = arguments.unwrap_or("()");
-            let args = arguments.parse::<IDLArgs>();
+            let args = parse_idl_args(arguments);
             let typed_args = match method_type {
                 None => args
                     .context("Failed to parse arguments with no method type info")?
@@ -210,7 +210,7 @@ fn blob_from_arguments(
                             if &TypeInner::Text == func.args[0].as_ref() && !is_quote {
                                 Ok(IDLValue::Text(arguments.to_string()))
                             } else {
-                                arguments.parse::<IDLValue>()
+                                parse_idl_value(arguments)
                             }
                             .map(|v| IDLArgs::new(&[v]))
                         } else {
@@ -290,7 +290,11 @@ pub fn get_effective_canister_id(
             | MgmtMethod::DeleteCanister
             | MgmtMethod::DepositCycles
             | MgmtMethod::UninstallCode
-            | MgmtMethod::ProvisionalTopUpCanister => {
+            | MgmtMethod::ProvisionalTopUpCanister
+            | MgmtMethod::UploadChunk
+            | MgmtMethod::ClearChunkStore
+            | MgmtMethod::StoredChunks
+            | MgmtMethod::FetchCanisterLogs => {
                 #[derive(CandidType, Deserialize)]
                 struct In {
                     canister_id: Principal,
@@ -309,6 +313,25 @@ pub fn get_effective_canister_id(
                 let in_args =
                     Decode!(arg_value, In).context("Argument is not valid for UpdateSettings")?;
                 Ok(in_args.canister_id)
+            }
+            MgmtMethod::InstallChunkedCode => {
+                #[derive(CandidType, Deserialize)]
+                struct In {
+                    target_canister: Principal,
+                }
+                let in_args = Decode!(arg_value, In)
+                    .context("Argument is not valid for InstallChunkedCode")?;
+                Ok(in_args.target_canister)
+            }
+            MgmtMethod::BitcoinGetBalance
+            | MgmtMethod::BitcoinGetBalanceQuery
+            | MgmtMethod::BitcoinGetUtxos
+            | MgmtMethod::BitcoinGetUtxosQuery
+            | MgmtMethod::BitcoinSendTransaction
+            | MgmtMethod::BitcoinGetCurrentFeePercentiles
+            | MgmtMethod::EcdsaPublicKey
+            | MgmtMethod::SignWithEcdsa => {
+                bail!("Management canister method {method_name} can only be run from canisters");
             }
         }
     } else {

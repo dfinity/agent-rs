@@ -4,6 +4,7 @@
 #![warn(
     missing_docs,
     missing_debug_implementations,
+    elided_lifetimes_in_paths,
     rustdoc::broken_intra_doc_links,
     rustdoc::private_intra_doc_links
 )]

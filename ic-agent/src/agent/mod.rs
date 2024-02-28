@@ -27,13 +27,14 @@ mod agent_test;
 use crate::{
     agent::response_authentication::{
         extract_der, lookup_canister_info, lookup_canister_metadata, lookup_request_status,
-        lookup_subnet, lookup_subnet_metrics, lookup_value,
+        lookup_subnet, lookup_subnet_metrics, lookup_time, lookup_value,
     },
     export::Principal,
     identity::Identity,
     to_request_id, RequestId,
 };
 use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
+use backoff::{exponential::ExponentialBackoff, SystemClock};
 use ic_certification::{Certificate, Delegation, Label};
 use ic_transport_types::{
     signed::{SignedQuery, SignedRequestStatus, SignedUpdate},
@@ -211,11 +212,10 @@ pub enum PollResult {
 /// #     )
 /// # }
 /// #
-/// # const URL: &'static str = concat!("http://localhost:", env!("IC_REF_PORT"));
-/// #
 /// async fn create_a_canister() -> Result<Principal, Box<dyn std::error::Error>> {
+/// # let url = format!("http://localhost:{}", option_env!("IC_REF_PORT").unwrap_or("4943"));
 ///   let agent = Agent::builder()
-///     .with_url(URL)
+///     .with_url(url)
 ///     .with_identity(create_identity())
 ///     .build()?;
 ///
@@ -476,7 +476,7 @@ impl Agent {
         request_id: RequestId,
     ) -> Result<Vec<u8>, AgentError> {
         let response = if self.verify_query_signatures {
-            let (response, subnet) = futures_util::try_join!(
+            let (response, mut subnet) = futures_util::try_join!(
                 self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query),
                 self.get_subnet_by_canister(&effective_canister_id)
             )?;
@@ -496,10 +496,17 @@ impl Agent {
                     return Err(AgentError::CertificateOutdated(self.ingress_expiry));
                 }
                 let signable = response.signable(request_id, signature.timestamp);
-                let node_key = subnet
-                    .node_keys
-                    .get(&signature.identity)
-                    .ok_or(AgentError::CertificateNotAuthorized())?;
+                let node_key = if let Some(node_key) = subnet.node_keys.get(&signature.identity) {
+                    node_key
+                } else {
+                    subnet = self
+                        .fetch_subnet_by_canister(&effective_canister_id)
+                        .await?;
+                    subnet
+                        .node_keys
+                        .get(&signature.identity)
+                        .ok_or(AgentError::CertificateNotAuthorized())?
+                };
                 if node_key.len() != 44 {
                     return Err(AgentError::DerKeyLengthMismatch {
                         expected: 44,
@@ -651,18 +658,91 @@ impl Agent {
         }
     }
 
+    fn get_retry_policy() -> ExponentialBackoff<SystemClock> {
+        ExponentialBackoffBuilder::new()
+            .with_initial_interval(Duration::from_millis(500))
+            .with_max_interval(Duration::from_secs(1))
+            .with_multiplier(1.4)
+            .with_max_elapsed_time(Some(Duration::from_secs(60 * 5)))
+            .build()
+    }
+
+    /// Wait for request_status to return a Replied response and return the arg.
+    pub async fn wait_signed(
+        &self,
+        request_id: &RequestId,
+        effective_canister_id: Principal,
+        signed_request_status: Vec<u8>,
+    ) -> Result<Vec<u8>, AgentError> {
+        let mut retry_policy = Self::get_retry_policy();
+
+        let mut request_accepted = false;
+        loop {
+            match self
+                .request_status_signed(
+                    request_id,
+                    effective_canister_id,
+                    signed_request_status.clone(),
+                )
+                .await?
+            {
+                RequestStatusResponse::Unknown => {}
+
+                RequestStatusResponse::Received | RequestStatusResponse::Processing => {
+                    if !request_accepted {
+                        retry_policy.reset();
+                        request_accepted = true;
+                    }
+                }
+
+                RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => return Ok(arg),
+
+                RequestStatusResponse::Rejected(response) => {
+                    return Err(AgentError::ReplicaError(response))
+                }
+
+                RequestStatusResponse::Done => {
+                    return Err(AgentError::RequestStatusDoneNoReply(String::from(
+                        *request_id,
+                    )))
+                }
+            };
+
+            match retry_policy.next_backoff() {
+                #[cfg(not(target_family = "wasm"))]
+                Some(duration) => tokio::time::sleep(duration).await,
+
+                #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
+                Some(duration) => {
+                    wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |rs, rj| {
+                        if let Err(e) = web_sys::window()
+                            .expect("global window unavailable")
+                            .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                &rs,
+                                duration.as_millis() as _,
+                            )
+                        {
+                            use wasm_bindgen::UnwrapThrowExt;
+                            rj.call1(&rj, &e).unwrap_throw();
+                        }
+                    }))
+                    .await
+                    .expect("unable to setTimeout");
+                }
+
+                None => return Err(AgentError::TimeoutWaitingForResponse()),
+            }
+        }
+    }
+
     /// Call request_status on the RequestId in a loop and return the response as a byte vector.
     pub async fn wait(
         &self,
         request_id: RequestId,
         effective_canister_id: Principal,
     ) -> Result<Vec<u8>, AgentError> {
-        let mut retry_policy = ExponentialBackoffBuilder::new()
-            .with_initial_interval(Duration::from_millis(500))
-            .with_max_interval(Duration::from_secs(1))
-            .with_multiplier(1.4)
-            .with_max_elapsed_time(Some(Duration::from_secs(60 * 5)))
-            .build();
+        let mut retry_policy = Self::get_retry_policy();
+
         let mut request_accepted = false;
         loop {
             match self.poll(&request_id, effective_canister_id).await? {
@@ -774,6 +854,8 @@ impl Agent {
         ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
             .map_err(|_| AgentError::CertificateVerificationFailed())?;
 
+        self.verify_cert_timestamp(cert)?;
+
         Ok(())
     }
 
@@ -798,6 +880,18 @@ impl Agent {
             .map_err(|_| AgentError::CertificateVerificationFailed())
     }
 
+    fn verify_cert_timestamp(&self, cert: &Certificate) -> Result<(), AgentError> {
+        let time = lookup_time(cert)?;
+        if (OffsetDateTime::now_utc()
+            - OffsetDateTime::from_unix_timestamp_nanos(time.into()).unwrap())
+            > self.ingress_expiry
+        {
+            Err(AgentError::CertificateOutdated(self.ingress_expiry))
+        } else {
+            Ok(())
+        }
+    }
+
     fn check_delegation(
         &self,
         delegation: &Option<Delegation>,
@@ -808,6 +902,9 @@ impl Agent {
             Some(delegation) => {
                 let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;
+                if cert.delegation.is_some() {
+                    return Err(AgentError::CertificateHasTooManyDelegations);
+                }
                 self.verify(&cert, effective_canister_id)?;
                 let canister_range_lookup = [
                     "subnet".as_bytes(),
@@ -840,8 +937,11 @@ impl Agent {
         match delegation {
             None => Ok(self.read_root_key()),
             Some(delegation) => {
-                let cert = serde_cbor::from_slice(&delegation.certificate)
+                let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;
+                if cert.delegation.is_some() {
+                    return Err(AgentError::CertificateHasTooManyDelegations);
+                }
                 self.verify_for_subnet(&cert, subnet_id)?;
                 let public_key_path = [
                     "subnet".as_bytes(),
@@ -1001,24 +1101,7 @@ impl Agent {
         if let Some(subnet) = subnet {
             Ok(subnet)
         } else {
-            let cert = self
-                .read_state_raw(vec![vec!["subnet".into()]], *canister)
-                .await?;
-            let time = leb128::read::unsigned(&mut lookup_value(&cert.tree, [b"time".as_ref()])?)?;
-            if (OffsetDateTime::now_utc()
-                - OffsetDateTime::from_unix_timestamp_nanos(time as _).unwrap())
-                > self.ingress_expiry
-            {
-                Err(AgentError::CertificateOutdated(self.ingress_expiry))
-            } else {
-                let (subnet_id, subnet) = lookup_subnet(&cert, &self.root_key.read().unwrap())?;
-                let subnet = Arc::new(subnet);
-                self.subnet_key_cache
-                    .lock()
-                    .unwrap()
-                    .insert_subnet(subnet_id, subnet.clone());
-                Ok(subnet)
-            }
+            self.fetch_subnet_by_canister(canister).await
         }
     }
 
@@ -1035,6 +1118,23 @@ impl Agent {
             .await?;
         let api_boundary_nodes = lookup_api_boundary_nodes(certificate)?;
         Ok(api_boundary_nodes)
+    }
+
+    async fn fetch_subnet_by_canister(
+        &self,
+        canister: &Principal,
+    ) -> Result<Arc<Subnet>, AgentError> {
+        let cert = self
+            .read_state_raw(vec![vec!["subnet".into()]], *canister)
+            .await?;
+
+        let (subnet_id, subnet) = lookup_subnet(&cert, &self.root_key.read().unwrap())?;
+        let subnet = Arc::new(subnet);
+        self.subnet_key_cache
+            .lock()
+            .unwrap()
+            .insert_subnet(subnet_id, subnet.clone());
+        Ok(subnet)
     }
 }
 
@@ -1525,7 +1625,7 @@ pub struct UpdateBuilder<'agent> {
 }
 
 impl<'agent> UpdateBuilder<'agent> {
-    /// Creates a new query builder with an agent for a particular canister method.
+    /// Creates a new update builder with an agent for a particular canister method.
     pub fn new(agent: &'agent Agent, canister_id: Principal, method_name: String) -> Self {
         Self {
             agent,

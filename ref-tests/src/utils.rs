@@ -1,5 +1,5 @@
 use ic_agent::agent::http_transport::ReqwestTransport;
-use ic_agent::identity::Secp256k1Identity;
+use ic_agent::identity::{Prime256v1Identity, Secp256k1Identity};
 use ic_agent::{export::Principal, identity::BasicIdentity, Agent, Identity};
 use ic_identity_hsm::HardwareIdentity;
 use ic_utils::interfaces::{management_canister::builders::MemoryAllocation, ManagementCanister};
@@ -77,8 +77,24 @@ yeMC60IsMNxDjLqElV7+T7dkb5Ki7Q==
     Ok(identity)
 }
 
+pub fn create_prime256v1_identity() -> Result<Prime256v1Identity, String> {
+    // generated from the following command:
+    // $ openssl ecparam -name prime256v1 -genkey -noout -out identity.pem
+    // $ cat identity.pem
+    let identity_file = "\
+-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIL1ybmbwx+uKYsscOZcv71MmKhrNqfPP0ke1unET5AY4oAoGCCqGSM49
+AwEHoUQDQgAEUbbZV4NerZTPWfbQ749/GNLu8TaH8BUS/I7/+ipsu+MPywfnBFIZ
+Sks4xGbA/ZbazsrMl4v446U5UIVxCGGaKw==
+-----END EC PRIVATE KEY-----";
+
+    let identity = Prime256v1Identity::from_pem(identity_file.as_bytes())
+        .expect("Cannot create prime256v1 identity from PEM file.");
+    Ok(identity)
+}
+
 pub async fn create_agent(identity: impl Identity + 'static) -> Result<Agent, String> {
-    let port_env = std::env::var("IC_REF_PORT").unwrap_or_else(|_| "8001".into());
+    let port_env = std::env::var("IC_REF_PORT").unwrap_or_else(|_| "4943".into());
     let port = port_env
         .parse::<u32>()
         .expect("Could not parse the IC_REF_PORT environment variable as an integer.");

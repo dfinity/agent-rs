@@ -8,6 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Timestamps are now being checked in `Agent::verify`. If you were using it with old certificates, increase the expiry timeout to continue to verify them.
+* Added ECDSA and Bitcoin functions to `MgmtMethod`. There are no new wrappers in `ManagementCanister` because only canisters can call these functions.
+* Added `FetchCanisterLogs` function to `MgmtMethod` and a corresponding wrapper to `ManagementCanister`.
+
+## [0.33.0] - 2024-02-08
+
+* Changed the return type of `stored_chunks` to a struct.
+* Added a prime256v1-based `Identity` impl to complement the ed25519 and secp256k1 `Identity` impls.
+* Added serde and candid serialization traits to the `Status` type.
+* Changed the type of `InstallMode.skip_pre_upgrade` from `bool` to `Option<bool>` to match the interface specification.
+
+## [0.32.0] - 2024-01-18
+
+* Added the chunked wasm API to ic-utils. Existing code that uses `install_code` should probably update to `install`, which works the same but silently handles large wasm modules.
+* Added query stats to `StatusCallResult`.
+* Upgraded `ic-certification` to v2.2.
+
+## [0.31.0] - 2023-11-27
+
+* Breaking change: Bump candid to 0.10. Downstream libraries need to bump Candid to 0.10 as well.
+* Feat: add `idle_cycles_burned_per_day` field to `StatusCallResult`.
+
+## [0.30.2] - 2023-11-16
+
+* Fixed a spurious certificate validation error in the five minutes after a node is added to a subnet
+
+## [0.30.1] - 2023-11-15
+
+* Fixed `HyperTransport` endpoint construction (`//` in the format `/api/v2//canister/5v3p4-iyaaa-aaaaa-qaaaa-cai/query`)
+
 ## [0.30.0] - 2023-11-07
 
 * Added node signature certification to query calls, for protection against rogue boundary nodes. This can be disabled with `with_verify_query_signatures`.

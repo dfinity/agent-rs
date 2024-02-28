@@ -19,19 +19,19 @@ jobs:
             os: ubuntu-latest
 
     steps:
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
-          node-version: 16
+          node-version: 20
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Install dfx
         uses: dfinity/setup-dfx@main
         with:
-          dfx-version: "0.15.2-beta.1"
+          dfx-version: "0.16.1"
 
       - name: Cargo cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry

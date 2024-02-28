@@ -2,15 +2,23 @@
 //!
 //! [spec]: https://internetcomputer.org/docs/current/references/ic-interface-spec#ic-management-canister
 
-use crate::{call::AsyncCall, Canister};
+use crate::{
+    call::{AsyncCall, SyncCall},
+    Canister,
+};
 use candid::{CandidType, Deserialize, Nat};
 use ic_agent::{export::Principal, Agent};
-use std::{convert::AsRef, fmt::Debug, ops::Deref};
-use strum_macros::{AsRefStr, EnumString};
+use std::{convert::AsRef, ops::Deref};
+use strum_macros::{AsRefStr, Display, EnumString};
 
 pub mod attributes;
 pub mod builders;
-pub use builders::{CreateCanisterBuilder, InstallCodeBuilder, UpdateCanisterBuilder};
+mod serde_impls;
+#[doc(inline)]
+pub use builders::{
+    CreateCanisterBuilder, InstallBuilder, InstallChunkedCodeBuilder, InstallCodeBuilder,
+    UpdateCanisterBuilder,
+};
 
 /// The IC management canister.
 #[derive(Debug, Clone)]
@@ -24,34 +32,59 @@ impl<'agent> Deref for ManagementCanister<'agent> {
 }
 
 /// All the known methods of the management canister.
-#[derive(AsRefStr, Debug, EnumString)]
+#[derive(AsRefStr, Debug, EnumString, Display)]
 #[strum(serialize_all = "snake_case")]
 pub enum MgmtMethod {
-    // FIXME when rust-lang/rust#85960 is resolved, update these to links.
-    /// See `Canister::<ManagementCanister>::create_canister`.
+    /// See [`ManagementCanister::create_canister`].
     CreateCanister,
-    /// See `Canister::<ManagementCanister>::install_code`.
+    /// See [`ManagementCanister::install_code`].
     InstallCode,
-    /// See `Canister::<ManagementCanister>::start_canister`.
+    /// See [`ManagementCanister::start_canister`].
     StartCanister,
-    /// See `Canister::<ManagementCanister>::stop_canister`.
+    /// See [`ManagementCanister::stop_canister`].
     StopCanister,
-    /// See `Canister::<ManagementCanister>::canister_status`.
+    /// See [`ManagementCanister::canister_status`].
     CanisterStatus,
-    /// See `Canister::<ManagementCanister>::delete_canister`.
+    /// See [`ManagementCanister::delete_canister`].
     DeleteCanister,
-    /// See `Canister::<ManagementCanister>::deposit_cycles`.
+    /// See [`ManagementCanister::deposit_cycles`].
     DepositCycles,
-    /// See `Canister::<ManagementCanister>::raw_rand`.
+    /// See [`ManagementCanister::raw_rand`].
     RawRand,
-    /// See `Canister::<ManagementCanister>::provisional_create_canister_with_cycles`.
+    /// See [`ManagementCanister::provisional_create_canister_with_cycles`].
     ProvisionalCreateCanisterWithCycles,
-    /// See `Canister::<ManagementCanister>::provisional_top_up_canister`.
+    /// See [`ManagementCanister::provisional_top_up_canister`].
     ProvisionalTopUpCanister,
-    /// See `Canister::<ManagementCanister>::uninstall_code`.
+    /// See [`ManagementCanister::uninstall_code`].
     UninstallCode,
-    /// See `Canister::<ManagementCanister>::update_settings`.
+    /// See [`ManagementCanister::update_settings`].
     UpdateSettings,
+    /// See [`ManagementCanister::upload_chunk`].
+    UploadChunk,
+    /// See [`ManagementCanister::clear_chunk_store`].
+    ClearChunkStore,
+    /// See [`ManagementCanister::stored_chunks`].
+    StoredChunks,
+    /// See [`ManagementCanister::install_chunked_code`].
+    InstallChunkedCode,
+    /// See [`ManagementCanister::fetch_canister_logs`].
+    FetchCanisterLogs,
+    /// There is no corresponding agent function as only canisters can call it.
+    EcdsaPublicKey,
+    /// There is no corresponding agent function as only canisters can call it.
+    SignWithEcdsa,
+    /// There is no corresponding agent function as only canisters can call it.
+    BitcoinGetBalance,
+    /// There is no corresponding agent function as only canisters can call it.
+    BitcoinGetBalanceQuery,
+    /// There is no corresponding agent function as only canisters can call it.
+    BitcoinGetUtxos,
+    /// There is no corresponding agent function as only canisters can call it.
+    BitcoinGetUtxosQuery,
+    /// There is no corresponding agent function as only canisters can call it.
+    BitcoinSendTransaction,
+    /// There is no corresponding agent function as only canisters can call it.
+    BitcoinGetCurrentFeePercentiles,
 }
 
 impl<'agent> ManagementCanister<'agent> {
@@ -89,6 +122,24 @@ pub struct StatusCallResult {
     pub cycles: Nat,
     /// The canister's reserved cycles balance.
     pub reserved_cycles: Nat,
+    /// The cycles burned by the canister in one day for its resource usage
+    /// (compute and memory allocation and memory usage).
+    pub idle_cycles_burned_per_day: Nat,
+    /// Additional information relating to query calls.
+    pub query_stats: QueryStats,
+}
+
+/// Statistics relating to query calls.
+#[derive(Clone, Debug, Deserialize, CandidType)]
+pub struct QueryStats {
+    /// The total number of query calls this canister has performed.
+    pub num_calls_total: Nat,
+    /// The total number of instructions this canister has executed during query calls.
+    pub num_instructions_total: Nat,
+    /// The total number of bytes in request payloads sent to this canister's query calls.
+    pub request_payload_bytes_total: Nat,
+    /// The total number of bytes in response payloads returned from this canister's query calls.
+    pub response_payload_bytes_total: Nat,
 }
 
 /// The concrete settings of a canister.
@@ -104,6 +155,21 @@ pub struct DefiniteCanisterSettings {
     pub freezing_threshold: Nat,
     /// The upper limit of the canister's reserved cycles balance.
     pub reserved_cycles_limit: Option<Nat>,
+}
+
+/// The result of a [`ManagementCanister::upload_chunk`] call.
+#[derive(Clone, Debug, Deserialize, CandidType)]
+pub struct UploadChunkResult {
+    /// The hash of the uploaded chunk.
+    #[serde(with = "serde_bytes")]
+    pub hash: ChunkHash,
+}
+
+/// The result of a [`ManagementCanister::stored_chunks`] call.
+#[derive(Clone, Debug)]
+pub struct ChunkInfo {
+    /// The hash of the stored chunk.
+    pub hash: ChunkHash,
 }
 
 impl std::fmt::Display for StatusCallResult {
@@ -133,10 +199,32 @@ impl std::fmt::Display for CanisterStatus {
     }
 }
 
+/// A log record of a canister.
+#[derive(Default, Clone, CandidType, Deserialize, Debug, PartialEq, Eq)]
+pub struct CanisterLogRecord {
+    /// The index of the log record.
+    pub idx: u64,
+    /// The timestamp of the log record.
+    pub timestamp_nanos: u64,
+    /// The content of the log record.
+    #[serde(with = "serde_bytes")]
+    pub content: Vec<u8>,
+}
+
+/// The result of a [`ManagementCanister::fetch_canister_logs`] call.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, CandidType)]
+pub struct FetchCanisterLogsResponse {
+    /// The logs of the canister.
+    pub canister_log_records: Vec<CanisterLogRecord>,
+}
+
+/// A SHA-256 hash of a WASM chunk.
+pub type ChunkHash = [u8; 32];
+
 impl<'agent> ManagementCanister<'agent> {
     /// Get the status of a canister.
-    pub fn canister_status<'canister: 'agent>(
-        &'canister self,
+    pub fn canister_status(
+        &self,
         canister_id: &Principal,
     ) -> impl 'agent + AsyncCall<(StatusCallResult,)> {
         #[derive(CandidType)]
@@ -154,18 +242,13 @@ impl<'agent> ManagementCanister<'agent> {
     }
 
     /// Create a canister.
-    pub fn create_canister<'canister: 'agent>(
-        &'canister self,
-    ) -> CreateCanisterBuilder<'agent, 'canister> {
+    pub fn create_canister<'canister>(&'canister self) -> CreateCanisterBuilder<'agent, 'canister> {
         CreateCanisterBuilder::builder(self)
     }
 
     /// This method deposits the cycles included in this call into the specified canister.
     /// Only the controller of the canister can deposit cycles.
-    pub fn deposit_cycles<'canister: 'agent>(
-        &'canister self,
-        canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<()> {
+    pub fn deposit_cycles(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<()> {
         #[derive(CandidType)]
         struct Argument {
             canister_id: Principal,
@@ -180,10 +263,7 @@ impl<'agent> ManagementCanister<'agent> {
     }
 
     /// Deletes a canister.
-    pub fn delete_canister<'canister: 'agent>(
-        &'canister self,
-        canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<()> {
+    pub fn delete_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<()> {
         #[derive(CandidType)]
         struct Argument {
             canister_id: Principal,
@@ -201,8 +281,8 @@ impl<'agent> ManagementCanister<'agent> {
     /// the system provides the provisional_top_up_canister method.
     /// It adds amount cycles to the balance of canister identified by amount
     /// (implicitly capping it at MAX_CANISTER_BALANCE).
-    pub fn provisional_top_up_canister<'canister: 'agent>(
-        &'canister self,
+    pub fn provisional_top_up_canister(
+        &self,
         canister_id: &Principal,
         amount: u64,
     ) -> impl 'agent + AsyncCall<()> {
@@ -224,17 +304,14 @@ impl<'agent> ManagementCanister<'agent> {
     /// This method takes no input and returns 32 pseudo-random bytes to the caller.
     /// The return value is unknown to any part of the IC at time of the submission of this call.
     /// A new return value is generated for each call to this method.
-    pub fn raw_rand<'canister: 'agent>(&'canister self) -> impl 'agent + AsyncCall<(Vec<u8>,)> {
+    pub fn raw_rand(&self) -> impl 'agent + AsyncCall<(Vec<u8>,)> {
         self.update(MgmtMethod::RawRand.as_ref())
             .build()
             .map(|result: (Vec<u8>,)| (result.0,))
     }
 
     /// Starts a canister.
-    pub fn start_canister<'canister: 'agent>(
-        &'canister self,
-        canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<()> {
+    pub fn start_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<()> {
         #[derive(CandidType)]
         struct Argument {
             canister_id: Principal,
@@ -249,10 +326,7 @@ impl<'agent> ManagementCanister<'agent> {
     }
 
     /// Stop a canister.
-    pub fn stop_canister<'canister: 'agent>(
-        &'canister self,
-        canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<()> {
+    pub fn stop_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<()> {
         #[derive(CandidType)]
         struct Argument {
             canister_id: Principal,
@@ -273,10 +347,7 @@ impl<'agent> ManagementCanister<'agent> {
     /// Outstanding responses to the canister will not be processed, even if they arrive after code has been installed again.
     /// The canister is now empty. In particular, any incoming or queued calls will be rejected.
     //// A canister after uninstalling retains its cycles balance, controller, status, and allocations.
-    pub fn uninstall_code<'canister: 'agent>(
-        &'canister self,
-        canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<()> {
+    pub fn uninstall_code(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<()> {
         #[derive(CandidType)]
         struct Argument {
             canister_id: Principal,
@@ -291,7 +362,7 @@ impl<'agent> ManagementCanister<'agent> {
     }
 
     /// Install a canister, with all the arguments necessary for creating the canister.
-    pub fn install_code<'canister: 'agent>(
+    pub fn install_code<'canister>(
         &'canister self,
         canister_id: &Principal,
         wasm: &'canister [u8],
@@ -300,10 +371,100 @@ impl<'agent> ManagementCanister<'agent> {
     }
 
     /// Update one or more of a canisters settings (i.e its controller, compute allocation, or memory allocation.)
-    pub fn update_settings<'canister: 'agent>(
+    pub fn update_settings<'canister>(
         &'canister self,
         canister_id: &Principal,
     ) -> UpdateCanisterBuilder<'agent, 'canister> {
         UpdateCanisterBuilder::builder(self, canister_id)
+    }
+
+    /// Upload a chunk of a WASM module to a canister's chunked WASM storage.
+    pub fn upload_chunk(
+        &self,
+        canister_id: &Principal,
+        chunk: &[u8],
+    ) -> impl 'agent + AsyncCall<(UploadChunkResult,)> {
+        #[derive(CandidType, Deserialize)]
+        struct Argument<'a> {
+            canister_id: Principal,
+            #[serde(with = "serde_bytes")]
+            chunk: &'a [u8],
+        }
+
+        self.update(MgmtMethod::UploadChunk.as_ref())
+            .with_arg(Argument {
+                canister_id: *canister_id,
+                chunk,
+            })
+            .with_effective_canister_id(*canister_id)
+            .build()
+    }
+
+    /// Clear a canister's chunked WASM storage.
+    pub fn clear_chunk_store(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<()> {
+        #[derive(CandidType)]
+        struct Argument<'a> {
+            canister_id: &'a Principal,
+        }
+        self.update(MgmtMethod::ClearChunkStore.as_ref())
+            .with_arg(Argument { canister_id })
+            .with_effective_canister_id(*canister_id)
+            .build()
+    }
+
+    /// Get a list of the hashes of a canister's stored WASM chunks
+    pub fn stored_chunks(
+        &self,
+        canister_id: &Principal,
+    ) -> impl 'agent + AsyncCall<(Vec<ChunkInfo>,)> {
+        #[derive(CandidType)]
+        struct Argument<'a> {
+            canister_id: &'a Principal,
+        }
+        self.update(MgmtMethod::StoredChunks.as_ref())
+            .with_arg(Argument { canister_id })
+            .with_effective_canister_id(*canister_id)
+            .build()
+    }
+
+    /// Install a canister module previously uploaded in chunks via [`upload_chunk`](Self::upload_chunk).
+    pub fn install_chunked_code<'canister>(
+        &'canister self,
+        canister_id: &Principal,
+        wasm_module_hash: ChunkHash,
+    ) -> InstallChunkedCodeBuilder<'agent, 'canister> {
+        InstallChunkedCodeBuilder::builder(self, *canister_id, wasm_module_hash)
+    }
+
+    /// Install a canister module, automatically selecting one-shot installation or chunked installation depending on module size.
+    ///
+    /// # Warnings
+    ///
+    /// This will clear chunked code storage if chunked installation is used. Do not use with canisters that you are manually uploading chunked code to.
+    pub fn install<'canister: 'builder, 'builder>(
+        &'canister self,
+        canister_id: &Principal,
+        wasm: &'builder [u8],
+    ) -> InstallBuilder<'agent, 'canister, 'builder> {
+        InstallBuilder::builder(self, canister_id, wasm)
+    }
+
+    /// Fetch the logs of a canister.
+    pub fn fetch_canister_logs(
+        &self,
+        canister_id: &Principal,
+    ) -> impl 'agent + SyncCall<(FetchCanisterLogsResponse,)> {
+        #[derive(CandidType)]
+        struct In {
+            canister_id: Principal,
+        }
+
+        // `fetch_canister_logs` is only supported in non-replicated mode.
+        self.query(MgmtMethod::FetchCanisterLogs.as_ref())
+            .with_arg(In {
+                canister_id: *canister_id,
+            })
+            .with_effective_canister_id(*canister_id)
+            .build()
     }
 }
