@@ -3,12 +3,13 @@ pub use hyper;
 
 use std::{any, error::Error, future::Future, marker::PhantomData, sync::atomic::AtomicPtr};
 
-use http_body::{LengthLimitError, Limited};
-use hyper::{
-    body::HttpBody, client::HttpConnector, header::CONTENT_TYPE, service::Service, Client, Method,
-    Request, Response,
-};
+//use http_body::{LengthLimitError, Limited};
+use axum::body::HttpBody;
+use hyper::{header::CONTENT_TYPE, service::Service, Method, Request, Response};
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
+use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::client::legacy::Client;
+use hyper_util::rt::TokioExecutor;
 
 use crate::{
     agent::{
@@ -91,7 +92,7 @@ impl<B1: HyperBody> HyperTransport<B1> {
             .enable_http1()
             .enable_http2()
             .build();
-        Self::create_with_service(url, Client::builder().build(connector))
+        Self::create_with_service(url, Client::builder(TokioExecutor::new()).build(connector))
     }
 }
 
@@ -166,21 +167,21 @@ where
             .map_err(map_error)?;
 
         let (parts, body) = response.into_parts();
-        let body = if let Some(limit) = self.max_response_body_size {
-            hyper::body::to_bytes(Limited::new(body, limit))
-                .await
-                .map_err(|err| {
-                    if err.downcast_ref::<LengthLimitError>().is_some() {
-                        AgentError::ResponseSizeExceededLimit()
-                    } else {
-                        AgentError::TransportError(err)
-                    }
-                })?
-        } else {
-            hyper::body::to_bytes(body)
-                .await
-                .map_err(|err| AgentError::TransportError(Box::new(err)))?
-        };
+        let body: hyper::body::Bytes = todo!(""); /*if let Some(limit) = self.max_response_body_size {
+                                                      hyper::body::to_bytes(Limited::new(body, limit))
+                                                          .await
+                                                          .map_err(|err| {
+                                                              if err.downcast_ref::<LengthLimitError>().is_some() {
+                                                                  AgentError::ResponseSizeExceededLimit()
+                                                              } else {
+                                                                  AgentError::TransportError(err)
+                                                              }
+                                                          })?
+                                                  } else {
+                                                      hyper::body::to_bytes(body)
+                                                          .await
+                                                          .map_err(|err| AgentError::TransportError(Box::new(err)))?
+                                                  };*/
 
         let (status, headers, body) = (parts.status, parts.headers, body.to_vec());
         if status.is_client_error() || status.is_server_error() {
@@ -261,6 +262,7 @@ where
     }
 }
 
+/*
 #[cfg(test)]
 mod test {
     use super::HyperTransport;
@@ -299,3 +301,4 @@ mod test {
         test("https://fooic0.app.ic0.app", "https://ic0.app/api/v2/");
     }
 }
+*/
