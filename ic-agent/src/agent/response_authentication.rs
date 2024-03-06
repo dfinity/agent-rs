@@ -216,7 +216,7 @@ pub(crate) fn lookup_subnet<Storage: AsRef<[u8]> + Clone>(
 pub(crate) fn lookup_api_boundary_nodes<Storage: AsRef<[u8]> + Clone>(
     certificate: Certificate<Storage>,
 ) -> Result<Vec<ApiBoundaryNode>, AgentError> {
-    // API Boundary Node paths in the State Tree, as defined in the spec (https://github.com/dfinity/interface-spec/pull/248 to be merged soon).
+    // API boundary nodes paths in the state tree, as defined in the spec (https://internetcomputer.org/docs/current/references/ic-interface-spec#state-tree-api-bn).
     let api_bn_path = "api_boundary_nodes".as_bytes();
     let domain_path = "domain".as_bytes();
     let ipv4_path = "ipv4_address".as_bytes();
@@ -242,7 +242,7 @@ pub(crate) fn lookup_api_boundary_nodes<Storage: AsRef<[u8]> + Clone>(
                 String::from_utf8(ipv4.to_vec())
                     .map_err(|err| AgentError::Utf8ReadError(err.utf8_error()))?,
             ),
-            // By convention an absent path `/api_boundary_nodes/<node_id>/ipv4_address` in the State Tree signifies that ipv4 is None.
+            // By convention an absent path `/api_boundary_nodes/<node_id>/ipv4_address` in the state tree signifies that ipv4 is None.
             Err(AgentError::LookupPathAbsent(_)) => None,
             Err(err) => return Err(err),
         };
@@ -255,6 +255,7 @@ pub(crate) fn lookup_api_boundary_nodes<Storage: AsRef<[u8]> + Clone>(
 
         api_bns.push(api_bn);
     }
+
     Ok(api_bns)
 }
 
