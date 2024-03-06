@@ -1123,7 +1123,7 @@ impl Agent {
         }
     }
 
-    /// Retrieve all existing API Boundary Nodes from the State Tree.
+    /// Retrieve all existing API boundary nodes from the state tree.
     pub async fn fetch_api_boundary_nodes(
         &self,
         effective_canister_id: Principal,
@@ -1463,7 +1463,7 @@ pub(crate) struct Subnet {
     canister_ranges: RangeInclusiveSet<Principal, PrincipalStep>,
 }
 
-/// API Boundary Node, which routes /api calls to IC replica nodes.
+/// API boundary node, which routes /api calls to IC replica nodes.
 #[derive(Debug)]
 pub struct ApiBoundaryNode {
     /// Domain name
