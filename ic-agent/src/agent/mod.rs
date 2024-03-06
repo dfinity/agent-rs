@@ -841,6 +841,16 @@ impl Agent {
         cert: &Certificate,
         effective_canister_id: Principal,
     ) -> Result<(), AgentError> {
+        self.verify_cert(cert, effective_canister_id)?;
+        self.verify_cert_timestamp(cert)?;
+        Ok(())
+    }
+
+    fn verify_cert(
+        &self,
+        cert: &Certificate,
+        effective_canister_id: Principal,
+    ) -> Result<(), AgentError> {
         let sig = &cert.signature;
 
         let root_hash = cert.tree.digest();
@@ -853,15 +863,22 @@ impl Agent {
 
         ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
             .map_err(|_| AgentError::CertificateVerificationFailed())?;
-
-        self.verify_cert_timestamp(cert)?;
-
         Ok(())
     }
 
     /// Verify a certificate, checking delegation if present.
     /// Only passes if the certificate is for the specified subnet.
     pub fn verify_for_subnet(
+        &self,
+        cert: &Certificate,
+        subnet_id: Principal,
+    ) -> Result<(), AgentError> {
+        self.verify_cert_for_subnet(cert, subnet_id)?;
+        self.verify_cert_timestamp(cert)?;
+        Ok(())
+    }
+
+    fn verify_cert_for_subnet(
         &self,
         cert: &Certificate,
         subnet_id: Principal,
@@ -877,7 +894,8 @@ impl Agent {
         let key = extract_der(der_key)?;
 
         ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
-            .map_err(|_| AgentError::CertificateVerificationFailed())
+            .map_err(|_| AgentError::CertificateVerificationFailed())?;
+        Ok(())
     }
 
     fn verify_cert_timestamp(&self, cert: &Certificate) -> Result<(), AgentError> {
@@ -905,7 +923,7 @@ impl Agent {
                 if cert.delegation.is_some() {
                     return Err(AgentError::CertificateHasTooManyDelegations);
                 }
-                self.verify(&cert, effective_canister_id)?;
+                self.verify_cert(&cert, effective_canister_id)?;
                 let canister_range_lookup = [
                     "subnet".as_bytes(),
                     delegation.subnet_id.as_ref(),
@@ -942,7 +960,7 @@ impl Agent {
                 if cert.delegation.is_some() {
                     return Err(AgentError::CertificateHasTooManyDelegations);
                 }
-                self.verify_for_subnet(&cert, subnet_id)?;
+                self.verify_cert_for_subnet(&cert, subnet_id)?;
                 let public_key_path = [
                     "subnet".as_bytes(),
                     delegation.subnet_id.as_ref(),
