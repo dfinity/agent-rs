@@ -44,6 +44,21 @@ fn make_certifying_agent(url: &str) -> Agent {
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+async fn refuse_to_install_mainnet_root_key() -> Result<(), AgentError> {
+    let url = "https://icp0.io";
+
+    let agent = make_agent(&url);
+    let result = agent.fetch_root_key().await;
+    assert!(matches!(
+        result,
+        Err(AgentError::NeverFetchRootKeyOnMainNet())
+    ));
+    assert_eq!(agent.read_root_key(), Vec::<u8>::new());
+    Ok(())
+}
+
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn query() -> Result<(), AgentError> {
     let blob = Vec::from("Hello World");
     let response = QueryResponse::Replied {

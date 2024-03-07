@@ -201,6 +201,11 @@ pub enum AgentError {
     /// Route provider failed to generate a url for some reason.
     #[error("Route provider failed to generate url: {0}")]
     RouteProviderError(String),
+
+    /// It's an error to fetch the root key on the mainnet.
+    /// Doing so would enable a man-in-the-middle attack.
+    #[error("Never fetch the root key on the mainnet")]
+    NeverFetchRootKeyOnMainNet(),
 }
 
 impl PartialEq for AgentError {
