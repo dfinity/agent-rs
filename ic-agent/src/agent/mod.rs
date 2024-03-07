@@ -330,6 +330,11 @@ impl Agent {
         }
         let status = self.status().await?;
         let root_key = match status.root_key {
+            Some(key) if key[..] == IC_ROOT_KEY[..] => {
+                // even if the caller ignores this error, we're done here.
+                self.set_root_key(vec![]);
+                return Err(AgentError::NeverFetchRootKeyOnMainNet());
+            }
             Some(key) => key,
             None => return Err(AgentError::NoRootKeyInStatus(status)),
         };
@@ -340,7 +345,7 @@ impl Agent {
     /// By default, the agent is configured to talk to the main Internet Computer, and verifies
     /// responses using a hard-coded public key.
     ///
-    /// Using this function you can set the root key to a known one if you know if beforehand.
+    /// Using this function you can set the root key to a known one if you know it beforehand.
     pub fn set_root_key(&self, root_key: Vec<u8>) {
         *self.root_key.write().unwrap() = root_key;
     }
