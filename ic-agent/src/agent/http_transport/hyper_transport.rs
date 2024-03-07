@@ -3,13 +3,14 @@ pub use hyper;
 
 use std::{any, error::Error, future::Future, marker::PhantomData, sync::atomic::AtomicPtr};
 
-//use http_body::{LengthLimitError, Limited};
-use axum::body::HttpBody;
-use hyper::{header::CONTENT_TYPE, service::Service, Method, Request, Response};
+use http_body::Body;
+use http_body_to_bytes::{http_body_to_bytes, http_body_to_bytes_with_max_length};
+use http_body_util::LengthLimitError;
+use hyper::{header::CONTENT_TYPE, Method, Request, Response};
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-use hyper_util::client::legacy::connect::HttpConnector;
-use hyper_util::client::legacy::Client;
+use hyper_util::client::legacy::{connect::HttpConnector, Client};
 use hyper_util::rt::TokioExecutor;
+use tower::Service;
 
 use crate::{
     agent::{
@@ -36,17 +37,17 @@ pub use HyperTransport as HyperReplicaV2Transport; // delete after 0.31
 
 /// Trait representing the contraints on [`HttpBody`] that [`HyperTransport`] requires
 pub trait HyperBody:
-    HttpBody<Data = Self::BodyData, Error = Self::BodyError> + Send + From<Vec<u8>> + 'static
+    Body<Data = Self::BodyData, Error = Self::BodyError> + Send + Unpin + 'static
 {
     /// Values yielded by the `Body`.
     type BodyData: Send;
     /// The error type this `Body` might generate.
-    type BodyError: Error + Send + Sync + 'static;
+    type BodyError: Into<Box<dyn std::error::Error + Send + Sync>>;
 }
 
 impl<B> HyperBody for B
 where
-    B: HttpBody + Send + From<Vec<u8>> + 'static,
+    B: Body + Send + Unpin + 'static,
     B::Data: Send,
     B::Error: Error + Send + Sync + 'static,
 {
@@ -62,28 +63,32 @@ pub trait HyperService<B1: HyperBody>:
     + Service<
         Request<B1>,
         Response = Response<Self::ResponseBody>,
-        Error = hyper::Error,
+        Error = Self::RError,
         Future = Self::ServiceFuture,
     >
 {
     /// Values yielded in the `Body` of the `Response`.
     type ResponseBody: HyperBody;
+    /// The error type for conversion to `Bytes`.
+    type RError: std::error::Error + Send + Sync + 'static;
     /// The future response value.
     type ServiceFuture: Send + Future<Output = Result<Self::Response, Self::Error>>;
 }
 
-impl<B1, B2, S> HyperService<B1> for S
+impl<B1, B2, S, E> HyperService<B1> for S
 where
     B1: HyperBody,
     B2: HyperBody,
-    S: Send + Sync + Clone + Service<Request<B1>, Response = Response<B2>, Error = hyper::Error>,
+    E: std::error::Error + Send + Sync + 'static,
+    S: Send + Sync + Clone + Service<Request<B1>, Response = Response<B2>, Error = E>,
     S::Future: Send,
 {
     type ResponseBody = B2;
     type ServiceFuture = S::Future;
+    type RError = E;
 }
 
-impl<B1: HyperBody> HyperTransport<B1> {
+impl<B1: HyperBody + From<Vec<u8>>> HyperTransport<B1> {
     /// Creates a replica transport from a HTTP URL.
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
         let connector = HttpsConnectorBuilder::new()
@@ -92,13 +97,14 @@ impl<B1: HyperBody> HyperTransport<B1> {
             .enable_http1()
             .enable_http2()
             .build();
-        Self::create_with_service(url, Client::builder(TokioExecutor::new()).build(connector))
+        let client = Client::builder(TokioExecutor::new()).build(connector);
+        Self::create_with_service(url, client)
     }
 }
 
 impl<B1, S> HyperTransport<B1, S>
 where
-    B1: HyperBody,
+    B1: HyperBody + From<Vec<u8>>,
     S: HyperService<B1>,
 {
     /// Creates a replica transport from a HTTP URL and a [`HyperService`].
@@ -167,21 +173,21 @@ where
             .map_err(map_error)?;
 
         let (parts, body) = response.into_parts();
-        let body: hyper::body::Bytes = todo!(""); /*if let Some(limit) = self.max_response_body_size {
-                                                      hyper::body::to_bytes(Limited::new(body, limit))
-                                                          .await
-                                                          .map_err(|err| {
-                                                              if err.downcast_ref::<LengthLimitError>().is_some() {
-                                                                  AgentError::ResponseSizeExceededLimit()
-                                                              } else {
-                                                                  AgentError::TransportError(err)
-                                                              }
-                                                          })?
-                                                  } else {
-                                                      hyper::body::to_bytes(body)
-                                                          .await
-                                                          .map_err(|err| AgentError::TransportError(Box::new(err)))?
-                                                  };*/
+        let body = if let Some(limit) = self.max_response_body_size {
+            http_body_to_bytes_with_max_length(body, limit)
+                .await
+                .map_err(|err| {
+                    if err.downcast_ref::<LengthLimitError>().is_some() {
+                        AgentError::ResponseSizeExceededLimit()
+                    } else {
+                        AgentError::TransportError(err)
+                    }
+                })?
+        } else {
+            http_body_to_bytes(body)
+                .await
+                .map_err(|err| AgentError::TransportError(err.into()))?
+        };
 
         let (status, headers, body) = (parts.status, parts.headers, body.to_vec());
         if status.is_client_error() || status.is_server_error() {
@@ -201,7 +207,7 @@ where
 
 impl<B1, S> Transport for HyperTransport<B1, S>
 where
-    B1: HyperBody,
+    B1: HyperBody + From<Vec<u8>>,
     S: HyperService<B1>,
 {
     fn call(
@@ -262,17 +268,28 @@ where
     }
 }
 
-/*
 #[cfg(test)]
 mod test {
     use super::HyperTransport;
-    use hyper::Client;
+    use http_body_util::Full;
+    use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
+    use hyper_util::client::legacy::connect::HttpConnector;
+    use hyper_util::client::legacy::Client;
+    use hyper_util::rt::TokioExecutor;
+    use std::collections::VecDeque;
     use url::Url;
 
     #[test]
     fn redirect() {
         fn test(base: &str, result: &str) {
-            let client: Client<_> = Client::builder().build_http();
+            let connector = HttpsConnectorBuilder::new()
+                .with_webpki_roots()
+                .https_or_http()
+                .enable_http1()
+                .enable_http2()
+                .build();
+            let client: Client<HttpsConnector<HttpConnector>, Full<VecDeque<u8>>> =
+                Client::builder(TokioExecutor::new()).build(connector);
             let url: Url = base.parse().unwrap();
             let t = HyperTransport::create_with_service(url, client).unwrap();
             assert_eq!(
@@ -301,4 +318,3 @@ mod test {
         test("https://fooic0.app.ic0.app", "https://ic0.app/api/v2/");
     }
 }
-*/
