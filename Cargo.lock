@@ -1201,7 +1201,7 @@ dependencies = [
  "rand",
  "rangemap",
  "reqwest",
- "ring 0.16.20",
+ "ring 0.17.8",
  "rustls-webpki 0.101.4",
  "sec1",
  "serde",
@@ -1271,7 +1271,7 @@ dependencies = [
  "futures-util",
  "ic-agent",
  "once_cell",
- "ring 0.16.20",
+ "ring 0.17.8",
  "semver",
  "serde",
  "serde_bytes",
@@ -1323,7 +1323,7 @@ dependencies = [
  "humantime",
  "ic-agent",
  "ic-utils",
- "ring 0.16.20",
+ "ring 0.17.8",
  "serde",
  "serde_json",
  "tokio",
@@ -1970,7 +1970,7 @@ dependencies = [
  "ic-certification",
  "ic-identity-hsm",
  "ic-utils",
- "ring 0.16.20",
+ "ring 0.17.8",
  "serde",
  "serde_cbor",
  "sha2 0.10.7",
@@ -2166,8 +2166,8 @@ version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f48172685e6ff52a556baa527774f61fcaa884f59daf3375c62a3f1cd2549dab"
 dependencies = [
- "base64 0.21.2",
- "rustls-pki-types",
+ "ring 0.16.20",
+ "untrusted 0.7.1",
 ]
 
 [[package]]
@@ -2184,17 +2184,6 @@ checksum = "7d93931baf2d282fff8d3a532bbfd7653f734643161b87e3e01e59a04439bf0d"
 dependencies = [
  "ring 0.16.20",
  "untrusted 0.7.1",
-]
-
-[[package]]
-name = "rustls-webpki"
-version = "0.102.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "faaa0a62740bedb9b2ef5afa303da42764c012f743917351dc9a237ea1663610"
-dependencies = [
- "ring 0.17.8",
- "rustls-pki-types",
- "untrusted 0.9.0",
 ]
 
 [[package]]
