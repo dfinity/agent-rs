@@ -62,28 +62,24 @@ pub trait HyperService<B1: HyperBody>:
     + Clone
     + Service<
         Request<B1>,
-        Response = Response<Self::ResponseBody>,
+        Response = Response<hyper::body::Incoming>,
         Error = Self::RError,
         Future = Self::ServiceFuture,
     >
 {
-    /// Values yielded in the `Body` of the `Response`.
-    type ResponseBody: HyperBody;
     /// The error type for conversion to `Bytes`.
     type RError: std::error::Error + Send + Sync + 'static;
     /// The future response value.
     type ServiceFuture: Send + Future<Output = Result<Self::Response, Self::Error>>;
 }
 
-impl<B1, B2, S, E> HyperService<B1> for S
+impl<B1, S, E> HyperService<B1> for S
 where
     B1: HyperBody,
-    B2: HyperBody,
     E: std::error::Error + Send + Sync + 'static,
-    S: Send + Sync + Clone + Service<Request<B1>, Response = Response<B2>, Error = E>,
+    S: Send + Sync + Clone + Service<Request<B1>, Response = Response<hyper::body::Incoming>, Error = E>,
     S::Future: Send,
 {
-    type ResponseBody = B2;
     type ServiceFuture = S::Future;
     type RError = E;
 }
