@@ -77,7 +77,10 @@ impl<B1, S, E> HyperService<B1> for S
 where
     B1: HyperBody,
     E: std::error::Error + Send + Sync + 'static,
-    S: Send + Sync + Clone + Service<Request<B1>, Response = Response<hyper::body::Incoming>, Error = E>,
+    S: Send
+        + Sync
+        + Clone
+        + Service<Request<B1>, Response = Response<hyper::body::Incoming>, Error = E>,
     S::Future: Send,
 {
     type ServiceFuture = S::Future;
