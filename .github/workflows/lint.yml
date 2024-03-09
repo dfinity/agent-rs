@@ -21,10 +21,17 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack@0.6.21
+
       - name: Run Lint
-        run: cargo clippy --verbose --tests --benches -- -D warnings
+        run: |
+          cargo hack clippy --each-feature --exclude-features ic_ref_tests --no-dev-deps --verbose -- -D warnings
+          cargo clippy --features ic_ref_tests --verbose --tests --benches -- -D warnings
         env:
           RUST_BACKTRACE: 1
+
       - name: Run Lint (WASM)
         run: CARGO_TARGET_DIR=target/wasm cargo clippy --target wasm32-unknown-unknown -p ic-agent --features wasm-bindgen -p ic-utils --verbose -- -D warnings
   aggregate:
