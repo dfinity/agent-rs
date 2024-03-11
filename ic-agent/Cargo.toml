@@ -99,7 +99,7 @@ web-sys = { version = "0.3", features = [
 [features]
 default = ["pem", "reqwest"]
 reqwest = ["dep:reqwest"]
-hyper = ["dep:hyper", "dep:hyper-rustls"]
+hyper = ["dep:hyper", "dep:hyper-rustls", "dep:http-body-to-bytes", "dep:http-body-util", "dep:hyper-util", "dep:tower"]
 ic_ref_tests = [
     "default",
 ] # Used to separate integration tests for ic-ref which need a server running.
