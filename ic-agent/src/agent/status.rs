@@ -119,20 +119,31 @@ fn can_serialize_status_as_json_with_non_null() {
         Text("replica_health_status".to_string()),
         Text("healthy".to_string()),
     );
-    map.insert(Text("certified_height".to_string()), serde_cbor::value::Value::Integer(654275));
+    map.insert(
+        Text("certified_height".to_string()),
+        serde_cbor::value::Value::Integer(654275),
+    );
     map.insert(
         Text("arbitrary".to_string()),
         serde_cbor::value::Value::Null,
     );
-    map.insert(Text("root_key".to_string()), serde_cbor::value::Value::Bytes(vec![1, 2, 3, 4]));
-    map.insert(Text("truthy".to_string()), serde_cbor::value::Value::Bool(true));
+    map.insert(
+        Text("root_key".to_string()),
+        serde_cbor::value::Value::Bytes(vec![1, 2, 3, 4]),
+    );
+    map.insert(
+        Text("truthy".to_string()),
+        serde_cbor::value::Value::Bool(true),
+    );
     let mut submap = BTreeMap::new();
     submap.insert(Text("foo".to_string()), Text("bar".to_string()));
-    map.insert(Text("submap".to_string()), serde_cbor::value::Value::Map(submap));
+    map.insert(
+        Text("submap".to_string()),
+        serde_cbor::value::Value::Map(submap),
+    );
     let cbor = serde_cbor::Value::Map(map);
     let status = Status::try_from(&cbor).expect("Failed to convert from cbor");
-    let expected_json =
-        r#"{"arbitrary":null,"certified_height":654275,"impl_version":"0.19.2","replica_health_status":"healthy","root_key":[1,2,3,4],"submap":{"foo":"bar"},"truthy":true}"#;
+    let expected_json = r#"{"arbitrary":null,"certified_height":654275,"impl_version":"0.19.2","replica_health_status":"healthy","root_key":[1,2,3,4],"submap":{"foo":"bar"},"truthy":true}"#;
     let actual_json = serde_json::to_string(&status).expect("Failed to serialize as JSON");
     assert_eq!(expected_json, actual_json);
 }
