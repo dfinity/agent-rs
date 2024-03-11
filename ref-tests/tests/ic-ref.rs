@@ -42,8 +42,8 @@ mod management_canister {
         Argument,
     };
     use ref_tests::{
-        create_agent, create_basic_identity, create_secp256k1_identity, with_agent,
-        with_wallet_canister,
+        create_agent, create_basic_identity, create_prime256v1_identity, create_secp256k1_identity,
+        with_agent, with_wallet_canister,
     };
     use ref_tests::{get_effective_canister_id, with_universal_canister};
     use sha2::{Digest, Sha256};
@@ -270,6 +270,12 @@ mod management_canister {
             secp256k1_agent.fetch_root_key().await?;
             let secp256k1_ic00 = ManagementCanister::create(&secp256k1_agent);
 
+            let prime256v1_identity = create_prime256v1_identity()?;
+            let prime256v1_principal = prime256v1_identity.sender()?;
+            let prime256v1_agent = create_agent(prime256v1_identity).await?;
+            prime256v1_agent.fetch_root_key().await?;
+            let prime256v1_ic00 = ManagementCanister::create(&prime256v1_agent);
+
             let ic00 = ManagementCanister::create(&agent);
 
             let (canister_id,) = ic00
@@ -343,6 +349,46 @@ mod management_canister {
                 .await?;
             assert_eq!(result.0.settings.controllers.len(), 1);
             assert_eq!(result.0.settings.controllers[0], secp256k1_principal);
+
+            // Only that controller can change the controller again
+            let result = ic00
+                .update_settings(&canister_id)
+                .with_controller(prime256v1_principal)
+                .call_and_wait()
+                .await;
+            assert_err_or_reject(
+                result,
+                vec![RejectCode::DestinationInvalid, RejectCode::CanisterError],
+            );
+            let result = other_ic00
+                .update_settings(&canister_id)
+                .with_controller(prime256v1_principal)
+                .call_and_wait()
+                .await;
+            assert_err_or_reject(
+                result,
+                vec![RejectCode::DestinationInvalid, RejectCode::CanisterError],
+            );
+
+            secp256k1_ic00
+                .update_settings(&canister_id)
+                .with_controller(prime256v1_principal)
+                .call_and_wait()
+                .await?;
+            let result = secp256k1_ic00
+                .canister_status(&canister_id)
+                .call_and_wait()
+                .await;
+            assert_err_or_reject(
+                result,
+                vec![RejectCode::DestinationInvalid, RejectCode::CanisterError],
+            );
+            let result = prime256v1_ic00
+                .canister_status(&canister_id)
+                .call_and_wait()
+                .await?;
+            assert_eq!(result.0.settings.controllers.len(), 1);
+            assert_eq!(result.0.settings.controllers[0], prime256v1_principal);
 
             Ok(())
         })
@@ -789,6 +835,35 @@ mod management_canister {
 
     #[ignore]
     #[test]
+    fn chunked_wasm() {
+        with_agent(|agent| async move {
+            let asm = b"\0asm\x01\0\0\0";
+            let asm_hash = Sha256::digest(asm).into();
+            let mgmt = ManagementCanister::create(&agent);
+            let (canister,) = mgmt
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
+                .call_and_wait()
+                .await?;
+            let (pt1,) = mgmt
+                .upload_chunk(&canister, &asm[0..4])
+                .call_and_wait()
+                .await?;
+            let (pt2,) = mgmt
+                .upload_chunk(&canister, &asm[4..8])
+                .call_and_wait()
+                .await?;
+            mgmt.install_chunked_code(&canister, asm_hash)
+                .with_chunk_hashes(vec![pt1.hash, pt2.hash])
+                .call_and_wait()
+                .await?;
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
     // makes sure that calling fetch_root_key twice by accident does not break
     fn multi_fetch_root_key() {
         with_agent(|agent| async move {
@@ -1145,6 +1220,15 @@ mod extras {
                 ),
                 "wrong error: {result:?}"
             );
+
+            ic00.stop_canister(&specified_id)
+                .call_and_wait()
+                .await
+                .unwrap();
+            ic00.delete_canister(&specified_id)
+                .call_and_wait()
+                .await
+                .unwrap();
 
             Ok(())
         })

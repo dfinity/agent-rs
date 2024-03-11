@@ -8,7 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Added `Agent::fetch_api_boundary_nodes` for looking up API boundary nodes in the state tree.
+* Timestamps are now being checked in `Agent::verify` and `Agent::verify_for_subnet`. If you were using it with old certificates, increase the expiry timeout to continue to verify them.
+* Added node metrics, ECDSA, and Bitcoin functions to `MgmtMethod`. Most do not have wrappers in `ManagementCanister` because only canisters can call these functions.
+* Added `FetchCanisterLogs` function to `MgmtMethod` and a corresponding wrapper to `ManagementCanister`.
+* Updated the `ring` crate to 0.17.7.  `ring` 0.16 has a bug where it requires incorrect Ed25519 PEM encoding. 0.17.7 fixes that and is backwards compatible.
+
+## [0.33.0] - 2024-02-08
+
+* Changed the return type of `stored_chunks` to a struct.
+* Added a prime256v1-based `Identity` impl to complement the ed25519 and secp256k1 `Identity` impls.
+* Added serde and candid serialization traits to the `Status` type.
+* Changed the type of `InstallMode.skip_pre_upgrade` from `bool` to `Option<bool>` to match the interface specification.
+
+## [0.32.0] - 2024-01-18
+
+* Added the chunked wasm API to ic-utils. Existing code that uses `install_code` should probably update to `install`, which works the same but silently handles large wasm modules.
 * Added query stats to `StatusCallResult`.
+* Upgraded `ic-certification` to v2.2.
 
 ## [0.31.0] - 2023-11-27
 

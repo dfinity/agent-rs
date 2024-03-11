@@ -14,9 +14,9 @@ jobs:
         dfx: [ '0.8.4', '0.9.2', '0.10.1', '0.11.1' ]
 
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v4
       - name: Cache Cargo
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -27,13 +27,13 @@ jobs:
       - name: Provision Darwin
         if: contains(matrix.os, 'macos')
         run: bash .github/workflows/provision-darwin.sh
-        env:
-          INSTALL_DFX_VERSION: ${{ matrix.dfx }}
       - name: Provision Linux
         if: contains(matrix.os, 'ubuntu')
         run: bash .github/workflows/provision-linux.sh
-        env:
-          INSTALL_DFX_VERSION: ${{ matrix.dfx }}
+      - name: Install DFX
+        uses: dfinity/setup-dfx@main
+        with:
+          dfx-version: ${{ matrix.dfx }}
       - name: Setup for dfx version differences
         run: |
           if [[ "${{ matrix.dfx }}" == "0.8.4" ]]; then
