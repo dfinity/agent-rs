@@ -1,15 +1,14 @@
 //! Types for interacting with the status endpoint of a replica. See [`Status`] for details.
 
 use candid::{CandidType, Deserialize};
+use serde::ser::{SerializeMap, SerializeSeq};
 use serde::Serialize;
 use std::{collections::BTreeMap, fmt::Debug};
 
 /// Value returned by the status endpoint of a replica. This is a loose mapping to CBOR values.
 /// Because the agent should not return [`serde_cbor::Value`] directly across API boundaries,
 /// we reimplement it as [`Value`] here.
-#[derive(
-    Debug, Ord, PartialOrd, Eq, PartialEq, Clone, Hash, CandidType, Serialize, Deserialize,
-)]
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Clone, Hash, CandidType, Deserialize)]
 pub enum Value {
     /// See [`Null`](serde_cbor::Value::Null).
     Null,
@@ -27,6 +26,34 @@ pub enum Value {
     Map(BTreeMap<String, Box<Value>>),
 }
 
+impl Serialize for Value {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Value::Integer(v) => serializer.serialize_i64(*v),
+            Value::String(v) => serializer.serialize_str(v),
+            Value::Null => serializer.serialize_none(),
+            Value::Bool(v) => serializer.serialize_bool(*v),
+            Value::Bytes(v) => serializer.serialize_bytes(v),
+            Value::Vec(v) => {
+                let mut seq = serializer.serialize_seq(Some(v.len()))?;
+                for e in v {
+                    seq.serialize_element(e)?;
+                }
+                seq.end()
+            }
+            Value::Map(v) => {
+                let mut map = serializer.serialize_map(Some(v.len()))?;
+                for (k, v) in v {
+                    map.serialize_entry(k, v)?;
+                }
+                map.end()
+            }
+        }
+    }
+}
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -44,7 +71,7 @@ impl std::fmt::Display for Value {
 
 /// The structure returned by [`super::Agent::status`], containing the information returned
 /// by the status endpoint of a replica.
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, CandidType, Deserialize, Serialize)]
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, CandidType, Deserialize)]
 pub struct Status {
     /// Optional. The precise git revision of the Internet Computer Protocol implementation.
     pub impl_version: Option<String>,
@@ -59,8 +86,17 @@ pub struct Status {
     pub values: BTreeMap<String, Box<Value>>,
 }
 
+impl Serialize for Status {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.values.serialize(serializer)
+    }
+}
+
 #[test]
-fn can_serilaize_status_as_json() {
+fn can_serialize_status_as_json() {
     let status = Status {
         impl_version: None,
         replica_health_status: None,
@@ -69,6 +105,34 @@ fn can_serilaize_status_as_json() {
     };
     let expected_json =
         r#"{"impl_version":null,"replica_health_status":null,"root_key":null,"values":{}}"#;
+    let actual_json = serde_json::to_string(&status).expect("Failed to serialize as JSON");
+    assert_eq!(expected_json, actual_json);
+}
+
+#[test]
+fn can_serialize_status_as_json_with_non_null() {
+    use serde_cbor::value::Value::Text;
+
+    let mut map: BTreeMap<serde_cbor::value::Value, serde_cbor::value::Value> = BTreeMap::new();
+    map.insert(Text("impl_version".to_string()), Text("0.19.2".to_string()));
+    map.insert(
+        Text("replica_health_status".to_string()),
+        Text("healthy".to_string()),
+    );
+    map.insert(Text("certified_height".to_string()), serde_cbor::value::Value::Integer(654275));
+    map.insert(
+        Text("arbitrary".to_string()),
+        serde_cbor::value::Value::Null,
+    );
+    map.insert(Text("root_key".to_string()), serde_cbor::value::Value::Bytes(vec![1, 2, 3, 4]));
+    map.insert(Text("truthy".to_string()), serde_cbor::value::Value::Bool(true));
+    let mut submap = BTreeMap::new();
+    submap.insert(Text("foo".to_string()), Text("bar".to_string()));
+    map.insert(Text("submap".to_string()), serde_cbor::value::Value::Map(submap));
+    let cbor = serde_cbor::Value::Map(map);
+    let status = Status::try_from(&cbor).expect("Failed to convert from cbor");
+    let expected_json =
+        r#"{"arbitrary":null,"certified_height":654275,"impl_version":"0.19.2","replica_health_status":"healthy","root_key":[1,2,3,4],"submap":{"foo":"bar"},"truthy":true}"#;
     let actual_json = serde_json::to_string(&status).expect("Failed to serialize as JSON");
     assert_eq!(expected_json, actual_json);
 }
