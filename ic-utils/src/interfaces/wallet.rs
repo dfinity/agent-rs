@@ -436,7 +436,7 @@ impl<'agent> WalletCanister<'agent> {
         let version: Result<(String,), _> =
             canister.query("wallet_api_version").build().call().await;
         let version = match version {
-            Err(AgentError::ReplicaError(replica_error))
+            Err(AgentError::UncertifiedReject(replica_error))
                 if replica_error.reject_code == RejectCode::DestinationInvalid
                     && (replica_error
                         .reject_message

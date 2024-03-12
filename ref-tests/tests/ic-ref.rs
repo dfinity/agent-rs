@@ -96,7 +96,7 @@ mod management_canister {
                     .await;
 
                 assert!(matches!(result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                     reject_code: RejectCode::DestinationInvalid,
                     reject_message,
                     error_code: Some(ref error_code)
@@ -136,7 +136,7 @@ mod management_canister {
                 .call_and_wait()
                 .await;
 
-            assert!(matches!(result, Err(AgentError::ReplicaError { .. })));
+            assert!(matches!(result, Err(AgentError::CertifiedReject { .. })));
 
             // Reinstall should succeed.
             ic00.install_code(&canister_id, &canister_wasm)
@@ -157,7 +157,7 @@ mod management_canister {
                 .with_mode(InstallMode::Reinstall)
                 .call_and_wait()
                 .await;
-            assert!(matches!(result, Err(AgentError::ReplicaError(..))));
+            assert!(matches!(result, Err(AgentError::UncertifiedReject(..))));
 
             // Upgrade should succeed.
             ic00.install_code(&canister_id, &canister_wasm)
@@ -175,7 +175,7 @@ mod management_canister {
                 })
                 .call_and_wait()
                 .await;
-            assert!(matches!(result, Err(AgentError::ReplicaError(..))));
+            assert!(matches!(result, Err(AgentError::UncertifiedReject(..))));
 
             // Change controller.
             ic00.update_settings(&canister_id)
@@ -190,7 +190,7 @@ mod management_canister {
                 .call_and_wait()
                 .await;
             assert!(
-                matches!(result, Err(AgentError::ReplicaError(RejectResponse{
+                matches!(result, Err(AgentError::UncertifiedReject(RejectResponse{
                 reject_code: RejectCode::CanisterError,
                 reject_message,
                 error_code: Some(ref error_code),
@@ -404,7 +404,7 @@ mod management_canister {
     ) {
         for expected_rc in &allowed_reject_codes {
             if matches!(result,
-                Err(AgentError::ReplicaError(RejectResponse {
+                Err(AgentError::UncertifiedReject(RejectResponse {
                 reject_code,
                 ..
             })) if reject_code == *expected_rc)
@@ -415,7 +415,7 @@ mod management_canister {
 
         assert!(
             matches!(result, Err(AgentError::HttpError(_))),
-            "expect an HttpError, or a ReplicaError with reject_code in {:?}",
+            "expect an HttpError, or a CertifiedReject with reject_code in {:?}",
             allowed_reject_codes
         );
     }
@@ -458,7 +458,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
@@ -473,7 +473,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
@@ -503,7 +503,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::CertifiedReject(RejectResponse {
                         reject_code: RejectCode::DestinationInvalid,
                         reject_message,
                         error_code: None,
@@ -517,7 +517,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::DestinationInvalid,
                         reject_message,
                         error_code: Some(error_code),
@@ -541,7 +541,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::DestinationInvalid,
                         reject_message,
                         error_code: Some(error_code),
@@ -556,7 +556,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::DestinationInvalid,
                         reject_message,
                         error_code: Some(error_code),
@@ -570,7 +570,7 @@ mod management_canister {
             let result = ic00.canister_status(&canister_id).call_and_wait().await;
             assert!(
                 match &result {
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::DestinationInvalid,
                         reject_message,
                         error_code: Some(error_code),
@@ -590,7 +590,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse{
+                    Err(AgentError::UncertifiedReject(RejectResponse{
                         reject_code: RejectCode::DestinationInvalid,
                         reject_message,
                         error_code: Some(error_code),
@@ -636,7 +636,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
@@ -651,7 +651,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
@@ -669,7 +669,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
@@ -687,7 +687,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
@@ -959,7 +959,7 @@ mod simple_calls {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::CertifiedReject(RejectResponse {
                         reject_code: RejectCode::DestinationInvalid,
                         ..
                     })),
@@ -984,7 +984,7 @@ mod simple_calls {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::DestinationInvalid,
                         ..
                     }))
@@ -1218,7 +1218,7 @@ mod extras {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::CertifiedReject(RejectResponse {
                         reject_code: RejectCode::DestinationInvalid,
                         reject_message,
                         error_code: None,

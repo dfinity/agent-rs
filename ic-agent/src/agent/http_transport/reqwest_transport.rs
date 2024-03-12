@@ -146,7 +146,7 @@ impl ReqwestTransport {
                 serde_cbor::from_slice(&body);
 
             let agent_error = match cbor_decoded_body {
-                Ok(replica_error) => AgentError::ReplicaError(replica_error),
+                Ok(replica_error) => AgentError::UncertifiedReject(replica_error),
                 Err(cbor_error) => AgentError::InvalidCborData(cbor_error),
             };
 

@@ -141,7 +141,7 @@ async fn query_rejected() -> Result<(), AgentError> {
     assert_mock(query_mock).await;
 
     match result {
-        Err(AgentError::ReplicaError(replica_error)) => {
+        Err(AgentError::UncertifiedReject(replica_error)) => {
             assert_eq!(replica_error.reject_code, RejectCode::DestinationInvalid);
             assert_eq!(replica_error.reject_message, "Rejected Message");
             assert_eq!(replica_error.error_code, Some("Error code".to_string()));
@@ -202,7 +202,7 @@ async fn call_rejected() -> Result<(), AgentError> {
 
     assert_mock(call_mock).await;
 
-    let expected_response = Err(AgentError::ReplicaError(reject_body));
+    let expected_response = Err(AgentError::UncertifiedReject(reject_body));
     assert_eq!(expected_response, result);
 
     Ok(())
@@ -238,7 +238,7 @@ async fn call_rejected_without_error_code() -> Result<(), AgentError> {
 
     assert_mock(call_mock).await;
 
-    let expected_response = Err(AgentError::ReplicaError(reject_body));
+    let expected_response = Err(AgentError::UncertifiedReject(reject_body));
     assert_eq!(expected_response, result);
 
     Ok(())
