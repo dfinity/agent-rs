@@ -38,6 +38,7 @@ jobs:
 
     - name: Build
       run: |
+        rustup target add ${{ matrix.target }}
         cargo build --target ${{ matrix.target }} ${{ env.cargo_build_ARGS }}
 
     - name: Strip binaries
