@@ -37,24 +37,21 @@ jobs:
         echo "END" >> $GITHUB_ENV
 
     - name: Build
-      uses: ructions/cargo@v1
-      with:
-        command: build
-        args: --target ${{ matrix.target }} ${{ env.cargo_build_ARGS }}
-        use-cross: ${{ contains(matrix.os, 'ubuntu') }}
+      run: |
+        cargo build --target ${{ matrix.target }} ${{ env.cargo_build_ARGS }}
 
     - name: Strip binaries
       run: |
         cd ${{ matrix.binary_path }}
         sudo chown -R $(whoami) .
         strip ${{ matrix.binary_files }}
-      if: contains(matrix.os, 'ubuntu')
+      if: ${{ contains(matrix.os, 'ubuntu') }}
 
     - name: Check linkage
       run: |
         cd ${{ matrix.binary_path }}
         otool -L ${{ matrix.binary_files }}
-      if: contains(matrix.os, 'macos')
+      if: ${{ contains(matrix.os, 'macos') }}
 
     - name: Create tarball of binaries
       if: ${{ github.event_name == 'push' }}
