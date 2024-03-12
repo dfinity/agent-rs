@@ -26,6 +26,9 @@ jobs:
             binary_files: icx
     steps:
     - uses: actions/checkout@v4
+    - uses: taiki-e/install-action
+      with:
+        tool: cross@0.2.5
 
     - name: Setup environment variables
       run: |
@@ -38,8 +41,7 @@ jobs:
 
     - name: Build
       run: |
-        rustup target add ${{ matrix.target }}
-        cargo build --target ${{ matrix.target }} ${{ env.cargo_build_ARGS }}
+        cross build --target ${{ matrix.target }} ${{ env.cargo_build_ARGS }}
 
     - name: Strip binaries
       run: |
