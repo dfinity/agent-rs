@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Changed `AgentError::ReplicaError` to `CertifiedReject` or `UncertifiedReject`. `CertifiedReject`s went through consensus, and `UncertifiedReject`s did not. If your code uses `ReplicaError`:
+    * for queries: use `UncertifiedReject` in all cases (for now)
+    * for updates: use `CertifiedReject` for errors raised after the message successfully reaches the canister, and `UncertifiedReject` otherwise
 * Added `Agent::fetch_api_boundary_nodes` for looking up API boundary nodes in the state tree.
 * Timestamps are now being checked in `Agent::verify` and `Agent::verify_for_subnet`. If you were using it with old certificates, increase the expiry timeout to continue to verify them.
 * Added node metrics, ECDSA, and Bitcoin functions to `MgmtMethod`. Most do not have wrappers in `ManagementCanister` because only canisters can call these functions.

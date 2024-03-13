@@ -187,7 +187,7 @@ fn canister_reject_call() {
 
         assert!(matches!(
             result,
-            Err(AgentError::ReplicaError(RejectResponse {
+            Err(AgentError::CertifiedReject(RejectResponse {
                 reject_code: RejectCode::DestinationInvalid,
                 reject_message,
                 error_code: None,

@@ -550,7 +550,7 @@ impl Agent {
 
         match response {
             QueryResponse::Replied { reply, .. } => Ok(reply.arg),
-            QueryResponse::Rejected { reject, .. } => Err(AgentError::ReplicaError(reject)),
+            QueryResponse::Rejected { reject, .. } => Err(AgentError::UncertifiedReject(reject)),
         }
     }
 
@@ -650,7 +650,7 @@ impl Agent {
                 Ok(PollResult::Completed(arg))
             }
 
-            RequestStatusResponse::Rejected(response) => Err(AgentError::ReplicaError(response)),
+            RequestStatusResponse::Rejected(response) => Err(AgentError::CertifiedReject(response)),
 
             RequestStatusResponse::Done => Err(AgentError::RequestStatusDoneNoReply(String::from(
                 *request_id,
@@ -698,7 +698,7 @@ impl Agent {
                 RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => return Ok(arg),
 
                 RequestStatusResponse::Rejected(response) => {
-                    return Err(AgentError::ReplicaError(response))
+                    return Err(AgentError::CertifiedReject(response))
                 }
 
                 RequestStatusResponse::Done => {
