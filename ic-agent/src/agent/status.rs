@@ -1,15 +1,11 @@
 //! Types for interacting with the status endpoint of a replica. See [`Status`] for details.
 
-use candid::{CandidType, Deserialize};
-use serde::Serialize;
 use std::{collections::BTreeMap, fmt::Debug};
 
 /// Value returned by the status endpoint of a replica. This is a loose mapping to CBOR values.
 /// Because the agent should not return [`serde_cbor::Value`] directly across API boundaries,
 /// we reimplement it as [`Value`] here.
-#[derive(
-    Debug, Ord, PartialOrd, Eq, PartialEq, Clone, Hash, CandidType, Serialize, Deserialize,
-)]
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Clone, Hash)]
 pub enum Value {
     /// See [`Null`](serde_cbor::Value::Null).
     Null,
@@ -44,7 +40,7 @@ impl std::fmt::Display for Value {
 
 /// The structure returned by [`super::Agent::status`], containing the information returned
 /// by the status endpoint of a replica.
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, CandidType, Deserialize, Serialize)]
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq)]
 pub struct Status {
     /// Optional. The precise git revision of the Internet Computer Protocol implementation.
     pub impl_version: Option<String>,
@@ -57,47 +53,6 @@ pub struct Status {
 
     /// Contains any additional values that the replica gave as status.
     pub values: BTreeMap<String, Box<Value>>,
-}
-
-#[test]
-fn can_serilaize_status_as_json() {
-    let status = Status {
-        impl_version: None,
-        replica_health_status: None,
-        root_key: None,
-        values: BTreeMap::new(),
-    };
-    let expected_json =
-        r#"{"impl_version":null,"replica_health_status":null,"root_key":null,"values":{}}"#;
-    let actual_json = serde_json::to_string(&status).expect("Failed to serialize as JSON");
-    assert_eq!(expected_json, actual_json);
-}
-#[test]
-fn can_serialize_status_as_idl() {
-    use candid::types::value::IDLValue;
-    use candid::{Encode, IDLArgs, Result as CandidResult, TypeEnv};
-    let status = Status {
-        impl_version: Some("Foo".to_string()),
-        replica_health_status: None,
-        root_key: None,
-        values: BTreeMap::new(),
-    };
-    // Expresses data as IDLValue.  Then use .to_string() to convert to text-form candid.
-    // TODO: This function has been added to the Candid library and will be available in the next
-    // release.  Then, this definition here can be deleted.
-    pub fn try_from_candid_type<T>(data: &T) -> CandidResult<IDLValue>
-    where
-        T: CandidType,
-    {
-        let blob = Encode!(data)?;
-        let args = IDLArgs::from_bytes_with_types(&blob, &TypeEnv::default(), &[T::ty()])?;
-        Ok(args.args[0].clone())
-    }
-    let expected_idl = "record {\n  values = vec {};\n  replica_health_status = null;\n  impl_version = opt \"Foo\";\n  root_key = null;\n}";
-    let actual_idl = try_from_candid_type(&status)
-        .expect("Failed to convert to idl")
-        .to_string();
-    assert_eq!(expected_idl, actual_idl);
 }
 
 impl std::fmt::Display for Status {
