@@ -232,22 +232,11 @@ pub enum BitcoinNetwork {
     /// The TESTBTC network.
     #[serde(rename = "testnet")]
     Testnet,
-}
-
-impl BitcoinNetwork {
-    /// Gets the [effective canister ID](crate::call::SyncCallBuilder::with_effective_canister_id)
-    // to make `bitcoin_*` calls to.
-    pub fn effective_canister_id(&self) -> Principal {
-        const BITCOIN_MAINNET_CANISTER: Principal =
-            Principal::from_slice(b"\x00\x00\x00\x00\x01\xa0\x00\x04\x01\x01"); // ghsi2-tqaaa-aaaan-aaaca-cai
-        const BITCOIN_TESTNET_CANISTER: Principal =
-            Principal::from_slice(b"\x00\x00\x00\x00\x01\xa0\x00\x01\x01\x01"); // g4xu7-jiaaa-aaaan-aaaaq-cai
-
-        match self {
-            Self::Mainnet => BITCOIN_MAINNET_CANISTER,
-            Self::Testnet => BITCOIN_TESTNET_CANISTER,
-        }
-    }
+    /// The REGTEST network.
+    ///
+    /// This is only available when developing with local replica.
+    #[serde(rename = "regtest")]
+    Regtest,
 }
 
 /// Defines how to filter results from [`bitcoin_get_utxos_query`](ManagementCanister::bitcoin_get_utxos_query).
@@ -562,7 +551,7 @@ impl<'agent> ManagementCanister<'agent> {
                 network,
                 min_confirmations,
             })
-            .with_effective_canister_id(network.effective_canister_id())
+            .with_effective_canister_id(Principal::management_canister())
             .build()
     }
 
@@ -589,7 +578,7 @@ impl<'agent> ManagementCanister<'agent> {
                 network,
                 filter,
             })
-            .with_effective_canister_id(network.effective_canister_id())
+            .with_effective_canister_id(Principal::management_canister())
             .build()
     }
 }
