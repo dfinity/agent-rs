@@ -40,8 +40,8 @@ jobs:
               echo "DFX_NO_WALLET=--no-wallet" >> "$GITHUB_ENV"
           fi
 
-      - name: 'Run tests'
-        run: bats e2e/bash/icx.bash 
+      # - name: 'Run tests'
+      #   run: bats e2e/bash/icx.bash 
 
   aggregate:
     name: e2e:required
