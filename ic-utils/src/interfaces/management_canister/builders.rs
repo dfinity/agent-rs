@@ -377,6 +377,15 @@ impl<'agent, 'canister: 'agent> AsyncCall<(Principal,)>
     }
 }
 
+#[derive(Debug, Copy, Clone, CandidType, Deserialize, Eq, PartialEq)]
+/// Upgrade options.
+pub struct CanisterUpgradeOptions {
+    /// Skip pre-upgrade hook. Only for exceptional cases, see the IC documentation. Not useful for Motoko.
+    pub skip_pre_upgrade: Option<bool>,
+    /// Enhanced orthogonal persistence for Motoko. Not used by other CDKs.
+    pub keep_main_memory: Option<bool>,
+}
+
 /// The install mode of the canister to install. If a canister is already installed,
 /// using [InstallMode::Install] will be an error. [InstallMode::Reinstall] overwrites
 /// the module, and [InstallMode::Upgrade] performs an Upgrade step.
@@ -388,12 +397,9 @@ pub enum InstallMode {
     /// Overwrite the canister with this module.
     #[serde(rename = "reinstall")]
     Reinstall,
-    /// Upgrade the canister with this module.
+    /// Upgrade the canister with this module and some options.
     #[serde(rename = "upgrade")]
-    Upgrade {
-        /// If true, skip a canister's `#[pre_upgrade]` function.
-        skip_pre_upgrade: Option<bool>,
-    },
+    Upgrade(Option<CanisterUpgradeOptions>),
 }
 
 /// A prepared call to `install_code`.
@@ -418,9 +424,7 @@ impl FromStr for InstallMode {
         match s {
             "install" => Ok(InstallMode::Install),
             "reinstall" => Ok(InstallMode::Reinstall),
-            "upgrade" => Ok(InstallMode::Upgrade {
-                skip_pre_upgrade: Some(false),
-            }),
+            "upgrade" => Ok(InstallMode::Upgrade(None)),
             &_ => Err(format!("Invalid install mode: {}", s)),
         }
     }
