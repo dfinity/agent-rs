@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.34.0] - 2024-03-18
+
 * Changed `AgentError::ReplicaError` to `CertifiedReject` or `UncertifiedReject`. `CertifiedReject`s went through consensus, and `UncertifiedReject`s did not. If your code uses `ReplicaError`:
     * for queries: use `UncertifiedReject` in all cases (for now)
     * for updates: use `CertifiedReject` for errors raised after the message successfully reaches the canister, and `UncertifiedReject` otherwise
