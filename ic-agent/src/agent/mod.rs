@@ -1033,9 +1033,11 @@ impl Agent {
         let paths: Vec<Vec<Label>> =
             vec![vec!["request_status".into(), request_id.to_vec().into()]];
 
-        let cert = self.read_state_raw(paths, effective_canister_id).await?;
-
-        lookup_request_status(cert, request_id)
+        match self.read_state_raw(paths, effective_canister_id).await {
+            Ok(cert) => lookup_request_status(cert, request_id),
+            Err(AgentError::LookupPathAbsent(_)) => Ok(RequestStatusResponse::Unknown),
+            Err(err) => Err(err),
+        }
     }
 
     /// Send the signed request_status to the network. Will return [`RequestStatusResponse`].
