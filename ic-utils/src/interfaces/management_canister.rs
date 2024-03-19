@@ -289,7 +289,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn canister_status(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<(StatusCallResult,)> {
+    ) -> impl 'agent + AsyncCall<Value = (StatusCallResult,)> {
         #[derive(CandidType)]
         struct In {
             canister_id: Principal,
@@ -311,7 +311,7 @@ impl<'agent> ManagementCanister<'agent> {
 
     /// This method deposits the cycles included in this call into the specified canister.
     /// Only the controller of the canister can deposit cycles.
-    pub fn deposit_cycles(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<()> {
+    pub fn deposit_cycles(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
         #[derive(CandidType)]
         struct Argument {
             canister_id: Principal,
@@ -326,7 +326,7 @@ impl<'agent> ManagementCanister<'agent> {
     }
 
     /// Deletes a canister.
-    pub fn delete_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<()> {
+    pub fn delete_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
         #[derive(CandidType)]
         struct Argument {
             canister_id: Principal,
@@ -348,7 +348,7 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
         amount: u64,
-    ) -> impl 'agent + AsyncCall<()> {
+    ) -> impl 'agent + AsyncCall<Value = ()> {
         #[derive(CandidType)]
         struct Argument {
             canister_id: Principal,
@@ -367,14 +367,14 @@ impl<'agent> ManagementCanister<'agent> {
     /// This method takes no input and returns 32 pseudo-random bytes to the caller.
     /// The return value is unknown to any part of the IC at time of the submission of this call.
     /// A new return value is generated for each call to this method.
-    pub fn raw_rand(&self) -> impl 'agent + AsyncCall<(Vec<u8>,)> {
+    pub fn raw_rand(&self) -> impl 'agent + AsyncCall<Value = (Vec<u8>,)> {
         self.update(MgmtMethod::RawRand.as_ref())
             .build()
             .map(|result: (Vec<u8>,)| (result.0,))
     }
 
     /// Starts a canister.
-    pub fn start_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<()> {
+    pub fn start_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
         #[derive(CandidType)]
         struct Argument {
             canister_id: Principal,
@@ -389,7 +389,7 @@ impl<'agent> ManagementCanister<'agent> {
     }
 
     /// Stop a canister.
-    pub fn stop_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<()> {
+    pub fn stop_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
         #[derive(CandidType)]
         struct Argument {
             canister_id: Principal,
@@ -410,7 +410,7 @@ impl<'agent> ManagementCanister<'agent> {
     /// Outstanding responses to the canister will not be processed, even if they arrive after code has been installed again.
     /// The canister is now empty. In particular, any incoming or queued calls will be rejected.
     //// A canister after uninstalling retains its cycles balance, controller, status, and allocations.
-    pub fn uninstall_code(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<()> {
+    pub fn uninstall_code(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
         #[derive(CandidType)]
         struct Argument {
             canister_id: Principal,
@@ -446,7 +446,7 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
         chunk: &[u8],
-    ) -> impl 'agent + AsyncCall<(UploadChunkResult,)> {
+    ) -> impl 'agent + AsyncCall<Value = (UploadChunkResult,)> {
         #[derive(CandidType, Deserialize)]
         struct Argument<'a> {
             canister_id: Principal,
@@ -464,7 +464,10 @@ impl<'agent> ManagementCanister<'agent> {
     }
 
     /// Clear a canister's chunked WASM storage.
-    pub fn clear_chunk_store(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<()> {
+    pub fn clear_chunk_store(
+        &self,
+        canister_id: &Principal,
+    ) -> impl 'agent + AsyncCall<Value = ()> {
         #[derive(CandidType)]
         struct Argument<'a> {
             canister_id: &'a Principal,
@@ -479,7 +482,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn stored_chunks(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<(Vec<ChunkInfo>,)> {
+    ) -> impl 'agent + AsyncCall<Value = (Vec<ChunkInfo>,)> {
         #[derive(CandidType)]
         struct Argument<'a> {
             canister_id: &'a Principal,
@@ -516,7 +519,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn fetch_canister_logs(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + SyncCall<(FetchCanisterLogsResponse,)> {
+    ) -> impl 'agent + SyncCall<Value = (FetchCanisterLogsResponse,)> {
         #[derive(CandidType)]
         struct In {
             canister_id: Principal,
@@ -538,7 +541,7 @@ impl<'agent> ManagementCanister<'agent> {
         address: &str,
         network: BitcoinNetwork,
         min_confirmations: Option<u32>,
-    ) -> impl 'agent + SyncCall<(u64,)> {
+    ) -> impl 'agent + SyncCall<Value = (u64,)> {
         #[derive(CandidType)]
         struct In<'a> {
             address: &'a str,
@@ -565,7 +568,7 @@ impl<'agent> ManagementCanister<'agent> {
         address: &str,
         network: BitcoinNetwork,
         filter: Option<UtxosFilter>,
-    ) -> impl 'agent + SyncCall<(GetUtxosResponse,)> {
+    ) -> impl 'agent + SyncCall<Value = (GetUtxosResponse,)> {
         #[derive(CandidType)]
         struct In<'a> {
             address: &'a str,

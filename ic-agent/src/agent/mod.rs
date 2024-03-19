@@ -47,7 +47,7 @@ use std::{
     collections::HashMap,
     convert::TryFrom,
     fmt,
-    future::Future,
+    future::{Future, IntoFuture},
     pin::Pin,
     sync::{Arc, Mutex, RwLock},
     task::{Context, Poll},
@@ -1593,6 +1593,14 @@ impl<'agent> QueryBuilder<'agent> {
     }
 }
 
+impl<'agent> IntoFuture for QueryBuilder<'agent> {
+    type IntoFuture = AgentFuture<'agent, Vec<u8>>;
+    type Output = Result<Vec<u8>, AgentError>;
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(self.call())
+    }
+}
+
 /// An in-flight canister update call. Useful primarily as a `Future`.
 pub struct UpdateCall<'agent> {
     agent: &'agent Agent,
@@ -1745,6 +1753,14 @@ impl<'agent> UpdateBuilder<'agent> {
             signed_update,
             request_id,
         })
+    }
+}
+
+impl<'agent> IntoFuture for UpdateBuilder<'agent> {
+    type IntoFuture = AgentFuture<'agent, Vec<u8>>;
+    type Output = Result<Vec<u8>, AgentError>;
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(self.call_and_wait())
     }
 }
 
