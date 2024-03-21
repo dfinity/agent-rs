@@ -423,6 +423,7 @@ impl Agent {
 
     /// The simplest way to do a query call; sends a byte array and will return a byte vector.
     /// The encoding is left as an exercise to the user.
+    #[allow(clippy::too_many_arguments)]
     async fn query_raw(
         &self,
         canister_id: Principal,
@@ -431,6 +432,7 @@ impl Agent {
         arg: Vec<u8>,
         ingress_expiry_datetime: Option<u64>,
         use_nonce: bool,
+        explicit_verify_query_signatures: Option<bool>,
     ) -> Result<Vec<u8>, AgentError> {
         let content = self.query_content(
             canister_id,
@@ -444,6 +446,7 @@ impl Agent {
             effective_canister_id,
             serialized_bytes,
             content.to_request_id(),
+            explicit_verify_query_signatures,
         )
         .await
     }
@@ -462,6 +465,7 @@ impl Agent {
             effective_canister_id,
             signed_query,
             envelope.content.to_request_id(),
+            None,
         )
         .await
     }
@@ -474,8 +478,9 @@ impl Agent {
         effective_canister_id: Principal,
         signed_query: Vec<u8>,
         request_id: RequestId,
+        explicit_verify_query_signatures: Option<bool>,
     ) -> Result<Vec<u8>, AgentError> {
-        let response = if self.verify_query_signatures {
+        let response = if explicit_verify_query_signatures.unwrap_or(self.verify_query_signatures) {
             let (response, mut subnet) = futures_util::try_join!(
                 self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query),
                 self.get_subnet_by_canister(&effective_canister_id)
@@ -1554,6 +1559,43 @@ impl<'agent> QueryBuilder<'agent> {
                 self.arg,
                 self.ingress_expiry_datetime,
                 self.use_nonce,
+                None,
+            )
+            .await
+    }
+
+    /// Make a query call with signature verification. This will return a byte vector.
+    ///
+    /// Compared with [call][Self::call], this method will **always** verify the signature of the query response
+    /// regardless the Agent level configuration from [AgentBuilder::with_verify_query_signatures].
+    pub async fn call_with_verification(self) -> Result<Vec<u8>, AgentError> {
+        self.agent
+            .query_raw(
+                self.canister_id,
+                self.effective_canister_id,
+                self.method_name,
+                self.arg,
+                self.ingress_expiry_datetime,
+                self.use_nonce,
+                Some(true),
+            )
+            .await
+    }
+
+    /// Make a query call without signature verification. This will return a byte vector.
+    ///
+    /// Compared with [call][Self::call], this method will **never** verify the signature of the query response
+    /// regardless the Agent level configuration from [AgentBuilder::with_verify_query_signatures].
+    pub async fn call_without_verification(self) -> Result<Vec<u8>, AgentError> {
+        self.agent
+            .query_raw(
+                self.canister_id,
+                self.effective_canister_id,
+                self.method_name,
+                self.arg,
+                self.ingress_expiry_datetime,
+                self.use_nonce,
+                Some(false),
             )
             .await
     }

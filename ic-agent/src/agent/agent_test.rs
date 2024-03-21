@@ -69,6 +69,7 @@ async fn query() -> Result<(), AgentError> {
             vec![],
             None,
             false,
+            None,
         )
         .await;
 
@@ -94,6 +95,7 @@ async fn query_error() -> Result<(), AgentError> {
             vec![],
             None,
             false,
+            None,
         )
         .await;
 
@@ -135,6 +137,7 @@ async fn query_rejected() -> Result<(), AgentError> {
             vec![],
             None,
             false,
+            None,
         )
         .await;
 
