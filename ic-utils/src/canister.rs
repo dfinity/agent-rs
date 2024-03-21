@@ -98,6 +98,7 @@ impl<'agent> Canister<'agent> {
     }
 
     /// Create an AsyncCallBuilder to do an update call.
+    /// Prefer using [`update`](Canister::update) instead.
     pub fn update_<'canister>(
         &'canister self,
         method_name: &str,
@@ -106,7 +107,6 @@ impl<'agent> Canister<'agent> {
     }
 
     /// Create an AsyncCallBuilder to do an update call.
-    /// Prefer using [`update`](Canister::update) instead.
     pub fn update<'canister>(
         &'canister self,
         method_name: &str,

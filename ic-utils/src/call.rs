@@ -3,7 +3,9 @@ use candid::{decode_args, decode_one, utils::ArgumentDecoder, CandidType};
 use ic_agent::{agent::UpdateBuilder, export::Principal, Agent, AgentError, RequestId};
 use serde::de::DeserializeOwned;
 use std::fmt;
-use std::future::Future;
+use std::future::{Future, IntoFuture};
+use std::marker::PhantomData;
+use std::pin::Pin;
 
 mod expiry;
 pub use expiry::Expiry;
@@ -11,20 +13,19 @@ pub use expiry::Expiry;
 /// A type that implements synchronous calls (ie. 'query' calls).
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-pub trait SyncCall<O>
-where
-    O: for<'de> ArgumentDecoder<'de> + Send,
-{
+pub trait SyncCall: IntoFuture<Output = Result<Self::Value, AgentError>> {
+    /// The return type of the Candid function being called.
+    type Value: for<'de> ArgumentDecoder<'de> + Send;
     /// Execute the call, return an array of bytes directly from the canister.
     #[cfg(feature = "raw")]
     async fn call_raw(self) -> Result<Vec<u8>, AgentError>;
 
     /// Execute the call, returning either the value returned by the canister, or an
     /// error returned by the Agent.
-    async fn call(self) -> Result<O, AgentError>
+    async fn call(self) -> Result<Self::Value, AgentError>
     where
         Self: Sized + Send,
-        O: 'async_trait;
+        Self::Value: 'async_trait;
 }
 
 /// A type that implements asynchronous calls (ie. 'update' calls).
@@ -35,10 +36,9 @@ where
 /// call should be returning.
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-pub trait AsyncCall<Out>
-where
-    Out: for<'de> ArgumentDecoder<'de> + Send,
-{
+pub trait AsyncCall: IntoFuture<Output = Result<Self::Value, AgentError>> {
+    /// The return type of the Candid function being called.
+    type Value: for<'de> ArgumentDecoder<'de> + Send;
     /// Execute the call, but returns the RequestId. Waiting on the request Id must be
     /// managed by the caller using the Agent directly.
     ///
@@ -52,7 +52,7 @@ where
 
     /// Execute the call, and wait for an answer using an exponential-backoff strategy. The return
     /// type is encoded in the trait.
-    async fn call_and_wait(self) -> Result<Out, AgentError>;
+    async fn call_and_wait(self) -> Result<Self::Value, AgentError>;
 
     /// Apply a transformation function after the call has been successful. The transformation
     /// is applied with the result.
@@ -117,29 +117,35 @@ where
     /// eprintln!("{}", canister_id);
     /// # });
     /// ```
-    fn and_then<Out2, R, AndThen>(
+    fn and_then<'a, Out2, R, AndThen>(
         self,
         and_then: AndThen,
-    ) -> AndThenAsyncCaller<Out, Out2, Self, R, AndThen>
+    ) -> AndThenAsyncCaller<'a, Self::Value, Out2, Self, R, AndThen>
     where
-        Self: Sized + Send,
-        Out2: for<'de> ArgumentDecoder<'de> + Send,
-        R: Future<Output = Result<Out2, AgentError>> + Send,
-        AndThen: Send + Fn(Out) -> R,
+        Self: Sized + Send + 'a,
+        Out2: for<'de> ArgumentDecoder<'de> + Send + 'a,
+        R: Future<Output = Result<Out2, AgentError>> + Send + 'a,
+        AndThen: Send + Fn(Self::Value) -> R + 'a,
     {
         AndThenAsyncCaller::new(self, and_then)
     }
 
     /// Apply a transformation function after the call has been successful. Equivalent to `.and_then(|x| async { map(x) })`.
-    fn map<Out2, Map>(self, map: Map) -> MappedAsyncCaller<Out, Out2, Self, Map>
+    fn map<'a, Out, Map>(self, map: Map) -> MappedAsyncCaller<'a, Self::Value, Out, Self, Map>
     where
-        Self: Sized + Send,
-        Out2: for<'de> ArgumentDecoder<'de> + Send,
-        Map: Send + Fn(Out) -> Out2,
+        Self: Sized + Send + 'a,
+        Out: for<'de> ArgumentDecoder<'de> + Send + 'a,
+        Map: Send + Fn(Self::Value) -> Out + 'a,
     {
         MappedAsyncCaller::new(self, map)
     }
 }
+
+#[cfg(target_family = "wasm")]
+pub(crate) type CallFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, AgentError>> + 'a>>;
+#[cfg(not(target_family = "wasm"))]
+pub(crate) type CallFuture<'a, T> =
+    Pin<Box<dyn Future<Output = Result<T, AgentError>> + Send + 'a>>;
 
 /// A synchronous call encapsulation.
 #[derive(Debug)]
@@ -153,7 +159,7 @@ where
     pub(crate) method_name: String,
     pub(crate) arg: Result<Vec<u8>, AgentError>,
     pub(crate) expiry: Expiry,
-    pub(crate) phantom_out: std::marker::PhantomData<Out>,
+    pub(crate) phantom_out: PhantomData<Out>,
 }
 
 impl<'agent, Out> SyncCaller<'agent, Out>
@@ -174,11 +180,12 @@ where
 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<'agent, Out> SyncCall<Out> for SyncCaller<'agent, Out>
+impl<'agent, Out> SyncCall for SyncCaller<'agent, Out>
 where
     Self: Sized,
     Out: 'agent + for<'de> ArgumentDecoder<'de> + Send,
 {
+    type Value = Out;
     #[cfg(feature = "raw")]
     async fn call_raw(self) -> Result<Vec<u8>, AgentError> {
         Ok(self.call_raw().await?)
@@ -188,6 +195,18 @@ where
         let result = self.call_raw().await?;
 
         decode_args(&result).map_err(|e| AgentError::CandidError(Box::new(e)))
+    }
+}
+
+impl<'agent, Out> IntoFuture for SyncCaller<'agent, Out>
+where
+    Self: Sized,
+    Out: 'agent + for<'de> ArgumentDecoder<'de> + Send,
+{
+    type IntoFuture = CallFuture<'agent, Out>;
+    type Output = Result<Out, AgentError>;
+    fn into_future(self) -> Self::IntoFuture {
+        SyncCall::call(self)
     }
 }
 
@@ -203,12 +222,12 @@ where
     pub(crate) method_name: String,
     pub(crate) arg: Result<Vec<u8>, AgentError>,
     pub(crate) expiry: Expiry,
-    pub(crate) phantom_out: std::marker::PhantomData<Out>,
+    pub(crate) phantom_out: PhantomData<Out>,
 }
 
 impl<'agent, Out> AsyncCaller<'agent, Out>
 where
-    Out: for<'de> ArgumentDecoder<'de> + Send,
+    Out: for<'de> ArgumentDecoder<'de> + Send + 'agent,
 {
     /// Build an UpdateBuilder call that can be used directly with the [Agent]. This is
     /// essentially downleveling this type into the lower level [ic-agent] abstraction.
@@ -246,7 +265,7 @@ where
     }
 
     /// See [`AsyncCall::map`].
-    pub fn map<Out2, Map>(self, map: Map) -> MappedAsyncCaller<Out, Out2, Self, Map>
+    pub fn map<Out2, Map>(self, map: Map) -> MappedAsyncCaller<'agent, Out, Out2, Self, Map>
     where
         Out2: for<'de> ArgumentDecoder<'de> + Send,
         Map: Send + Fn(Out) -> Out2,
@@ -257,10 +276,11 @@ where
 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<'agent, Out> AsyncCall<Out> for AsyncCaller<'agent, Out>
+impl<'agent, Out> AsyncCall for AsyncCaller<'agent, Out>
 where
-    Out: for<'de> ArgumentDecoder<'de> + Send,
+    Out: for<'de> ArgumentDecoder<'de> + Send + 'agent,
 {
+    type Value = Out;
     async fn call(self) -> Result<RequestId, AgentError> {
         self.call().await
     }
@@ -269,27 +289,41 @@ where
     }
 }
 
+impl<'agent, Out> IntoFuture for AsyncCaller<'agent, Out>
+where
+    Out: for<'de> ArgumentDecoder<'de> + Send + 'agent,
+{
+    type IntoFuture = CallFuture<'agent, Out>;
+    type Output = Result<Out, AgentError>;
+    fn into_future(self) -> Self::IntoFuture {
+        AsyncCall::call_and_wait(self)
+    }
+}
+
 /// An AsyncCall that applies a transform function to the result of the call. Because of
 /// constraints on the type system in Rust, both the input and output to the function must be
 /// deserializable.
 pub struct AndThenAsyncCaller<
+    'a,
     Out: for<'de> ArgumentDecoder<'de> + Send,
     Out2: for<'de> ArgumentDecoder<'de> + Send,
-    Inner: AsyncCall<Out> + Send,
+    Inner: AsyncCall<Value = Out> + Send + 'a,
     R: Future<Output = Result<Out2, AgentError>> + Send,
     AndThen: Send + Fn(Out) -> R,
 > {
     inner: Inner,
     and_then: AndThen,
-    _out: std::marker::PhantomData<Out>,
-    _out2: std::marker::PhantomData<Out2>,
+    _out: PhantomData<Out>,
+    _out2: PhantomData<Out2>,
+    _lifetime: PhantomData<&'a ()>,
 }
 
-impl<Out, Out2, Inner, R, AndThen> fmt::Debug for AndThenAsyncCaller<Out, Out2, Inner, R, AndThen>
+impl<'a, Out, Out2, Inner, R, AndThen> fmt::Debug
+    for AndThenAsyncCaller<'a, Out, Out2, Inner, R, AndThen>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send,
     Out2: for<'de> ArgumentDecoder<'de> + Send,
-    Inner: AsyncCall<Out> + Send + fmt::Debug,
+    Inner: AsyncCall<Value = Out> + Send + fmt::Debug + 'a,
     R: Future<Output = Result<Out2, AgentError>> + Send,
     AndThen: Send + Fn(Out) -> R + fmt::Debug,
 {
@@ -303,21 +337,22 @@ where
     }
 }
 
-impl<Out, Out2, Inner, R, AndThen> AndThenAsyncCaller<Out, Out2, Inner, R, AndThen>
+impl<'a, Out, Out2, Inner, R, AndThen> AndThenAsyncCaller<'a, Out, Out2, Inner, R, AndThen>
 where
-    Out: for<'de> ArgumentDecoder<'de> + Send,
-    Out2: for<'de> ArgumentDecoder<'de> + Send,
-    Inner: AsyncCall<Out> + Send,
-    R: Future<Output = Result<Out2, AgentError>> + Send,
-    AndThen: Send + Fn(Out) -> R,
+    Out: for<'de> ArgumentDecoder<'de> + Send + 'a,
+    Out2: for<'de> ArgumentDecoder<'de> + Send + 'a,
+    Inner: AsyncCall<Value = Out> + Send + 'a,
+    R: Future<Output = Result<Out2, AgentError>> + Send + 'a,
+    AndThen: Send + Fn(Out) -> R + 'a,
 {
     /// Equivalent to `inner.and_then(and_then)`.
     pub fn new(inner: Inner, and_then: AndThen) -> Self {
         Self {
             inner,
             and_then,
-            _out: std::marker::PhantomData,
-            _out2: std::marker::PhantomData,
+            _out: PhantomData,
+            _out2: PhantomData,
+            _lifetime: PhantomData,
         }
     }
 
@@ -338,17 +373,17 @@ where
     pub fn and_then<Out3, R2, AndThen2>(
         self,
         and_then: AndThen2,
-    ) -> AndThenAsyncCaller<Out2, Out3, Self, R2, AndThen2>
+    ) -> AndThenAsyncCaller<'a, Out2, Out3, Self, R2, AndThen2>
     where
-        Out3: for<'de> ArgumentDecoder<'de> + Send,
-        R2: Future<Output = Result<Out3, AgentError>> + Send,
-        AndThen2: Send + Fn(Out2) -> R2,
+        Out3: for<'de> ArgumentDecoder<'de> + Send + 'a,
+        R2: Future<Output = Result<Out3, AgentError>> + Send + 'a,
+        AndThen2: Send + Fn(Out2) -> R2 + 'a,
     {
         AndThenAsyncCaller::new(self, and_then)
     }
 
     /// See [`AsyncCall::map`].
-    pub fn map<Out3, Map>(self, map: Map) -> MappedAsyncCaller<Out2, Out3, Self, Map>
+    pub fn map<Out3, Map>(self, map: Map) -> MappedAsyncCaller<'a, Out2, Out3, Self, Map>
     where
         Out3: for<'de> ArgumentDecoder<'de> + Send,
         Map: Send + Fn(Out2) -> Out3,
@@ -359,15 +394,17 @@ where
 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<Out, Out2, Inner, R, AndThen> AsyncCall<Out2>
-    for AndThenAsyncCaller<Out, Out2, Inner, R, AndThen>
+impl<'a, Out, Out2, Inner, R, AndThen> AsyncCall
+    for AndThenAsyncCaller<'a, Out, Out2, Inner, R, AndThen>
 where
-    Out: for<'de> ArgumentDecoder<'de> + Send,
-    Out2: for<'de> ArgumentDecoder<'de> + Send,
-    Inner: AsyncCall<Out> + Send,
-    R: Future<Output = Result<Out2, AgentError>> + Send,
-    AndThen: Send + Fn(Out) -> R,
+    Out: for<'de> ArgumentDecoder<'de> + Send + 'a,
+    Out2: for<'de> ArgumentDecoder<'de> + Send + 'a,
+    Inner: AsyncCall<Value = Out> + Send + 'a,
+    R: Future<Output = Result<Out2, AgentError>> + Send + 'a,
+    AndThen: Send + Fn(Out) -> R + 'a,
 {
+    type Value = Out2;
+
     async fn call(self) -> Result<RequestId, AgentError> {
         self.call().await
     }
@@ -377,25 +414,43 @@ where
     }
 }
 
+impl<'a, Out, Out2, Inner, R, AndThen> IntoFuture
+    for AndThenAsyncCaller<'a, Out, Out2, Inner, R, AndThen>
+where
+    Out: for<'de> ArgumentDecoder<'de> + Send + 'a,
+    Out2: for<'de> ArgumentDecoder<'de> + Send + 'a,
+    Inner: AsyncCall<Value = Out> + Send + 'a,
+    R: Future<Output = Result<Out2, AgentError>> + Send + 'a,
+    AndThen: Send + Fn(Out) -> R + 'a,
+{
+    type IntoFuture = CallFuture<'a, Out2>;
+    type Output = Result<Out2, AgentError>;
+    fn into_future(self) -> Self::IntoFuture {
+        AsyncCall::call_and_wait(self)
+    }
+}
+
 /// A structure that applies a transform function to the result of a call. Because of constraints
 /// on the type system in Rust, both the input and output to the function must be deserializable.
 pub struct MappedAsyncCaller<
+    'a,
     Out: for<'de> ArgumentDecoder<'de> + Send,
     Out2: for<'de> ArgumentDecoder<'de> + Send,
-    Inner: AsyncCall<Out> + Send,
+    Inner: AsyncCall<Value = Out> + Send + 'a,
     Map: Send + Fn(Out) -> Out2,
 > {
     inner: Inner,
     map: Map,
-    _out: std::marker::PhantomData<Out>,
-    _out2: std::marker::PhantomData<Out2>,
+    _out: PhantomData<Out>,
+    _out2: PhantomData<Out2>,
+    _lifetime: PhantomData<&'a ()>,
 }
 
-impl<Out, Out2, Inner, Map> fmt::Debug for MappedAsyncCaller<Out, Out2, Inner, Map>
+impl<'a, Out, Out2, Inner, Map> fmt::Debug for MappedAsyncCaller<'a, Out, Out2, Inner, Map>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send,
     Out2: for<'de> ArgumentDecoder<'de> + Send,
-    Inner: AsyncCall<Out> + Send + fmt::Debug,
+    Inner: AsyncCall<Value = Out> + Send + fmt::Debug + 'a,
     Map: Send + Fn(Out) -> Out2 + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -408,11 +463,11 @@ where
     }
 }
 
-impl<Out, Out2, Inner, Map> MappedAsyncCaller<Out, Out2, Inner, Map>
+impl<'a, Out, Out2, Inner, Map> MappedAsyncCaller<'a, Out, Out2, Inner, Map>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send,
     Out2: for<'de> ArgumentDecoder<'de> + Send,
-    Inner: AsyncCall<Out> + Send,
+    Inner: AsyncCall<Value = Out> + Send + 'a,
     Map: Send + Fn(Out) -> Out2,
 {
     /// Equivalent to `inner.map(map)`.
@@ -420,8 +475,9 @@ where
         Self {
             inner,
             map,
-            _out: std::marker::PhantomData,
-            _out2: std::marker::PhantomData,
+            _out: PhantomData,
+            _out2: PhantomData,
+            _lifetime: PhantomData,
         }
     }
 
@@ -440,17 +496,17 @@ where
     pub fn and_then<Out3, R2, AndThen2>(
         self,
         and_then: AndThen2,
-    ) -> AndThenAsyncCaller<Out2, Out3, Self, R2, AndThen2>
+    ) -> AndThenAsyncCaller<'a, Out2, Out3, Self, R2, AndThen2>
     where
-        Out3: for<'de> ArgumentDecoder<'de> + Send,
-        R2: Future<Output = Result<Out3, AgentError>> + Send,
-        AndThen2: Send + Fn(Out2) -> R2,
+        Out3: for<'de> ArgumentDecoder<'de> + Send + 'a,
+        R2: Future<Output = Result<Out3, AgentError>> + Send + 'a,
+        AndThen2: Send + Fn(Out2) -> R2 + 'a,
     {
         AndThenAsyncCaller::new(self, and_then)
     }
 
     /// See [`AsyncCall::map`].
-    pub fn map<Out3, Map2>(self, map: Map2) -> MappedAsyncCaller<Out2, Out3, Self, Map2>
+    pub fn map<Out3, Map2>(self, map: Map2) -> MappedAsyncCaller<'a, Out2, Out3, Self, Map2>
     where
         Out3: for<'de> ArgumentDecoder<'de> + Send,
         Map2: Send + Fn(Out2) -> Out3,
@@ -461,18 +517,35 @@ where
 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<Out, Out2, Inner, Map> AsyncCall<Out2> for MappedAsyncCaller<Out, Out2, Inner, Map>
+impl<'a, Out, Out2, Inner, Map> AsyncCall for MappedAsyncCaller<'a, Out, Out2, Inner, Map>
 where
-    Out: for<'de> ArgumentDecoder<'de> + Send,
-    Out2: for<'de> ArgumentDecoder<'de> + Send,
-    Inner: AsyncCall<Out> + Send,
-    Map: Send + Fn(Out) -> Out2,
+    Out: for<'de> ArgumentDecoder<'de> + Send + 'a,
+    Out2: for<'de> ArgumentDecoder<'de> + Send + 'a,
+    Inner: AsyncCall<Value = Out> + Send + 'a,
+    Map: Send + Fn(Out) -> Out2 + 'a,
 {
+    type Value = Out2;
+
     async fn call(self) -> Result<RequestId, AgentError> {
         self.call().await
     }
 
     async fn call_and_wait(self) -> Result<Out2, AgentError> {
         self.call_and_wait().await
+    }
+}
+
+impl<'a, Out, Out2, Inner, Map> IntoFuture for MappedAsyncCaller<'a, Out, Out2, Inner, Map>
+where
+    Out: for<'de> ArgumentDecoder<'de> + Send + 'a,
+    Out2: for<'de> ArgumentDecoder<'de> + Send + 'a,
+    Inner: AsyncCall<Value = Out> + Send + 'a,
+    Map: Send + Fn(Out) -> Out2 + 'a,
+{
+    type IntoFuture = CallFuture<'a, Out2>;
+    type Output = Result<Out2, AgentError>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        AsyncCall::call_and_wait(self)
     }
 }
