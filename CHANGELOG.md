@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Polling the status of a request before the request appears in the state tree no longer results in an `AgentError::LookupPathAbsent` and instead is treated as `RequestStatus::Unknown`.
+
 ## [0.34.0] - 2024-03-18
 
 * Changed `AgentError::ReplicaError` to `CertifiedReject` or `UncertifiedReject`. `CertifiedReject`s went through consensus, and `UncertifiedReject`s did not. If your code uses `ReplicaError`:
