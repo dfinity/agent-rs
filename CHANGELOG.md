@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Changed `WalletCanister::from_canister/create`'s version check to not rely on the reject code.
 * Added `QueryBuilder::call_with_verification()` and `QueryBuilder::call_without_verification()` which always/never verify query signatures
   regardless the Agent level configuration from `AgentBuilder::with_verify_query_signatures`.
 
