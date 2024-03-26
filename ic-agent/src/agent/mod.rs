@@ -1129,15 +1129,11 @@ impl Agent {
     }
 
     /// Retrieve all existing API boundary nodes from the state tree.
-    pub async fn fetch_api_boundary_nodes(
-        &self,
-        effective_canister_id: Principal,
-    ) -> Result<Vec<ApiBoundaryNode>, AgentError> {
+    pub async fn fetch_api_boundary_nodes(&self) -> Result<Vec<ApiBoundaryNode>, AgentError> {
+        // Here we use root canister_id, but any other 'permanent' canister in the root subnet can be used too.
+        let root_canister_id = Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap();
         let certificate = self
-            .read_state_raw(
-                vec![vec!["api_boundary_nodes".into()]],
-                effective_canister_id,
-            )
+            .read_state_raw(vec![vec!["api_boundary_nodes".into()]], root_canister_id)
             .await?;
         let api_boundary_nodes = lookup_api_boundary_nodes(certificate)?;
         Ok(api_boundary_nodes)
