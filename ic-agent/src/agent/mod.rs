@@ -1469,7 +1469,7 @@ pub(crate) struct Subnet {
 }
 
 /// API boundary node, which routes /api calls to IC replica nodes.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ApiBoundaryNode {
     /// Domain name
     pub domain: String,
