@@ -1128,28 +1128,29 @@ impl Agent {
         }
     }
 
-    /// Retrieve all existing API boundary nodes from the state tree using a hard-coded `effective_canister_id`.
-    pub async fn fetch_api_boundary_nodes(&self) -> Result<Vec<ApiBoundaryNode>, AgentError> {
-        // Here we use root canister_id, but any other 'permanent' canister in the root subnet can be used too.
-        let root_canister_id = Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap();
-        let certificate = self
-            .read_state_raw(vec![vec!["api_boundary_nodes".into()]], root_canister_id)
-            .await?;
+    /// Retrieve all existing API boundary nodes from the state tree using a hard-coded id of the root subnet in mainnet.
+    /// Endpoint /api/v2/subnet/<subnet_id>/read_state is called internally.
+    pub async fn fetch_api_boundary_nodes_mainnet(
+        &self,
+    ) -> Result<Vec<ApiBoundaryNode>, AgentError> {
+        // While the id of the root subnet is utilized here, it's important to note that an ID of any existing subnet could also be employed.
+        let root_subnet_id =
+            Principal::from_text("tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe")
+                .expect("failed to parse principle");
+        let paths = vec![vec!["api_boundary_nodes".into()]];
+        let certificate = self.read_subnet_state_raw(paths, root_subnet_id).await?;
         let api_boundary_nodes = lookup_api_boundary_nodes(certificate)?;
         Ok(api_boundary_nodes)
     }
 
-    /// Retrieve all existing API boundary nodes from the state tree using a custom `effective_canister_id`.
-    pub async fn fetch_api_boundary_nodes_by_canister_id(
+    /// Retrieve all existing API boundary nodes from the state tree using a custom existing subnet_id.
+    /// Endpoint /api/v2/subnet/<subnet_id>/read_state is called internally.
+    pub async fn fetch_api_boundary_nodes(
         &self,
-        effective_canister_id: Principal,
+        subnet_id: Principal,
     ) -> Result<Vec<ApiBoundaryNode>, AgentError> {
-        let certificate = self
-            .read_state_raw(
-                vec![vec!["api_boundary_nodes".into()]],
-                effective_canister_id,
-            )
-            .await?;
+        let paths = vec![vec!["api_boundary_nodes".into()]];
+        let certificate = self.read_subnet_state_raw(paths, subnet_id).await?;
         let api_boundary_nodes = lookup_api_boundary_nodes(certificate)?;
         Ok(api_boundary_nodes)
     }
