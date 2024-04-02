@@ -1128,17 +1128,24 @@ impl Agent {
         }
     }
 
-    /// Retrieve all existing API boundary nodes from the state tree.
-    pub async fn fetch_api_boundary_nodes(
+    /// Retrieve all existing API boundary nodes from the state tree via endpoint /api/v2/canister/<effective_canister_id>/read_state
+    pub async fn fetch_api_boundary_nodes_by_canister_id(
         &self,
-        effective_canister_id: Principal,
+        canister_id: Principal,
     ) -> Result<Vec<ApiBoundaryNode>, AgentError> {
-        let certificate = self
-            .read_state_raw(
-                vec![vec!["api_boundary_nodes".into()]],
-                effective_canister_id,
-            )
-            .await?;
+        let paths = vec![vec!["api_boundary_nodes".into()]];
+        let certificate = self.read_state_raw(paths, canister_id).await?;
+        let api_boundary_nodes = lookup_api_boundary_nodes(certificate)?;
+        Ok(api_boundary_nodes)
+    }
+
+    /// Retrieve all existing API boundary nodes from the state tree via endpoint /api/v2/subnet/<subnet_id>/read_state
+    pub async fn fetch_api_boundary_nodes_by_subnet_id(
+        &self,
+        subnet_id: Principal,
+    ) -> Result<Vec<ApiBoundaryNode>, AgentError> {
+        let paths = vec![vec!["api_boundary_nodes".into()]];
+        let certificate = self.read_subnet_state_raw(paths, subnet_id).await?;
         let api_boundary_nodes = lookup_api_boundary_nodes(certificate)?;
         Ok(api_boundary_nodes)
     }
@@ -1469,7 +1476,7 @@ pub(crate) struct Subnet {
 }
 
 /// API boundary node, which routes /api calls to IC replica nodes.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ApiBoundaryNode {
     /// Domain name
     pub domain: String,
