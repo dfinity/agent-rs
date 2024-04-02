@@ -1133,7 +1133,7 @@ impl Agent {
     pub async fn fetch_api_boundary_nodes_mainnet(
         &self,
     ) -> Result<Vec<ApiBoundaryNode>, AgentError> {
-        // While the id of the root subnet is utilized here, it's important to note that an ID of any existing subnet could also be employed.
+        // While the id of the root subnet is utilized here, it's important to note that an id of any existing subnet could also be employed.
         let root_subnet_id =
             Principal::from_text("tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe")
                 .expect("failed to parse principle");
@@ -1143,7 +1143,7 @@ impl Agent {
         Ok(api_boundary_nodes)
     }
 
-    /// Retrieve all existing API boundary nodes from the state tree using a custom existing subnet_id.
+    /// Retrieve all existing API boundary nodes from the state tree using a custom id of an existing subnet.
     /// Endpoint /api/v2/subnet/<subnet_id>/read_state is called internally.
     pub async fn fetch_api_boundary_nodes(
         &self,
