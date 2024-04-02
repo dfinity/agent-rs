@@ -1128,20 +1128,25 @@ impl Agent {
         }
     }
 
-    /// Retrieve all existing API boundary nodes from the state tree.
-    pub async fn fetch_api_boundary_nodes(
+    /// Retrieve all existing API boundary nodes from the state tree via endpoint /api/v2/canister/<effective_canister_id>/read_state
+    pub async fn fetch_api_boundary_nodes_by_canister_id(
         &self,
-        resolver: ApiBoundaryNodesResolver,
+        canister_id: Principal,
     ) -> Result<Vec<ApiBoundaryNode>, AgentError> {
         let paths = vec![vec!["api_boundary_nodes".into()]];
-        let certificate = match resolver {
-            ApiBoundaryNodesResolver::ViaCanisterId(id) => self.read_state_raw(paths, id).await?,
-            ApiBoundaryNodesResolver::ViaSubnetId(id) => {
-                self.read_subnet_state_raw(paths, id).await?
-            }
-        };
+        let certificate = self.read_state_raw(paths, canister_id).await?;
         let api_boundary_nodes = lookup_api_boundary_nodes(certificate)?;
+        Ok(api_boundary_nodes)
+    }
 
+    /// Retrieve all existing API boundary nodes from the state tree via endpoint /api/v2/subnet/<subnet_id>/read_state
+    pub async fn fetch_api_boundary_nodes_by_subnet_id(
+        &self,
+        subnet_id: Principal,
+    ) -> Result<Vec<ApiBoundaryNode>, AgentError> {
+        let paths = vec![vec!["api_boundary_nodes".into()]];
+        let certificate = self.read_subnet_state_raw(paths, subnet_id).await?;
+        let api_boundary_nodes = lookup_api_boundary_nodes(certificate)?;
         Ok(api_boundary_nodes)
     }
 
@@ -1468,15 +1473,6 @@ pub(crate) struct Subnet {
     _key: Vec<u8>,
     node_keys: HashMap<Principal, Vec<u8>>,
     canister_ranges: RangeInclusiveSet<Principal, PrincipalStep>,
-}
-
-/// Specifies a method for fetching API boundary nodes.
-#[derive(Debug, Clone)]
-pub enum ApiBoundaryNodesResolver {
-    /// Via endpoint: /api/v2/canister/<effective_canister_id>/read_state
-    ViaCanisterId(Principal),
-    /// Via endpoint: /api/v2/subnet/<subnet_id>/read_state
-    ViaSubnetId(Principal),
 }
 
 /// API boundary node, which routes /api calls to IC replica nodes.
