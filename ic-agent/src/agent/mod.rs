@@ -1128,30 +1128,20 @@ impl Agent {
         }
     }
 
-    /// Retrieve all existing API boundary nodes from the state tree using a hard-coded id of the root subnet in mainnet.
-    /// Endpoint /api/v2/subnet/<subnet_id>/read_state is called internally.
-    pub async fn fetch_api_boundary_nodes_mainnet(
-        &self,
-    ) -> Result<Vec<ApiBoundaryNode>, AgentError> {
-        // While the id of the root subnet is utilized here, it's important to note that an id of any existing subnet could also be employed.
-        let root_subnet_id =
-            Principal::from_text("tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe")
-                .expect("failed to parse principle");
-        let paths = vec![vec!["api_boundary_nodes".into()]];
-        let certificate = self.read_subnet_state_raw(paths, root_subnet_id).await?;
-        let api_boundary_nodes = lookup_api_boundary_nodes(certificate)?;
-        Ok(api_boundary_nodes)
-    }
-
-    /// Retrieve all existing API boundary nodes from the state tree using a custom id of an existing subnet.
-    /// Endpoint /api/v2/subnet/<subnet_id>/read_state is called internally.
+    /// Retrieve all existing API boundary nodes from the state tree.
     pub async fn fetch_api_boundary_nodes(
         &self,
-        subnet_id: Principal,
+        resolver: ApiBoundaryNodesResolver,
     ) -> Result<Vec<ApiBoundaryNode>, AgentError> {
         let paths = vec![vec!["api_boundary_nodes".into()]];
-        let certificate = self.read_subnet_state_raw(paths, subnet_id).await?;
+        let certificate = match resolver {
+            ApiBoundaryNodesResolver::ViaCanisterId(id) => self.read_state_raw(paths, id).await?,
+            ApiBoundaryNodesResolver::ViaSubnetId(id) => {
+                self.read_subnet_state_raw(paths, id).await?
+            }
+        };
         let api_boundary_nodes = lookup_api_boundary_nodes(certificate)?;
+
         Ok(api_boundary_nodes)
     }
 
@@ -1478,6 +1468,15 @@ pub(crate) struct Subnet {
     _key: Vec<u8>,
     node_keys: HashMap<Principal, Vec<u8>>,
     canister_ranges: RangeInclusiveSet<Principal, PrincipalStep>,
+}
+
+/// Specifies a method for fetching API boundary nodes.
+#[derive(Debug, Clone)]
+pub enum ApiBoundaryNodesResolver {
+    /// Via endpoint: /api/v2/canister/<effective_canister_id>/read_state
+    ViaCanisterId(Principal),
+    /// Via endpoint: /api/v2/subnet/<subnet_id>/read_state
+    ViaSubnetId(Principal),
 }
 
 /// API boundary node, which routes /api calls to IC replica nodes.

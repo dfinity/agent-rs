@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Changed `WalletCanister::from_canister/create`'s version check to not rely on the reject code.
 * Added `QueryBuilder::call_with_verification()` and `QueryBuilder::call_without_verification()` which always/never verify query signatures
   regardless the Agent level configuration from `AgentBuilder::with_verify_query_signatures`.
-* Function `Agent::fetch_api_boundary_nodes()` is modified and split into two: `fetch_api_boundary_nodes_mainnet()` and `fetch_api_boundary_nodes(subnet_id)` (now uses `subnet_id` instead of `effective_canister_id`).
+* Function `Agent::fetch_api_boundary_nodes(effective_canister_id)` is modified into `fetch_api_boundary_nodes(resolver: ApiBoundaryNodesResolver)`.
 
 ## [0.34.0] - 2024-03-18
 
