@@ -766,7 +766,7 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
                         self.canister
                             .install_chunked_code(
                                 &self.canister_id,
-                                &Sha256::digest(self.wasm).to_vec(),
+                                &Sha256::digest(self.wasm),
                             )
                             .with_chunk_hashes(results)
                             .with_raw_arg(arg)
