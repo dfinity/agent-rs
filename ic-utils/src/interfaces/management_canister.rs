@@ -13,7 +13,7 @@ use strum_macros::{AsRefStr, Display, EnumString};
 
 pub mod attributes;
 pub mod builders;
-mod serde_impls;
+
 #[doc(inline)]
 pub use builders::{
     CreateCanisterBuilder, InstallBuilder, InstallChunkedCodeBuilder, InstallCodeBuilder,
@@ -159,20 +159,9 @@ pub struct DefiniteCanisterSettings {
     pub reserved_cycles_limit: Option<Nat>,
 }
 
-/// The result of a [`ManagementCanister::upload_chunk`] call.
-#[derive(Clone, Debug, Deserialize, CandidType)]
-pub struct UploadChunkResult {
-    /// The hash of the uploaded chunk.
-    #[serde(with = "serde_bytes")]
-    pub hash: ChunkHash,
-}
+type StoreChunksResult = Vec<ChunkHash>;
 
-/// The result of a [`ManagementCanister::stored_chunks`] call.
-#[derive(Clone, Debug)]
-pub struct ChunkInfo {
-    /// The hash of the stored chunk.
-    pub hash: ChunkHash,
-}
+type UploadChunkResult = ChunkHash;
 
 impl std::fmt::Display for StatusCallResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -220,8 +209,13 @@ pub struct FetchCanisterLogsResponse {
     pub canister_log_records: Vec<CanisterLogRecord>,
 }
 
-/// A SHA-256 hash of a WASM chunk.
-pub type ChunkHash = [u8; 32];
+/// Return type of [upload_chunk](upload_chunk) and [stored_chunks](super::stored_chunks).
+#[derive(CandidType, Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+pub struct ChunkHash {
+    /// The hash of an uploaded chunk
+    #[serde(with = "serde_bytes")]
+    pub hash: Vec<u8>,
+}
 
 /// The Bitcoin network that a Bitcoin transaction is placed on.
 #[derive(Clone, Copy, Debug, CandidType, Deserialize, PartialEq, Eq)]
@@ -479,7 +473,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn stored_chunks(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<(Vec<ChunkInfo>,)> {
+    ) -> impl 'agent + AsyncCall<(StoreChunksResult,)> {
         #[derive(CandidType)]
         struct Argument<'a> {
             canister_id: &'a Principal,
@@ -494,7 +488,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn install_chunked_code<'canister>(
         &'canister self,
         canister_id: &Principal,
-        wasm_module_hash: ChunkHash,
+        wasm_module_hash: &[u8],
     ) -> InstallChunkedCodeBuilder<'agent, 'canister> {
         InstallChunkedCodeBuilder::builder(self, *canister_id, wasm_module_hash)
     }

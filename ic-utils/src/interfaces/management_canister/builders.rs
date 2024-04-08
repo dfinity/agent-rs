@@ -18,7 +18,7 @@ use futures_util::{
 };
 use ic_agent::{export::Principal, AgentError, RequestId};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::convert::{From, TryInto};
 use std::pin::Pin;
 use std::str::FromStr;
@@ -528,7 +528,7 @@ pub struct InstallChunkedCodeBuilder<'agent, 'canister> {
     target_canister: Principal,
     storage_canister: Principal,
     chunk_hashes_list: Vec<ChunkHash>,
-    wasm_module_hash: ChunkHash,
+    wasm_module_hash: Vec<u8>,
     arg: Argument,
     mode: InstallMode,
 }
@@ -538,12 +538,12 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
     pub fn builder(
         canister: &'canister Canister<'agent>,
         target_canister: Principal,
-        wasm_module_hash: ChunkHash,
+        wasm_module_hash: &[u8],
     ) -> Self {
         Self {
             canister,
             target_canister,
-            wasm_module_hash,
+            wasm_module_hash: wasm_module_hash.to_vec(),
             storage_canister: target_canister,
             chunk_hashes_list: vec![],
             arg: Argument::new(),
@@ -598,7 +598,7 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
             target_canister: Principal,
             storage_canister: Principal,
             chunk_hashes_list: Vec<ChunkHash>,
-            wasm_module_hash: ChunkHash,
+            wasm_module_hash: Vec<u8>,
             arg: Vec<u8>,
             sender_canister_version: Option<u64>,
         }
@@ -742,21 +742,17 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
                 } else {
                     let (existing_chunks,) = self.canister.stored_chunks(&self.canister_id).call_and_wait().await?;
                     let existing_chunks = existing_chunks.into_iter().map(|c| c.hash).collect::<BTreeSet<_>>();
-                    let to_upload_chunks_ordered = self.wasm.chunks(1024 * 1024).map(|x| (<[u8; 32]>::from(Sha256::digest(x)), x)).collect::<Vec<_>>();
-                    let to_upload_chunks = to_upload_chunks_ordered.iter().map(|&(k, v)| (k, v)).collect::<BTreeMap<_, _>>();
-                    let (new_chunks, setup) = if existing_chunks.iter().all(|hash| to_upload_chunks.contains_key(hash)) {
-                        (
-                            to_upload_chunks.iter()
-                                .filter_map(|(hash, value)| (!existing_chunks.contains(hash)).then_some((*hash, *value)))
-                                .collect(),
-                            Box::pin(ready(Ok(()))) as _,
-                        )
-                    } else {
-                        (to_upload_chunks.clone(), self.canister.clear_chunk_store(&self.canister_id).call_and_wait())
-                    };
-                    let chunks_stream = FuturesUnordered::new();
-                    for &chunk in new_chunks.values() {
-                        chunks_stream.push(async move {
+                    let all_chunks = self.wasm.chunks(1024 * 1024).map(|x| (Sha256::digest(x).to_vec(), x)).collect::<Vec<_>>();
+                    let mut to_upload_chunks = vec![];
+                    for (hash, chunk) in &all_chunks {
+                        if !existing_chunks.contains(hash) {
+                            to_upload_chunks.push(*chunk);
+                        }
+                    }
+
+                    let upload_chunks_stream = FuturesUnordered::new();
+                    for chunk in to_upload_chunks {
+                        upload_chunks_stream.push(async move {
                             let (_res,) = self
                                 .canister
                                 .upload_chunk(&self.canister_id, chunk)
@@ -765,36 +761,32 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
                             Ok(())
                         })
                     }
-                    Box::pin(
-                        setup.into_stream()
-                            // emit the same number of elements each time for a consistent progress bar, even if some are already uploaded
-                            .chain(stream::repeat_with(|| Ok(())).take(to_upload_chunks.len() - new_chunks.len()))
-                            .chain(chunks_stream)
-                            .chain(
-                                async move {
-                                    let results = to_upload_chunks_ordered.iter().map(|&(hash, _)| hash).collect();
-                                    self.canister
-                                        .install_chunked_code(
-                                            &self.canister_id,
-                                            Sha256::digest(self.wasm).into(),
-                                        )
-                                        .with_chunk_hashes(results)
-                                        .with_raw_arg(arg)
-                                        .with_install_mode(self.mode)
-                                        .call_and_wait()
-                                        .await
-                                }
-                                .into_stream(),
+                    let install_chunked_code_stream = async move {
+                        let results = all_chunks.iter().map(|(hash,_)| ChunkHash{ hash: hash.clone() }).collect();
+                        self.canister
+                            .install_chunked_code(
+                                &self.canister_id,
+                                &Sha256::digest(self.wasm).to_vec(),
                             )
-                            .chain(
-                                async move {
-                                    self.canister
-                                        .clear_chunk_store(&self.canister_id)
-                                        .call_and_wait()
-                                        .await
-                                }
-                                .into_stream(),
-                            ),
+                            .with_chunk_hashes(results)
+                            .with_raw_arg(arg)
+                            .with_install_mode(self.mode)
+                            .call_and_wait()
+                            .await
+                    }
+                    .into_stream();
+                    let clear_store_stream = async move {
+                        self.canister
+                            .clear_chunk_store(&self.canister_id)
+                            .call_and_wait()
+                            .await
+                    }
+                    .into_stream();
+
+                    Box::pin(
+                        upload_chunks_stream
+                            .chain(install_chunked_code_stream)
+                            .chain(clear_store_stream                        ),
                     )
                 };
             Ok(stream)
