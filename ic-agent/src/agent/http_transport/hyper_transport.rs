@@ -1,6 +1,7 @@
 //! A [`Transport`] that connects using a [`hyper`] client.
 pub use hyper;
 
+use std::sync::Arc;
 use std::{any, error::Error, future::Future, marker::PhantomData, sync::atomic::AtomicPtr};
 
 use http_body::Body;
@@ -26,7 +27,7 @@ use crate::{
 #[derive(Debug)]
 pub struct HyperTransport<B1, S = Client<HttpsConnector<HttpConnector>, B1>> {
     _marker: PhantomData<AtomicPtr<B1>>,
-    route_provider: Box<dyn RouteProvider>,
+    route_provider: Arc<dyn RouteProvider>,
     max_response_body_size: Option<usize>,
     service: S,
 }
@@ -108,13 +109,13 @@ where
 {
     /// Creates a replica transport from a HTTP URL and a [`HyperService`].
     pub fn create_with_service<U: Into<String>>(url: U, service: S) -> Result<Self, AgentError> {
-        let route_provider = Box::new(RoundRobinRouteProvider::new(vec![url.into()])?);
+        let route_provider = Arc::new(RoundRobinRouteProvider::new(vec![url.into()])?);
         Self::create_with_service_route(route_provider, service)
     }
 
     /// Creates a replica transport from a [`RouteProvider`] and a [`HyperService`].
     pub fn create_with_service_route(
-        route_provider: Box<dyn RouteProvider>,
+        route_provider: Arc<dyn RouteProvider>,
         service: S,
     ) -> Result<Self, AgentError> {
         Ok(Self {
