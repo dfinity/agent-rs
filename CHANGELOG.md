@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* BREAKING: Changed Chunk Store API to conform to the interface specification:
+  * `ChunkHash` was changed from `[u8; 32]` to a struct.
+  * Return types of `ManagementCanister::stored_chunks()` and `ManagementCanister::upload_chunk()`.
+  * Argument type of `ManagementCanister::install_chunked_code()`.
+  * `InstallChunkedCodeBuilder`.
+    * All occurrences of `storage_canister` were changed to `store_canister`.
+    * The field `chunk_hashes_list` was changed from `vec<vec<u8>>` to `vec<ChunkHash>`.
 * Changed `WalletCanister::from_canister/create`'s version check to not rely on the reject code.
 * Added `QueryBuilder::call_with_verification()` and `QueryBuilder::call_without_verification()` which always/never verify query signatures
   regardless the Agent level configuration from `AgentBuilder::with_verify_query_signatures`.
