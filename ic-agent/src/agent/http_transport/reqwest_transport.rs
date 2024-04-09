@@ -220,58 +220,62 @@ mod test {
 
     use super::ReqwestTransport;
 
-    #[cfg_attr(not(target_family = "wasm"), test)]
+    #[cfg_attr(not(target_family = "wasm"), tokio::test)]
     #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
-    fn redirect() {
-        fn test(base: &str, result: &str) {
+    async fn redirect() {
+        async fn test(base: &str, result: &str) {
             let t = ReqwestTransport::create(base).unwrap();
             assert_eq!(
-                t.route_provider.route().unwrap().as_str(),
+                t.route_provider.route().await.unwrap().as_str(),
                 result,
                 "{}",
                 base
             );
         }
 
-        test("https://ic0.app", "https://ic0.app/api/v2/");
-        test("https://IC0.app", "https://ic0.app/api/v2/");
-        test("https://foo.ic0.app", "https://ic0.app/api/v2/");
-        test("https://foo.IC0.app", "https://ic0.app/api/v2/");
-        test("https://foo.Ic0.app", "https://ic0.app/api/v2/");
-        test("https://foo.iC0.app", "https://ic0.app/api/v2/");
-        test("https://foo.bar.ic0.app", "https://ic0.app/api/v2/");
-        test("https://ic0.app/foo/", "https://ic0.app/foo/api/v2/");
-        test("https://foo.ic0.app/foo/", "https://ic0.app/foo/api/v2/");
+        test("https://ic0.app", "https://ic0.app/api/v2/").await;
+        test("https://IC0.app", "https://ic0.app/api/v2/").await;
+        test("https://foo.ic0.app", "https://ic0.app/api/v2/").await;
+        test("https://foo.IC0.app", "https://ic0.app/api/v2/").await;
+        test("https://foo.Ic0.app", "https://ic0.app/api/v2/").await;
+        test("https://foo.iC0.app", "https://ic0.app/api/v2/").await;
+        test("https://foo.bar.ic0.app", "https://ic0.app/api/v2/").await;
+        test("https://ic0.app/foo/", "https://ic0.app/foo/api/v2/").await;
+        test("https://foo.ic0.app/foo/", "https://ic0.app/foo/api/v2/").await;
         test(
             "https://ryjl3-tyaaa-aaaaa-aaaba-cai.ic0.app",
             "https://ic0.app/api/v2/",
-        );
+        )
+        .await;
 
-        test("https://ic1.app", "https://ic1.app/api/v2/");
-        test("https://foo.ic1.app", "https://foo.ic1.app/api/v2/");
-        test("https://ic0.app.ic1.app", "https://ic0.app.ic1.app/api/v2/");
+        test("https://ic1.app", "https://ic1.app/api/v2/").await;
+        test("https://foo.ic1.app", "https://foo.ic1.app/api/v2/").await;
+        test("https://ic0.app.ic1.app", "https://ic0.app.ic1.app/api/v2/").await;
 
-        test("https://fooic0.app", "https://fooic0.app/api/v2/");
-        test("https://fooic0.app.ic0.app", "https://ic0.app/api/v2/");
+        test("https://fooic0.app", "https://fooic0.app/api/v2/").await;
+        test("https://fooic0.app.ic0.app", "https://ic0.app/api/v2/").await;
 
-        test("https://icp0.io", "https://icp0.io/api/v2/");
+        test("https://icp0.io", "https://icp0.io/api/v2/").await;
         test(
             "https://ryjl3-tyaaa-aaaaa-aaaba-cai.icp0.io",
             "https://icp0.io/api/v2/",
-        );
-        test("https://ic0.app.icp0.io", "https://icp0.io/api/v2/");
+        )
+        .await;
+        test("https://ic0.app.icp0.io", "https://icp0.io/api/v2/").await;
 
-        test("https://icp-api.io", "https://icp-api.io/api/v2/");
+        test("https://icp-api.io", "https://icp-api.io/api/v2/").await;
         test(
             "https://ryjl3-tyaaa-aaaaa-aaaba-cai.icp-api.io",
             "https://icp-api.io/api/v2/",
-        );
-        test("https://icp0.io.icp-api.io", "https://icp-api.io/api/v2/");
+        )
+        .await;
+        test("https://icp0.io.icp-api.io", "https://icp-api.io/api/v2/").await;
 
-        test("http://localhost:4943", "http://localhost:4943/api/v2/");
+        test("http://localhost:4943", "http://localhost:4943/api/v2/").await;
         test(
             "http://ryjl3-tyaaa-aaaaa-aaaba-cai.localhost:4943",
             "http://localhost:4943/api/v2/",
-        );
+        )
+        .await;
     }
 }

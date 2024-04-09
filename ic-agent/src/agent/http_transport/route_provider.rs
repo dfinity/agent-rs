@@ -76,19 +76,19 @@ impl RoundRobinRouteProvider {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_empty_routes() {
+    #[tokio::test]
+    async fn test_empty_routes() {
         let provider = RoundRobinRouteProvider::new::<&str>(vec![])
             .expect("failed to create a route provider");
-        let result = provider.route().unwrap_err();
+        let result = provider.route().await.unwrap_err();
         assert_eq!(
             result,
             AgentError::RouteProviderError("No routing urls provided".to_string())
         );
     }
 
-    #[test]
-    fn test_routes_rotation() {
+    #[tokio::test]
+    async fn test_routes_rotation() {
         let provider = RoundRobinRouteProvider::new(vec!["https://url1.com", "https://url2.com"])
             .expect("failed to create a route provider");
         let url_strings = vec![
@@ -100,9 +100,9 @@ mod tests {
             .iter()
             .map(|url_str| Url::parse(url_str).expect("Invalid URL"))
             .collect();
-        let urls: Vec<Url> = (0..3)
-            .map(|_| provider.route().expect("failed to get next url"))
-            .collect();
-        assert_eq!(expected_urls, urls);
+        for url_expected in expected_urls {
+            let url = provider.route().await.expect("failed to get next url");
+            assert_eq!(url_expected, url);
+        }
     }
 }

@@ -278,9 +278,9 @@ mod test {
     use std::collections::VecDeque;
     use url::Url;
 
-    #[test]
-    fn redirect() {
-        fn test(base: &str, result: &str) {
+    #[tokio::test]
+    async fn redirect() {
+        async fn test(base: &str, result: &str) {
             let connector = HttpsConnectorBuilder::new()
                 .with_webpki_roots()
                 .https_or_http()
@@ -292,28 +292,28 @@ mod test {
             let url: Url = base.parse().unwrap();
             let t = HyperTransport::create_with_service(url, client).unwrap();
             assert_eq!(
-                t.route_provider.route().unwrap().as_str(),
+                t.route_provider.route().await.unwrap().as_str(),
                 result,
                 "{}",
                 base
             );
         }
 
-        test("https://ic0.app", "https://ic0.app/api/v2/");
-        test("https://IC0.app", "https://ic0.app/api/v2/");
-        test("https://foo.ic0.app", "https://ic0.app/api/v2/");
-        test("https://foo.IC0.app", "https://ic0.app/api/v2/");
-        test("https://foo.Ic0.app", "https://ic0.app/api/v2/");
-        test("https://foo.iC0.app", "https://ic0.app/api/v2/");
-        test("https://foo.bar.ic0.app", "https://ic0.app/api/v2/");
-        test("https://ic0.app/foo/", "https://ic0.app/foo/api/v2/");
-        test("https://foo.ic0.app/foo/", "https://ic0.app/foo/api/v2/");
+        test("https://ic0.app", "https://ic0.app/api/v2/").await;
+        test("https://IC0.app", "https://ic0.app/api/v2/").await;
+        test("https://foo.ic0.app", "https://ic0.app/api/v2/").await;
+        test("https://foo.IC0.app", "https://ic0.app/api/v2/").await;
+        test("https://foo.Ic0.app", "https://ic0.app/api/v2/").await;
+        test("https://foo.iC0.app", "https://ic0.app/api/v2/").await;
+        test("https://foo.bar.ic0.app", "https://ic0.app/api/v2/").await;
+        test("https://ic0.app/foo/", "https://ic0.app/foo/api/v2/").await;
+        test("https://foo.ic0.app/foo/", "https://ic0.app/foo/api/v2/").await;
 
-        test("https://ic1.app", "https://ic1.app/api/v2/");
-        test("https://foo.ic1.app", "https://foo.ic1.app/api/v2/");
-        test("https://ic0.app.ic1.app", "https://ic0.app.ic1.app/api/v2/");
+        test("https://ic1.app", "https://ic1.app/api/v2/").await;
+        test("https://foo.ic1.app", "https://foo.ic1.app/api/v2/").await;
+        test("https://ic0.app.ic1.app", "https://ic0.app.ic1.app/api/v2/").await;
 
-        test("https://fooic0.app", "https://fooic0.app/api/v2/");
-        test("https://fooic0.app.ic0.app", "https://ic0.app/api/v2/");
+        test("https://fooic0.app", "https://fooic0.app/api/v2/").await;
+        test("https://fooic0.app.ic0.app", "https://ic0.app/api/v2/").await;
     }
 }
