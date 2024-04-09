@@ -185,18 +185,21 @@ fn canister_reject_call() {
 
         let result = alice.wallet_send(*bob.canister_id(), 1_000_000).await;
 
-        assert!(matches!(
-            result,
-            Err(AgentError::CertifiedReject(RejectResponse {
-                reject_code: RejectCode::DestinationInvalid,
-                reject_message,
-                error_code: None,
-                ..
-            })) if reject_message == format!(
-                "Canister {} has no update method 'wallet_send'",
-                alice.canister_id()
-            )
-        ));
+        assert!(
+            matches!(
+                &result,
+                Err(AgentError::CertifiedReject(RejectResponse {
+                    reject_code: RejectCode::CanisterError,
+                    reject_message,
+                    error_code: None,
+                    ..
+                })) if *reject_message == format!(
+                    "Canister {} has no update method 'wallet_send'",
+                    alice.canister_id()
+                )
+            ),
+            "wrong error: {result:?}"
+        );
 
         Ok(())
     });
