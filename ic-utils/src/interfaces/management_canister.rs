@@ -159,10 +159,6 @@ pub struct DefiniteCanisterSettings {
     pub reserved_cycles_limit: Option<Nat>,
 }
 
-type StoreChunksResult = Vec<ChunkHash>;
-
-type UploadChunkResult = ChunkHash;
-
 impl std::fmt::Display for StatusCallResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Debug::fmt(self, f)
@@ -209,13 +205,19 @@ pub struct FetchCanisterLogsResponse {
     pub canister_log_records: Vec<CanisterLogRecord>,
 }
 
-/// Return type of [upload_chunk](upload_chunk) and [stored_chunks](super::stored_chunks).
+/// Chunk hash.
 #[derive(CandidType, Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct ChunkHash {
     /// The hash of an uploaded chunk
     #[serde(with = "serde_bytes")]
     pub hash: Vec<u8>,
 }
+
+/// Return type of [ManagementCanister::stored_chunks].
+pub type StoreChunksResult = Vec<ChunkHash>;
+
+/// Return type of [ManagementCanister::upload_chunk].
+pub type UploadChunkResult = ChunkHash;
 
 /// The Bitcoin network that a Bitcoin transaction is placed on.
 #[derive(Clone, Copy, Debug, CandidType, Deserialize, PartialEq, Eq)]

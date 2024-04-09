@@ -843,24 +843,24 @@ mod management_canister {
     #[test]
     fn chunked_wasm() {
         with_agent(|agent| async move {
-            let asm = b"\0asm\x01\0\0\0";
-            let asm_hash = Sha256::digest(asm).to_vec();
+            let wasm = b"\0asm\x01\0\0\0";
+            let wasm_hash = Sha256::digest(wasm).to_vec();
             let mgmt = ManagementCanister::create(&agent);
-            let (canister,) = mgmt
+            let (canister_id,) = mgmt
                 .create_canister()
                 .as_provisional_create_with_amount(None)
                 .with_effective_canister_id(get_effective_canister_id())
                 .call_and_wait()
                 .await?;
             let (pt1,) = mgmt
-                .upload_chunk(&canister, &asm[0..4])
+                .upload_chunk(&canister_id, &wasm[0..4])
                 .call_and_wait()
                 .await?;
             let (pt2,) = mgmt
-                .upload_chunk(&canister, &asm[4..8])
+                .upload_chunk(&canister_id, &wasm[4..8])
                 .call_and_wait()
                 .await?;
-            mgmt.install_chunked_code(&canister, &asm_hash)
+            mgmt.install_chunked_code(&canister_id, &wasm_hash)
                 .with_chunk_hashes(vec![pt1, pt2])
                 .call_and_wait()
                 .await?;

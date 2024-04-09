@@ -526,7 +526,7 @@ impl<'agent, 'canister: 'agent> AsyncCall<()> for InstallCodeBuilder<'agent, 'ca
 pub struct InstallChunkedCodeBuilder<'agent, 'canister> {
     canister: &'canister Canister<'agent>,
     target_canister: Principal,
-    storage_canister: Principal,
+    store_canister: Option<Principal>,
     chunk_hashes_list: Vec<ChunkHash>,
     wasm_module_hash: Vec<u8>,
     arg: Argument,
@@ -544,7 +544,7 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
             canister,
             target_canister,
             wasm_module_hash: wasm_module_hash.to_vec(),
-            storage_canister: target_canister,
+            store_canister: None,
             chunk_hashes_list: vec![],
             arg: Argument::new(),
             mode: InstallMode::Install,
@@ -558,8 +558,8 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
     }
 
     /// Set the canister to pull uploaded chunks from. By default this is the same as the target canister.
-    pub fn with_storage_canister(mut self, storage_canister: Principal) -> Self {
-        self.storage_canister = storage_canister;
+    pub fn with_store_canister(mut self, store_canister: Principal) -> Self {
+        self.store_canister = Some(store_canister);
         self
     }
 
@@ -596,8 +596,8 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
         struct In {
             mode: InstallMode,
             target_canister: Principal,
-            storage_canister: Principal,
-            chunk_hashes_list: Vec<ChunkHash>,
+            store_canister: Option<Principal>,
+            chunk_hashes_list: Vec<Vec<u8>>,
             wasm_module_hash: Vec<u8>,
             arg: Vec<u8>,
             sender_canister_version: Option<u64>,
@@ -605,7 +605,7 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
         let Self {
             mode,
             target_canister,
-            storage_canister,
+            store_canister,
             chunk_hashes_list,
             wasm_module_hash,
             arg,
@@ -617,8 +617,8 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
             .with_arg(In {
                 mode,
                 target_canister,
-                storage_canister,
-                chunk_hashes_list,
+                store_canister,
+                chunk_hashes_list: chunk_hashes_list.into_iter().map(|c| c.hash).collect(),
                 wasm_module_hash,
                 arg: arg.serialize()?,
                 sender_canister_version: None,
