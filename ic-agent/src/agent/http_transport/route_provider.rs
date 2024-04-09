@@ -1,4 +1,5 @@
 //! A [`RouteProvider`] for dynamic generation of routing urls.
+use async_trait::async_trait;
 use std::{
     str::FromStr,
     sync::atomic::{AtomicUsize, Ordering},
@@ -14,9 +15,10 @@ use crate::agent::{
 };
 
 /// A [`RouteProvider`] for dynamic generation of routing urls.
+#[async_trait]
 pub trait RouteProvider: std::fmt::Debug + Send + Sync {
     /// Generate next routing url
-    fn route(&self) -> Result<Url, AgentError>;
+    async fn route(&self) -> Result<Url, AgentError>;
 }
 
 /// A simple implementation of the [`RouteProvider`] which produces an even distribution of the urls from the input ones.
@@ -26,8 +28,9 @@ pub struct RoundRobinRouteProvider {
     current_idx: AtomicUsize,
 }
 
+#[async_trait]
 impl RouteProvider for RoundRobinRouteProvider {
-    fn route(&self) -> Result<Url, AgentError> {
+    async fn route(&self) -> Result<Url, AgentError> {
         if self.routes.is_empty() {
             return Err(AgentError::RouteProviderError(
                 "No routing urls provided".to_string(),

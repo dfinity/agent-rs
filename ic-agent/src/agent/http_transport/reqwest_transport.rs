@@ -126,7 +126,7 @@ impl ReqwestTransport {
         endpoint: &str,
         body: Option<Vec<u8>>,
     ) -> Result<Vec<u8>, AgentError> {
-        let url = self.route_provider.route()?.join(endpoint)?;
+        let url = self.route_provider.route().await?.join(endpoint)?;
         let mut http_request = Request::new(method, url);
         http_request
             .headers_mut()
