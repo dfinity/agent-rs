@@ -1,5 +1,6 @@
 //! Builder interfaces for some method calls of the management canister.
 
+use super::attributes::WasmMemoryLimit;
 #[doc(inline)]
 pub use super::attributes::{
     ComputeAllocation, FreezingThreshold, MemoryAllocation, ReservedCyclesLimit,
@@ -62,6 +63,16 @@ pub struct CanisterSettings {
     /// If set to 0, disables the reservation mechanism for the canister.
     /// Doing so will cause the canister to trap when it tries to allocate storage, if the subnet's usage exceeds 450 GiB.
     pub reserved_cycles_limit: Option<Nat>,
+
+    /// A soft limit on the Wasm memory usage of the canister.
+    ///
+    /// Update calls, timers, heartbeats, install, and post-upgrade fail if the
+    /// Wasm memory usage exceeds this limit. The main purpose of this field is
+    /// to protect against the case when the canister reaches the hard 4GiB
+    /// limit.
+    ///
+    /// Must be a number between 0 and 2^48^ (i.e 256TB), inclusively.
+    pub wasm_memory_limit: Option<Nat>,
 }
 
 /// A builder for a `create_canister` call.
@@ -74,6 +85,7 @@ pub struct CreateCanisterBuilder<'agent, 'canister: 'agent> {
     memory_allocation: Option<Result<MemoryAllocation, AgentError>>,
     freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
     reserved_cycles_limit: Option<Result<ReservedCyclesLimit, AgentError>>,
+    wasm_memory_limit: Option<Result<WasmMemoryLimit, AgentError>>,
     is_provisional_create: bool,
     amount: Option<u128>,
     specified_id: Option<Principal>,
@@ -90,6 +102,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             memory_allocation: None,
             freezing_threshold: None,
             reserved_cycles_limit: None,
+            wasm_memory_limit: None,
             is_provisional_create: false,
             amount: None,
             specified_id: None,
@@ -278,6 +291,32 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         }
     }
 
+    /// Pass in a Wasm memory limit value for the canister.
+    pub fn with_wasm_memory_limit<C, E>(self, wasm_memory_limit: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<WasmMemoryLimit, Error = E>,
+    {
+        self.with_optional_wasm_memory_limit(Some(wasm_memory_limit))
+    }
+
+    /// Pass in a Wasm memory limit optional value for the canister. If this is [None],
+    /// it will revert the Wasm memory limit to default.
+    pub fn with_optional_wasm_memory_limit<E, C>(self, wasm_memory_limit: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<WasmMemoryLimit, Error = E>,
+    {
+        Self {
+            wasm_memory_limit: wasm_memory_limit.map(|limit| {
+                limit
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+            }),
+            ..self
+        }
+    }
+
     /// Create an [AsyncCall] implementation that, when called, will create a
     /// canister.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<(Principal,)>, AgentError> {
@@ -306,6 +345,11 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             Some(Ok(x)) => Some(Nat::from(u128::from(x))),
             None => None,
         };
+        let wasm_memory_limit = match self.wasm_memory_limit {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
+            None => None,
+        };
 
         #[derive(Deserialize, CandidType)]
         struct Out {
@@ -327,6 +371,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     memory_allocation,
                     freezing_threshold,
                     reserved_cycles_limit,
+                    wasm_memory_limit,
                 },
                 specified_id: self.specified_id,
             };
@@ -343,6 +388,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     memory_allocation,
                     freezing_threshold,
                     reserved_cycles_limit,
+                    wasm_memory_limit,
                 })
                 .with_effective_canister_id(self.effective_canister_id)
         };
@@ -808,6 +854,7 @@ pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent> {
     memory_allocation: Option<Result<MemoryAllocation, AgentError>>,
     freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
     reserved_cycles_limit: Option<Result<ReservedCyclesLimit, AgentError>>,
+    wasm_memory_limit: Option<Result<WasmMemoryLimit, AgentError>>,
 }
 
 impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
@@ -821,6 +868,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             memory_allocation: None,
             freezing_threshold: None,
             reserved_cycles_limit: None,
+            wasm_memory_limit: None,
         }
     }
 
@@ -963,6 +1011,32 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         }
     }
 
+    /// Pass in a Wasm memory limit value for the canister.
+    pub fn with_wasm_memory_limit<C, E>(self, wasm_memory_limit: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<WasmMemoryLimit, Error = E>,
+    {
+        self.with_optional_wasm_memory_limit(Some(wasm_memory_limit))
+    }
+
+    /// Pass in a Wasm memory limit optional value for the canister. If this is [None],
+    /// leaves the Wasm memory limit unchanged.
+    pub fn with_optional_wasm_memory_limit<E, C>(self, wasm_memory_limit: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<WasmMemoryLimit, Error = E>,
+    {
+        Self {
+            wasm_memory_limit: wasm_memory_limit.map(|limit| {
+                limit
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+            }),
+            ..self
+        }
+    }
+
     /// Create an [AsyncCall] implementation that, when called, will update a
     /// canisters settings.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
@@ -997,6 +1071,11 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             Some(Ok(x)) => Some(Nat::from(u128::from(x))),
             None => None,
         };
+        let wasm_memory_limit = match self.wasm_memory_limit {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
+            None => None,
+        };
 
         Ok(self
             .canister
@@ -1009,6 +1088,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
                     memory_allocation,
                     freezing_threshold,
                     reserved_cycles_limit,
+                    wasm_memory_limit,
                 },
             })
             .with_effective_canister_id(self.canister_id)

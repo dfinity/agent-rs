@@ -157,6 +157,8 @@ pub struct DefiniteCanisterSettings {
     pub freezing_threshold: Nat,
     /// The upper limit of the canister's reserved cycles balance.
     pub reserved_cycles_limit: Option<Nat>,
+    /// A soft limit on the Wasm memory usage of the canister in bytes (up to 256TiB).
+    pub wasm_memory_limit: Option<Nat>,
 }
 
 impl std::fmt::Display for StatusCallResult {
