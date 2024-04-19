@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   regardless the Agent level configuration from `AgentBuilder::with_verify_query_signatures`.
 * Function `Agent::fetch_api_boundary_nodes()` is split into two functions: `fetch_api_boundary_nodes_by_canister_id()` and `fetch_api_boundary_nodes_by_subnet_id()`.
 * `ReqwestTransport` and `HyperTransport` structures storing the trait object `route_provider: Box<dyn RouteProvider>` have been modified to allow for shared ownership via `Arc<dyn RouteProvider>`.
+* Added `wasm_memory_limit` to canister creation and canister setting update options.
  
 ## [0.34.0] - 2024-03-18
 

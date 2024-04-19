@@ -723,6 +723,7 @@ mod management_canister {
                     memory_allocation: None,
                     freezing_threshold: None,
                     reserved_cycles_limit: None,
+                    wasm_memory_limit: None,
                 },
             };
 
@@ -1240,6 +1241,78 @@ mod extras {
                 .call_and_wait()
                 .await
                 .unwrap();
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn create_with_wasm_memory_limit() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
+                .with_wasm_memory_limit(1_000_000_000)
+                .call_and_wait()
+                .await
+                .unwrap();
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.wasm_memory_limit,
+                Some(Nat::from(1_000_000_000_u64))
+            );
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn update_wasm_memory_limit() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
+                .with_effective_canister_id(get_effective_canister_id())
+                .with_wasm_memory_limit(1_000_000_000)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.wasm_memory_limit,
+                Some(Nat::from(1_000_000_000_u64))
+            );
+
+            ic00.update_settings(&canister_id)
+                .with_wasm_memory_limit(3_000_000_000_u64)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.wasm_memory_limit,
+                Some(Nat::from(3_000_000_000_u64))
+            );
+
+            let no_change: Option<u64> = None;
+            ic00.update_settings(&canister_id)
+                .with_optional_wasm_memory_limit(no_change)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.wasm_memory_limit,
+                Some(Nat::from(3_000_000_000_u64))
+            );
 
             Ok(())
         })
