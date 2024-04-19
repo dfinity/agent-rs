@@ -1,9 +1,8 @@
 //! Builder interfaces for some method calls of the management canister.
 
-use super::attributes::WasmMemoryLimit;
 #[doc(inline)]
 pub use super::attributes::{
-    ComputeAllocation, FreezingThreshold, MemoryAllocation, ReservedCyclesLimit,
+    ComputeAllocation, FreezingThreshold, MemoryAllocation, ReservedCyclesLimit, WasmMemoryLimit,
 };
 use super::{ChunkHash, ManagementCanister};
 use crate::{
