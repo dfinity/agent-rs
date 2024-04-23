@@ -20,6 +20,7 @@ pub use ic_transport_types::{
 pub use nonce::{NonceFactory, NonceGenerator};
 use rangemap::{RangeInclusiveMap, RangeInclusiveSet, StepFns};
 use time::OffsetDateTime;
+use tokio::sync::Semaphore;
 
 #[cfg(test)]
 mod agent_test;
@@ -257,6 +258,7 @@ pub struct Agent {
     root_key: Arc<RwLock<Vec<u8>>>,
     transport: Arc<dyn Transport>,
     subnet_key_cache: Arc<Mutex<SubnetCache>>,
+    concurrent_requests_semaphore: Arc<Semaphore>,
     verify_query_signatures: bool,
 }
 
@@ -287,6 +289,7 @@ impl Agent {
                 .ok_or_else(AgentError::MissingReplicaTransport)?,
             subnet_key_cache: Arc::new(Mutex::new(SubnetCache::new())),
             verify_query_signatures: config.verify_query_signatures,
+            concurrent_requests_semaphore: Arc::new(Semaphore::new(config.max_concurrent_requests)),
         })
     }
 
@@ -372,6 +375,7 @@ impl Agent {
     where
         A: serde::de::DeserializeOwned,
     {
+        let _permit = self.concurrent_requests_semaphore.acquire().await.unwrap();
         let bytes = self
             .transport
             .query(effective_canister_id, serialized_bytes)
@@ -387,6 +391,7 @@ impl Agent {
     where
         A: serde::de::DeserializeOwned,
     {
+        let _permit = self.concurrent_requests_semaphore.acquire().await.unwrap();
         let bytes = self
             .transport
             .read_state(effective_canister_id, serialized_bytes)
@@ -402,6 +407,7 @@ impl Agent {
     where
         A: serde::de::DeserializeOwned,
     {
+        let _permit = self.concurrent_requests_semaphore.acquire().await.unwrap();
         let bytes = self
             .transport
             .read_subnet_state(subnet_id, serialized_bytes)
@@ -415,6 +421,7 @@ impl Agent {
         request_id: RequestId,
         serialized_bytes: Vec<u8>,
     ) -> Result<RequestId, AgentError> {
+        let _permit = self.concurrent_requests_semaphore.acquire().await.unwrap();
         self.transport
             .call(effective_canister_id, serialized_bytes, request_id)
             .await?;
