@@ -1,13 +1,16 @@
 // Disable these tests without the reqwest feature.
 #![cfg(feature = "reqwest")]
 
-use self::mock::{assert_mock, assert_single_mock, mock, mock_additional};
+use self::mock::{
+    assert_mock, assert_single_mock, assert_single_mock_count, mock, mock_additional,
+};
 use crate::{
     agent::{http_transport::ReqwestTransport, Status},
     export::Principal,
     Agent, AgentError, Certificate,
 };
 use candid::{Encode, Nat};
+use futures_util::FutureExt;
 use ic_certification::{Delegation, Label};
 use ic_transport_types::{NodeSignature, QueryResponse, RejectCode, RejectResponse, ReplyResponse};
 use std::{collections::BTreeMap, time::Duration};
@@ -541,6 +544,31 @@ async fn too_many_delegations() {
     ));
 }
 
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+async fn retry_ratelimit() {
+    let (mut mock, url) = mock(
+        "POST",
+        "/api/v2/canister/ryjl3-tyaaa-aaaaa-aaaba-cai/query",
+        429,
+        vec![],
+        Some("text/plain"),
+    )
+    .await;
+    let agent = make_agent(&url);
+    futures_util::select! {
+        _ = agent.query(&"ryjl3-tyaaa-aaaaa-aaaba-cai".parse().unwrap(), "greet").call().fuse() => panic!("did not retry 429"),
+        _ = crate::util::sleep(Duration::from_millis(500)).fuse() => {},
+    };
+    assert_single_mock_count(
+        "POST",
+        "/api/v2/canister/ryjl3-tyaaa-aaaaa-aaaba-cai/query",
+        2,
+        &mut mock,
+    )
+    .await;
+}
+
 #[cfg(not(target_family = "wasm"))]
 mod mock {
 
@@ -603,6 +631,19 @@ mod mock {
         (_, mocks): &(ServerGuard, HashMap<String, Mock>),
     ) {
         mocks[&format!("{method} {path}")].assert_async().await;
+    }
+
+    pub async fn assert_single_mock_count(
+        method: &str,
+        path: &str,
+        n: usize,
+        (_, mocks): &mut (ServerGuard, HashMap<String, Mock>),
+    ) {
+        let k = format!("{method} {path}");
+        let mut mock = mocks.remove(&k).unwrap();
+        mock = mock.expect_at_least(n);
+        mock.assert_async().await;
+        mocks.insert(k, mock);
     }
 }
 
@@ -697,8 +738,8 @@ mod mock {
             .unwrap();
     }
 
-    pub async fn assert_mock(nonce: String) {
-        let hits: HashMap<String, i64> = Client::new()
+    async fn get_hits(nonce: &str) -> HashMap<String, i64> {
+        Client::new()
             .get(&format!("http://mock_assert/{}", nonce))
             .send()
             .await
@@ -707,21 +748,21 @@ mod mock {
             .unwrap()
             .json()
             .await
-            .unwrap();
+            .unwrap()
+    }
+
+    pub async fn assert_mock(nonce: String) {
+        let hits = get_hits(&nonce).await;
         assert!(hits.values().all(|x| *x > 0));
     }
 
     pub async fn assert_single_mock(method: &str, path: &str, nonce: &String) {
-        let hits: HashMap<String, i64> = Client::new()
-            .get(&format!("http://mock_assert/{}", nonce))
-            .send()
-            .await
-            .unwrap()
-            .error_for_status()
-            .unwrap()
-            .json()
-            .await
-            .unwrap();
+        let hits = get_hits(nonce).await;
         assert!(hits[&format!("{method} {path}")] > 0);
+    }
+
+    pub async fn assert_single_mock_count(method: &str, path: &str, n: usize, nonce: &mut String) {
+        let hits = get_hits(&*nonce).await;
+        assert!(hits[&format!("{method} {path}")] >= n as i64);
     }
 }

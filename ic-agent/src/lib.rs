@@ -116,6 +116,7 @@ compile_error!("Feature `hyper` cannot be used from WASM.");
 pub mod agent;
 pub mod export;
 pub mod identity;
+mod util;
 
 use agent::response_authentication::LookupPath;
 #[doc(inline)]

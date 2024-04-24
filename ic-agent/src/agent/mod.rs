@@ -9,6 +9,7 @@ pub mod status;
 
 pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
+use async_lock::Semaphore;
 pub use builder::AgentBuilder;
 use cached::{Cached, TimedCache};
 use ed25519_consensus::{Error as Ed25519Error, Signature, VerificationKey};
@@ -257,6 +258,7 @@ pub struct Agent {
     root_key: Arc<RwLock<Vec<u8>>>,
     transport: Arc<dyn Transport>,
     subnet_key_cache: Arc<Mutex<SubnetCache>>,
+    concurrent_requests_semaphore: Arc<Semaphore>,
     verify_query_signatures: bool,
 }
 
@@ -287,6 +289,7 @@ impl Agent {
                 .ok_or_else(AgentError::MissingReplicaTransport)?,
             subnet_key_cache: Arc::new(Mutex::new(SubnetCache::new())),
             verify_query_signatures: config.verify_query_signatures,
+            concurrent_requests_semaphore: Arc::new(Semaphore::new(config.max_concurrent_requests)),
         })
     }
 
@@ -372,6 +375,7 @@ impl Agent {
     where
         A: serde::de::DeserializeOwned,
     {
+        let _permit = self.concurrent_requests_semaphore.acquire().await;
         let bytes = self
             .transport
             .query(effective_canister_id, serialized_bytes)
@@ -387,6 +391,7 @@ impl Agent {
     where
         A: serde::de::DeserializeOwned,
     {
+        let _permit = self.concurrent_requests_semaphore.acquire().await;
         let bytes = self
             .transport
             .read_state(effective_canister_id, serialized_bytes)
@@ -402,6 +407,7 @@ impl Agent {
     where
         A: serde::de::DeserializeOwned,
     {
+        let _permit = self.concurrent_requests_semaphore.acquire().await;
         let bytes = self
             .transport
             .read_subnet_state(subnet_id, serialized_bytes)
@@ -415,6 +421,7 @@ impl Agent {
         request_id: RequestId,
         serialized_bytes: Vec<u8>,
     ) -> Result<RequestId, AgentError> {
+        let _permit = self.concurrent_requests_semaphore.acquire().await;
         self.transport
             .call(effective_canister_id, serialized_bytes, request_id)
             .await?;
@@ -714,26 +721,7 @@ impl Agent {
             };
 
             match retry_policy.next_backoff() {
-                #[cfg(not(target_family = "wasm"))]
-                Some(duration) => tokio::time::sleep(duration).await,
-
-                #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
-                Some(duration) => {
-                    wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |rs, rj| {
-                        if let Err(e) = web_sys::window()
-                            .expect("global window unavailable")
-                            .set_timeout_with_callback_and_timeout_and_arguments_0(
-                                &rs,
-                                duration.as_millis() as _,
-                            )
-                        {
-                            use wasm_bindgen::UnwrapThrowExt;
-                            rj.call1(&rj, &e).unwrap_throw();
-                        }
-                    }))
-                    .await
-                    .expect("unable to setTimeout");
-                }
+                Some(duration) => crate::util::sleep(duration).await,
 
                 None => return Err(AgentError::TimeoutWaitingForResponse()),
             }
@@ -769,25 +757,8 @@ impl Agent {
             };
 
             match retry_policy.next_backoff() {
-                #[cfg(not(target_family = "wasm"))]
-                Some(duration) => tokio::time::sleep(duration).await,
-                #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
-                Some(duration) => {
-                    wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |rs, rj| {
-                        if let Err(e) = web_sys::window()
-                            .expect("global window unavailable")
-                            .set_timeout_with_callback_and_timeout_and_arguments_0(
-                                &rs,
-                                duration.as_millis() as _,
-                            )
-                        {
-                            use wasm_bindgen::UnwrapThrowExt;
-                            rj.call1(&rj, &e).unwrap_throw();
-                        }
-                    }))
-                    .await
-                    .expect("unable to setTimeout");
-                }
+                Some(duration) => crate::util::sleep(duration).await,
+
                 None => return Err(AgentError::TimeoutWaitingForResponse()),
             }
         }
@@ -1797,9 +1768,10 @@ impl<'agent> UpdateBuilder<'agent> {
     }
 }
 
-#[cfg(all(test, feature = "reqwest"))]
+#[cfg(all(test, feature = "reqwest", not(target_family = "wasm")))]
 mod offline_tests {
     use super::*;
+    use futures_util::future::pending;
     // Any tests that involve the network should go in agent_test, not here.
 
     #[test]
@@ -1822,5 +1794,49 @@ mod offline_tests {
         }
         // in six requests, there should be no more than two timestamps
         assert!(num_timestamps <= 2, "num_timestamps:{num_timestamps} > 2");
+    }
+
+    #[tokio::test]
+    async fn client_ratelimit() {
+        struct SlowTransport(Arc<Mutex<usize>>);
+        impl Transport for SlowTransport {
+            fn call(&self, _: Principal, _: Vec<u8>, _: RequestId) -> AgentFuture<()> {
+                *self.0.lock().unwrap() += 1;
+                Box::pin(pending())
+            }
+            fn query(&self, _: Principal, _: Vec<u8>) -> AgentFuture<Vec<u8>> {
+                *self.0.lock().unwrap() += 1;
+                Box::pin(pending())
+            }
+            fn read_state(&self, _: Principal, _: Vec<u8>) -> AgentFuture<Vec<u8>> {
+                *self.0.lock().unwrap() += 1;
+                Box::pin(pending())
+            }
+            fn read_subnet_state(&self, _: Principal, _: Vec<u8>) -> AgentFuture<Vec<u8>> {
+                *self.0.lock().unwrap() += 1;
+                Box::pin(pending())
+            }
+            fn status(&self) -> AgentFuture<Vec<u8>> {
+                *self.0.lock().unwrap() += 1;
+                Box::pin(pending())
+            }
+        }
+        let count = Arc::new(Mutex::new(0));
+        let agent = Agent::builder()
+            .with_transport(SlowTransport(count.clone()))
+            .with_max_concurrent_requests(2)
+            .build()
+            .unwrap();
+        for _ in 0..3 {
+            let agent = agent.clone();
+            tokio::spawn(async move {
+                agent
+                    .query(&"ryjl3-tyaaa-aaaaa-aaaba-cai".parse().unwrap(), "greet")
+                    .call()
+                    .await
+            });
+        }
+        crate::util::sleep(Duration::from_millis(250)).await;
+        assert_eq!(*count.lock().unwrap(), 2);
     }
 }

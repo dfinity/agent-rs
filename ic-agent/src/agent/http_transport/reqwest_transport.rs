@@ -1,7 +1,7 @@
 //! A [`Transport`] that connects using a [`reqwest`] client.
 #![cfg(feature = "reqwest")]
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use ic_transport_types::RejectResponse;
 pub use reqwest;
@@ -136,7 +136,13 @@ impl ReqwestTransport {
 
         *http_request.body_mut() = body.map(Body::from);
 
-        let request_result = self.request(http_request.try_clone().unwrap()).await?;
+        let request_result = loop {
+            let result = self.request(http_request.try_clone().unwrap()).await?;
+            if result.0 != StatusCode::TOO_MANY_REQUESTS {
+                break result;
+            }
+            crate::util::sleep(Duration::from_millis(250)).await;
+        };
         let status = request_result.0;
         let headers = request_result.1;
         let body = request_result.2;
