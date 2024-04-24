@@ -15,6 +15,7 @@ keywords = ["internet-computer", "agent", "icp", "dfinity"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
+async-lock = "3.3"
 backoff = "0.4.0"
 cached = { version = "0.46", features = ["ahash"], default-features = false }
 candid = { workspace = true }
@@ -71,7 +72,7 @@ hyper-rustls = { version = "0.26.0", features = [
     "webpki-roots",
     "http2",
 ], optional = true }
-tokio = { version = "1.24.2", features = ["time", "sync"] }
+tokio = { version = "1.24.2", features = ["time"] }
 tower = { version = "0.4.13", optional = true }
 rustls-webpki = "0.101.4"
 

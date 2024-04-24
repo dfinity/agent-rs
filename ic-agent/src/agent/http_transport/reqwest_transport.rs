@@ -11,7 +11,6 @@ use reqwest::{
     header::{HeaderMap, CONTENT_TYPE},
     Body, Client, Method, Request, StatusCode,
 };
-use tokio::time::sleep;
 
 use crate::{
     agent::{
@@ -142,7 +141,7 @@ impl ReqwestTransport {
             if result.0 != StatusCode::TOO_MANY_REQUESTS {
                 break result;
             }
-            sleep(Duration::from_millis(250)).await;
+            crate::util::sleep(Duration::from_millis(250)).await;
         };
         let status = request_result.0;
         let headers = request_result.1;

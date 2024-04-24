@@ -1,7 +1,6 @@
 //! A [`Transport`] that connects using a [`hyper`] client.
 use http::StatusCode;
 pub use hyper;
-use tokio::time::sleep;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -178,7 +177,7 @@ where
             if response.status() != StatusCode::TOO_MANY_REQUESTS {
                 break response;
             }
-            sleep(Duration::from_millis(250)).await;
+            crate::util::sleep(Duration::from_millis(250)).await;
         };
         let (parts, body) = response.into_parts();
         let body = if let Some(limit) = self.max_response_body_size {
