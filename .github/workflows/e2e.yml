@@ -10,12 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Since 2024-04-25, the GitHub macos runner started to fail 
-        # the `brew install bats-core` step in the provision-darwin.sh script.
-        # And we are not really running any tests this e2e workflow.
-        # So we disable the macos runner for now.
-        # os: [ macos-latest, ubuntu-latest ]
-        os: [ ubuntu-latest ]
+        os: [ macos-12, ubuntu-latest ]
         dfx: [ '0.8.4', '0.9.2', '0.10.1', '0.11.1' ]
 
     steps:
