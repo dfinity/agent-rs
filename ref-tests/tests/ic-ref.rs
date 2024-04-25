@@ -843,11 +843,6 @@ mod management_canister {
     #[ignore]
     #[test]
     fn chunked_wasm() {
-        // TODO: remove the following two lines to re-enable the test once dfx release (next of 0.19.0).
-        // The test is disabled because it requires updated replica which is not available in the latest dfx release (0.19.0).
-        // The correctness can be verified by relative tests in the sdk repo.
-        return;
-        #[allow(unreachable_code)]
         with_agent(|agent| async move {
             let wasm = b"\0asm\x01\0\0\0";
             let wasm_hash = Sha256::digest(wasm).to_vec();
