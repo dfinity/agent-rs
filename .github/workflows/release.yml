@@ -19,7 +19,7 @@ jobs:
             target: x86_64-unknown-linux-musl
             binary_path: target/x86_64-unknown-linux-musl/release
             binary_files: icx
-          - os: macos-latest
+          - os: macos-12
             name: macos
             target: x86_64-apple-darwin
             binary_path: target/x86_64-apple-darwin/release
