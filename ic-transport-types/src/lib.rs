@@ -140,10 +140,17 @@ pub enum SyncCallResponse {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum CallResponse {
-    /// A certified response from the canister.
-    CertifiedResponse(Certificate),
+    /// A certified response.
+    CertifiedState {
+        /// A certificate for the status of the update call.
+        certificate: Vec<u8>,
+    },
+
+    /// A non replicated rejection from the replica.
+    NonReplicatedRejection(RejectResponse),
+
     /// The replica timed out the sync request. The status of the request must be polled.
-    Accepted(RequestId),
+    Poll(RequestId),
 }
 
 /// Possible responses to a query call.

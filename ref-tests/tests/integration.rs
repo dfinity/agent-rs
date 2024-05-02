@@ -4,10 +4,11 @@
 //! integration tests with a running IC-Ref.
 use candid::CandidType;
 use ic_agent::{
-    agent::{agent_error::HttpErrorPayload, RejectCode, RejectResponse},
+    agent::{agent_error::HttpErrorPayload, Envelope, EnvelopeContent, RejectCode, RejectResponse},
     export::Principal,
     AgentError, Identity,
 };
+use ic_certification::Label;
 use ic_utils::{
     call::{AsyncCall, SyncCall},
     interfaces::{
@@ -20,6 +21,12 @@ use ref_tests::{
     create_agent, create_basic_identity, create_universal_canister, create_wallet_canister,
     get_wallet_wasm_from_env, universal_canister::payload, with_universal_canister,
     with_wallet_canister,
+};
+use serde::Serialize;
+use std::{
+    borrow::Cow,
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 #[ignore]
@@ -66,6 +73,84 @@ fn basic_expiry() {
 
 #[ignore]
 #[test]
+fn wait_signed() {
+    with_universal_canister(|mut agent, canister_id| async move {
+        fn serialized_bytes(envelope: Envelope) -> Vec<u8> {
+            let mut serialized_bytes = Vec::new();
+            let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
+            serializer.self_describe().unwrap();
+            envelope.serialize(&mut serializer).unwrap();
+            serialized_bytes
+        }
+
+        let arg = payload().reply_data(b"hello").build();
+        let ingress_expiry = (SystemTime::now().duration_since(UNIX_EPOCH).unwrap()
+            + Duration::from_secs(120))
+        .as_nanos() as u64;
+
+        let agent_identity = Arc::new(create_basic_identity().unwrap());
+        agent.set_arc_identity(agent_identity.clone());
+
+        let call_envelope_content = EnvelopeContent::Call {
+            sender: agent.get_principal().unwrap(),
+            arg: arg.clone(),
+            ingress_expiry,
+            nonce: None,
+            canister_id,
+            method_name: "update".to_string(),
+        };
+
+        let call_request_id = call_envelope_content.to_request_id();
+        let call_signature = agent_identity.sign(&call_envelope_content).unwrap();
+
+        let call_envelope = Envelope {
+            content: Cow::Borrowed(&call_envelope_content),
+            sender_pubkey: call_signature.public_key,
+            sender_sig: call_signature.signature,
+            sender_delegation: call_signature.delegations,
+        };
+
+        let call_envelope_serialized = serialized_bytes(call_envelope);
+
+        agent
+            .update_signed(canister_id, call_envelope_serialized)
+            .await
+            .unwrap();
+
+        let paths: Vec<Vec<Label>> = vec![vec![
+            "request_status".into(),
+            call_request_id.to_vec().into(),
+        ]];
+        let read_state_envelope_content = EnvelopeContent::ReadState {
+            sender: agent.get_principal().unwrap(),
+            paths,
+            ingress_expiry,
+        };
+
+        let read_signature = agent_identity.sign(&read_state_envelope_content).unwrap();
+
+        let read_state_envelope = Envelope {
+            content: Cow::Borrowed(&read_state_envelope_content),
+            sender_pubkey: read_signature.public_key,
+            sender_sig: read_signature.signature,
+            sender_delegation: read_signature.delegations,
+        };
+
+        let read_envelope_serialized = serialized_bytes(read_state_envelope);
+
+        let result = agent
+            .wait_signed(&call_request_id, canister_id, read_envelope_serialized)
+            .await
+            .unwrap();
+
+        assert_eq!(result.as_slice(), b"hello");
+
+        Ok(())
+    })
+}
+
+#[ignore]
+#[test]
 fn canister_query() {
     with_universal_canister(|agent, canister_id| async move {
         let universal = Canister::builder()
@@ -100,18 +185,21 @@ fn canister_reject_call() {
 
         let result = alice.wallet_send(*bob.canister_id(), 1_000_000).await;
 
-        assert!(matches!(
-            result,
-            Err(AgentError::ReplicaError(RejectResponse {
-                reject_code: RejectCode::DestinationInvalid,
-                reject_message,
-                error_code: None,
-                ..
-            })) if reject_message == format!(
-                "Canister {} has no update method 'wallet_send'",
-                alice.canister_id()
-            )
-        ));
+        assert!(
+            matches!(
+                &result,
+                Err(AgentError::CertifiedReject(RejectResponse {
+                    reject_code: RejectCode::CanisterError,
+                    reject_message,
+                    error_code: None,
+                    ..
+                })) if *reject_message == format!(
+                    "Canister {} has no update method 'wallet_send'",
+                    alice.canister_id()
+                )
+            ),
+            "wrong error: {result:?}"
+        );
 
         Ok(())
     });
@@ -336,6 +424,7 @@ fn wallet_create_wallet() {
                 memory_allocation: None,
                 freezing_threshold: None,
                 reserved_cycles_limit: None,
+                wasm_memory_limit: None,
             },
         };
         let args = Argument::from_candid((create_args,));

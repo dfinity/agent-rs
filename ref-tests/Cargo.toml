@@ -17,3 +17,4 @@ tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
 serde_cbor = { workspace = true }
+ic-certification = { workspace = true }

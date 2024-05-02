@@ -3,6 +3,7 @@
 
 use ic_transport_types::{CallResponse, RejectResponse, SynCallResponse};
 pub use reqwest;
+use std::{sync::Arc, time::Duration};
 
 use futures_util::StreamExt;
 use reqwest::{
@@ -23,7 +24,7 @@ use crate::{
 /// A [`Transport`] using [`reqwest`] to make HTTP calls to the Internet Computer.
 #[derive(Debug)]
 pub struct ReqwestTransport {
-    route_provider: Box<dyn RouteProvider>,
+    route_provider: Arc<dyn RouteProvider>,
     client: Client,
     max_response_body_size: Option<usize>,
 }
@@ -53,13 +54,13 @@ impl ReqwestTransport {
 
     /// Creates a replica transport from a HTTP URL and a [`reqwest::Client`].
     pub fn create_with_client<U: Into<String>>(url: U, client: Client) -> Result<Self, AgentError> {
-        let route_provider = Box::new(RoundRobinRouteProvider::new(vec![url.into()])?);
+        let route_provider = Arc::new(RoundRobinRouteProvider::new(vec![url.into()])?);
         Self::create_with_client_route(route_provider, client)
     }
 
     /// Creates a replica transport from a [`RouteProvider`] and a [`reqwest::Client`].
     pub fn create_with_client_route(
-        route_provider: Box<dyn RouteProvider>,
+        route_provider: Arc<dyn RouteProvider>,
         client: Client,
     ) -> Result<Self, AgentError> {
         Ok(Self {
@@ -134,7 +135,13 @@ impl ReqwestTransport {
 
         *http_request.body_mut() = body.map(Body::from);
 
-        let request_result = self.request(http_request.try_clone().unwrap()).await?;
+        let request_result = loop {
+            let result = self.request(http_request.try_clone().unwrap()).await?;
+            if result.0 != StatusCode::TOO_MANY_REQUESTS {
+                break result;
+            }
+            crate::util::sleep(Duration::from_millis(250)).await;
+        };
         let status = request_result.0;
         let headers = request_result.1;
         let body = request_result.2;
@@ -173,7 +180,7 @@ impl Transport for ReqwestTransport {
                             serde_cbor::from_slice(&body);
 
                         let agent_error = match cbor_decoded_body {
-                            Ok(replica_error) => AgentError::ReplicaError(replica_error),
+                            Ok(replica_error) => AgentError::UncertifiedReject(replica_error),
                             Err(cbor_error) => AgentError::InvalidCborData(cbor_error),
                         };
 
@@ -185,34 +192,30 @@ impl Transport for ReqwestTransport {
         })
     }
 
-    fn sync_call(
+    fn call_v3(
         &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
         request_id: RequestId,
-    ) -> AgentFuture<Option<Vec<u8>>> {
+    ) -> AgentFuture<CallResponse> {
         Box::pin(async move {
             let endpoint = format!("canister/{}/call", effective_canister_id.to_text());
             self.execute(Method::POST, &endpoint, Some(envelope))
                 .await
                 .and_then(|(body, status)| {
-                    if status == StatusCode::OK {
-                        let cbor_decoded_body: Result<SynCallResponse, serde_cbor::Error> =
-                            serde_cbor::from_slice(&body);
+                    // The `/v3/call` endpoint must return OK status code.
 
-                        match cbor_decoded_body {
-                            Ok(SynCallResponse::Replied(certificate)) => {
-                                Ok(CallResponse::CertifiedResponse(certificate))
-                            }
-                            Ok(SynCallResponse::Rejected { reject_response }) => {
-                                Err(AgentError::ReplicaError(reject_response))
-                            }
-                            Err(cbor_error) => Err(AgentError::InvalidCborData(cbor_error)),
-                        }
-                    // StatusCode == StatusCode::ACCEPTED
-                    } else {
-                        Ok(None)
+                    if status != StatusCode::OK {
+                        return Err(AgentError::InvalidHttpResponse(
+                            "Expected `200`, `4xx`, or `5xx` status code".to_string(),
+                        ));
                     }
+
+                    let response: Result<CallResponse, _> =
+                        serde_cbor::from_slice::<CallResponse>(&body)
+                            .map_err(AgentError::InvalidCborData);
+
+                    response
                 })
         })
     }

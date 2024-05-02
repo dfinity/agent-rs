@@ -15,7 +15,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize, Nat};
-use ic_agent::{agent::RejectCode, export::Principal, Agent, AgentError, RequestId};
+use ic_agent::{export::Principal, Agent, AgentError, RequestId};
 use once_cell::sync::Lazy;
 use semver::{Version, VersionReq};
 
@@ -436,14 +436,13 @@ impl<'agent> WalletCanister<'agent> {
         let version: Result<(String,), _> =
             canister.query("wallet_api_version").build().call().await;
         let version = match version {
-            Err(AgentError::ReplicaError(replica_error))
-                if replica_error.reject_code == RejectCode::DestinationInvalid
-                    && (replica_error
+            Err(AgentError::UncertifiedReject(replica_error))
+                if replica_error
+                    .reject_message
+                    .contains(REPLICA_ERROR_NO_SUCH_QUERY_METHOD)
+                    || replica_error
                         .reject_message
-                        .contains(REPLICA_ERROR_NO_SUCH_QUERY_METHOD)
-                        || replica_error
-                            .reject_message
-                            .contains(IC_REF_ERROR_NO_SUCH_QUERY_METHOD)) =>
+                        .contains(IC_REF_ERROR_NO_SUCH_QUERY_METHOD) =>
             {
                 DEFAULT_VERSION.clone()
             }
@@ -659,6 +658,7 @@ impl<'agent> WalletCanister<'agent> {
             memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
+            wasm_memory_limit: None,
         };
 
         self.update("wallet_create_canister")
@@ -688,6 +688,7 @@ impl<'agent> WalletCanister<'agent> {
             memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
+            wasm_memory_limit: None,
         };
 
         self.update("wallet_create_canister128")
@@ -701,6 +702,10 @@ impl<'agent> WalletCanister<'agent> {
     /// This method does not have a `reserved_cycles_limit` parameter,
     /// as the wallet does not support the setting.  If you need to create a canister
     /// with a `reserved_cycles_limit` set, use the management canister.
+    ///
+    /// This method does not have a `wasm_memory_limit` parameter,
+    /// as the wallet does not support the setting.  If you need to create a canister
+    /// with a `wasm_memory_limit` set, use the management canister.
     pub async fn wallet_create_canister(
         &self,
         cycles: u128,
@@ -811,6 +816,7 @@ impl<'agent> WalletCanister<'agent> {
             memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
+            wasm_memory_limit: None,
         };
 
         self.update("wallet_create_wallet")
@@ -840,6 +846,7 @@ impl<'agent> WalletCanister<'agent> {
             memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
+            wasm_memory_limit: None,
         };
 
         self.update("wallet_create_wallet128")

@@ -9,6 +9,7 @@ pub mod status;
 
 pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
+use async_lock::Semaphore;
 pub use builder::AgentBuilder;
 use cached::{Cached, TimedCache};
 use ed25519_consensus::{Error as Ed25519Error, Signature, VerificationKey};
@@ -27,17 +28,18 @@ mod agent_test;
 use crate::{
     agent::response_authentication::{
         extract_der, lookup_canister_info, lookup_canister_metadata, lookup_request_status,
-        lookup_subnet, lookup_subnet_metrics, lookup_value,
+        lookup_subnet, lookup_subnet_metrics, lookup_time, lookup_value,
     },
     export::Principal,
     identity::Identity,
     to_request_id, RequestId,
 };
 use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
+use backoff::{exponential::ExponentialBackoff, SystemClock};
 use ic_certification::{Certificate, Delegation, Label};
 use ic_transport_types::{
     signed::{SignedQuery, SignedRequestStatus, SignedUpdate},
-    SynCallResponse, QueryResponse, ReadStateResponse, SubnetMetrics, CallResponse,
+    CallResponse, QueryResponse, ReadStateResponse, SubnetMetrics, SynCallResponse,
 };
 use serde::Serialize;
 use status::Status;
@@ -52,6 +54,8 @@ use std::{
     task::{Context, Poll},
     time::Duration,
 };
+
+use crate::agent::response_authentication::lookup_api_boundary_nodes;
 
 const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 
@@ -76,8 +80,8 @@ pub trait Transport: Send + Sync {
     /// Sends a potentially synchronous request to a replica. The Request ID is non-mutable and
     /// depends on the content of the envelope.
     ///
-    /// This normally corresponds to the `/api/v2/canister/<effective_canister_id>/sync_call` endpoint.
-    fn sync_call(
+    /// This normally corresponds to the `/api/v3/canister/<effective_canister_id>/call` endpoint.
+    fn call_v3(
         &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
@@ -124,13 +128,13 @@ pub trait Transport: Send + Sync {
 }
 
 impl<I: Transport + ?Sized> Transport for Box<I> {
-    fn sync_call(
+    fn call_v3(
         &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
         request_id: RequestId,
     ) -> AgentFuture<CallResponse> {
-        (**self).sync_call(effective_canister_id, envelope, request_id)
+        (**self).call_v3(effective_canister_id, envelope, request_id)
     }
     fn call(
         &self,
@@ -158,13 +162,13 @@ impl<I: Transport + ?Sized> Transport for Box<I> {
     }
 }
 impl<I: Transport + ?Sized> Transport for Arc<I> {
-    fn sync_call(
+    fn call_v3(
         &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
         request_id: RequestId,
     ) -> AgentFuture<CallResponse> {
-        (**self).sync_call(effective_canister_id, envelope, request_id)
+        (**self).call_v3(effective_canister_id, envelope, request_id)
     }
     fn call(
         &self,
@@ -236,11 +240,10 @@ pub enum PollResult {
 /// #     )
 /// # }
 /// #
-/// # const URL: &'static str = concat!("http://localhost:", env!("IC_REF_PORT"));
-/// #
 /// async fn create_a_canister() -> Result<Principal, Box<dyn std::error::Error>> {
+/// # let url = format!("http://localhost:{}", option_env!("IC_REF_PORT").unwrap_or("4943"));
 ///   let agent = Agent::builder()
-///     .with_url(URL)
+///     .with_url(url)
 ///     .with_identity(create_identity())
 ///     .build()?;
 ///
@@ -282,6 +285,7 @@ pub struct Agent {
     root_key: Arc<RwLock<Vec<u8>>>,
     transport: Arc<dyn Transport>,
     subnet_key_cache: Arc<Mutex<SubnetCache>>,
+    concurrent_requests_semaphore: Arc<Semaphore>,
     verify_query_signatures: bool,
 }
 
@@ -312,6 +316,7 @@ impl Agent {
                 .ok_or_else(AgentError::MissingReplicaTransport)?,
             subnet_key_cache: Arc::new(Mutex::new(SubnetCache::new())),
             verify_query_signatures: config.verify_query_signatures,
+            concurrent_requests_semaphore: Arc::new(Semaphore::new(config.max_concurrent_requests)),
         })
     }
 
@@ -397,6 +402,7 @@ impl Agent {
     where
         A: serde::de::DeserializeOwned,
     {
+        let _permit = self.concurrent_requests_semaphore.acquire().await;
         let bytes = self
             .transport
             .query(effective_canister_id, serialized_bytes)
@@ -412,6 +418,7 @@ impl Agent {
     where
         A: serde::de::DeserializeOwned,
     {
+        let _permit = self.concurrent_requests_semaphore.acquire().await;
         let bytes = self
             .transport
             .read_state(effective_canister_id, serialized_bytes)
@@ -427,6 +434,7 @@ impl Agent {
     where
         A: serde::de::DeserializeOwned,
     {
+        let _permit = self.concurrent_requests_semaphore.acquire().await;
         let bytes = self
             .transport
             .read_subnet_state(subnet_id, serialized_bytes)
@@ -440,25 +448,27 @@ impl Agent {
         request_id: RequestId,
         serialized_bytes: Vec<u8>,
     ) -> Result<RequestId, AgentError> {
+        let _permit = self.concurrent_requests_semaphore.acquire().await;
         self.transport
             .call(effective_canister_id, serialized_bytes, request_id)
             .await?;
         Ok(request_id)
     }
 
-    async fn sync_call_endpoint(
+    async fn call_v3_endpoint(
         &self,
         effective_canister_id: Principal,
         request_id: RequestId,
         serialized_bytes: Vec<u8>,
     ) -> Result<CallResponse, AgentError> {
         self.transport
-            .sync_call(effective_canister_id, serialized_bytes, request_id)
+            .call_v3(effective_canister_id, serialized_bytes, request_id)
             .await
     }
 
     /// The simplest way to do a query call; sends a byte array and will return a byte vector.
     /// The encoding is left as an exercise to the user.
+    #[allow(clippy::too_many_arguments)]
     async fn query_raw(
         &self,
         canister_id: Principal,
@@ -467,6 +477,7 @@ impl Agent {
         arg: Vec<u8>,
         ingress_expiry_datetime: Option<u64>,
         use_nonce: bool,
+        explicit_verify_query_signatures: Option<bool>,
     ) -> Result<Vec<u8>, AgentError> {
         let content = self.query_content(
             canister_id,
@@ -480,6 +491,7 @@ impl Agent {
             effective_canister_id,
             serialized_bytes,
             content.to_request_id(),
+            explicit_verify_query_signatures,
         )
         .await
     }
@@ -498,6 +510,7 @@ impl Agent {
             effective_canister_id,
             signed_query,
             envelope.content.to_request_id(),
+            None,
         )
         .await
     }
@@ -510,8 +523,9 @@ impl Agent {
         effective_canister_id: Principal,
         signed_query: Vec<u8>,
         request_id: RequestId,
+        explicit_verify_query_signatures: Option<bool>,
     ) -> Result<Vec<u8>, AgentError> {
-        let response = if self.verify_query_signatures {
+        let response = if explicit_verify_query_signatures.unwrap_or(self.verify_query_signatures) {
             let (response, mut subnet) = futures_util::try_join!(
                 self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query),
                 self.get_subnet_by_canister(&effective_canister_id)
@@ -586,7 +600,7 @@ impl Agent {
 
         match response {
             QueryResponse::Replied { reply, .. } => Ok(reply.arg),
-            QueryResponse::Rejected { reject, .. } => Err(AgentError::ReplicaError(reject)),
+            QueryResponse::Rejected { reject, .. } => Err(AgentError::UncertifiedReject(reject)),
         }
     }
 
@@ -637,7 +651,7 @@ impl Agent {
     /// if the request timed ut at the replica returnin `202`. Otherwise it returns a
     /// certified response.
     /// The RequestId should then be used for request_status (most likely in a loop).
-    async fn sync_update_raw(
+    async fn update_v3_raw(
         &self,
         canister_id: Principal,
         effective_canister_id: Principal,
@@ -656,14 +670,14 @@ impl Agent {
         let request_id = to_request_id(&content)?;
         let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
 
-        self.sync_call_endpoint(effective_canister_id, request_id, serialized_bytes)
+        self.call_v3_endpoint(effective_canister_id, request_id, serialized_bytes)
             .await
     }
 
     /// Send the signed update to the network. Will return a [`SyncCallResponse`].
     /// The bytes will be checked to verify that it is a valid update.
     /// If you want to inspect the fields of the update, use [`signed_update_inspect`] before calling this method.
-    pub async fn sync_update_signed(
+    pub async fn update_v3_signed(
         &self,
         effective_canister_id: Principal,
         signed_update: Vec<u8>,
@@ -671,7 +685,7 @@ impl Agent {
         let envelope: Envelope =
             serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
         let request_id = to_request_id(&envelope.content)?;
-        self.sync_call_endpoint(effective_canister_id, request_id, signed_update)
+        self.call_v3_endpoint(effective_canister_id, request_id, signed_update)
             .await
     }
 
@@ -728,11 +742,69 @@ impl Agent {
                 Ok(PollResult::Completed(arg))
             }
 
-            RequestStatusResponse::Rejected(response) => Err(AgentError::ReplicaError(response)),
+            RequestStatusResponse::Rejected(response) => Err(AgentError::CertifiedReject(response)),
 
             RequestStatusResponse::Done => Err(AgentError::RequestStatusDoneNoReply(String::from(
                 *request_id,
             ))),
+        }
+    }
+
+    fn get_retry_policy() -> ExponentialBackoff<SystemClock> {
+        ExponentialBackoffBuilder::new()
+            .with_initial_interval(Duration::from_millis(500))
+            .with_max_interval(Duration::from_secs(1))
+            .with_multiplier(1.4)
+            .with_max_elapsed_time(Some(Duration::from_secs(60 * 5)))
+            .build()
+    }
+
+    /// Wait for request_status to return a Replied response and return the arg.
+    pub async fn wait_signed(
+        &self,
+        request_id: &RequestId,
+        effective_canister_id: Principal,
+        signed_request_status: Vec<u8>,
+    ) -> Result<Vec<u8>, AgentError> {
+        let mut retry_policy = Self::get_retry_policy();
+
+        let mut request_accepted = false;
+        loop {
+            match self
+                .request_status_signed(
+                    request_id,
+                    effective_canister_id,
+                    signed_request_status.clone(),
+                )
+                .await?
+            {
+                RequestStatusResponse::Unknown => {}
+
+                RequestStatusResponse::Received | RequestStatusResponse::Processing => {
+                    if !request_accepted {
+                        retry_policy.reset();
+                        request_accepted = true;
+                    }
+                }
+
+                RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => return Ok(arg),
+
+                RequestStatusResponse::Rejected(response) => {
+                    return Err(AgentError::CertifiedReject(response))
+                }
+
+                RequestStatusResponse::Done => {
+                    return Err(AgentError::RequestStatusDoneNoReply(String::from(
+                        *request_id,
+                    )))
+                }
+            };
+
+            match retry_policy.next_backoff() {
+                Some(duration) => crate::util::sleep(duration).await,
+
+                None => return Err(AgentError::TimeoutWaitingForResponse()),
+            }
         }
     }
 
@@ -742,12 +814,8 @@ impl Agent {
         request_id: RequestId,
         effective_canister_id: Principal,
     ) -> Result<Vec<u8>, AgentError> {
-        let mut retry_policy = ExponentialBackoffBuilder::new()
-            .with_initial_interval(Duration::from_millis(500))
-            .with_max_interval(Duration::from_secs(1))
-            .with_multiplier(1.4)
-            .with_max_elapsed_time(Some(Duration::from_secs(60 * 5)))
-            .build();
+        let mut retry_policy = Self::get_retry_policy();
+
         let mut request_accepted = false;
         loop {
             match self.poll(&request_id, effective_canister_id).await? {
@@ -769,25 +837,8 @@ impl Agent {
             };
 
             match retry_policy.next_backoff() {
-                #[cfg(not(target_family = "wasm"))]
-                Some(duration) => tokio::time::sleep(duration).await,
-                #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
-                Some(duration) => {
-                    wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |rs, rj| {
-                        if let Err(e) = web_sys::window()
-                            .expect("global window unavailable")
-                            .set_timeout_with_callback_and_timeout_and_arguments_0(
-                                &rs,
-                                duration.as_millis() as _,
-                            )
-                        {
-                            use wasm_bindgen::UnwrapThrowExt;
-                            rj.call1(&rj, &e).unwrap_throw();
-                        }
-                    }))
-                    .await
-                    .expect("unable to setTimeout");
-                }
+                Some(duration) => crate::util::sleep(duration).await,
+
                 None => return Err(AgentError::TimeoutWaitingForResponse()),
             }
         }
@@ -846,6 +897,16 @@ impl Agent {
         cert: &Certificate,
         effective_canister_id: Principal,
     ) -> Result<(), AgentError> {
+        self.verify_cert(cert, effective_canister_id)?;
+        self.verify_cert_timestamp(cert)?;
+        Ok(())
+    }
+
+    fn verify_cert(
+        &self,
+        cert: &Certificate,
+        effective_canister_id: Principal,
+    ) -> Result<(), AgentError> {
         let sig = &cert.signature;
 
         let root_hash = cert.tree.digest();
@@ -858,13 +919,22 @@ impl Agent {
 
         ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
             .map_err(|_| AgentError::CertificateVerificationFailed())?;
-
         Ok(())
     }
 
     /// Verify a certificate, checking delegation if present.
     /// Only passes if the certificate is for the specified subnet.
     pub fn verify_for_subnet(
+        &self,
+        cert: &Certificate,
+        subnet_id: Principal,
+    ) -> Result<(), AgentError> {
+        self.verify_cert_for_subnet(cert, subnet_id)?;
+        self.verify_cert_timestamp(cert)?;
+        Ok(())
+    }
+
+    fn verify_cert_for_subnet(
         &self,
         cert: &Certificate,
         subnet_id: Principal,
@@ -880,7 +950,20 @@ impl Agent {
         let key = extract_der(der_key)?;
 
         ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
-            .map_err(|_| AgentError::CertificateVerificationFailed())
+            .map_err(|_| AgentError::CertificateVerificationFailed())?;
+        Ok(())
+    }
+
+    fn verify_cert_timestamp(&self, cert: &Certificate) -> Result<(), AgentError> {
+        let time = lookup_time(cert)?;
+        if (OffsetDateTime::now_utc()
+            - OffsetDateTime::from_unix_timestamp_nanos(time.into()).unwrap())
+            > self.ingress_expiry
+        {
+            Err(AgentError::CertificateOutdated(self.ingress_expiry))
+        } else {
+            Ok(())
+        }
     }
 
     fn check_delegation(
@@ -896,7 +979,7 @@ impl Agent {
                 if cert.delegation.is_some() {
                     return Err(AgentError::CertificateHasTooManyDelegations);
                 }
-                self.verify(&cert, effective_canister_id)?;
+                self.verify_cert(&cert, effective_canister_id)?;
                 let canister_range_lookup = [
                     "subnet".as_bytes(),
                     delegation.subnet_id.as_ref(),
@@ -933,7 +1016,7 @@ impl Agent {
                 if cert.delegation.is_some() {
                     return Err(AgentError::CertificateHasTooManyDelegations);
                 }
-                self.verify_for_subnet(&cert, subnet_id)?;
+                self.verify_cert_for_subnet(&cert, subnet_id)?;
                 let public_key_path = [
                     "subnet".as_bytes(),
                     delegation.subnet_id.as_ref(),
@@ -1010,7 +1093,6 @@ impl Agent {
 
         lookup_request_status(cert, request_id)
     }
-
 
     /// Send the signed request_status to the network. Will return [`RequestStatusResponse`].
     /// The bytes will be checked to verify that it is a valid request_status.
@@ -1097,6 +1179,28 @@ impl Agent {
         }
     }
 
+    /// Retrieve all existing API boundary nodes from the state tree via endpoint /api/v2/canister/<effective_canister_id>/read_state
+    pub async fn fetch_api_boundary_nodes_by_canister_id(
+        &self,
+        canister_id: Principal,
+    ) -> Result<Vec<ApiBoundaryNode>, AgentError> {
+        let paths = vec![vec!["api_boundary_nodes".into()]];
+        let certificate = self.read_state_raw(paths, canister_id).await?;
+        let api_boundary_nodes = lookup_api_boundary_nodes(certificate)?;
+        Ok(api_boundary_nodes)
+    }
+
+    /// Retrieve all existing API boundary nodes from the state tree via endpoint /api/v2/subnet/<subnet_id>/read_state
+    pub async fn fetch_api_boundary_nodes_by_subnet_id(
+        &self,
+        subnet_id: Principal,
+    ) -> Result<Vec<ApiBoundaryNode>, AgentError> {
+        let paths = vec![vec!["api_boundary_nodes".into()]];
+        let certificate = self.read_subnet_state_raw(paths, subnet_id).await?;
+        let api_boundary_nodes = lookup_api_boundary_nodes(certificate)?;
+        Ok(api_boundary_nodes)
+    }
+
     async fn fetch_subnet_by_canister(
         &self,
         canister: &Principal,
@@ -1104,21 +1208,14 @@ impl Agent {
         let cert = self
             .read_state_raw(vec![vec!["subnet".into()]], *canister)
             .await?;
-        let time = leb128::read::unsigned(&mut lookup_value(&cert.tree, [b"time".as_ref()])?)?;
-        if (OffsetDateTime::now_utc()
-            - OffsetDateTime::from_unix_timestamp_nanos(time as _).unwrap())
-            > self.ingress_expiry
-        {
-            Err(AgentError::CertificateOutdated(self.ingress_expiry))
-        } else {
-            let (subnet_id, subnet) = lookup_subnet(&cert, &self.root_key.read().unwrap())?;
-            let subnet = Arc::new(subnet);
-            self.subnet_key_cache
-                .lock()
-                .unwrap()
-                .insert_subnet(subnet_id, subnet.clone());
-            Ok(subnet)
-        }
+
+        let (subnet_id, subnet) = lookup_subnet(&cert, &self.root_key.read().unwrap())?;
+        let subnet = Arc::new(subnet);
+        self.subnet_key_cache
+            .lock()
+            .unwrap()
+            .insert_subnet(subnet_id, subnet.clone());
+        Ok(subnet)
     }
 }
 
@@ -1429,6 +1526,17 @@ pub(crate) struct Subnet {
     canister_ranges: RangeInclusiveSet<Principal, PrincipalStep>,
 }
 
+/// API boundary node, which routes /api calls to IC replica nodes.
+#[derive(Debug, Clone)]
+pub struct ApiBoundaryNode {
+    /// Domain name
+    pub domain: String,
+    /// IPv6 address in the hexadecimal notation with colons.
+    pub ipv6_address: String,
+    /// IPv4 address in the dotted-decimal notation.
+    pub ipv4_address: Option<String>,
+}
+
 /// A Query Request Builder.
 ///
 /// This makes it easier to do query calls without actually passing all arguments.
@@ -1509,6 +1617,43 @@ impl<'agent> QueryBuilder<'agent> {
                 self.arg,
                 self.ingress_expiry_datetime,
                 self.use_nonce,
+                None,
+            )
+            .await
+    }
+
+    /// Make a query call with signature verification. This will return a byte vector.
+    ///
+    /// Compared with [call][Self::call], this method will **always** verify the signature of the query response
+    /// regardless the Agent level configuration from [AgentBuilder::with_verify_query_signatures].
+    pub async fn call_with_verification(self) -> Result<Vec<u8>, AgentError> {
+        self.agent
+            .query_raw(
+                self.canister_id,
+                self.effective_canister_id,
+                self.method_name,
+                self.arg,
+                self.ingress_expiry_datetime,
+                self.use_nonce,
+                Some(true),
+            )
+            .await
+    }
+
+    /// Make a query call without signature verification. This will return a byte vector.
+    ///
+    /// Compared with [call][Self::call], this method will **never** verify the signature of the query response
+    /// regardless the Agent level configuration from [AgentBuilder::with_verify_query_signatures].
+    pub async fn call_without_verification(self) -> Result<Vec<u8>, AgentError> {
+        self.agent
+            .query_raw(
+                self.canister_id,
+                self.effective_canister_id,
+                self.method_name,
+                self.arg,
+                self.ingress_expiry_datetime,
+                self.use_nonce,
+                Some(false),
             )
             .await
     }
@@ -1647,9 +1792,9 @@ impl<'agent> UpdateBuilder<'agent> {
     /// Make an update call. This will call request_status on the RequestId in a loop and return
     /// the response as a byte vector.
     pub async fn call_and_wait(self) -> Result<Vec<u8>, AgentError> {
-        let sync_call_response_future = async move {
+        let update_v3_response_future = async move {
             self.agent
-                .sync_update_raw(
+                .update_v3_raw(
                     self.canister_id,
                     self.effective_canister_id,
                     self.method_name,
@@ -1660,9 +1805,9 @@ impl<'agent> UpdateBuilder<'agent> {
         };
         UpdateCall {
             agent: self.agent,
-            response_future: Box::pin(sync_call_response_future),
+            response_future: Box::pin(update_v3_response_future),
             effective_canister_id: self.effective_canister_id,
-        }
+        };
         todo!()
     }
 
@@ -1725,9 +1870,10 @@ impl<'agent> UpdateBuilder<'agent> {
     }
 }
 
-#[cfg(all(test, feature = "reqwest"))]
+#[cfg(all(test, feature = "reqwest", not(target_family = "wasm")))]
 mod offline_tests {
     use super::*;
+    use futures_util::future::pending;
     // Any tests that involve the network should go in agent_test, not here.
 
     #[test]
@@ -1750,5 +1896,49 @@ mod offline_tests {
         }
         // in six requests, there should be no more than two timestamps
         assert!(num_timestamps <= 2, "num_timestamps:{num_timestamps} > 2");
+    }
+
+    #[tokio::test]
+    async fn client_ratelimit() {
+        struct SlowTransport(Arc<Mutex<usize>>);
+        impl Transport for SlowTransport {
+            fn call(&self, _: Principal, _: Vec<u8>, _: RequestId) -> AgentFuture<()> {
+                *self.0.lock().unwrap() += 1;
+                Box::pin(pending())
+            }
+            fn query(&self, _: Principal, _: Vec<u8>) -> AgentFuture<Vec<u8>> {
+                *self.0.lock().unwrap() += 1;
+                Box::pin(pending())
+            }
+            fn read_state(&self, _: Principal, _: Vec<u8>) -> AgentFuture<Vec<u8>> {
+                *self.0.lock().unwrap() += 1;
+                Box::pin(pending())
+            }
+            fn read_subnet_state(&self, _: Principal, _: Vec<u8>) -> AgentFuture<Vec<u8>> {
+                *self.0.lock().unwrap() += 1;
+                Box::pin(pending())
+            }
+            fn status(&self) -> AgentFuture<Vec<u8>> {
+                *self.0.lock().unwrap() += 1;
+                Box::pin(pending())
+            }
+        }
+        let count = Arc::new(Mutex::new(0));
+        let agent = Agent::builder()
+            .with_transport(SlowTransport(count.clone()))
+            .with_max_concurrent_requests(2)
+            .build()
+            .unwrap();
+        for _ in 0..3 {
+            let agent = agent.clone();
+            tokio::spawn(async move {
+                agent
+                    .query(&"ryjl3-tyaaa-aaaaa-aaaba-cai".parse().unwrap(), "greet")
+                    .call()
+                    .await
+            });
+        }
+        crate::util::sleep(Duration::from_millis(250)).await;
+        assert_eq!(*count.lock().unwrap(), 2);
     }
 }

@@ -16,6 +16,8 @@ pub struct AgentConfig {
     pub transport: Option<Arc<dyn Transport>>,
     /// See [`verify_query_signatures`](super::AgentBuilder::with_verify_query_signatures).
     pub verify_query_signatures: bool,
+    /// See [`with_max_concurrent_requests`](super::AgentBuilder::with_max_concurrent_requests).
+    pub max_concurrent_requests: usize,
 }
 
 impl Default for AgentConfig {
@@ -26,6 +28,7 @@ impl Default for AgentConfig {
             ingress_expiry: None,
             transport: None,
             verify_query_signatures: true,
+            max_concurrent_requests: 50,
         }
     }
 }
