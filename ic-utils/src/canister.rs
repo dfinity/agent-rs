@@ -1,6 +1,7 @@
 use crate::call::{AsyncCaller, SyncCaller};
 use candid::utils::ArgumentEncoder;
 use candid::{ser::IDLBuilder, types::value::IDLValue, utils::ArgumentDecoder, CandidType, Encode};
+use ic_agent::CallResponse;
 use ic_agent::{export::Principal, Agent, AgentError, RequestId};
 use std::convert::TryInto;
 use thiserror::Error;
@@ -135,7 +136,13 @@ impl<'agent> Canister<'agent> {
     pub async fn wait<'canister>(
         &'canister self,
         request_id: RequestId,
+        call_response: CallResponse,
     ) -> Result<Vec<u8>, AgentError> {
+        let status = match call_response {
+            CallResponse::CertifiedState(_) => todo!(),
+            CallResponse::NonReplicatedRejection(_) => todo!(),
+            CallResponse::Accepted => todo!(),
+        };
         self.agent.wait(request_id, self.canister_id).await
     }
 

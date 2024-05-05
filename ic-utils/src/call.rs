@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use candid::{decode_args, decode_one, utils::ArgumentDecoder, CandidType};
+use ic_agent::CallResponse;
 use ic_agent::{agent::UpdateBuilder, export::Principal, Agent, AgentError, RequestId};
 use serde::de::DeserializeOwned;
 use std::fmt;
@@ -48,7 +49,7 @@ where
     /// the result, and try to deserialize it as a [String]. This would be caught by
     /// Rust type system, but in this case it will be checked at runtime (as Request
     /// Id does not have a type associated with it).
-    async fn call(self) -> Result<RequestId, AgentError>;
+    async fn call(self) -> Result<(RequestId, CallResponse), AgentError>;
 
     /// Execute the call, and wait for an answer using an exponential-backoff strategy. The return
     /// type is encoded in the trait.
@@ -222,7 +223,7 @@ where
     }
 
     /// See [`AsyncCall::call`].
-    pub async fn call(self) -> Result<RequestId, AgentError> {
+    pub async fn call(self) -> Result<(RequestId, CallResponse), AgentError> {
         self.build_call()?.call().await
     }
 
@@ -261,7 +262,7 @@ impl<'agent, Out> AsyncCall<Out> for AsyncCaller<'agent, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send,
 {
-    async fn call(self) -> Result<RequestId, AgentError> {
+    async fn call(self) -> Result<(RequestId, CallResponse), AgentError> {
         self.call().await
     }
     async fn call_and_wait(self) -> Result<Out, AgentError> {
@@ -322,7 +323,7 @@ where
     }
 
     /// See [`AsyncCall::call`].
-    pub async fn call(self) -> Result<RequestId, AgentError> {
+    pub async fn call(self) -> Result<(RequestId, CallResponse), AgentError> {
         self.inner.call().await
     }
     /// See [`AsyncCall::call_and_wait`].
@@ -368,7 +369,7 @@ where
     R: Future<Output = Result<Out2, AgentError>> + Send,
     AndThen: Send + Fn(Out) -> R,
 {
-    async fn call(self) -> Result<RequestId, AgentError> {
+    async fn call(self) -> Result<(RequestId, CallResponse), AgentError> {
         self.call().await
     }
 
@@ -426,7 +427,7 @@ where
     }
 
     /// See [`AsyncCall::call`].
-    pub async fn call(self) -> Result<RequestId, AgentError> {
+    pub async fn call(self) -> Result<(RequestId, CallResponse), AgentError> {
         self.inner.call().await
     }
 
@@ -468,7 +469,7 @@ where
     Inner: AsyncCall<Out> + Send,
     Map: Send + Fn(Out) -> Out2,
 {
-    async fn call(self) -> Result<RequestId, AgentError> {
+    async fn call(self) -> Result<(RequestId, CallResponse), AgentError> {
         self.call().await
     }
 

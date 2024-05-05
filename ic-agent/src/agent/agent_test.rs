@@ -12,7 +12,9 @@ use crate::{
 use candid::{Encode, Nat};
 use futures_util::FutureExt;
 use ic_certification::{Delegation, Label};
-use ic_transport_types::{NodeSignature, QueryResponse, RejectCode, RejectResponse, ReplyResponse};
+use ic_transport_types::{
+    CallResponse, NodeSignature, QueryResponse, RejectCode, RejectResponse, ReplyResponse,
+};
 use std::{collections::BTreeMap, time::Duration};
 #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -181,17 +183,17 @@ async fn call_error() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn call_rejected() -> Result<(), AgentError> {
-    let reject_body = RejectResponse {
+    let reject_body = CallResponse::NonReplicatedRejection(RejectResponse {
         reject_code: RejectCode::SysTransient,
         reject_message: "Test reject message".to_string(),
         error_code: Some("Test error code".to_string()),
-    };
+    });
 
     let body = serde_cbor::to_vec(&reject_body).unwrap();
 
     let (call_mock, url) = mock(
         "POST",
-        "/api/v2/canister/aaaaa-aa/call",
+        "/api/v3/canister/aaaaa-aa/call",
         200,
         body,
         Some("application/cbor"),
@@ -204,7 +206,8 @@ async fn call_rejected() -> Result<(), AgentError> {
         .update(&Principal::management_canister(), "greet")
         .with_arg([])
         .call()
-        .await;
+        .await
+        .map(|(_request_id, response)| response);
 
     assert_mock(call_mock).await;
 

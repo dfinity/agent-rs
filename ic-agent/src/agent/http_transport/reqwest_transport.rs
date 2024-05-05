@@ -1,7 +1,7 @@
 //! A [`Transport`] that connects using a [`reqwest`] client.
 #![cfg(feature = "reqwest")]
 
-use ic_transport_types::{CallResponse, RejectResponse, SynCallResponse};
+use ic_transport_types::{CallResponse, RejectResponse};
 pub use reqwest;
 use std::{sync::Arc, time::Duration};
 
@@ -166,56 +166,19 @@ impl Transport for ReqwestTransport {
         &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-        _request_id: RequestId,
-    ) -> AgentFuture<()> {
-        Box::pin(async move {
-            let endpoint = format!("canister/{}/call", effective_canister_id.to_text());
-            self.execute(Method::POST, &endpoint, Some(envelope))
-                .await
-                .and_then(|(body, status)| {
-                    // status == OK means we have an error message for call requests
-                    // See https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call
-                    if status == StatusCode::OK {
-                        let cbor_decoded_body: Result<RejectResponse, serde_cbor::Error> =
-                            serde_cbor::from_slice(&body);
-
-                        let agent_error = match cbor_decoded_body {
-                            Ok(replica_error) => AgentError::UncertifiedReject(replica_error),
-                            Err(cbor_error) => AgentError::InvalidCborData(cbor_error),
-                        };
-
-                        Err(agent_error)
-                    } else {
-                        Ok(())
-                    }
-                })
-        })
-    }
-
-    fn call_v3(
-        &self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-        request_id: RequestId,
     ) -> AgentFuture<CallResponse> {
         Box::pin(async move {
             let endpoint = format!("canister/{}/call", effective_canister_id.to_text());
             self.execute(Method::POST, &endpoint, Some(envelope))
                 .await
                 .and_then(|(body, status)| {
-                    // The `/v3/call` endpoint must return OK status code.
-
-                    if status != StatusCode::OK {
-                        return Err(AgentError::InvalidHttpResponse(
-                            "Expected `200`, `4xx`, or `5xx` status code".to_string(),
-                        ));
+                    if status == StatusCode::OK {
+                        serde_cbor::from_slice(&body).map_err(AgentError::InvalidCborData)
+                    } else {
+                        Err(AgentError::InvalidHttpResponse(
+                            "Expected `200`, `4xx`, or `5xx` HTTP status code.".to_string(),
+                        ))
                     }
-
-                    let response: Result<CallResponse, _> =
-                        serde_cbor::from_slice::<CallResponse>(&body)
-                            .map_err(AgentError::InvalidCborData);
-
-                    response
                 })
         })
     }

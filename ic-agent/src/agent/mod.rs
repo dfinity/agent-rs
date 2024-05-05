@@ -36,10 +36,10 @@ use crate::{
 };
 use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
 use backoff::{exponential::ExponentialBackoff, SystemClock};
-use ic_certification::{Certificate, Delegation, Label};
+use ic_certification::{certificate, Certificate, Delegation, Label};
 use ic_transport_types::{
     signed::{SignedQuery, SignedRequestStatus, SignedUpdate},
-    CallResponse, QueryResponse, ReadStateResponse, SubnetMetrics, SynCallResponse,
+    CallResponse, QueryResponse, ReadStateResponse, SubnetMetrics,
 };
 use serde::Serialize;
 use status::Status;
@@ -49,6 +49,7 @@ use std::{
     convert::TryFrom,
     fmt,
     future::Future,
+    os::macos::raw::stat,
     pin::Pin,
     sync::{Arc, Mutex, RwLock},
     task::{Context, Poll},
@@ -81,23 +82,11 @@ pub trait Transport: Send + Sync {
     /// depends on the content of the envelope.
     ///
     /// This normally corresponds to the `/api/v3/canister/<effective_canister_id>/call` endpoint.
-    fn call_v3(
-        &self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-        request_id: RequestId,
-    ) -> AgentFuture<CallResponse>;
-
-    /// Sends an asynchronous request to a replica. The Request ID is non-mutable and
-    /// depends on the content of the envelope.
-    ///
-    /// This normally corresponds to the `/api/v2/canister/<effective_canister_id>/call` endpoint.
     fn call(
         &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-        request_id: RequestId,
-    ) -> AgentFuture<()>;
+    ) -> AgentFuture<CallResponse>;
 
     /// Sends a synchronous request to a replica. This call includes the body of the request message
     /// itself (envelope).
@@ -128,22 +117,14 @@ pub trait Transport: Send + Sync {
 }
 
 impl<I: Transport + ?Sized> Transport for Box<I> {
-    fn call_v3(
-        &self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-        request_id: RequestId,
-    ) -> AgentFuture<CallResponse> {
-        (**self).call_v3(effective_canister_id, envelope, request_id)
-    }
     fn call(
         &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-        request_id: RequestId,
-    ) -> AgentFuture<()> {
-        (**self).call(effective_canister_id, envelope, request_id)
+    ) -> AgentFuture<CallResponse> {
+        (**self).call(effective_canister_id, envelope)
     }
+
     fn read_state(
         &self,
         effective_canister_id: Principal,
@@ -162,21 +143,12 @@ impl<I: Transport + ?Sized> Transport for Box<I> {
     }
 }
 impl<I: Transport + ?Sized> Transport for Arc<I> {
-    fn call_v3(
-        &self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-        request_id: RequestId,
-    ) -> AgentFuture<CallResponse> {
-        (**self).call_v3(effective_canister_id, envelope, request_id)
-    }
     fn call(
         &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-        request_id: RequestId,
-    ) -> AgentFuture<()> {
-        (**self).call(effective_canister_id, envelope, request_id)
+    ) -> AgentFuture<CallResponse> {
+        (**self).call(effective_canister_id, envelope)
     }
     fn read_state(
         &self,
@@ -194,20 +166,6 @@ impl<I: Transport + ?Sized> Transport for Arc<I> {
     fn read_subnet_state(&self, subnet_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         (**self).read_subnet_state(subnet_id, envelope)
     }
-}
-
-/// Classification of the result of a request_status_raw (poll) call.
-#[derive(Debug)]
-pub enum PollResult {
-    /// The request has been submitted, but we do not know yet if it
-    /// has been accepted or not.
-    Submitted,
-
-    /// The request has been received and may be processing.
-    Accepted,
-
-    /// The request completed and returned some data.
-    Completed(Vec<u8>),
 }
 
 /// A low level Agent to make calls to a Replica endpoint.
@@ -445,24 +403,11 @@ impl Agent {
     async fn call_endpoint(
         &self,
         effective_canister_id: Principal,
-        request_id: RequestId,
-        serialized_bytes: Vec<u8>,
-    ) -> Result<RequestId, AgentError> {
-        let _permit = self.concurrent_requests_semaphore.acquire().await;
-        self.transport
-            .call(effective_canister_id, serialized_bytes, request_id)
-            .await?;
-        Ok(request_id)
-    }
-
-    async fn call_v3_endpoint(
-        &self,
-        effective_canister_id: Principal,
-        request_id: RequestId,
         serialized_bytes: Vec<u8>,
     ) -> Result<CallResponse, AgentError> {
+        let _permit = self.concurrent_requests_semaphore.acquire().await;
         self.transport
-            .call_v3(effective_canister_id, serialized_bytes, request_id)
+            .call(effective_canister_id, serialized_bytes)
             .await
     }
 
@@ -622,7 +567,7 @@ impl Agent {
         })
     }
 
-    /// The simplest way to do an update call; sends a byte array and will return a RequestId.
+    /// The simplest way to do an update call; Sends a byte array and will return the response, [`CallResponse`], from the replica.
     /// The RequestId should then be used for request_status (most likely in a loop).
     async fn update_raw(
         &self,
@@ -631,7 +576,7 @@ impl Agent {
         method_name: String,
         arg: Vec<u8>,
         ingress_expiry_datetime: Option<u64>,
-    ) -> Result<RequestId, AgentError> {
+    ) -> Result<(RequestId, CallResponse), AgentError> {
         let nonce = self.nonce_factory.generate();
         let content = self.update_content(
             canister_id,
@@ -643,65 +588,38 @@ impl Agent {
         let request_id = to_request_id(&content)?;
         let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
 
-        self.call_endpoint(effective_canister_id, request_id, serialized_bytes)
-            .await
+        let call_response = self
+            .call_endpoint(effective_canister_id, serialized_bytes)
+            .await?;
+
+        if let CallResponse::CertifiedState(certificate) = &call_response {
+            self.verify(certificate, effective_canister_id)?;
+        }
+
+        Ok((request_id, call_response))
     }
 
-    /// The simplest way to do an update call; sends a byte array and will return a RequestId
-    /// if the request timed ut at the replica returnin `202`. Otherwise it returns a
-    /// certified response.
-    /// The RequestId should then be used for request_status (most likely in a loop).
-    async fn update_v3_raw(
-        &self,
-        canister_id: Principal,
-        effective_canister_id: Principal,
-        method_name: String,
-        arg: Vec<u8>,
-        ingress_expiry_datetime: Option<u64>,
-    ) -> Result<CallResponse, AgentError> {
-        let nonce = self.nonce_factory.generate();
-        let content = self.update_content(
-            canister_id,
-            method_name,
-            arg,
-            ingress_expiry_datetime,
-            nonce,
-        )?;
-        let request_id = to_request_id(&content)?;
-        let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
-
-        self.call_v3_endpoint(effective_canister_id, request_id, serialized_bytes)
-            .await
-    }
-
-    /// Send the signed update to the network. Will return a [`SyncCallResponse`].
-    /// The bytes will be checked to verify that it is a valid update.
-    /// If you want to inspect the fields of the update, use [`signed_update_inspect`] before calling this method.
-    pub async fn update_v3_signed(
-        &self,
-        effective_canister_id: Principal,
-        signed_update: Vec<u8>,
-    ) -> Result<CallResponse, AgentError> {
-        let envelope: Envelope =
-            serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
-        let request_id = to_request_id(&envelope.content)?;
-        self.call_v3_endpoint(effective_canister_id, request_id, signed_update)
-            .await
-    }
-
-    /// Send the signed update to the network. Will return a [`RequestId`].
+    /// Send the signed update to the network. Will return a [`CallResponse`].
     /// The bytes will be checked to verify that it is a valid update.
     /// If you want to inspect the fields of the update, use [`signed_update_inspect`] before calling this method.
     pub async fn update_signed(
         &self,
         effective_canister_id: Principal,
         signed_update: Vec<u8>,
-    ) -> Result<RequestId, AgentError> {
+    ) -> Result<(RequestId, CallResponse), AgentError> {
         let envelope: Envelope =
             serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
         let request_id = to_request_id(&envelope.content)?;
-        self.call_endpoint(effective_canister_id, request_id, signed_update)
-            .await
+
+        let call_response = self
+            .call_endpoint(effective_canister_id, signed_update)
+            .await?;
+
+        if let CallResponse::CertifiedState(certificate) = &call_response {
+            self.verify(certificate, effective_canister_id)?;
+        }
+
+        Ok((request_id, call_response))
     }
 
     fn update_content(
@@ -722,34 +640,6 @@ impl Agent {
         })
     }
 
-    /// Call request_status on the RequestId once and classify the result
-    pub async fn poll(
-        &self,
-        request_id: &RequestId,
-        effective_canister_id: Principal,
-    ) -> Result<PollResult, AgentError> {
-        match self
-            .request_status_raw(request_id, effective_canister_id)
-            .await?
-        {
-            RequestStatusResponse::Unknown => Ok(PollResult::Submitted),
-
-            RequestStatusResponse::Received | RequestStatusResponse::Processing => {
-                Ok(PollResult::Accepted)
-            }
-
-            RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => {
-                Ok(PollResult::Completed(arg))
-            }
-
-            RequestStatusResponse::Rejected(response) => Err(AgentError::CertifiedReject(response)),
-
-            RequestStatusResponse::Done => Err(AgentError::RequestStatusDoneNoReply(String::from(
-                *request_id,
-            ))),
-        }
-    }
-
     fn get_retry_policy() -> ExponentialBackoff<SystemClock> {
         ExponentialBackoffBuilder::new()
             .with_initial_interval(Duration::from_millis(500))
@@ -763,6 +653,7 @@ impl Agent {
     pub async fn wait_signed(
         &self,
         request_id: &RequestId,
+        mut status: Option<RequestStatusResponse>,
         effective_canister_id: Principal,
         signed_request_status: Vec<u8>,
     ) -> Result<Vec<u8>, AgentError> {
@@ -770,14 +661,19 @@ impl Agent {
 
         let mut request_accepted = false;
         loop {
-            match self
-                .request_status_signed(
-                    request_id,
-                    effective_canister_id,
-                    signed_request_status.clone(),
-                )
-                .await?
-            {
+            let status = match status.take() {
+                Some(status) => status,
+                None => {
+                    self.request_status_signed(
+                        request_id,
+                        effective_canister_id,
+                        signed_request_status.clone(),
+                    )
+                    .await?
+                }
+            };
+
+            match status {
                 RequestStatusResponse::Unknown => {}
 
                 RequestStatusResponse::Received | RequestStatusResponse::Processing => {
@@ -811,19 +707,29 @@ impl Agent {
     /// Call request_status on the RequestId in a loop and return the response as a byte vector.
     pub async fn wait(
         &self,
-        request_id: RequestId,
+        request_id: &RequestId,
+        mut status: Option<RequestStatusResponse>,
         effective_canister_id: Principal,
     ) -> Result<Vec<u8>, AgentError> {
         let mut retry_policy = Self::get_retry_policy();
 
         let mut request_accepted = false;
         loop {
-            match self.poll(&request_id, effective_canister_id).await? {
-                PollResult::Submitted => {}
-                PollResult::Accepted => {
+            let status = match status.take() {
+                Some(status) => status,
+                None => {
+                    self.request_status_raw(request_id, effective_canister_id)
+                        .await?
+                }
+            };
+
+            match status {
+                RequestStatusResponse::Unknown => {}
+
+                RequestStatusResponse::Received | RequestStatusResponse::Processing => {
                     if !request_accepted {
                         // The system will return RequestStatusResponse::Unknown
-                        // (PollResult::Submitted) until the request is accepted
+                        // until the request is accepted
                         // and we generally cannot know how long that will take.
                         // State transitions between Received and Processing may be
                         // instantaneous. Therefore, once we know the request is accepted,
@@ -833,7 +739,18 @@ impl Agent {
                         request_accepted = true;
                     }
                 }
-                PollResult::Completed(result) => return Ok(result),
+
+                RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => return Ok(arg),
+
+                RequestStatusResponse::Rejected(response) => {
+                    return Err(AgentError::CertifiedReject(response))
+                }
+
+                RequestStatusResponse::Done => {
+                    return Err(AgentError::RequestStatusDoneNoReply(String::from(
+                        *request_id,
+                    )))
+                }
             };
 
             match retry_policy.next_backoff() {
@@ -1693,10 +1610,10 @@ impl<'agent> QueryBuilder<'agent> {
     }
 }
 
-/// An in-flight canister update call. Useful primarily as a `Future`.
+/// An in-flight canister update call. Useful primarily as a [`Future`].
 pub struct UpdateCall<'agent> {
     agent: &'agent Agent,
-    response_future: AgentFuture<'agent, CallResponse>,
+    response_future: AgentFuture<'agent, (RequestId, CallResponse)>,
     effective_canister_id: Principal,
 }
 
@@ -1710,23 +1627,29 @@ impl fmt::Debug for UpdateCall<'_> {
 }
 
 impl Future for UpdateCall<'_> {
-    type Output = Result<CallResponse, AgentError>;
+    type Output = Result<(RequestId, CallResponse), AgentError>;
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.response_future.as_mut().poll(cx)
     }
 }
 impl<'a> UpdateCall<'a> {
     async fn and_wait(self) -> Result<Vec<u8>, AgentError> {
-        let call_response = self.response_future.await?;
+        let (request_id, call_response) = self.response_future.await?;
 
-        match call_response {
-            CallResponse::Accepted(request_id) => {
-                self.agent
-                    .wait(request_id, self.effective_canister_id)
-                    .await
+        let status = match call_response {
+            CallResponse::NonReplicatedRejection(rejection) => {
+                return Err(AgentError::UncertifiedReject(rejection));
             }
-            CallResponse::CertifiedResponse(certificate) => Ok(certificate.0),
-        }
+            CallResponse::CertifiedState(certificate) => {
+                let status = lookup_request_status(certificate, &request_id)?;
+                Some(status)
+            }
+            CallResponse::Accepted => None,
+        };
+
+        self.agent
+            .wait(&request_id, status, self.effective_canister_id)
+            .await
     }
 }
 /// An Update Request Builder.
@@ -1794,7 +1717,7 @@ impl<'agent> UpdateBuilder<'agent> {
     pub async fn call_and_wait(self) -> Result<Vec<u8>, AgentError> {
         let update_v3_response_future = async move {
             self.agent
-                .update_v3_raw(
+                .update_raw(
                     self.canister_id,
                     self.effective_canister_id,
                     self.method_name,
@@ -1814,7 +1737,7 @@ impl<'agent> UpdateBuilder<'agent> {
     /// Make an update call. This will return a RequestId.
     /// The RequestId should then be used for request_status (most likely in a loop).
     pub fn call(self) -> UpdateCall<'agent> {
-        let request_id_future = async move {
+        let response_future = async move {
             self.agent
                 .update_raw(
                     self.canister_id,
@@ -1827,7 +1750,7 @@ impl<'agent> UpdateBuilder<'agent> {
         };
         UpdateCall {
             agent: self.agent,
-            response_future: Box::pin(request_id_future),
+            response_future: Box::pin(response_future),
             effective_canister_id: self.effective_canister_id,
         }
     }
@@ -1902,7 +1825,11 @@ mod offline_tests {
     async fn client_ratelimit() {
         struct SlowTransport(Arc<Mutex<usize>>);
         impl Transport for SlowTransport {
-            fn call(&self, _: Principal, _: Vec<u8>, _: RequestId) -> AgentFuture<()> {
+            fn call(
+                &self,
+                effective_canister_id: Principal,
+                envelope: Vec<u8>,
+            ) -> AgentFuture<CallResponse> {
                 *self.0.lock().unwrap() += 1;
                 Box::pin(pending())
             }

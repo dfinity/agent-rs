@@ -16,6 +16,7 @@ use futures_util::{
     stream::{self, FuturesUnordered},
     FutureExt, Stream, StreamExt, TryStreamExt,
 };
+use ic_agent::CallResponse;
 use ic_agent::{export::Principal, AgentError, RequestId};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
@@ -398,7 +399,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
     }
 
     /// Make a call. This is equivalent to the [AsyncCall::call].
-    pub async fn call(self) -> Result<RequestId, AgentError> {
+    pub async fn call(self) -> Result<(RequestId, CallResponse), AgentError> {
         self.build()?.call().await
     }
 
@@ -413,7 +414,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
 impl<'agent, 'canister: 'agent> AsyncCall<(Principal,)>
     for CreateCanisterBuilder<'agent, 'canister>
 {
-    async fn call(self) -> Result<RequestId, AgentError> {
+    async fn call(self) -> Result<(RequestId, CallResponse), AgentError> {
         self.build()?.call().await
     }
 
@@ -544,7 +545,7 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
     }
 
     /// Make a call. This is equivalent to the [AsyncCall::call].
-    pub async fn call(self) -> Result<RequestId, AgentError> {
+    pub async fn call(self) -> Result<(RequestId, CallResponse), AgentError> {
         self.build()?.call().await
     }
 
@@ -557,7 +558,7 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<'agent, 'canister: 'agent> AsyncCall<()> for InstallCodeBuilder<'agent, 'canister> {
-    async fn call(self) -> Result<RequestId, AgentError> {
+    async fn call(self) -> Result<(RequestId, CallResponse), AgentError> {
         self.build()?.call().await
     }
 
@@ -673,7 +674,7 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
     }
 
     /// Make the call. This is equivalent to [`AsyncCall::call`].
-    pub async fn call(self) -> Result<RequestId, AgentError> {
+    pub async fn call(self) -> Result<(RequestId, CallResponse), AgentError> {
         self.build()?.call().await
     }
 
@@ -686,7 +687,7 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<'agent, 'canister: 'agent> AsyncCall<()> for InstallChunkedCodeBuilder<'agent, 'canister> {
-    async fn call(self) -> Result<RequestId, AgentError> {
+    async fn call(self) -> Result<(RequestId, CallResponse), AgentError> {
         self.call().await
     }
     async fn call_and_wait(self) -> Result<(), AgentError> {
@@ -1095,7 +1096,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
     }
 
     /// Make a call. This is equivalent to the [AsyncCall::call].
-    pub async fn call(self) -> Result<RequestId, AgentError> {
+    pub async fn call(self) -> Result<(RequestId, CallResponse), AgentError> {
         self.build()?.call().await
     }
 
@@ -1108,7 +1109,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<'agent, 'canister: 'agent> AsyncCall<()> for UpdateCanisterBuilder<'agent, 'canister> {
-    async fn call(self) -> Result<RequestId, AgentError> {
+    async fn call(self) -> Result<(RequestId, CallResponse), AgentError> {
         self.build()?.call().await
     }
 

@@ -217,12 +217,7 @@ where
     B1: HyperBody + From<Vec<u8>>,
     S: HyperService<B1>,
 {
-    fn call(
-        &self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-        _request_id: RequestId,
-    ) -> AgentFuture<()> {
+    fn call(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<()> {
         Box::pin(async move {
             let url = format!(
                 "{}canister/{effective_canister_id}/call",

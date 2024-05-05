@@ -116,11 +116,6 @@ pub struct ReadStateResponse {
     #[serde(with = "serde_bytes")]
     pub certificate: Vec<u8>,
 }
-/// A [certificate](https://internetcomputer.org/docs/current/references/ic-interface-spec#certificate), containing
-/// part of the system state tree as well as a signature to verify its authenticity.
-/// Use the [`ic-certification`](https://docs.rs/ic-certification) crate to process it.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Certificate(#[serde(with = "serde_bytes")] pub Vec<u8>);
 
 /// Possible responses from a canister to a call.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -141,16 +136,16 @@ pub enum SyncCallResponse {
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum CallResponse {
     /// A certified response.
-    CertifiedState {
-        /// A certificate for the status of the update call.
-        certificate: Vec<u8>,
-    },
+    CertifiedState(
+        // TODO: Introduce a new type. This type for Transport to return, and a new type that has ReadStateResponse variant returned by the agent
+        ic_certification::Certificate,
+    ),
 
     /// A non replicated rejection from the replica.
     NonReplicatedRejection(RejectResponse),
 
     /// The replica timed out the sync request. The status of the request must be polled.
-    Poll(RequestId),
+    Accepted,
 }
 
 /// Possible responses to a query call.
