@@ -1,6 +1,8 @@
 //! A [`Transport`] that connects using a [`hyper`] client.
 use http::StatusCode;
 pub use hyper;
+use ic_transport_types::TransportCallResponse;
+use time::format_description::modifier::End;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -18,11 +20,11 @@ use tower::Service;
 use crate::{
     agent::{
         agent_error::HttpErrorPayload,
-        http_transport::route_provider::{RoundRobinRouteProvider, RouteProvider},
+        http_transport::route_provider::{Endpoint, RoundRobinRouteProvider, RouteProvider},
         AgentFuture, Transport,
     },
     export::Principal,
-    AgentError, RequestId,
+    AgentError,
 };
 
 /// A [`Transport`] using [`hyper`] to make HTTP calls to the Internet Computer.
@@ -38,7 +40,7 @@ pub struct HyperTransport<B1, S = Client<HttpsConnector<HttpConnector>, B1>> {
 #[deprecated(since = "0.30.0", note = "use HyperTransport")]
 pub use HyperTransport as HyperReplicaV2Transport; // delete after 0.31
 
-/// Trait representing the contraints on [`HttpBody`] that [`HyperTransport`] requires
+/// Trait representing the constraints on [`HttpBody`] that [`HyperTransport`] requires
 pub trait HyperBody:
     Body<Data = Self::BodyData, Error = Self::BodyError> + Send + Unpin + 'static
 {
@@ -58,7 +60,7 @@ where
     type BodyError = B::Error;
 }
 
-/// Trait representing the contraints on [`Service`] that [`HyperTransport`] requires.
+/// Trait representing the constraints on [`Service`] that [`HyperTransport`] requires.
 pub trait HyperService<B1: HyperBody>:
     Send
     + Sync
@@ -138,10 +140,11 @@ where
 
     async fn request(
         &self,
+        endpoint: Endpoint,
         method: Method,
-        url: String,
         body: Option<Vec<u8>>,
     ) -> Result<Vec<u8>, AgentError> {
+        let url = self.route_provider.route(endpoint)?;
         let body = body.unwrap_or_default();
         fn map_error<E: Error + Send + Sync + 'static>(err: E) -> AgentError {
             if any::TypeId::of::<E>() == any::TypeId::of::<AgentError>() {
@@ -217,14 +220,14 @@ where
     B1: HyperBody + From<Vec<u8>>,
     S: HyperService<B1>,
 {
-    fn call(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<()> {
+    fn call(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let url = format!(
-                "{}canister/{effective_canister_id}/call",
-                self.route_provider.route()?
-            );
-            self.request(Method::POST, url, Some(envelope)).await?;
-            Ok(())
+            self.request(
+                Endpoint::Call(effective_canister_id),
+                Method::POST,
+                Some(envelope),
+            )
+            .await?
         })
     }
 
@@ -234,44 +237,45 @@ where
         envelope: Vec<u8>,
     ) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let url = format!(
-                "{}canister/{effective_canister_id}/read_state",
-                self.route_provider.route()?
-            );
-            self.request(Method::POST, url, Some(envelope)).await
+            self.request(
+                Endpoint::ReadStateCanister(effective_canister_id),
+                Method::POST,
+                Some(envelope),
+            )
+            .await
         })
     }
 
     fn read_subnet_state(&self, subnet_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let url = format!(
-                "{}subnet/{subnet_id}/read_state",
-                self.route_provider.route()?
-            );
-            self.request(Method::POST, url, Some(envelope)).await
+            self.request(
+                Endpoint::ReadStateSubnet(subnet_id),
+                Method::POST,
+                Some(envelope),
+            )
+            .await
         })
     }
 
     fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let url = format!(
-                "{}canister/{effective_canister_id}/query",
-                self.route_provider.route()?
-            );
-            self.request(Method::POST, url, Some(envelope)).await
+            self.request(
+                Endpoint::Query(effective_canister_id),
+                Method::POST,
+                Some(envelope),
+            )
+            .await
         })
     }
 
     fn status(&self) -> AgentFuture<Vec<u8>> {
-        Box::pin(async move {
-            let url = format!("{}status", self.route_provider.route()?);
-            self.request(Method::GET, url, None).await
-        })
+        Box::pin(async move { self.request(Endpoint::Status, Method::GET, None).await })
     }
 }
 
 #[cfg(test)]
 mod test {
+    use super::Endpoint;
     use super::HyperTransport;
     use http_body_util::Full;
     use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
@@ -294,9 +298,12 @@ mod test {
                 Client::builder(TokioExecutor::new()).build(connector);
             let url: Url = base.parse().unwrap();
             let t = HyperTransport::create_with_service(url, client).unwrap();
+
+            let expected_endpoint = format!("{}status", result);
+
             assert_eq!(
-                t.route_provider.route().unwrap().as_str(),
-                result,
+                t.route_provider.route(Endpoint::Status).unwrap().as_str(),
+                expected_endpoint,
                 "{}",
                 base
             );
