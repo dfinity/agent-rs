@@ -7,7 +7,7 @@ pub mod reqwest_transport;
 #[doc(inline)]
 pub use reqwest_transport::ReqwestTransport;
 
-// #[cfg(feature = "hyper")]
+#[cfg(feature = "hyper")]
 pub mod hyper_transport;
 
 #[cfg(feature = "hyper")]
