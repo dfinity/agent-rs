@@ -77,8 +77,7 @@ type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + '
 ///
 /// Any error returned by these methods will bubble up to the code that called the [Agent].
 pub trait Transport: Send + Sync {
-    /// Sends a potentially synchronous request to a replica. The Request ID is non-mutable and
-    /// depends on the content of the envelope.
+    /// Sends a synchronous call request to a replica.
     ///
     /// This normally corresponds to the `/api/v3/canister/<effective_canister_id>/call` endpoint.
     fn call(
@@ -566,8 +565,7 @@ impl Agent {
         })
     }
 
-    /// The simplest way to do an update call; Sends a byte array and will return the response, [`CallResponse`], from the replica.
-    /// The RequestId should then be used for request_status (most likely in a loop).
+    /// The simplest way to do an update call; Sends a byte array and will return a response, [`CallResponse`], from the replica.
     async fn update_raw(
         &self,
         canister_id: Principal,
