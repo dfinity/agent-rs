@@ -1,6 +1,8 @@
 //! A [`Transport`] that connects using a [`reqwest`] client.
 #![cfg(feature = "reqwest")]
 
+use std::{sync::Arc, time::Duration};
+
 use ic_transport_types::RejectResponse;
 pub use reqwest;
 
@@ -23,7 +25,7 @@ use crate::{
 /// A [`Transport`] using [`reqwest`] to make HTTP calls to the Internet Computer.
 #[derive(Debug)]
 pub struct ReqwestTransport {
-    route_provider: Box<dyn RouteProvider>,
+    route_provider: Arc<dyn RouteProvider>,
     client: Client,
     max_response_body_size: Option<usize>,
 }
@@ -53,13 +55,13 @@ impl ReqwestTransport {
 
     /// Creates a replica transport from a HTTP URL and a [`reqwest::Client`].
     pub fn create_with_client<U: Into<String>>(url: U, client: Client) -> Result<Self, AgentError> {
-        let route_provider = Box::new(RoundRobinRouteProvider::new(vec![url.into()])?);
+        let route_provider = Arc::new(RoundRobinRouteProvider::new(vec![url.into()])?);
         Self::create_with_client_route(route_provider, client)
     }
 
     /// Creates a replica transport from a [`RouteProvider`] and a [`reqwest::Client`].
     pub fn create_with_client_route(
-        route_provider: Box<dyn RouteProvider>,
+        route_provider: Arc<dyn RouteProvider>,
         client: Client,
     ) -> Result<Self, AgentError> {
         Ok(Self {
@@ -134,7 +136,13 @@ impl ReqwestTransport {
 
         *http_request.body_mut() = body.map(Body::from);
 
-        let request_result = self.request(http_request.try_clone().unwrap()).await?;
+        let request_result = loop {
+            let result = self.request(http_request.try_clone().unwrap()).await?;
+            if result.0 != StatusCode::TOO_MANY_REQUESTS {
+                break result;
+            }
+            crate::util::sleep(Duration::from_millis(250)).await;
+        };
         let status = request_result.0;
         let headers = request_result.1;
         let body = request_result.2;
