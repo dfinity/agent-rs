@@ -120,6 +120,7 @@ pub struct ReadStateResponse {
 /// The response from a request to the `call` endpoint.
 // TODO: Inline this enum. No need for it to be public.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
 pub enum TransportCallResponse {
     /// A certified response.
     CertifiedState(ic_certification::Certificate),
