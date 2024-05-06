@@ -1,4 +1,5 @@
 //! A [`RouteProvider`] for dynamic generation of routing urls.
+use candid::Principal;
 use std::{
     str::FromStr,
     sync::atomic::{AtomicUsize, Ordering},
@@ -13,10 +14,18 @@ use crate::agent::{
     AgentError,
 };
 
+pub enum Endpoint {
+    Call(Principal),
+    Query(Principal),
+    ReadStateCanister(Principal),
+    ReadStateSubnet(Principal),
+    Status,
+}
+
 /// A [`RouteProvider`] for dynamic generation of routing urls.
 pub trait RouteProvider: std::fmt::Debug + Send + Sync {
     /// Generate next routing url
-    fn route(&self) -> Result<Url, AgentError>;
+    fn route(&self, endpoint: Endpoint) -> Result<Url, AgentError>;
 }
 
 /// A simple implementation of the [`RouteProvider`] which produces an even distribution of the urls from the input ones.
@@ -26,8 +35,8 @@ pub struct RoundRobinRouteProvider {
     current_idx: AtomicUsize,
 }
 
-impl RouteProvider for RoundRobinRouteProvider {
-    fn route(&self) -> Result<Url, AgentError> {
+impl RoundRobinRouteProvider {
+    fn base_url(&self) -> Result<Url, AgentError> {
         if self.routes.is_empty() {
             return Err(AgentError::RouteProviderError(
                 "No routing urls provided".to_string(),
@@ -35,7 +44,34 @@ impl RouteProvider for RoundRobinRouteProvider {
         }
         // This operation wraps around an overflow, i.e. after max is reached the value is reset back to 0.
         let prev_idx = self.current_idx.fetch_add(1, Ordering::Relaxed);
+
         Ok(self.routes[prev_idx % self.routes.len()].clone())
+    }
+}
+
+impl RouteProvider for RoundRobinRouteProvider {
+    fn route(&self, endpoint: Endpoint) -> Result<Url, AgentError> {
+        let base_url = self.base_url()?;
+
+        let endpoint = match endpoint {
+            Endpoint::Call(effective_canister_id) => {
+                format!("api/v3/canister/{}/call", effective_canister_id.to_text())
+            }
+            Endpoint::Query(effective_canister_id) => {
+                format!("api/v2/canister/{}/query", effective_canister_id.to_text())
+            }
+            Endpoint::ReadStateCanister(principal) => {
+                format!("api/v2/canister/{}/read_state", principal.to_text())
+            }
+            Endpoint::ReadStateSubnet(principal) => {
+                format!("api/v2/subnet/{}/read_state", principal.to_text())
+            }
+            Endpoint::Status => {
+                format!("api/v2/status")
+            }
+        };
+
+        Ok(base_url.join(&endpoint)?)
     }
 }
 
@@ -58,10 +94,11 @@ impl RoundRobinRouteProvider {
                             url.set_host(Some(LOCALHOST_DOMAIN))?;
                         }
                     }
-                    url.join("api/v2/")
+                    Ok(url)
                 })
             })
             .collect();
+
         Ok(Self {
             routes: routes?,
             current_idx: AtomicUsize::new(0),
@@ -77,7 +114,7 @@ mod tests {
     fn test_empty_routes() {
         let provider = RoundRobinRouteProvider::new::<&str>(vec![])
             .expect("failed to create a route provider");
-        let result = provider.route().unwrap_err();
+        let result = provider.base_url().unwrap_err();
         assert_eq!(
             result,
             AgentError::RouteProviderError("No routing urls provided".to_string())
@@ -98,7 +135,178 @@ mod tests {
             .map(|url_str| Url::parse(url_str).expect("Invalid URL"))
             .collect();
         let urls: Vec<Url> = (0..3)
-            .map(|_| provider.route().expect("failed to get next url"))
+            .map(|_| provider.base_url().expect("failed to get next url"))
+            .collect();
+        assert_eq!(expected_urls, urls);
+    }
+
+    #[test]
+    fn test_call_endpoint() {
+        let canister = Principal::from_text("224od-giaaa-aaaao-ae5vq-cai").unwrap();
+
+        let provider = RoundRobinRouteProvider::new(vec!["https://url1.com", "https://url2.com"])
+            .expect("failed to create a route provider");
+
+        let url_strings = vec![
+            format!(
+                "https://url1.com/api/v3/canister/{}/call",
+                canister.to_text()
+            ),
+            format!(
+                "https://url2.com/api/v3/canister/{}/call",
+                canister.to_text()
+            ),
+            format!(
+                "https://url1.com/api/v3/canister/{}/call",
+                canister.to_text()
+            ),
+        ];
+
+        let expected_urls: Vec<Url> = url_strings
+            .iter()
+            .map(|url_str| Url::parse(url_str).expect("Invalid URL"))
+            .collect();
+
+        let urls: Vec<Url> = (0..3)
+            .map(|_| {
+                provider
+                    .route(Endpoint::Call(canister))
+                    .expect("failed to get next url")
+            })
+            .collect();
+
+        assert_eq!(expected_urls, urls);
+    }
+
+    #[test]
+    fn test_query_endpoint() {
+        let canister = Principal::from_text("224od-giaaa-aaaao-ae5vq-cai").unwrap();
+
+        let provider = RoundRobinRouteProvider::new(vec!["https://url1.com", "https://url2.com"])
+            .expect("failed to create a route provider");
+
+        let url_strings = vec![
+            format!(
+                "https://url1.com/api/v2/canister/{}/query",
+                canister.to_text()
+            ),
+            format!(
+                "https://url2.com/api/v2/canister/{}/query",
+                canister.to_text()
+            ),
+            format!(
+                "https://url1.com/api/v2/canister/{}/query",
+                canister.to_text()
+            ),
+        ];
+
+        let expected_urls: Vec<Url> = url_strings
+            .iter()
+            .map(|url_str| Url::parse(url_str).expect("Invalid URL"))
+            .collect();
+        let urls: Vec<Url> = (0..3)
+            .map(|_| {
+                provider
+                    .route(Endpoint::Query(canister))
+                    .expect("failed to get next url")
+            })
+            .collect();
+        assert_eq!(expected_urls, urls);
+    }
+
+    #[test]
+    fn test_read_state_canister_endpoint() {
+        let canister = Principal::from_text("224od-giaaa-aaaao-ae5vq-cai").unwrap();
+
+        let provider = RoundRobinRouteProvider::new(vec!["https://url1.com", "https://url2.com"])
+            .expect("failed to create a route provider");
+
+        let url_strings = vec![
+            format!(
+                "https://url1.com/api/v2/canister/{}/read_state",
+                canister.to_text()
+            ),
+            format!(
+                "https://url2.com/api/v2/canister/{}/read_state",
+                canister.to_text()
+            ),
+            format!(
+                "https://url1.com/api/v2/canister/{}/read_state",
+                canister.to_text()
+            ),
+        ];
+
+        let expected_urls: Vec<Url> = url_strings
+            .iter()
+            .map(|url_str| Url::parse(url_str).expect("Invalid URL"))
+            .collect();
+        let urls: Vec<Url> = (0..3)
+            .map(|_| {
+                provider
+                    .route(Endpoint::ReadStateCanister(canister))
+                    .expect("failed to get next url")
+            })
+            .collect();
+        assert_eq!(expected_urls, urls);
+    }
+
+    #[test]
+    fn test_read_state_subnet_endpoint() {
+        let subnet = Principal::from_text("224od-giaaa-aaaao-ae5vq-cai").unwrap();
+
+        let provider = RoundRobinRouteProvider::new(vec!["https://url1.com", "https://url2.com"])
+            .expect("failed to create a route provider");
+
+        let url_strings = vec![
+            format!(
+                "https://url1.com/api/v2/subnet/{}/read_state",
+                subnet.to_text()
+            ),
+            format!(
+                "https://url2.com/api/v2/subnet/{}/read_state",
+                subnet.to_text()
+            ),
+            format!(
+                "https://url1.com/api/v2/subnet/{}/read_state",
+                subnet.to_text()
+            ),
+        ];
+
+        let expected_urls: Vec<Url> = url_strings
+            .iter()
+            .map(|url_str| Url::parse(url_str).expect("Invalid URL"))
+            .collect();
+        let urls: Vec<Url> = (0..3)
+            .map(|_| {
+                provider
+                    .route(Endpoint::ReadStateSubnet(subnet))
+                    .expect("failed to get next url")
+            })
+            .collect();
+        assert_eq!(expected_urls, urls);
+    }
+
+    #[test]
+    fn test_status_endpoint() {
+        let provider = RoundRobinRouteProvider::new(vec!["https://url1.com", "https://url2.com"])
+            .expect("failed to create a route provider");
+
+        let url_strings = vec![
+            "https://url1.com/api/v2/status",
+            "https://url2.com/api/v2/status",
+            "https://url1.com/api/v2/status",
+        ];
+
+        let expected_urls: Vec<Url> = url_strings
+            .iter()
+            .map(|url_str| Url::parse(url_str).expect("Invalid URL"))
+            .collect();
+        let urls: Vec<Url> = (0..3)
+            .map(|_| {
+                provider
+                    .route(Endpoint::Status)
+                    .expect("failed to get next url")
+            })
             .collect();
         assert_eq!(expected_urls, urls);
     }

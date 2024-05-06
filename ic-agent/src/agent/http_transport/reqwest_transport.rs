@@ -31,7 +31,9 @@ pub struct ReqwestTransport {
 
 #[doc(hidden)]
 #[deprecated(since = "0.30.0", note = "use ReqwestTransport")]
-pub use ReqwestTransport as ReqwestHttpReplicaV2Transport; // delete after 0.31
+pub use ReqwestTransport as ReqwestHttpReplicaV2Transport;
+
+use super::route_provider::Endpoint; // delete after 0.31
 
 impl ReqwestTransport {
     /// Creates a replica transport from a HTTP URL.
@@ -123,11 +125,11 @@ impl ReqwestTransport {
 
     async fn execute(
         &self,
+        endpoint: Endpoint,
         method: Method,
-        endpoint: &str,
         body: Option<Vec<u8>>,
     ) -> Result<(Vec<u8>, StatusCode), AgentError> {
-        let url = self.route_provider.route()?.join(endpoint)?;
+        let url = self.route_provider.route(endpoint)?.join("")?;
         let mut http_request = Request::new(method, url);
         http_request
             .headers_mut()
@@ -168,18 +170,21 @@ impl Transport for ReqwestTransport {
         envelope: Vec<u8>,
     ) -> AgentFuture<TransportCallResponse> {
         Box::pin(async move {
-            let endpoint = format!("canister/{}/call", effective_canister_id.to_text());
-            self.execute(Method::POST, &endpoint, Some(envelope))
-                .await
-                .and_then(|(body, status)| {
-                    if status == StatusCode::OK {
-                        serde_cbor::from_slice(&body).map_err(AgentError::InvalidCborData)
-                    } else {
-                        Err(AgentError::InvalidHttpResponse(
-                            "Expected `200`, `4xx`, or `5xx` HTTP status code.".to_string(),
-                        ))
-                    }
-                })
+            self.execute(
+                Endpoint::Call(effective_canister_id),
+                Method::POST,
+                Some(envelope),
+            )
+            .await
+            .and_then(|(body, status)| {
+                if status == StatusCode::OK {
+                    serde_cbor::from_slice(&body).map_err(AgentError::InvalidCborData)
+                } else {
+                    Err(AgentError::InvalidHttpResponse(
+                        "Expected `200`, `4xx`, or `5xx` HTTP status code.".to_string(),
+                    ))
+                }
+            })
         })
     }
 
@@ -189,34 +194,43 @@ impl Transport for ReqwestTransport {
         envelope: Vec<u8>,
     ) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let endpoint = format!("canister/{effective_canister_id}/read_state");
-            self.execute(Method::POST, &endpoint, Some(envelope))
-                .await
-                .map(|(body, _)| body)
+            self.execute(
+                Endpoint::ReadStateCanister(effective_canister_id),
+                Method::POST,
+                Some(envelope),
+            )
+            .await
+            .map(|(body, _)| body)
         })
     }
 
     fn read_subnet_state(&self, subnet_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let endpoint = format!("subnet/{subnet_id}/read_state");
-            self.execute(Method::POST, &endpoint, Some(envelope))
-                .await
-                .map(|(body, _)| body)
+            self.execute(
+                Endpoint::ReadStateSubnet(subnet_id),
+                Method::POST,
+                Some(envelope),
+            )
+            .await
+            .map(|(body, _)| body)
         })
     }
 
     fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let endpoint = format!("canister/{effective_canister_id}/query");
-            self.execute(Method::POST, &endpoint, Some(envelope))
-                .await
-                .map(|(body, _)| body)
+            self.execute(
+                Endpoint::Query(effective_canister_id),
+                Method::POST,
+                Some(envelope),
+            )
+            .await
+            .map(|(body, _)| body)
         })
     }
 
     fn status(&self) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            self.execute(Method::GET, "status", None)
+            self.execute(Endpoint::Status, Method::GET, None)
                 .await
                 .map(|(body, _)| body)
         })
@@ -230,16 +244,20 @@ mod test {
     #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
     wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
+    use crate::agent::http_transport::route_provider::Endpoint;
+
     use super::ReqwestTransport;
 
     #[cfg_attr(not(target_family = "wasm"), test)]
     #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
     fn redirect() {
         fn test(base: &str, result: &str) {
-            let t = ReqwestTransport::create(base).unwrap();
+            let t: ReqwestTransport = ReqwestTransport::create(base).unwrap();
+            let expected_endpoint = format!("{}status", result);
+
             assert_eq!(
-                t.route_provider.route().unwrap().as_str(),
-                result,
+                t.route_provider.route(Endpoint::Status).unwrap().as_str(),
+                expected_endpoint,
                 "{}",
                 base
             );
