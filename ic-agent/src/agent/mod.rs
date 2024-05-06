@@ -589,7 +589,7 @@ impl Agent {
             .call_endpoint(effective_canister_id, serialized_bytes)
             .await?;
 
-        let response = match call_response {
+        match call_response {
             TransportCallResponse::CertifiedState(certificate) => {
                 self.verify(&certificate, effective_canister_id)?;
                 let status = lookup_request_status(certificate, &request_id)?;
@@ -606,9 +606,7 @@ impl Agent {
             TransportCallResponse::NonReplicatedRejection(reject_response) => {
                 Err(AgentError::UncertifiedReject(reject_response))
             }
-        };
-
-        response
+        }
     }
 
     /// Send the signed update to the network. Will return a [`CallResponse<Vec<u8>>`].
@@ -631,7 +629,7 @@ impl Agent {
             self.verify(certificate, effective_canister_id)?;
         }
 
-        let response = match call_response {
+        match call_response {
             TransportCallResponse::CertifiedState(certificate) => {
                 self.verify(&certificate, effective_canister_id)?;
                 let status = lookup_request_status(certificate, &request_id)?;
@@ -648,9 +646,7 @@ impl Agent {
             TransportCallResponse::NonReplicatedRejection(reject_response) => {
                 Err(AgentError::UncertifiedReject(reject_response))
             }
-        };
-
-        response
+        }
     }
 
     fn update_content(

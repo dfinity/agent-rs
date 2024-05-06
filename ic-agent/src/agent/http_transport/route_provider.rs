@@ -73,9 +73,7 @@ impl RouteProvider for RoundRobinRouteProvider {
             Endpoint::ReadStateSubnet(principal) => {
                 format!("api/v2/subnet/{}/read_state", principal.to_text())
             }
-            Endpoint::Status => {
-                format!("api/v2/status")
-            }
+            Endpoint::Status => "api/v2/status".to_string(),
         };
 
         Ok(base_url.join(&endpoint)?)
