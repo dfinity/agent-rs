@@ -9,20 +9,20 @@ use crate::{
     call::AsyncCall, canister::Argument, interfaces::management_canister::MgmtMethod, Canister,
 };
 use async_trait::async_trait;
-use candid::utils::ArgumentEncoder;
-use candid::{CandidType, Deserialize, Nat};
+use candid::{utils::ArgumentEncoder, CandidType, Deserialize, Nat};
 use futures_util::{
     future::ready,
     stream::{self, FuturesUnordered},
     FutureExt, Stream, StreamExt, TryStreamExt,
 };
-use ic_agent::agent::CallResponse;
-use ic_agent::{export::Principal, AgentError};
+use ic_agent::{agent::CallResponse, export::Principal, AgentError};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeSet;
-use std::convert::{From, TryInto};
-use std::pin::Pin;
-use std::str::FromStr;
+use std::{
+    collections::BTreeSet,
+    convert::{From, TryInto},
+    pin::Pin,
+    str::FromStr,
+};
 
 /// The set of possible canister settings. Similar to [`DefiniteCanisterSettings`](super::DefiniteCanisterSettings),
 /// but all the fields are optional.

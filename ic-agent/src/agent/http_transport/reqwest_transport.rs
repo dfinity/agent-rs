@@ -14,7 +14,7 @@ use reqwest::{
 use crate::{
     agent::{
         agent_error::HttpErrorPayload,
-        http_transport::route_provider::{RoundRobinRouteProvider, RouteProvider},
+        http_transport::route_provider::{Endpoint, RoundRobinRouteProvider, RouteProvider},
         AgentFuture, Transport,
     },
     export::Principal,
@@ -31,9 +31,7 @@ pub struct ReqwestTransport {
 
 #[doc(hidden)]
 #[deprecated(since = "0.30.0", note = "use ReqwestTransport")]
-pub use ReqwestTransport as ReqwestHttpReplicaV2Transport;
-
-use super::route_provider::Endpoint; // delete after 0.31
+pub use ReqwestTransport as ReqwestHttpReplicaV2Transport; // delete after 0.31
 
 impl ReqwestTransport {
     /// Creates a replica transport from a HTTP URL.
