@@ -1,8 +1,6 @@
 //! A [`Transport`] that connects using a [`hyper`] client.
 use http::StatusCode;
 pub use hyper;
-use ic_transport_types::TransportCallResponse;
-use time::format_description::modifier::End;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -167,7 +165,7 @@ where
         let response = loop {
             let http_request = Request::builder()
                 .method(&method)
-                .uri(&url)
+                .uri(url.to_string())
                 .header(CONTENT_TYPE, "application/cbor")
                 .body(body.clone().into())
                 .map_err(|err| AgentError::TransportError(Box::new(err)))?;
@@ -227,7 +225,7 @@ where
                 Method::POST,
                 Some(envelope),
             )
-            .await?
+            .await
         })
     }
 

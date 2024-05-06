@@ -118,6 +118,7 @@ pub struct ReadStateResponse {
 }
 
 /// The response from a request to the `call` endpoint.
+// TODO: Inline this enum. No need for it to be public.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum TransportCallResponse {
     /// A certified response.

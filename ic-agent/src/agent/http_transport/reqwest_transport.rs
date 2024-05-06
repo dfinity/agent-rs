@@ -1,7 +1,6 @@
 //! A [`Transport`] that connects using a [`reqwest`] client.
 #![cfg(feature = "reqwest")]
 
-use ic_transport_types::TransportCallResponse;
 pub use reqwest;
 use std::{sync::Arc, time::Duration};
 
@@ -126,7 +125,7 @@ impl ReqwestTransport {
         endpoint: Endpoint,
         method: Method,
         body: Option<Vec<u8>>,
-    ) -> Result<(Vec<u8>, StatusCode), AgentError> {
+    ) -> Result<Vec<u8>, AgentError> {
         let url = self.route_provider.route(endpoint)?.join("")?;
         let mut http_request = Request::new(method, url);
         http_request
@@ -155,18 +154,19 @@ impl ReqwestTransport {
                     .map(|x| x.to_string()),
                 content: body,
             }))
+        } else if status != StatusCode::OK {
+            Err(AgentError::InvalidHttpResponse(format!(
+                "Expected `200`, `4xx`, or `5xx` HTTP status code. Got: {}",
+                status
+            )))
         } else {
-            Ok((body, status))
+            Ok(body)
         }
     }
 }
 
 impl Transport for ReqwestTransport {
-    fn call(
-        &self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-    ) -> AgentFuture<TransportCallResponse> {
+    fn call(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
             self.execute(
                 Endpoint::Call(effective_canister_id),
@@ -174,15 +174,6 @@ impl Transport for ReqwestTransport {
                 Some(envelope),
             )
             .await
-            .and_then(|(body, status)| {
-                if status == StatusCode::OK {
-                    serde_cbor::from_slice(&body).map_err(AgentError::InvalidCborData)
-                } else {
-                    Err(AgentError::InvalidHttpResponse(
-                        "Expected `200`, `4xx`, or `5xx` HTTP status code.".to_string(),
-                    ))
-                }
-            })
         })
     }
 
@@ -198,7 +189,6 @@ impl Transport for ReqwestTransport {
                 Some(envelope),
             )
             .await
-            .map(|(body, _)| body)
         })
     }
 
@@ -210,7 +200,6 @@ impl Transport for ReqwestTransport {
                 Some(envelope),
             )
             .await
-            .map(|(body, _)| body)
         })
     }
 
@@ -222,16 +211,11 @@ impl Transport for ReqwestTransport {
                 Some(envelope),
             )
             .await
-            .map(|(body, _)| body)
         })
     }
 
     fn status(&self) -> AgentFuture<Vec<u8>> {
-        Box::pin(async move {
-            self.execute(Endpoint::Status, Method::GET, None)
-                .await
-                .map(|(body, _)| body)
-        })
+        Box::pin(async move { self.execute(Endpoint::Status, Method::GET, None).await })
     }
 }
 

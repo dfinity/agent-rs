@@ -80,11 +80,7 @@ pub trait Transport: Send + Sync {
     /// Sends a synchronous call request to a replica.
     ///
     /// This normally corresponds to the `/api/v3/canister/<effective_canister_id>/call` endpoint.
-    fn call(
-        &self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-    ) -> AgentFuture<TransportCallResponse>;
+    fn call(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>>;
 
     /// Sends a synchronous request to a replica. This call includes the body of the request message
     /// itself (envelope).
@@ -115,11 +111,7 @@ pub trait Transport: Send + Sync {
 }
 
 impl<I: Transport + ?Sized> Transport for Box<I> {
-    fn call(
-        &self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-    ) -> AgentFuture<TransportCallResponse> {
+    fn call(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         (**self).call(effective_canister_id, envelope)
     }
 
@@ -141,11 +133,7 @@ impl<I: Transport + ?Sized> Transport for Box<I> {
     }
 }
 impl<I: Transport + ?Sized> Transport for Arc<I> {
-    fn call(
-        &self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-    ) -> AgentFuture<TransportCallResponse> {
+    fn call(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         (**self).call(effective_canister_id, envelope)
     }
     fn read_state(
@@ -402,7 +390,7 @@ impl Agent {
         &self,
         effective_canister_id: Principal,
         serialized_bytes: Vec<u8>,
-    ) -> Result<TransportCallResponse, AgentError> {
+    ) -> Result<Vec<u8>, AgentError> {
         let _permit = self.concurrent_requests_semaphore.acquire().await;
         self.transport
             .call(effective_canister_id, serialized_bytes)
@@ -585,11 +573,14 @@ impl Agent {
         let request_id = to_request_id(&content)?;
         let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
 
-        let call_response = self
+        let response_body = self
             .call_endpoint(effective_canister_id, serialized_bytes)
             .await?;
 
-        match call_response {
+        let parsed_response: TransportCallResponse =
+            serde_cbor::from_slice(&response_body).map_err(AgentError::InvalidCborData)?;
+
+        match parsed_response {
             TransportCallResponse::CertifiedState(certificate) => {
                 self.verify(&certificate, effective_canister_id)?;
                 let status = lookup_request_status(certificate, &request_id)?;
@@ -621,15 +612,18 @@ impl Agent {
             serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
         let request_id = to_request_id(&envelope.content)?;
 
-        let call_response = self
+        let response_body = self
             .call_endpoint(effective_canister_id, signed_update)
             .await?;
 
-        if let TransportCallResponse::CertifiedState(certificate) = &call_response {
+        let parsed_response: TransportCallResponse =
+            serde_cbor::from_slice(&response_body).map_err(AgentError::InvalidCborData)?;
+
+        if let TransportCallResponse::CertifiedState(certificate) = &parsed_response {
             self.verify(certificate, effective_canister_id)?;
         }
 
-        match call_response {
+        match parsed_response {
             TransportCallResponse::CertifiedState(certificate) => {
                 self.verify(&certificate, effective_canister_id)?;
                 let status = lookup_request_status(certificate, &request_id)?;
@@ -1822,7 +1816,7 @@ mod offline_tests {
                 &self,
                 _effective_canister_id: Principal,
                 _envelope: Vec<u8>,
-            ) -> AgentFuture<TransportCallResponse> {
+            ) -> AgentFuture<Vec<u8>> {
                 *self.0.lock().unwrap() += 1;
                 Box::pin(pending())
             }
