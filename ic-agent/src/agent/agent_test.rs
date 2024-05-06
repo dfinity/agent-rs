@@ -1,14 +1,17 @@
 // Disable these tests without the reqwest feature.
 #![cfg(feature = "reqwest")]
 
-use self::mock::{assert_mock, assert_single_mock, mock, mock_additional};
+use self::mock::{
+    assert_mock, assert_single_mock, assert_single_mock_count, mock, mock_additional,
+};
 use crate::{
     agent::{http_transport::ReqwestTransport, Status},
     export::Principal,
-    Agent, AgentError,
+    Agent, AgentError, Certificate,
 };
 use candid::{Encode, Nat};
-use ic_certification::Label;
+use futures_util::FutureExt;
+use ic_certification::{Delegation, Label};
 use ic_transport_types::{NodeSignature, QueryResponse, RejectCode, RejectResponse, ReplyResponse};
 use std::{collections::BTreeMap, time::Duration};
 #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
@@ -69,6 +72,7 @@ async fn query() -> Result<(), AgentError> {
             vec![],
             None,
             false,
+            None,
         )
         .await;
 
@@ -94,6 +98,7 @@ async fn query_error() -> Result<(), AgentError> {
             vec![],
             None,
             false,
+            None,
         )
         .await;
 
@@ -135,13 +140,14 @@ async fn query_rejected() -> Result<(), AgentError> {
             vec![],
             None,
             false,
+            None,
         )
         .await;
 
     assert_mock(query_mock).await;
 
     match result {
-        Err(AgentError::ReplicaError(replica_error)) => {
+        Err(AgentError::UncertifiedReject(replica_error)) => {
             assert_eq!(replica_error.reject_code, RejectCode::DestinationInvalid);
             assert_eq!(replica_error.reject_message, "Rejected Message");
             assert_eq!(replica_error.error_code, Some("Error code".to_string()));
@@ -202,7 +208,7 @@ async fn call_rejected() -> Result<(), AgentError> {
 
     assert_mock(call_mock).await;
 
-    let expected_response = Err(AgentError::ReplicaError(reject_body));
+    let expected_response = Err(AgentError::UncertifiedReject(reject_body));
     assert_eq!(expected_response, result);
 
     Ok(())
@@ -238,7 +244,7 @@ async fn call_rejected_without_error_code() -> Result<(), AgentError> {
 
     assert_mock(call_mock).await;
 
-    let expected_response = Err(AgentError::ReplicaError(reject_body));
+    let expected_response = Err(AgentError::UncertifiedReject(reject_body));
     assert_eq!(expected_response, result);
 
     Ok(())
@@ -488,6 +494,81 @@ async fn no_cert() {
     assert_mock(read_mock).await;
 }
 
+const RESP_WITH_SUBNET_KEY: &[u8] = include_bytes!("agent_test/with_subnet_key.bin");
+
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+async fn too_many_delegations() {
+    // Use the certificate as its own delegation, and repeat the process the specified number of times
+    fn self_delegate_cert(subnet_id: Vec<u8>, cert: &Certificate, depth: u32) -> Certificate {
+        let mut current = cert.clone();
+        for _ in 0..depth {
+            current = Certificate {
+                tree: current.tree.clone(),
+                signature: current.signature.clone(),
+                delegation: Some(Delegation {
+                    subnet_id: subnet_id.clone(),
+                    certificate: serde_cbor::to_vec(&current).unwrap(),
+                }),
+            }
+        }
+        current
+    }
+
+    let canister_id_str = "rdmx6-jaaaa-aaaaa-aaadq-cai";
+    let canister_id = Principal::from_text(canister_id_str).unwrap();
+    let subnet_id = Vec::from(
+        Principal::from_text("uzr34-akd3s-xrdag-3ql62-ocgoh-ld2ao-tamcv-54e7j-krwgb-2gm4z-oqe")
+            .unwrap()
+            .as_slice(),
+    );
+
+    let (_read_mock, url) = mock(
+        "POST",
+        format!("/api/v2/canister/{}/read_state", canister_id_str).as_str(),
+        200,
+        RESP_WITH_SUBNET_KEY.into(),
+        Some("application/cbor"),
+    )
+    .await;
+    let path_label = Label::from_bytes("subnet".as_bytes());
+    let agent = make_untimed_agent(&url);
+    let cert = agent
+        .read_state_raw(vec![vec![path_label]], canister_id)
+        .await
+        .expect("read state failed");
+    let new_cert = self_delegate_cert(subnet_id, &cert, 1);
+    assert!(matches!(
+        agent.verify(&new_cert, canister_id).unwrap_err(),
+        AgentError::CertificateHasTooManyDelegations
+    ));
+}
+
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+async fn retry_ratelimit() {
+    let (mut mock, url) = mock(
+        "POST",
+        "/api/v2/canister/ryjl3-tyaaa-aaaaa-aaaba-cai/query",
+        429,
+        vec![],
+        Some("text/plain"),
+    )
+    .await;
+    let agent = make_agent(&url);
+    futures_util::select! {
+        _ = agent.query(&"ryjl3-tyaaa-aaaaa-aaaba-cai".parse().unwrap(), "greet").call().fuse() => panic!("did not retry 429"),
+        _ = crate::util::sleep(Duration::from_millis(500)).fuse() => {},
+    };
+    assert_single_mock_count(
+        "POST",
+        "/api/v2/canister/ryjl3-tyaaa-aaaaa-aaaba-cai/query",
+        2,
+        &mut mock,
+    )
+    .await;
+}
+
 #[cfg(not(target_family = "wasm"))]
 mod mock {
 
@@ -550,6 +631,19 @@ mod mock {
         (_, mocks): &(ServerGuard, HashMap<String, Mock>),
     ) {
         mocks[&format!("{method} {path}")].assert_async().await;
+    }
+
+    pub async fn assert_single_mock_count(
+        method: &str,
+        path: &str,
+        n: usize,
+        (_, mocks): &mut (ServerGuard, HashMap<String, Mock>),
+    ) {
+        let k = format!("{method} {path}");
+        let mut mock = mocks.remove(&k).unwrap();
+        mock = mock.expect_at_least(n);
+        mock.assert_async().await;
+        mocks.insert(k, mock);
     }
 }
 
@@ -644,8 +738,8 @@ mod mock {
             .unwrap();
     }
 
-    pub async fn assert_mock(nonce: String) {
-        let hits: HashMap<String, i64> = Client::new()
+    async fn get_hits(nonce: &str) -> HashMap<String, i64> {
+        Client::new()
             .get(&format!("http://mock_assert/{}", nonce))
             .send()
             .await
@@ -654,21 +748,21 @@ mod mock {
             .unwrap()
             .json()
             .await
-            .unwrap();
+            .unwrap()
+    }
+
+    pub async fn assert_mock(nonce: String) {
+        let hits = get_hits(&nonce).await;
         assert!(hits.values().all(|x| *x > 0));
     }
 
     pub async fn assert_single_mock(method: &str, path: &str, nonce: &String) {
-        let hits: HashMap<String, i64> = Client::new()
-            .get(&format!("http://mock_assert/{}", nonce))
-            .send()
-            .await
-            .unwrap()
-            .error_for_status()
-            .unwrap()
-            .json()
-            .await
-            .unwrap();
+        let hits = get_hits(nonce).await;
         assert!(hits[&format!("{method} {path}")] > 0);
+    }
+
+    pub async fn assert_single_mock_count(method: &str, path: &str, n: usize, nonce: &mut String) {
+        let hits = get_hits(&*nonce).await;
+        assert!(hits[&format!("{method} {path}")] >= n as i64);
     }
 }

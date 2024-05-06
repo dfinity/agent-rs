@@ -314,7 +314,11 @@ pub fn get_effective_canister_id(
             | MgmtMethod::DeleteCanister
             | MgmtMethod::DepositCycles
             | MgmtMethod::UninstallCode
-            | MgmtMethod::ProvisionalTopUpCanister => {
+            | MgmtMethod::ProvisionalTopUpCanister
+            | MgmtMethod::UploadChunk
+            | MgmtMethod::ClearChunkStore
+            | MgmtMethod::StoredChunks
+            | MgmtMethod::FetchCanisterLogs => {
                 #[derive(CandidType, Deserialize)]
                 struct In {
                     canister_id: Principal,
@@ -333,6 +337,27 @@ pub fn get_effective_canister_id(
                 let in_args =
                     Decode!(arg_value, In).context("Argument is not valid for update_settings")?;
                 Ok(in_args.canister_id)
+            }
+            MgmtMethod::InstallChunkedCode => {
+                #[derive(CandidType, Deserialize)]
+                struct In {
+                    target_canister: Principal,
+                }
+                let in_args = Decode!(arg_value, In)
+                    .context("Argument is not valid for InstallChunkedCode")?;
+                Ok(in_args.target_canister)
+            }
+            MgmtMethod::BitcoinGetBalanceQuery | MgmtMethod::BitcoinGetUtxosQuery => {
+                Ok(Principal::management_canister())
+            }
+            MgmtMethod::BitcoinGetBalance
+            | MgmtMethod::BitcoinGetUtxos
+            | MgmtMethod::BitcoinSendTransaction
+            | MgmtMethod::BitcoinGetCurrentFeePercentiles
+            | MgmtMethod::EcdsaPublicKey
+            | MgmtMethod::SignWithEcdsa
+            | MgmtMethod::NodeMetricsHistory => {
+                bail!("Management canister method {method_name} can only be run from canisters");
             }
         }
     } else {

@@ -8,8 +8,8 @@ pub enum PemError {
     Io(#[from] std::io::Error),
 
     /// An unsupported curve was detected
-    #[error("Only secp256k1 curve is supported: {0:?}")]
-    UnsupportedKeyCurve(Vec<u8>),
+    #[error("Only {0} curve is supported: {1:?}")]
+    UnsupportedKeyCurve(String, Vec<u8>),
 
     /// An error occurred while reading the file in PEM format.
     #[cfg(feature = "pem")]

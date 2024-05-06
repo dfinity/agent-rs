@@ -58,7 +58,13 @@ pub struct Status {
 impl std::fmt::Display for Status {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("{\n")?;
+        let mut first = true;
         for (key, value) in &self.values {
+            if first {
+                first = false;
+            } else {
+                f.write_str(",\n")?;
+            }
             f.write_fmt(format_args!(r#"  "{}": "#, key.escape_debug()))?;
             std::fmt::Display::fmt(&value, f)?;
         }

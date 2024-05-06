@@ -50,9 +50,13 @@ pub enum AgentError {
     #[error("Cannot parse Principal: {0}")]
     PrincipalError(#[from] crate::export::PrincipalError),
 
-    /// The replica rejected the message.
-    #[error("The replica returned a replica error: reject code {:?}, reject message {}, error code {:?}", .0.reject_code, .0.reject_message, .0.error_code)]
-    ReplicaError(RejectResponse),
+    /// The subnet rejected the message.
+    #[error("The replica returned a rejection error: reject code {:?}, reject message {}, error code {:?}", .0.reject_code, .0.reject_message, .0.error_code)]
+    CertifiedReject(RejectResponse),
+
+    /// The replica rejected the message. This rejection cannot be verified as authentic.
+    #[error("The replica returned a rejection error: reject code {:?}, reject message {}, error code {:?}", .0.reject_code, .0.reject_message, .0.error_code)]
+    UncertifiedReject(RejectResponse),
 
     /// The replica returned an HTTP error.
     #[error("The replica returned an HTTP Error: {0}")]
@@ -109,6 +113,10 @@ pub enum AgentError {
     /// The certificate was older than allowed by the `ingress_expiry`.
     #[error("Certificate is stale (over {0:?}). Is the computer's clock synchronized?")]
     CertificateOutdated(Duration),
+
+    /// The certificate contained more than one delegation.
+    #[error("The certificate contained more than one delegation")]
+    CertificateHasTooManyDelegations,
 
     /// The query response did not contain any node signatures.
     #[error("Query response did not contain any node signatures")]

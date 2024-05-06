@@ -82,7 +82,7 @@ impl AgentBuilder {
 
     /// Provides a _default_ ingress expiry. This is the delta that will be applied
     /// at the time an update or query is made. The default expiry cannot be a
-    /// fixed system time.
+    /// fixed system time. This is also used when checking certificate timestamps.
     ///
     /// The timestamp corresponding to this duration may be rounded in order to reduce
     /// cache misses. The current implementation rounds to the nearest minute if the
@@ -96,6 +96,14 @@ impl AgentBuilder {
     /// a separate read-state call to fetch node keys.
     pub fn with_verify_query_signatures(mut self, verify_query_signatures: bool) -> Self {
         self.config.verify_query_signatures = verify_query_signatures;
+        self
+    }
+
+    /// Sets the maximum number of requests that the agent will make concurrently. The replica is configured
+    /// to only permit 50 concurrent requests per client. Set this value lower if you have multiple agents,
+    /// to avoid the slowdown of retrying any 429 errors.
+    pub fn with_max_concurrent_requests(mut self, max_concurrent_requests: usize) -> Self {
+        self.config.max_concurrent_requests = max_concurrent_requests;
         self
     }
 }
