@@ -15,7 +15,7 @@ use ic_certification::{Delegation, Label};
 use ic_transport_types::{
     NodeSignature, QueryResponse, RejectCode, RejectResponse, ReplyResponse, TransportCallResponse,
 };
-use std::{collections::BTreeMap, time::Duration};
+use std::{collections::BTreeMap, str::FromStr, time::Duration};
 #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -221,17 +221,21 @@ async fn call_rejected() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn call_rejected_without_error_code() -> Result<(), AgentError> {
-    let reject_body = RejectResponse {
+    let non_replicated_reject = RejectResponse {
         reject_code: RejectCode::SysTransient,
         reject_message: "Test reject message".to_string(),
         error_code: None,
     };
 
+    let reject_body = TransportCallResponse::NonReplicatedRejection(non_replicated_reject.clone());
+
+    let canister_id_str = "aaaaa-aa";
+
     let body = serde_cbor::to_vec(&reject_body).unwrap();
 
     let (call_mock, url) = mock(
         "POST",
-        "/api/v3/canister/aaaaa-aa/call",
+        format!("/api/v3/canister/{}/call", canister_id_str).as_str(),
         200,
         body,
         Some("application/cbor"),
@@ -241,14 +245,14 @@ async fn call_rejected_without_error_code() -> Result<(), AgentError> {
     let agent = make_agent(&url);
 
     let result = agent
-        .update(&Principal::management_canister(), "greet")
+        .update(&Principal::from_str(canister_id_str).unwrap(), "greet")
         .with_arg([])
         .call()
         .await;
 
     assert_mock(call_mock).await;
 
-    let expected_response = Err(AgentError::UncertifiedReject(reject_body));
+    let expected_response = Err(AgentError::UncertifiedReject(non_replicated_reject));
     assert_eq!(expected_response, result);
 
     Ok(())

@@ -14,11 +14,17 @@ use crate::agent::{
     AgentError,
 };
 
+/// The different HTTP endpoints that the agent can interact with as per the [IC-spec](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-interface).
 pub enum Endpoint {
+    /// The [call](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call) endpoint.
     Call(Principal),
+    /// The [query](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-query) endpoint.
     Query(Principal),
+    /// The [read_state](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-read-state) endpoint for canisters.
     ReadStateCanister(Principal),
+    /// The [read_state](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-read-state) endpoint for subnets.
     ReadStateSubnet(Principal),
+    /// The [status](https://internetcomputer.org/docs/current/references/ic-interface-spec#api-status) endpoint.
     Status,
 }
 
@@ -50,6 +56,7 @@ impl RoundRobinRouteProvider {
 }
 
 impl RouteProvider for RoundRobinRouteProvider {
+    /// Generates a url for the given endpoint.
     fn route(&self, endpoint: Endpoint) -> Result<Url, AgentError> {
         let base_url = self.base_url()?;
 
@@ -125,11 +132,7 @@ mod tests {
     fn test_routes_rotation() {
         let provider = RoundRobinRouteProvider::new(vec!["https://url1.com", "https://url2.com"])
             .expect("failed to create a route provider");
-        let url_strings = vec![
-            "https://url1.com/api/v2/",
-            "https://url2.com/api/v2/",
-            "https://url1.com/api/v2/",
-        ];
+        let url_strings = vec!["https://url1.com", "https://url2.com", "https://url1.com"];
         let expected_urls: Vec<Url> = url_strings
             .iter()
             .map(|url_str| Url::parse(url_str).expect("Invalid URL"))
