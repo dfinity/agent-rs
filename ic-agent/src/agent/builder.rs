@@ -98,4 +98,12 @@ impl AgentBuilder {
         self.config.verify_query_signatures = verify_query_signatures;
         self
     }
+
+    /// Sets the maximum number of requests that the agent will make concurrently. The replica is configured
+    /// to only permit 50 concurrent requests per client. Set this value lower if you have multiple agents,
+    /// to avoid the slowdown of retrying any 429 errors.
+    pub fn with_max_concurrent_requests(mut self, max_concurrent_requests: usize) -> Self {
+        self.config.max_concurrent_requests = max_concurrent_requests;
+        self
+    }
 }

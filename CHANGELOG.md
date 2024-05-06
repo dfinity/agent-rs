@@ -8,18 +8,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Added a limit to the concurrent requests an agent will make at once. This should make server-side ratelimiting much rarer to encounter, even when sending a high volume of requests (for example, a large `ic_utils::ManagementCanister::install` call).
+* The agent will now automatically retry 429 Too Many Requests responses after a short delay.
+* BREAKING: Changed Chunk Store API to conform to the interface specification:
+  * `ChunkHash` was changed from `[u8; 32]` to a struct.
+  * Return types of `ManagementCanister::stored_chunks()` and `ManagementCanister::upload_chunk()`.
+  * Argument type of `ManagementCanister::install_chunked_code()`.
+  * `InstallChunkedCodeBuilder`.
+    * All occurrences of `storage_canister` were changed to `store_canister`.
+    * The field `chunk_hashes_list` was changed from `vec<vec<u8>>` to `vec<ChunkHash>`.
+* Changed `WalletCanister::from_canister/create`'s version check to not rely on the reject code.
+* Added `QueryBuilder::call_with_verification()` and `QueryBuilder::call_without_verification()` which always/never verify query signatures
+  regardless the Agent level configuration from `AgentBuilder::with_verify_query_signatures`.
+* Function `Agent::fetch_api_boundary_nodes()` is split into two functions: `fetch_api_boundary_nodes_by_canister_id()` and `fetch_api_boundary_nodes_by_subnet_id()`.
+* `ReqwestTransport` and `HyperTransport` structures storing the trait object `route_provider: Box<dyn RouteProvider>` have been modified to allow for shared ownership via `Arc<dyn RouteProvider>`.
+* Added `wasm_memory_limit` to canister creation and canister setting update options.
+* Agent::fetch_root_key() now returns an error, and sets its root key to an empty vector, if got the same root key as the mainnet. This reduce the potentiality of MITM attack.
+ 
+## [0.34.0] - 2024-03-18
+
+* Changed `AgentError::ReplicaError` to `CertifiedReject` or `UncertifiedReject`. `CertifiedReject`s went through consensus, and `UncertifiedReject`s did not. If your code uses `ReplicaError`:
+    * for queries: use `UncertifiedReject` in all cases (for now)
+    * for updates: use `CertifiedReject` for errors raised after the message successfully reaches the canister, and `UncertifiedReject` otherwise
 * Added `Agent::fetch_api_boundary_nodes` for looking up API boundary nodes in the state tree.
 * Timestamps are now being checked in `Agent::verify` and `Agent::verify_for_subnet`. If you were using it with old certificates, increase the expiry timeout to continue to verify them.
 * Added node metrics, ECDSA, and Bitcoin functions to `MgmtMethod`. Most do not have wrappers in `ManagementCanister` because only canisters can call these functions.
 * Added `FetchCanisterLogs` function to `MgmtMethod` and a corresponding wrapper to `ManagementCanister`.
 * Updated the `ring` crate to 0.17.7.  `ring` 0.16 has a bug where it requires incorrect Ed25519 PEM encoding. 0.17.7 fixes that and is backwards compatible.
-* Agent::fetch_root_key() now returns an error, and sets its root key to an empty vector, if got the same root key as the mainnet. This reduce the potentiality of MITM attack.
+* Removed serde and candid serialization traits from the `Status` type.
+* Added commas and newlines to the `Status` fmt::Display output. It is valid JSON now (it was close before).
 
 ## [0.33.0] - 2024-02-08
 
 * Changed the return type of `stored_chunks` to a struct.
 * Added a prime256v1-based `Identity` impl to complement the ed25519 and secp256k1 `Identity` impls.
-* Added serde and candid serialization traits to the `Status` type.
 * Changed the type of `InstallMode.skip_pre_upgrade` from `bool` to `Option<bool>` to match the interface specification.
 
 ## [0.32.0] - 2024-01-18

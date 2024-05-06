@@ -50,9 +50,13 @@ pub enum AgentError {
     #[error("Cannot parse Principal: {0}")]
     PrincipalError(#[from] crate::export::PrincipalError),
 
-    /// The replica rejected the message.
-    #[error("The replica returned a replica error: reject code {:?}, reject message {}, error code {:?}", .0.reject_code, .0.reject_message, .0.error_code)]
-    ReplicaError(RejectResponse),
+    /// The subnet rejected the message.
+    #[error("The replica returned a rejection error: reject code {:?}, reject message {}, error code {:?}", .0.reject_code, .0.reject_message, .0.error_code)]
+    CertifiedReject(RejectResponse),
+
+    /// The replica rejected the message. This rejection cannot be verified as authentic.
+    #[error("The replica returned a rejection error: reject code {:?}, reject message {}, error code {:?}", .0.reject_code, .0.reject_message, .0.error_code)]
+    UncertifiedReject(RejectResponse),
 
     /// The replica returned an HTTP error.
     #[error("The replica returned an HTTP Error: {0}")]

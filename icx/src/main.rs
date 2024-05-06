@@ -18,7 +18,7 @@ use ic_agent::{
 };
 use ic_utils::interfaces::management_canister::{
     builders::{CanisterInstall, CanisterSettings},
-    BitcoinNetwork, MgmtMethod,
+    MgmtMethod,
 };
 use ring::signature::Ed25519KeyPair;
 use std::{
@@ -324,13 +324,7 @@ pub fn get_effective_canister_id(
                 Ok(in_args.target_canister)
             }
             MgmtMethod::BitcoinGetBalanceQuery | MgmtMethod::BitcoinGetUtxosQuery => {
-                #[derive(CandidType, Deserialize)]
-                struct In {
-                    network: BitcoinNetwork,
-                }
-                let in_args = Decode!(arg_value, In)
-                    .with_context(|| format!("Argument is not valid for {method_name}"))?;
-                Ok(in_args.network.effective_canister_id())
+                Ok(Principal::management_canister())
             }
             MgmtMethod::BitcoinGetBalance
             | MgmtMethod::BitcoinGetUtxos

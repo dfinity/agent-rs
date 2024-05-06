@@ -13,7 +13,7 @@ use strum_macros::{AsRefStr, Display, EnumString};
 
 pub mod attributes;
 pub mod builders;
-mod serde_impls;
+
 #[doc(inline)]
 pub use builders::{
     CreateCanisterBuilder, InstallBuilder, InstallChunkedCodeBuilder, InstallCodeBuilder,
@@ -157,21 +157,8 @@ pub struct DefiniteCanisterSettings {
     pub freezing_threshold: Nat,
     /// The upper limit of the canister's reserved cycles balance.
     pub reserved_cycles_limit: Option<Nat>,
-}
-
-/// The result of a [`ManagementCanister::upload_chunk`] call.
-#[derive(Clone, Debug, Deserialize, CandidType)]
-pub struct UploadChunkResult {
-    /// The hash of the uploaded chunk.
-    #[serde(with = "serde_bytes")]
-    pub hash: ChunkHash,
-}
-
-/// The result of a [`ManagementCanister::stored_chunks`] call.
-#[derive(Clone, Debug)]
-pub struct ChunkInfo {
-    /// The hash of the stored chunk.
-    pub hash: ChunkHash,
+    /// A soft limit on the Wasm memory usage of the canister in bytes (up to 256TiB).
+    pub wasm_memory_limit: Option<Nat>,
 }
 
 impl std::fmt::Display for StatusCallResult {
@@ -220,8 +207,19 @@ pub struct FetchCanisterLogsResponse {
     pub canister_log_records: Vec<CanisterLogRecord>,
 }
 
-/// A SHA-256 hash of a WASM chunk.
-pub type ChunkHash = [u8; 32];
+/// Chunk hash.
+#[derive(CandidType, Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+pub struct ChunkHash {
+    /// The hash of an uploaded chunk
+    #[serde(with = "serde_bytes")]
+    pub hash: Vec<u8>,
+}
+
+/// Return type of [ManagementCanister::stored_chunks].
+pub type StoreChunksResult = Vec<ChunkHash>;
+
+/// Return type of [ManagementCanister::upload_chunk].
+pub type UploadChunkResult = ChunkHash;
 
 /// The Bitcoin network that a Bitcoin transaction is placed on.
 #[derive(Clone, Copy, Debug, CandidType, Deserialize, PartialEq, Eq)]
@@ -232,22 +230,11 @@ pub enum BitcoinNetwork {
     /// The TESTBTC network.
     #[serde(rename = "testnet")]
     Testnet,
-}
-
-impl BitcoinNetwork {
-    /// Gets the [effective canister ID](crate::call::SyncCallBuilder::with_effective_canister_id)
-    // to make `bitcoin_*` calls to.
-    pub fn effective_canister_id(&self) -> Principal {
-        const BITCOIN_MAINNET_CANISTER: Principal =
-            Principal::from_slice(b"\x00\x00\x00\x00\x01\xa0\x00\x04\x01\x01"); // ghsi2-tqaaa-aaaan-aaaca-cai
-        const BITCOIN_TESTNET_CANISTER: Principal =
-            Principal::from_slice(b"\x00\x00\x00\x00\x01\xa0\x00\x01\x01\x01"); // g4xu7-jiaaa-aaaan-aaaaq-cai
-
-        match self {
-            Self::Mainnet => BITCOIN_MAINNET_CANISTER,
-            Self::Testnet => BITCOIN_TESTNET_CANISTER,
-        }
-    }
+    /// The REGTEST network.
+    ///
+    /// This is only available when developing with local replica.
+    #[serde(rename = "regtest")]
+    Regtest,
 }
 
 /// Defines how to filter results from [`bitcoin_get_utxos_query`](ManagementCanister::bitcoin_get_utxos_query).
@@ -490,7 +477,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn stored_chunks(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<(Vec<ChunkInfo>,)> {
+    ) -> impl 'agent + AsyncCall<(StoreChunksResult,)> {
         #[derive(CandidType)]
         struct Argument<'a> {
             canister_id: &'a Principal,
@@ -505,7 +492,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn install_chunked_code<'canister>(
         &'canister self,
         canister_id: &Principal,
-        wasm_module_hash: ChunkHash,
+        wasm_module_hash: &[u8],
     ) -> InstallChunkedCodeBuilder<'agent, 'canister> {
         InstallChunkedCodeBuilder::builder(self, *canister_id, wasm_module_hash)
     }
@@ -562,7 +549,7 @@ impl<'agent> ManagementCanister<'agent> {
                 network,
                 min_confirmations,
             })
-            .with_effective_canister_id(network.effective_canister_id())
+            .with_effective_canister_id(Principal::management_canister())
             .build()
     }
 
@@ -589,7 +576,7 @@ impl<'agent> ManagementCanister<'agent> {
                 network,
                 filter,
             })
-            .with_effective_canister_id(network.effective_canister_id())
+            .with_effective_canister_id(Principal::management_canister())
             .build()
     }
 }

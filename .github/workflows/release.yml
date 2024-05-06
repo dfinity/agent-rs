@@ -19,13 +19,16 @@ jobs:
             target: x86_64-unknown-linux-musl
             binary_path: target/x86_64-unknown-linux-musl/release
             binary_files: icx
-          - os: macos-latest
+          - os: macos-12
             name: macos
             target: x86_64-apple-darwin
             binary_path: target/x86_64-apple-darwin/release
             binary_files: icx
     steps:
     - uses: actions/checkout@v4
+    - uses: taiki-e/install-action@v2
+      with:
+        tool: cross@0.2.5
 
     - name: Setup environment variables
       run: |
@@ -37,24 +40,21 @@ jobs:
         echo "END" >> $GITHUB_ENV
 
     - name: Build
-      uses: ructions/cargo@v1
-      with:
-        command: build
-        args: --target ${{ matrix.target }} ${{ env.cargo_build_ARGS }}
-        use-cross: ${{ contains(matrix.os, 'ubuntu') }}
+      run: |
+        cross build --target ${{ matrix.target }} ${{ env.cargo_build_ARGS }}
 
     - name: Strip binaries
       run: |
         cd ${{ matrix.binary_path }}
         sudo chown -R $(whoami) .
         strip ${{ matrix.binary_files }}
-      if: contains(matrix.os, 'ubuntu')
+      if: ${{ contains(matrix.os, 'ubuntu') }}
 
     - name: Check linkage
       run: |
         cd ${{ matrix.binary_path }}
         otool -L ${{ matrix.binary_files }}
-      if: contains(matrix.os, 'macos')
+      if: ${{ contains(matrix.os, 'macos') }}
 
     - name: Create tarball of binaries
       if: ${{ github.event_name == 'push' }}
