@@ -1,7 +1,7 @@
 //! A [`Transport`] that connects using a [`reqwest`] client.
 #![cfg(feature = "reqwest")]
 
-use ic_transport_types::{CallResponse, RejectResponse};
+use ic_transport_types::TransportCallResponse;
 pub use reqwest;
 use std::{sync::Arc, time::Duration};
 
@@ -18,7 +18,7 @@ use crate::{
         AgentFuture, Transport,
     },
     export::Principal,
-    AgentError, RequestId,
+    AgentError,
 };
 
 /// A [`Transport`] using [`reqwest`] to make HTTP calls to the Internet Computer.
@@ -166,7 +166,7 @@ impl Transport for ReqwestTransport {
         &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-    ) -> AgentFuture<CallResponse> {
+    ) -> AgentFuture<TransportCallResponse> {
         Box::pin(async move {
             let endpoint = format!("canister/{}/call", effective_canister_id.to_text());
             self.execute(Method::POST, &endpoint, Some(envelope))

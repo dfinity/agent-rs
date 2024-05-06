@@ -13,7 +13,7 @@ use candid::{Encode, Nat};
 use futures_util::FutureExt;
 use ic_certification::{Delegation, Label};
 use ic_transport_types::{
-    CallResponse, NodeSignature, QueryResponse, RejectCode, RejectResponse, ReplyResponse,
+    NodeSignature, QueryResponse, RejectCode, RejectResponse, ReplyResponse, TransportCallResponse,
 };
 use std::{collections::BTreeMap, time::Duration};
 #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
@@ -183,11 +183,13 @@ async fn call_error() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn call_rejected() -> Result<(), AgentError> {
-    let reject_body = CallResponse::NonReplicatedRejection(RejectResponse {
+    let reject_response = RejectResponse {
         reject_code: RejectCode::SysTransient,
         reject_message: "Test reject message".to_string(),
         error_code: Some("Test error code".to_string()),
-    });
+    };
+
+    let reject_body = TransportCallResponse::NonReplicatedRejection(reject_response.clone());
 
     let body = serde_cbor::to_vec(&reject_body).unwrap();
 
@@ -206,12 +208,11 @@ async fn call_rejected() -> Result<(), AgentError> {
         .update(&Principal::management_canister(), "greet")
         .with_arg([])
         .call()
-        .await
-        .map(|(_request_id, response)| response);
+        .await;
 
     assert_mock(call_mock).await;
 
-    let expected_response = Err(AgentError::UncertifiedReject(reject_body));
+    let expected_response = Err(AgentError::UncertifiedReject(reject_response));
     assert_eq!(expected_response, result);
 
     Ok(())

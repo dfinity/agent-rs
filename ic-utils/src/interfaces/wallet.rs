@@ -15,7 +15,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize, Nat};
-use ic_agent::{export::Principal, Agent, AgentError, CallResponse, RequestId};
+use ic_agent::{agent::CallResponse, export::Principal, Agent, AgentError};
 use once_cell::sync::Lazy;
 use semver::{Version, VersionReq};
 
@@ -120,7 +120,7 @@ where
     }
 
     /// Calls the forwarded canister call on the wallet canister. Equivalent to `.build().call()`.
-    pub async fn call(self) -> Result<(RequestId, CallResponse), AgentError> {
+    pub async fn call(self) -> Result<CallResponse<Out>, AgentError> {
         self.build()?.call().await
     }
 
@@ -136,7 +136,7 @@ impl<'agent: 'canister, 'canister, Out> AsyncCall<Out> for CallForwarder<'agent,
 where
     Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
 {
-    async fn call(self) -> Result<RequestId, AgentError> {
+    async fn call(self) -> Result<CallResponse<Out>, AgentError> {
         self.call().await
     }
 

@@ -7,7 +7,7 @@
 use std::borrow::Cow;
 
 use candid::Principal;
-use ic_certification::{certificate, Label};
+use ic_certification::Label;
 pub use request_id::{to_request_id, RequestId, RequestIdError};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -117,35 +117,26 @@ pub struct ReadStateResponse {
     pub certificate: Vec<u8>,
 }
 
-/// Possible responses from a canister to a call.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "status", rename_all = "snake_case")]
-pub enum SyncCallResponse {
-    /// The request was successfully replied to.
-    Replied(ReplyResponse),
-    /// The request was rejected.
-    Rejected {
-        /// The rejection from the canister.
-        #[serde(flatten)]
-        reject_response: RejectResponse,
-    },
-}
-
-/// Possible responses to a query call.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "status", rename_all = "snake_case")]
-pub enum CallResponse {
+/// The response from a request to the `call` endpoint.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum TransportCallResponse {
     /// A certified response.
-    CertifiedState(
-        // TODO: Introduce a new type. This type for Transport to return, and a new type that has ReadStateResponse variant returned by the agent
-        ic_certification::Certificate,
-    ),
+    CertifiedState(ic_certification::Certificate),
 
     /// A non replicated rejection from the replica.
     NonReplicatedRejection(RejectResponse),
 
     /// The replica timed out the sync request. The status of the request must be polled.
     Accepted,
+}
+
+/// The response
+#[derive(Debug, PartialEq, Eq)]
+pub enum CallResponse<Out> {
+    /// The call was accepted and a certified response is available.
+    Response(Out),
+    /// The call timed out, and the request id should be polled for the response.
+    Poll(RequestId),
 }
 
 /// Possible responses to a query call.
