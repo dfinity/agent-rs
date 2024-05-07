@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Function `Agent::fetch_api_boundary_nodes()` is split into two functions: `fetch_api_boundary_nodes_by_canister_id()` and `fetch_api_boundary_nodes_by_subnet_id()`.
 * `ReqwestTransport` and `HyperTransport` structures storing the trait object `route_provider: Box<dyn RouteProvider>` have been modified to allow for shared ownership via `Arc<dyn RouteProvider>`.
 * Added `wasm_memory_limit` to canister creation and canister setting update options.
+* Agent::fetch_root_key() now returns an error, and sets its root key to an empty vector, if got the same root key as the mainnet. This reduce the potentiality of MITM attack.
  
 ## [0.34.0] - 2024-03-18
 
