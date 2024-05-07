@@ -13,7 +13,7 @@ use reqwest::{
 use crate::{
     agent::{
         agent_error::HttpErrorPayload,
-        http_transport::route_provider::{Endpoint, RoundRobinRouteProvider, RouteProvider},
+        http_transport::route_provider::{RoundRobinRouteProvider, RouteProvider},
         AgentFuture, Transport,
     },
     export::Principal,
@@ -122,11 +122,11 @@ impl ReqwestTransport {
 
     async fn execute(
         &self,
-        endpoint: Endpoint,
         method: Method,
+        endpoint: &str,
         body: Option<Vec<u8>>,
     ) -> Result<Vec<u8>, AgentError> {
-        let url = self.route_provider.route(endpoint)?.join("")?;
+        let url = self.route_provider.route()?.join(endpoint)?;
         let mut http_request = Request::new(method, url);
         http_request
             .headers_mut()
@@ -168,12 +168,8 @@ impl ReqwestTransport {
 impl Transport for ReqwestTransport {
     fn call(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            self.execute(
-                Endpoint::Call(effective_canister_id),
-                Method::POST,
-                Some(envelope),
-            )
-            .await
+            let endpoint = format!("api/v3/canister/{}/call", effective_canister_id.to_text());
+            self.execute(Method::POST, &endpoint, Some(envelope)).await
         })
     }
 
@@ -182,40 +178,33 @@ impl Transport for ReqwestTransport {
         effective_canister_id: Principal,
         envelope: Vec<u8>,
     ) -> AgentFuture<Vec<u8>> {
-        Box::pin(async move {
-            self.execute(
-                Endpoint::ReadStateCanister(effective_canister_id),
-                Method::POST,
-                Some(envelope),
-            )
-            .await
-        })
+        let endpoint = format!(
+            "api/v2/canister/{}/read_state",
+            effective_canister_id.to_text()
+        );
+
+        Box::pin(async move { self.execute(Method::POST, &endpoint, Some(envelope)).await })
     }
 
     fn read_subnet_state(&self, subnet_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            self.execute(
-                Endpoint::ReadStateSubnet(subnet_id),
-                Method::POST,
-                Some(envelope),
-            )
-            .await
+            let endpoint = format!("api/v2/subnet/{}/read_state", subnet_id.to_text());
+            self.execute(Method::POST, &endpoint, Some(envelope)).await
         })
     }
 
     fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            self.execute(
-                Endpoint::Query(effective_canister_id),
-                Method::POST,
-                Some(envelope),
-            )
-            .await
+            let endpoint = format!("api/v2/canister/{}/query", effective_canister_id.to_text());
+            self.execute(Method::POST, &endpoint, Some(envelope)).await
         })
     }
 
     fn status(&self) -> AgentFuture<Vec<u8>> {
-        Box::pin(async move { self.execute(Endpoint::Status, Method::GET, None).await })
+        Box::pin(async move {
+            let endpoint = "api/v2/status";
+            self.execute(Method::GET, &endpoint, None).await
+        })
     }
 }
 
@@ -226,64 +215,60 @@ mod test {
     #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
     wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
-    use crate::agent::http_transport::route_provider::Endpoint;
-
     use super::ReqwestTransport;
 
     #[cfg_attr(not(target_family = "wasm"), test)]
     #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
     fn redirect() {
         fn test(base: &str, result: &str) {
-            let t: ReqwestTransport = ReqwestTransport::create(base).unwrap();
-            let expected_endpoint = format!("{}status", result);
-
+            let t = ReqwestTransport::create(base).unwrap();
             assert_eq!(
-                t.route_provider.route(Endpoint::Status).unwrap().as_str(),
-                expected_endpoint,
+                t.route_provider.route().unwrap().as_str(),
+                result,
                 "{}",
                 base
             );
         }
 
-        test("https://ic0.app", "https://ic0.app/api/v2/");
-        test("https://IC0.app", "https://ic0.app/api/v2/");
-        test("https://foo.ic0.app", "https://ic0.app/api/v2/");
-        test("https://foo.IC0.app", "https://ic0.app/api/v2/");
-        test("https://foo.Ic0.app", "https://ic0.app/api/v2/");
-        test("https://foo.iC0.app", "https://ic0.app/api/v2/");
-        test("https://foo.bar.ic0.app", "https://ic0.app/api/v2/");
-        test("https://ic0.app/foo/", "https://ic0.app/foo/api/v2/");
-        test("https://foo.ic0.app/foo/", "https://ic0.app/foo/api/v2/");
+        test("https://ic0.app", "https://ic0.app/");
+        test("https://IC0.app", "https://ic0.app/");
+        test("https://foo.ic0.app", "https://ic0.app/");
+        test("https://foo.IC0.app", "https://ic0.app/");
+        test("https://foo.Ic0.app", "https://ic0.app/");
+        test("https://foo.iC0.app", "https://ic0.app/");
+        test("https://foo.bar.ic0.app", "https://ic0.app/");
+        test("https://ic0.app/foo/", "https://ic0.app/foo/");
+        test("https://foo.ic0.app/foo/", "https://ic0.app/foo/");
         test(
             "https://ryjl3-tyaaa-aaaaa-aaaba-cai.ic0.app",
-            "https://ic0.app/api/v2/",
+            "https://ic0.app/",
         );
 
-        test("https://ic1.app", "https://ic1.app/api/v2/");
-        test("https://foo.ic1.app", "https://foo.ic1.app/api/v2/");
-        test("https://ic0.app.ic1.app", "https://ic0.app.ic1.app/api/v2/");
+        test("https://ic1.app", "https://ic1.app/");
+        test("https://foo.ic1.app", "https://foo.ic1.app/");
+        test("https://ic0.app.ic1.app", "https://ic0.app.ic1.app/");
 
-        test("https://fooic0.app", "https://fooic0.app/api/v2/");
-        test("https://fooic0.app.ic0.app", "https://ic0.app/api/v2/");
+        test("https://fooic0.app", "https://fooic0.app/");
+        test("https://fooic0.app.ic0.app", "https://ic0.app/");
 
-        test("https://icp0.io", "https://icp0.io/api/v2/");
+        test("https://icp0.io", "https://icp0.io/");
         test(
             "https://ryjl3-tyaaa-aaaaa-aaaba-cai.icp0.io",
-            "https://icp0.io/api/v2/",
+            "https://icp0.io/",
         );
-        test("https://ic0.app.icp0.io", "https://icp0.io/api/v2/");
+        test("https://ic0.app.icp0.io", "https://icp0.io/");
 
-        test("https://icp-api.io", "https://icp-api.io/api/v2/");
+        test("https://icp-api.io", "https://icp-api.io/");
         test(
             "https://ryjl3-tyaaa-aaaaa-aaaba-cai.icp-api.io",
-            "https://icp-api.io/api/v2/",
+            "https://icp-api.io/",
         );
-        test("https://icp0.io.icp-api.io", "https://icp-api.io/api/v2/");
+        test("https://icp0.io.icp-api.io", "https://icp-api.io/");
 
-        test("http://localhost:4943", "http://localhost:4943/api/v2/");
+        test("http://localhost:4943", "http://localhost:4943/");
         test(
             "http://ryjl3-tyaaa-aaaaa-aaaba-cai.localhost:4943",
-            "http://localhost:4943/api/v2/",
+            "http://localhost:4943/",
         );
     }
 }

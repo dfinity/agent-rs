@@ -18,7 +18,7 @@ use tower::Service;
 use crate::{
     agent::{
         agent_error::HttpErrorPayload,
-        http_transport::route_provider::{Endpoint, RoundRobinRouteProvider, RouteProvider},
+        http_transport::route_provider::{RoundRobinRouteProvider, RouteProvider},
         AgentFuture, Transport,
     },
     export::Principal,
@@ -138,11 +138,10 @@ where
 
     async fn request(
         &self,
-        endpoint: Endpoint,
         method: Method,
+        url: String,
         body: Option<Vec<u8>>,
     ) -> Result<Vec<u8>, AgentError> {
-        let url = self.route_provider.route(endpoint)?;
         let body = body.unwrap_or_default();
         fn map_error<E: Error + Send + Sync + 'static>(err: E) -> AgentError {
             if any::TypeId::of::<E>() == any::TypeId::of::<AgentError>() {
@@ -220,12 +219,11 @@ where
 {
     fn call(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            self.request(
-                Endpoint::Call(effective_canister_id),
-                Method::POST,
-                Some(envelope),
-            )
-            .await
+            let url = format!(
+                "{}api/v3/canister/{effective_canister_id}/call",
+                self.route_provider.route()?
+            );
+            self.request(Method::POST, url, Some(envelope)).await
         })
     }
 
@@ -235,45 +233,44 @@ where
         envelope: Vec<u8>,
     ) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            self.request(
-                Endpoint::ReadStateCanister(effective_canister_id),
-                Method::POST,
-                Some(envelope),
-            )
-            .await
+            let url = format!(
+                "{}api/v2/canister/{effective_canister_id}/read_state",
+                self.route_provider.route()?
+            );
+            self.request(Method::POST, url, Some(envelope)).await
         })
     }
 
     fn read_subnet_state(&self, subnet_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            self.request(
-                Endpoint::ReadStateSubnet(subnet_id),
-                Method::POST,
-                Some(envelope),
-            )
-            .await
+            let url = format!(
+                "{}api/v2/subnet/{subnet_id}/read_state",
+                self.route_provider.route()?
+            );
+            self.request(Method::POST, url, Some(envelope)).await
         })
     }
 
     fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            self.request(
-                Endpoint::Query(effective_canister_id),
-                Method::POST,
-                Some(envelope),
-            )
-            .await
+            let url = format!(
+                "{}api/v2/canister/{effective_canister_id}/query",
+                self.route_provider.route()?
+            );
+            self.request(Method::POST, url, Some(envelope)).await
         })
     }
 
     fn status(&self) -> AgentFuture<Vec<u8>> {
-        Box::pin(async move { self.request(Endpoint::Status, Method::GET, None).await })
+        Box::pin(async move {
+            let url = format!("{}api/v2/status", self.route_provider.route()?);
+            self.request(Method::GET, url, None).await
+        })
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::Endpoint;
     use super::HyperTransport;
     use http_body_util::Full;
     use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
@@ -296,32 +293,29 @@ mod test {
                 Client::builder(TokioExecutor::new()).build(connector);
             let url: Url = base.parse().unwrap();
             let t = HyperTransport::create_with_service(url, client).unwrap();
-
-            let expected_endpoint = format!("{}status", result);
-
             assert_eq!(
-                t.route_provider.route(Endpoint::Status).unwrap().as_str(),
-                expected_endpoint,
+                t.route_provider.route().unwrap().as_str(),
+                result,
                 "{}",
                 base
             );
         }
 
-        test("https://ic0.app", "https://ic0.app/api/v2/");
-        test("https://IC0.app", "https://ic0.app/api/v2/");
-        test("https://foo.ic0.app", "https://ic0.app/api/v2/");
-        test("https://foo.IC0.app", "https://ic0.app/api/v2/");
-        test("https://foo.Ic0.app", "https://ic0.app/api/v2/");
-        test("https://foo.iC0.app", "https://ic0.app/api/v2/");
-        test("https://foo.bar.ic0.app", "https://ic0.app/api/v2/");
-        test("https://ic0.app/foo/", "https://ic0.app/foo/api/v2/");
-        test("https://foo.ic0.app/foo/", "https://ic0.app/foo/api/v2/");
+        test("https://ic0.app", "https://ic0.app/");
+        test("https://IC0.app", "https://ic0.app/");
+        test("https://foo.ic0.app", "https://ic0.app/");
+        test("https://foo.IC0.app", "https://ic0.app/");
+        test("https://foo.Ic0.app", "https://ic0.app/");
+        test("https://foo.iC0.app", "https://ic0.app/");
+        test("https://foo.bar.ic0.app", "https://ic0.app/");
+        test("https://ic0.app/foo/", "https://ic0.app/foo/");
+        test("https://foo.ic0.app/foo/", "https://ic0.app/foo/");
 
-        test("https://ic1.app", "https://ic1.app/api/v2/");
-        test("https://foo.ic1.app", "https://foo.ic1.app/api/v2/");
-        test("https://ic0.app.ic1.app", "https://ic0.app.ic1.app/api/v2/");
+        test("https://ic1.app", "https://ic1.app/");
+        test("https://foo.ic1.app", "https://foo.ic1.app/");
+        test("https://ic0.app.ic1.app", "https://ic0.app.ic1.app/");
 
-        test("https://fooic0.app", "https://fooic0.app/api/v2/");
-        test("https://fooic0.app.ic0.app", "https://ic0.app/api/v2/");
+        test("https://fooic0.app", "https://fooic0.app/");
+        test("https://fooic0.app.ic0.app", "https://ic0.app/");
     }
 }
