@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.35.0] - 2024-05-10
+
 * Added a limit to the concurrent requests an agent will make at once. This should make server-side ratelimiting much rarer to encounter, even when sending a high volume of requests (for example, a large `ic_utils::ManagementCanister::install` call).
 * The agent will now automatically retry 429 Too Many Requests responses after a short delay.
 * BREAKING: Changed Chunk Store API to conform to the interface specification:
