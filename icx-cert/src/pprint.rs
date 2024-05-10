@@ -46,6 +46,8 @@ fn parse_structured_cert_header(value: &str) -> Result<StructuredCertHeader<'_>>
 
 /// Decodes base64-encoded CBOR value.
 fn parse_base64_cbor<T: DeserializeOwned>(s: &str) -> Result<T> {
+    // TODO: base64 API changed a lot from 0.13 to 0.22, so we need to use the deprecated API for now (SDKTG-329)
+    #[allow(deprecated)]
     let bytes = base64::decode(s).with_context(|| {
         format!(
             "failed to parse {}: invalid base64 {}",
