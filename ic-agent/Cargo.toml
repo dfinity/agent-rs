@@ -17,7 +17,7 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 [dependencies]
 async-lock = "3.3"
 backoff = "0.4.0"
-cached = { version = "0.46", features = ["ahash"], default-features = false }
+cached = { version = "0.51", default-features = false, features = ["ahash"] }
 candid.workspace = true
 ed25519-consensus = { version = "2" }
 futures-util.workspace = true
@@ -26,7 +26,7 @@ http = "1.0.0"
 http-body = "1.0.0"
 ic-certification.workspace = true
 ic-transport-types.workspace = true
-ic-verify-bls-signature = "0.1"
+ic-verify-bls-signature = "0.3"
 k256 = { version = "0.13.1", features = ["pem"] }
 p256 = { version = "0.13.2", features = ["pem"] }
 leb128.workspace = true
@@ -68,13 +68,13 @@ hyper-util = { version = "0.1.3", features = [
     "client-legacy",
     "http2",
 ], optional = true }
-hyper-rustls = { version = "0.26.0", features = [
+hyper-rustls = { version = "0.27", features = [
     "webpki-roots",
     "http2",
 ], optional = true }
 tokio = { version = "1.24.2", features = ["time"] }
 tower = { version = "0.4.13", optional = true }
-rustls-webpki = "0.101.4"
+rustls-webpki = "0.102"
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 getrandom = { version = "0.2", features = ["js"], optional = true }
