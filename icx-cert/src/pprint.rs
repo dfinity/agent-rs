@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Context, Result};
+use base64::Engine as _;
 use ic_certification::{HashTree, LookupResult};
 use reqwest::header;
 use serde::{de::DeserializeOwned, Deserialize};
@@ -46,15 +47,15 @@ fn parse_structured_cert_header(value: &str) -> Result<StructuredCertHeader<'_>>
 
 /// Decodes base64-encoded CBOR value.
 fn parse_base64_cbor<T: DeserializeOwned>(s: &str) -> Result<T> {
-    // TODO: base64 API changed a lot from 0.13 to 0.22, so we need to use the deprecated API for now (SDKTG-329)
-    #[allow(deprecated)]
-    let bytes = base64::decode(s).with_context(|| {
-        format!(
-            "failed to parse {}: invalid base64 {}",
-            std::any::type_name::<T>(),
-            s
-        )
-    })?;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(s)
+        .with_context(|| {
+            format!(
+                "failed to parse {}: invalid base64 {}",
+                std::any::type_name::<T>(),
+                s
+            )
+        })?;
     serde_cbor::from_slice(&bytes[..]).with_context(|| {
         format!(
             "failed to parse {}: malformed CBOR",

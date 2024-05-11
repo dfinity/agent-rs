@@ -18,7 +18,7 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
 anyhow.workspace = true
-base64.workspace = true
+base64 = "0.22"
 clap = { workspace = true, features = ["derive", "cargo", "color"] }
 hex.workspace = true
 ic-certification.workspace = true
