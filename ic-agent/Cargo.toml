@@ -68,7 +68,9 @@ hyper-util = { version = "0.1.3", features = [
     "client-legacy",
     "http2",
 ], optional = true }
-hyper-rustls = { version = "0.27", features = [
+# hyper-rustls@0.27->rustls@0.23->aws-lc-rs which causes a build failure on Windows.
+# And latest reqwest@0.12.4 still uses hyper-rustls@0.26, so we stick to 0.26 for now.
+hyper-rustls = { version = "0.26", features = [
     "webpki-roots",
     "http2",
 ], optional = true }
