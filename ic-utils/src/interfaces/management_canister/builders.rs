@@ -377,13 +377,25 @@ impl<'agent, 'canister: 'agent> AsyncCall<(Principal,)>
     }
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Hash, CandidType, Copy)]
+/// Wasm main memory retention on upgrades.
+/// Currently used to specify the persistence of Wasm main memory.
+pub enum WasmMemoryPersistence {
+    /// Retain the main memory across upgrades.
+    /// Used for enhanced orthogonal persistence, as implemented in Motoko
+    Keep,
+    /// Reinitialize the main memory on upgrade.
+    /// Default behavior without enhanced orthogonal persistence.
+    Replace,
+}
+
 #[derive(Debug, Copy, Clone, CandidType, Deserialize, Eq, PartialEq)]
 /// Upgrade options.
 pub struct CanisterUpgradeOptions {
     /// Skip pre-upgrade hook. Only for exceptional cases, see the IC documentation. Not useful for Motoko.
     pub skip_pre_upgrade: Option<bool>,
-    /// Enhanced orthogonal persistence for Motoko. Not used by other CDKs.
-    pub keep_main_memory: Option<bool>,
+    /// Support for enhanced orthogonal persistence: Retain the main memory on upgrade.
+    pub wasm_memory_persistence: Option<WasmMemoryPersistence>,
 }
 
 /// The install mode of the canister to install. If a canister is already installed,
