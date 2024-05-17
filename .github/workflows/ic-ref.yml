@@ -42,7 +42,8 @@ jobs:
       - name: Download cycles-wallet canister
         run: |
           wget https://github.com/dfinity/cycles-wallet/releases/download/${{ matrix.wallet-tag }}/wallet.wasm
-          mv wallet.wasm $HOME/wallet.wasm
+          gzip -n wallet.wasm
+          mv wallet.wasm.gz $HOME/wallet.wasm.gz
 
       - name: Download universal-canister
         run: |
@@ -57,7 +58,7 @@ jobs:
           sleep 1
           export IC_REF_PORT=$(dfx info replica-port)
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
-          export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
+          export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm.gz
           cargo test --all-features -- --ignored
           dfx stop
         env:
