@@ -14,7 +14,7 @@ use crate::{
     Canister,
 };
 use async_trait::async_trait;
-use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize, Nat};
+use candid::{decode_args, utils::ArgumentDecoder, CandidType, Decode, Deserialize, Nat};
 use ic_agent::{export::Principal, Agent, AgentError, RequestId};
 use once_cell::sync::Lazy;
 use semver::{Version, VersionReq};
@@ -33,6 +33,19 @@ where
     method_name: String,
     amount: u128,
     u128: bool,
+    arg: Argument,
+    phantom_out: std::marker::PhantomData<Out>,
+}
+
+/// An interface for forwarding a canister method call through the wallet canister via `wallet_canister_call_with_max_cycles`.
+#[derive(Debug)]
+pub struct MaxCyclesCallForwarder<'agent, 'canister, Out>
+where
+    Out: CandidType + for<'de> candid::Deserialize<'de> + Send + Sync,
+{
+    wallet: &'canister WalletCanister<'agent>,
+    destination: Principal,
+    method_name: String,
     arg: Argument,
     phantom_out: std::marker::PhantomData<Out>,
 }
@@ -141,6 +154,92 @@ where
     }
 
     async fn call_and_wait(self) -> Result<Out, AgentError> {
+        self.call_and_wait().await
+    }
+}
+
+impl<'agent: 'canister, 'canister, Out> MaxCyclesCallForwarder<'agent, 'canister, Out>
+where
+    Out: CandidType + for<'de> candid::Deserialize<'de> + Send + Sync,
+{
+    /// Set the argument with candid argument. Can be called at most once.
+    pub fn with_arg<Argument>(mut self, arg: Argument) -> Self
+    where
+        Argument: CandidType + Sync + Send,
+    {
+        self.arg.set_idl_arg(arg);
+        self
+    }
+    /// Set the argument with multiple arguments as tuple. Can be called at most once.
+    pub fn with_args(mut self, tuple: impl candid::utils::ArgumentEncoder) -> Self {
+        if self.arg.0.is_some() {
+            panic!("argument is being set more than once");
+        }
+        self.arg = Argument::from_candid(tuple);
+        self
+    }
+
+    /// Set the argument with raw argument bytes. Can be called at most once.
+    pub fn with_arg_raw(mut self, arg: Vec<u8>) -> Self {
+        self.arg.set_raw_arg(arg);
+        self
+    }
+
+    /// Creates an [`AsyncCall`] implementation that, when called, will forward the specified canister call.
+    pub fn build<'out>(self) -> Result<impl 'out + AsyncCall<(Out, candid::Nat)>, AgentError>
+    where
+        Out: 'out,
+        'agent: 'out,
+    {
+        #[derive(CandidType, Deserialize)]
+        struct In {
+            canister: Principal,
+            method_name: String,
+            #[serde(with = "serde_bytes")]
+            args: Vec<u8>,
+        }
+        Ok(self
+            .wallet
+            .update("wallet_call_with_max_cycles")
+            .with_arg(In {
+                canister: self.destination,
+                method_name: self.method_name,
+                args: self.arg.serialize()?.to_vec(),
+            })
+            .build()
+            .and_then(
+                |(result,): (Result<MaxCyclesCallResult, String>,)| async move {
+                    let result = result.map_err(AgentError::WalletCallFailed)?;
+                    let out = Decode!(result.r#return.as_slice(), Out)
+                        .map_err(|e| AgentError::CandidError(Box::new(e)))?;
+                    Ok((out, result.attached_cycles))
+                },
+            ))
+    }
+
+    /// Calls the forwarded canister call on the wallet canister. Equivalent to `.build().call()`.
+    pub async fn call(self) -> Result<RequestId, AgentError> {
+        self.build()?.call().await
+    }
+
+    /// Calls the forwarded canister call on the wallet canister, and waits for the result. Equivalent to `.build().call_and_wait()`.
+    pub async fn call_and_wait(self) -> Result<(Out, candid::Nat), AgentError> {
+        self.build()?.call_and_wait().await
+    }
+}
+
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
+impl<'agent: 'canister, 'canister, Out> AsyncCall<(Out, candid::Nat)>
+    for MaxCyclesCallForwarder<'agent, 'canister, Out>
+where
+    Out: CandidType + for<'de> candid::Deserialize<'de> + Send + Sync,
+{
+    async fn call(self) -> Result<RequestId, AgentError> {
+        self.call().await
+    }
+
+    async fn call_and_wait(self) -> Result<(Out, candid::Nat), AgentError> {
         self.call_and_wait().await
     }
 }
@@ -412,6 +511,16 @@ pub struct CallResult {
     /// The encoded return value blob of the canister method.
     #[serde(with = "serde_bytes")]
     pub r#return: Vec<u8>,
+}
+
+/// The result of a call forwarding request via `wallet_call_with_max_cycles`.
+#[derive(Debug, Clone, CandidType, Deserialize)]
+pub struct MaxCyclesCallResult {
+    /// The encoded return value blob of the canister method.
+    #[serde(with = "serde_bytes")]
+    pub r#return: Vec<u8>,
+    /// How many cycles the call was performed with.
+    pub attached_cycles: candid::Nat,
 }
 
 impl<'agent> WalletCanister<'agent> {
@@ -1035,6 +1144,26 @@ impl<'agent> WalletCanister<'agent> {
             arg,
             phantom_out: std::marker::PhantomData,
             u128: true,
+        }
+    }
+
+    /// Forward a call to another canister, including an amount of cycles
+    /// from the wallet, using the 128-bit API.
+    pub fn call_with_max_cycles<'canister, Out, M: Into<String>>(
+        &'canister self,
+        destination: Principal,
+        method_name: M,
+        arg: Argument,
+    ) -> MaxCyclesCallForwarder<'agent, 'canister, Out>
+    where
+        Out: CandidType + for<'de> candid::Deserialize<'de> + Send + Sync,
+    {
+        MaxCyclesCallForwarder {
+            wallet: self,
+            destination,
+            method_name: method_name.into(),
+            arg,
+            phantom_out: std::marker::PhantomData,
         }
     }
 
