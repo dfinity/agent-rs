@@ -15,7 +15,7 @@ jobs:
         include:
           - build: linux-stable
             ic-hs-ref: "3d71032e"
-            wallet-tag: "20230308"
+            wallet-tag: "20240410"
             os: ubuntu-latest
 
     steps:
