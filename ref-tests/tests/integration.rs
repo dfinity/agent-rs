@@ -430,6 +430,7 @@ fn wallet_create_wallet() {
                 memory_allocation: None,
                 freezing_threshold: None,
                 reserved_cycles_limit: None,
+                wasm_memory_limit: None,
             },
         };
         let args = Argument::from_candid((create_args,));

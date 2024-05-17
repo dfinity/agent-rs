@@ -1,7 +1,9 @@
 //! A [`Transport`] that connects using a [`hyper`] client.
+use http::StatusCode;
 pub use hyper;
 
 use std::sync::Arc;
+use std::time::Duration;
 use std::{any, error::Error, future::Future, marker::PhantomData, sync::atomic::AtomicPtr};
 
 use http_body::Body;
@@ -140,13 +142,7 @@ where
         url: String,
         body: Option<Vec<u8>>,
     ) -> Result<Vec<u8>, AgentError> {
-        let http_request = Request::builder()
-            .method(method)
-            .uri(url)
-            .header(CONTENT_TYPE, "application/cbor")
-            .body(body.unwrap_or_default().into())
-            .map_err(|err| AgentError::TransportError(Box::new(err)))?;
-
+        let body = body.unwrap_or_default();
         fn map_error<E: Error + Send + Sync + 'static>(err: E) -> AgentError {
             if any::TypeId::of::<E>() == any::TypeId::of::<AgentError>() {
                 // Store the value in an `Option` so we can `take`
@@ -165,13 +161,24 @@ where
             }
             AgentError::TransportError(Box::new(err))
         }
-        let response = self
-            .service
-            .clone()
-            .call(http_request)
-            .await
-            .map_err(map_error)?;
-
+        let response = loop {
+            let http_request = Request::builder()
+                .method(&method)
+                .uri(&url)
+                .header(CONTENT_TYPE, "application/cbor")
+                .body(body.clone().into())
+                .map_err(|err| AgentError::TransportError(Box::new(err)))?;
+            let response = self
+                .service
+                .clone()
+                .call(http_request)
+                .await
+                .map_err(map_error)?;
+            if response.status() != StatusCode::TOO_MANY_REQUESTS {
+                break response;
+            }
+            crate::util::sleep(Duration::from_millis(250)).await;
+        };
         let (parts, body) = response.into_parts();
         let body = if let Some(limit) = self.max_response_body_size {
             http_body_to_bytes_with_max_length(body, limit)

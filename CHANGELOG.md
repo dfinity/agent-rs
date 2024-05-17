@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.35.0] - 2024-05-10
+
+* Added a limit to the concurrent requests an agent will make at once. This should make server-side ratelimiting much rarer to encounter, even when sending a high volume of requests (for example, a large `ic_utils::ManagementCanister::install` call).
+* The agent will now automatically retry 429 Too Many Requests responses after a short delay.
 * BREAKING: Changed Chunk Store API to conform to the interface specification:
   * `ChunkHash` was changed from `[u8; 32]` to a struct.
   * Return types of `ManagementCanister::stored_chunks()` and `ManagementCanister::upload_chunk()`.
@@ -20,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   regardless the Agent level configuration from `AgentBuilder::with_verify_query_signatures`.
 * Function `Agent::fetch_api_boundary_nodes()` is split into two functions: `fetch_api_boundary_nodes_by_canister_id()` and `fetch_api_boundary_nodes_by_subnet_id()`.
 * `ReqwestTransport` and `HyperTransport` structures storing the trait object `route_provider: Box<dyn RouteProvider>` have been modified to allow for shared ownership via `Arc<dyn RouteProvider>`.
+* Added `wasm_memory_limit` to canister creation and canister setting update options.
+* Bumped Reqwest version from `0.11.7` to `0.12.4`
  
 ## [0.34.0] - 2024-03-18
 

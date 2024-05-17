@@ -767,6 +767,7 @@ impl<'agent> WalletCanister<'agent> {
             memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
+            wasm_memory_limit: None,
         };
 
         self.update("wallet_create_canister")
@@ -796,6 +797,7 @@ impl<'agent> WalletCanister<'agent> {
             memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
+            wasm_memory_limit: None,
         };
 
         self.update("wallet_create_canister128")
@@ -809,6 +811,10 @@ impl<'agent> WalletCanister<'agent> {
     /// This method does not have a `reserved_cycles_limit` parameter,
     /// as the wallet does not support the setting.  If you need to create a canister
     /// with a `reserved_cycles_limit` set, use the management canister.
+    ///
+    /// This method does not have a `wasm_memory_limit` parameter,
+    /// as the wallet does not support the setting.  If you need to create a canister
+    /// with a `wasm_memory_limit` set, use the management canister.
     pub async fn wallet_create_canister(
         &self,
         cycles: u128,
@@ -919,6 +925,7 @@ impl<'agent> WalletCanister<'agent> {
             memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
+            wasm_memory_limit: None,
         };
 
         self.update("wallet_create_wallet")
@@ -948,6 +955,7 @@ impl<'agent> WalletCanister<'agent> {
             memory_allocation: memory_allocation.map(u64::from).map(Nat::from),
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
+            wasm_memory_limit: None,
         };
 
         self.update("wallet_create_wallet128")
