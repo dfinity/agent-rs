@@ -113,6 +113,7 @@ impl ReqwestTransport {
             match self.client.execute(http_request).await {
                 Ok(response) => break response,
                 Err(err) => {
+                    // Network-related errors can be retried.
                     if err.is_connect() {
                         if retry_count >= self.max_tcp_error_retries {
                             return Err(AgentError::TransportError(Box::new(err)));
