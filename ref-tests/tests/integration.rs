@@ -2,7 +2,7 @@
 //!
 //! Contrary to ic-ref.rs, these tests are not meant to match any other tests. They're
 //! integration tests with a running IC-Ref.
-use candid::CandidType;
+use candid::{CandidType, Nat};
 use ic_agent::{
     agent::{agent_error::HttpErrorPayload, Envelope, EnvelopeContent, RejectCode, RejectResponse},
     export::Principal,
@@ -220,15 +220,21 @@ fn wallet_canister_forward() {
             .reply_data(b"DIDL\0\x01\x71\x0bHello World")
             .build();
 
-        let args = Argument::from_raw(arg);
-
         let (result,): (String,) = wallet
-            .call(universal_id, "update", args, 0)
+            .call(universal_id, "update", Argument::from_raw(arg.clone()), 0)
             .call_and_wait()
             .await
             .unwrap();
 
         assert_eq!(result, "Hello World");
+
+        let (result_2, cycles): (String, Nat) = wallet
+            .call_with_max_cycles(universal_id, "update", Argument::from_raw(arg))
+            .call_and_wait()
+            .await
+            .unwrap();
+        assert_eq!(result_2, "Hello World");
+        assert!(cycles > 0_u8);
         Ok(())
     });
 }
