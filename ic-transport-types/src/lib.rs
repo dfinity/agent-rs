@@ -117,6 +117,31 @@ pub struct ReadStateResponse {
     pub certificate: Vec<u8>,
 }
 
+/// The response from a request to the `call` endpoint.
+// TODO: Inline this enum. No need for it to be public.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum TransportCallResponse {
+    /// A certified response.
+    CertifiedState(ic_certification::Certificate),
+
+    /// A non replicated rejection from the replica.
+    NonReplicatedRejection(RejectResponse),
+
+    /// The replica timed out the sync request. The status of the request must be polled.
+    Accepted,
+}
+
+/// The response from a request to the `call` endpoint.
+#[derive(Debug, PartialEq, Eq)]
+pub enum CallResponse<Out> {
+    /// The call complted, and the response is available.
+    Response(Out),
+    /// The replica timed out the update call, and the request id should be used to poll for the response
+    /// using the `request_status` request type.
+    Poll(RequestId),
+}
+
 /// Possible responses to a query call.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]

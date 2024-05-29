@@ -9,19 +9,20 @@ use crate::{
     call::AsyncCall, canister::Argument, interfaces::management_canister::MgmtMethod, Canister,
 };
 use async_trait::async_trait;
-use candid::utils::ArgumentEncoder;
-use candid::{CandidType, Deserialize, Nat};
+use candid::{utils::ArgumentEncoder, CandidType, Deserialize, Nat};
 use futures_util::{
     future::ready,
     stream::{self, FuturesUnordered},
     FutureExt, Stream, StreamExt, TryStreamExt,
 };
-use ic_agent::{export::Principal, AgentError, RequestId};
+use ic_agent::{agent::CallResponse, export::Principal, AgentError};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeSet;
-use std::convert::{From, TryInto};
-use std::pin::Pin;
-use std::str::FromStr;
+use std::{
+    collections::BTreeSet,
+    convert::{From, TryInto},
+    pin::Pin,
+    str::FromStr,
+};
 
 /// The set of possible canister settings. Similar to [`DefiniteCanisterSettings`](super::DefiniteCanisterSettings),
 /// but all the fields are optional.
@@ -398,7 +399,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
     }
 
     /// Make a call. This is equivalent to the [AsyncCall::call].
-    pub async fn call(self) -> Result<RequestId, AgentError> {
+    pub async fn call(self) -> Result<CallResponse<(Principal,)>, AgentError> {
         self.build()?.call().await
     }
 
@@ -413,7 +414,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
 impl<'agent, 'canister: 'agent> AsyncCall<(Principal,)>
     for CreateCanisterBuilder<'agent, 'canister>
 {
-    async fn call(self) -> Result<RequestId, AgentError> {
+    async fn call(self) -> Result<CallResponse<(Principal,)>, AgentError> {
         self.build()?.call().await
     }
 
@@ -544,7 +545,7 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
     }
 
     /// Make a call. This is equivalent to the [AsyncCall::call].
-    pub async fn call(self) -> Result<RequestId, AgentError> {
+    pub async fn call(self) -> Result<CallResponse<()>, AgentError> {
         self.build()?.call().await
     }
 
@@ -557,7 +558,7 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<'agent, 'canister: 'agent> AsyncCall<()> for InstallCodeBuilder<'agent, 'canister> {
-    async fn call(self) -> Result<RequestId, AgentError> {
+    async fn call(self) -> Result<CallResponse<()>, AgentError> {
         self.build()?.call().await
     }
 
@@ -673,7 +674,7 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
     }
 
     /// Make the call. This is equivalent to [`AsyncCall::call`].
-    pub async fn call(self) -> Result<RequestId, AgentError> {
+    pub async fn call(self) -> Result<CallResponse<()>, AgentError> {
         self.build()?.call().await
     }
 
@@ -686,7 +687,7 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<'agent, 'canister: 'agent> AsyncCall<()> for InstallChunkedCodeBuilder<'agent, 'canister> {
-    async fn call(self) -> Result<RequestId, AgentError> {
+    async fn call(self) -> Result<CallResponse<()>, AgentError> {
         self.call().await
     }
     async fn call_and_wait(self) -> Result<(), AgentError> {
@@ -1095,7 +1096,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
     }
 
     /// Make a call. This is equivalent to the [AsyncCall::call].
-    pub async fn call(self) -> Result<RequestId, AgentError> {
+    pub async fn call(self) -> Result<CallResponse<()>, AgentError> {
         self.build()?.call().await
     }
 
@@ -1108,7 +1109,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<'agent, 'canister: 'agent> AsyncCall<()> for UpdateCanisterBuilder<'agent, 'canister> {
-    async fn call(self) -> Result<RequestId, AgentError> {
+    async fn call(self) -> Result<CallResponse<()>, AgentError> {
         self.build()?.call().await
     }
 

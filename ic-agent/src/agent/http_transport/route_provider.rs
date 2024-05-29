@@ -27,6 +27,7 @@ pub struct RoundRobinRouteProvider {
 }
 
 impl RouteProvider for RoundRobinRouteProvider {
+    /// Generates a url for the given endpoint.
     fn route(&self) -> Result<Url, AgentError> {
         if self.routes.is_empty() {
             return Err(AgentError::RouteProviderError(
@@ -35,6 +36,7 @@ impl RouteProvider for RoundRobinRouteProvider {
         }
         // This operation wraps around an overflow, i.e. after max is reached the value is reset back to 0.
         let prev_idx = self.current_idx.fetch_add(1, Ordering::Relaxed);
+
         Ok(self.routes[prev_idx % self.routes.len()].clone())
     }
 }
@@ -58,10 +60,11 @@ impl RoundRobinRouteProvider {
                             url.set_host(Some(LOCALHOST_DOMAIN))?;
                         }
                     }
-                    url.join("api/v2/")
+                    Ok(url)
                 })
             })
             .collect();
+
         Ok(Self {
             routes: routes?,
             current_idx: AtomicUsize::new(0),
@@ -88,11 +91,7 @@ mod tests {
     fn test_routes_rotation() {
         let provider = RoundRobinRouteProvider::new(vec!["https://url1.com", "https://url2.com"])
             .expect("failed to create a route provider");
-        let url_strings = vec![
-            "https://url1.com/api/v2/",
-            "https://url2.com/api/v2/",
-            "https://url1.com/api/v2/",
-        ];
+        let url_strings = ["https://url1.com", "https://url2.com", "https://url1.com"];
         let expected_urls: Vec<Url> = url_strings
             .iter()
             .map(|url_str| Url::parse(url_str).expect("Invalid URL"))
