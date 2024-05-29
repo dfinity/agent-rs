@@ -203,7 +203,7 @@ impl Transport for ReqwestTransport {
     fn status(&self) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
             let endpoint = "api/v2/status";
-            self.execute(Method::GET, &endpoint, None).await
+            self.execute(Method::GET, endpoint, None).await
         })
     }
 }
