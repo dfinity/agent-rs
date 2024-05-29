@@ -1,6 +1,7 @@
 //! A [`Transport`] that connects using a [`reqwest`] client.
 #![cfg(feature = "reqwest")]
 
+use ic_transport_types::{RejectResponse, TransportCallResponse};
 pub use reqwest;
 use std::{sync::Arc, time::Duration};
 
@@ -125,7 +126,7 @@ impl ReqwestTransport {
         method: Method,
         endpoint: &str,
         body: Option<Vec<u8>>,
-    ) -> Result<Vec<u8>, AgentError> {
+    ) -> Result<(StatusCode, Vec<u8>), AgentError> {
         let url = self.route_provider.route()?.join(endpoint)?;
         let mut http_request = Request::new(method, url);
         http_request
@@ -154,22 +155,52 @@ impl ReqwestTransport {
                     .map(|x| x.to_string()),
                 content: body,
             }))
-        } else if status != StatusCode::OK {
+        } else if !(status == StatusCode::OK || status == StatusCode::ACCEPTED) {
             Err(AgentError::InvalidHttpResponse(format!(
-                "Expected `200`, `4xx`, or `5xx` HTTP status code. Got: {}",
+                "Expected `200`, `202`, 4xx`, or `5xx` HTTP status code. Got: {}",
                 status
             )))
         } else {
-            Ok(body)
+            Ok((status, body))
         }
     }
 }
 
 impl Transport for ReqwestTransport {
-    fn call(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
+    fn call(
+        &self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+    ) -> AgentFuture<TransportCallResponse> {
         Box::pin(async move {
-            let endpoint = format!("api/v3/canister/{}/call", effective_canister_id.to_text());
-            self.execute(Method::POST, &endpoint, Some(envelope)).await
+            let api_version = if cfg!(feature = "sync_call") {
+                "v2"
+            } else {
+                "v3"
+            };
+
+            let endpoint = format!(
+                "api/{}/canister/{}/call",
+                api_version,
+                effective_canister_id.to_text()
+            );
+            let (status_code, response_body) = self
+                .execute(Method::POST, &endpoint, Some(envelope))
+                .await?;
+
+            if status_code == StatusCode::ACCEPTED {
+                return Ok(TransportCallResponse::Accepted);
+            }
+
+            // status_code == OK (200)
+            if cfg!(feature = "sync_call") {
+                serde_cbor::from_slice(&response_body).map_err(AgentError::InvalidCborData)
+            } else {
+                let reject_response = serde_cbor::from_slice::<RejectResponse>(&response_body)
+                    .map_err(AgentError::InvalidCborData)?;
+
+                Err(AgentError::UncertifiedReject(reject_response))
+            }
         })
     }
 
@@ -183,27 +214,35 @@ impl Transport for ReqwestTransport {
             effective_canister_id.to_text()
         );
 
-        Box::pin(async move { self.execute(Method::POST, &endpoint, Some(envelope)).await })
+        Box::pin(async move {
+            self.execute(Method::POST, &endpoint, Some(envelope))
+                .await
+                .map(|r| r.1)
+        })
     }
 
     fn read_subnet_state(&self, subnet_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
             let endpoint = format!("api/v2/subnet/{}/read_state", subnet_id.to_text());
-            self.execute(Method::POST, &endpoint, Some(envelope)).await
+            self.execute(Method::POST, &endpoint, Some(envelope))
+                .await
+                .map(|r| r.1)
         })
     }
 
     fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
             let endpoint = format!("api/v2/canister/{}/query", effective_canister_id.to_text());
-            self.execute(Method::POST, &endpoint, Some(envelope)).await
+            self.execute(Method::POST, &endpoint, Some(envelope))
+                .await
+                .map(|r| r.1)
         })
     }
 
     fn status(&self) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
             let endpoint = "api/v2/status";
-            self.execute(Method::GET, endpoint, None).await
+            self.execute(Method::GET, endpoint, None).await.map(|r| r.1)
         })
     }
 }

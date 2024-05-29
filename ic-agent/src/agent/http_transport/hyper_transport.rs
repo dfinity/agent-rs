@@ -13,6 +13,7 @@ use hyper::{header::CONTENT_TYPE, Method, Request, Response};
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 use hyper_util::client::legacy::{connect::HttpConnector, Client};
 use hyper_util::rt::TokioExecutor;
+use ic_transport_types::{RejectResponse, TransportCallResponse};
 use tower::Service;
 
 use crate::{
@@ -141,7 +142,7 @@ where
         method: Method,
         url: String,
         body: Option<Vec<u8>>,
-    ) -> Result<Vec<u8>, AgentError> {
+    ) -> Result<(StatusCode, Vec<u8>), AgentError> {
         let body = body.unwrap_or_default();
         fn map_error<E: Error + Send + Sync + 'static>(err: E) -> AgentError {
             if any::TypeId::of::<E>() == any::TypeId::of::<AgentError>() {
@@ -207,7 +208,7 @@ where
                 content: body,
             }))
         } else {
-            Ok(body)
+            Ok((status, body))
         }
     }
 }
@@ -217,13 +218,39 @@ where
     B1: HyperBody + From<Vec<u8>>,
     S: HyperService<B1>,
 {
-    fn call(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
+    fn call(
+        &self,
+        effective_canister_id: Principal,
+        envelope: Vec<u8>,
+    ) -> AgentFuture<TransportCallResponse> {
         Box::pin(async move {
-            let url = format!(
-                "{}api/v3/canister/{effective_canister_id}/call",
-                self.route_provider.route()?
+            let api_version = if cfg!(feature = "sync_call") {
+                "v2"
+            } else {
+                "v3"
+            };
+
+            let endpoint = format!(
+                "api/{}/canister/{}/call",
+                api_version,
+                effective_canister_id.to_text()
             );
-            self.request(Method::POST, url, Some(envelope)).await
+            let (status_code, response_body) =
+                self.request(Method::POST, endpoint, Some(envelope)).await?;
+
+            if status_code == StatusCode::ACCEPTED {
+                return Ok(TransportCallResponse::Accepted);
+            }
+
+            // status_code == OK (200)
+            if cfg!(feature = "sync_call") {
+                serde_cbor::from_slice(&response_body).map_err(AgentError::InvalidCborData)
+            } else {
+                let reject_response = serde_cbor::from_slice::<RejectResponse>(&response_body)
+                    .map_err(AgentError::InvalidCborData)?;
+
+                Err(AgentError::UncertifiedReject(reject_response))
+            }
         })
     }
 
@@ -237,7 +264,9 @@ where
                 "{}api/v2/canister/{effective_canister_id}/read_state",
                 self.route_provider.route()?
             );
-            self.request(Method::POST, url, Some(envelope)).await
+            self.request(Method::POST, url, Some(envelope))
+                .await
+                .map(|(_, body)| body)
         })
     }
 
@@ -247,7 +276,9 @@ where
                 "{}api/v2/subnet/{subnet_id}/read_state",
                 self.route_provider.route()?
             );
-            self.request(Method::POST, url, Some(envelope)).await
+            self.request(Method::POST, url, Some(envelope))
+                .await
+                .map(|(_, body)| body)
         })
     }
 
@@ -257,14 +288,18 @@ where
                 "{}api/v2/canister/{effective_canister_id}/query",
                 self.route_provider.route()?
             );
-            self.request(Method::POST, url, Some(envelope)).await
+            self.request(Method::POST, url, Some(envelope))
+                .await
+                .map(|(_, body)| body)
         })
     }
 
     fn status(&self) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
             let url = format!("{}api/v2/status", self.route_provider.route()?);
-            self.request(Method::GET, url, None).await
+            self.request(Method::GET, url, None)
+                .await
+                .map(|(_, body)| body)
         })
     }
 }
