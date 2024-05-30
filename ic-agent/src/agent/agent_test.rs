@@ -14,8 +14,8 @@ use futures_util::FutureExt;
 use ic_certification::{Delegation, Label};
 use ic_transport_types::{NodeSignature, QueryResponse, RejectCode, RejectResponse, ReplyResponse};
 use reqwest::Client;
+use std::sync::Arc;
 use std::{collections::BTreeMap, time::Duration};
-use std::{collections::VecDeque, sync::Arc};
 #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -36,7 +36,6 @@ fn make_agent_with_route_provider(
     tcp_retries: usize,
 ) -> Agent {
     let client = Client::builder()
-        .use_rustls_tls()
         .build()
         .expect("Could not create HTTP client.");
     Agent::builder()
@@ -50,6 +49,7 @@ fn make_agent_with_route_provider(
         .unwrap()
 }
 
+#[cfg(feature = "hyper")]
 fn make_agent_with_hyper_transport_route_provider(
     route_provider: Arc<dyn RouteProvider>,
     tcp_retries: usize,
@@ -61,6 +61,7 @@ fn make_agent_with_hyper_transport_route_provider(
         client::legacy::{connect::HttpConnector, Client as LegacyClient},
         rt::TokioExecutor,
     };
+    use std::collections::VecDeque;
 
     let connector = HttpsConnectorBuilder::new()
         .with_webpki_roots()
@@ -382,6 +383,7 @@ async fn reqwest_client_status_okay_when_request_retried() -> Result<(), AgentEr
 }
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg(feature = "hyper")]
 async fn hyper_client_status_okay_when_request_retried() -> Result<(), AgentError> {
     let map = BTreeMap::new();
     let response = serde_cbor::Value::Map(map);

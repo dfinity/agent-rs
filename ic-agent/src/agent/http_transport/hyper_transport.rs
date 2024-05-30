@@ -174,7 +174,7 @@ where
         }
 
         let create_request_with_generated_url = || -> Result<Request<_>, AgentError> {
-            let url = self.route_provider.route()?.join(&endpoint)?;
+            let url = self.route_provider.route()?.join(endpoint)?;
             println!("{url}");
             let http_request = Request::builder()
                 .method(&method)
@@ -305,8 +305,8 @@ where
 
     fn status(&self) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let endpoint = &format!("status");
-            self.request(Method::GET, endpoint, None).await
+            let endpoint = "status".to_string();
+            self.request(Method::GET, &endpoint, None).await
         })
     }
 }
