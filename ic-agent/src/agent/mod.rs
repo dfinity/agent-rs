@@ -878,6 +878,7 @@ impl Agent {
         let time = lookup_time(cert)?;
         if (OffsetDateTime::now_utc()
             - OffsetDateTime::from_unix_timestamp_nanos(time.into()).unwrap())
+        .abs()
             > self.ingress_expiry
         {
             Err(AgentError::CertificateOutdated(self.ingress_expiry))
