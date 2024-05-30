@@ -175,6 +175,7 @@ where
 
         let create_request_with_generated_url = || -> Result<Request<_>, AgentError> {
             let url = self.route_provider.route()?.join(&endpoint)?;
+            println!("{url}");
             let http_request = Request::builder()
                 .method(&method)
                 .uri(url.as_str())
@@ -206,7 +207,8 @@ where
                         match self.service.clone().call(http_request).await {
                             Ok(response) => break response,
                             Err(err) => {
-                                if is_connect(err.source()) {
+                                let err_msg = err.to_string();
+                                if err_msg.contains("client error (Connect)") {
                                     if retry_count >= self.max_tcp_error_retries {
                                         return Err(map_error(err));
                                     }
@@ -307,12 +309,6 @@ where
             self.request(Method::GET, endpoint, None).await
         })
     }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-/// Returns true if the error is related to connect
-pub fn is_connect(source: Option<&(dyn Error + 'static)>) -> bool {
-    return true;
 }
 
 #[cfg(test)]
