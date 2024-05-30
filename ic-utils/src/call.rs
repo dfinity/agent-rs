@@ -101,11 +101,9 @@ pub trait AsyncCall: IntoFuture<Output = Result<Self::Value, AgentError>> {
     ///         .install_code(&canister_id, canister_wasm)
     ///         .build()
     ///         .unwrap()
-    ///         .call_and_wait()
     ///         .await?;
     ///       Ok((canister_id,))
     ///     })
-    ///     .call_and_wait()
     ///     .await?;
     ///
     ///   Ok(canister_id)

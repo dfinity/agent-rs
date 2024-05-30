@@ -234,7 +234,6 @@ pub enum PollResult {
 ///   let response = agent.update(&management_canister_id, "provisional_create_canister_with_cycles")
 ///     .with_effective_canister_id(effective_canister_id)
 ///     .with_arg(Encode!(&Argument { amount: None })?)
-///     .call_and_wait()
 ///     .await?;
 ///
 ///   let result = Decode!(response.as_slice(), CreateCanisterResult)?;
