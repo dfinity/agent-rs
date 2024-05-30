@@ -13,7 +13,7 @@ pub use expiry::Expiry;
 /// A type that implements synchronous calls (ie. 'query' calls).
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-pub trait SyncCall: IntoFuture<Output = Result<Self::Value, AgentError>> {
+pub trait SyncCall: CallIntoFuture<Output = Result<Self::Value, AgentError>> {
     /// The return type of the Candid function being called.
     type Value: for<'de> ArgumentDecoder<'de> + Send;
     /// Execute the call, return an array of bytes directly from the canister.
@@ -36,7 +36,7 @@ pub trait SyncCall: IntoFuture<Output = Result<Self::Value, AgentError>> {
 /// call should be returning.
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-pub trait AsyncCall: IntoFuture<Output = Result<Self::Value, AgentError>> {
+pub trait AsyncCall: CallIntoFuture<Output = Result<Self::Value, AgentError>> {
     /// The return type of the Candid function being called.
     type Value: for<'de> ArgumentDecoder<'de> + Send;
     /// Execute the call, but returns the RequestId. Waiting on the request Id must be
@@ -144,6 +144,21 @@ pub(crate) type CallFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, AgentE
 #[cfg(not(target_family = "wasm"))]
 pub(crate) type CallFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, AgentError>> + Send + 'a>>;
+#[cfg(not(target_family = "wasm"))]
+#[doc(hidden)]
+pub trait CallIntoFuture: IntoFuture<IntoFuture = <Self as CallIntoFuture>::IntoFuture> {
+    type IntoFuture: Future<Output = Self::Output> + Send;
+}
+#[cfg(not(target_family = "wasm"))]
+impl<T> CallIntoFuture for T
+where
+    T: IntoFuture + ?Sized,
+    T::IntoFuture: Send,
+{
+    type IntoFuture = T::IntoFuture;
+}
+#[cfg(target_family = "wasm")]
+pub use IntoFuture as CallIntoFuture;
 
 /// A synchronous call encapsulation.
 #[derive(Debug)]
