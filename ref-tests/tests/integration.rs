@@ -193,10 +193,10 @@ fn canister_reject_call() {
                     reject_message,
                     error_code: None,
                     ..
-                })) if *reject_message == format!(
-                    "Canister {} has no update method 'wallet_send'",
+                })) if reject_message.contains(&format!(
+                    "Canister {}: Canister has no update method 'wallet_send'",
                     alice.canister_id()
-                )
+                ))
             ),
             "wrong error: {result:?}"
         );
