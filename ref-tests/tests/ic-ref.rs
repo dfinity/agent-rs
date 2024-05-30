@@ -521,7 +521,7 @@ mod management_canister {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
-                    })) if *reject_message == format!("IC0536: Canister {} has no query method 'query'", canister_id)
+                    })) if reject_message.contains(&format!("Canister {}: Canister has no query method 'query'", canister_id))
                         && error_code == "IC0536",
                 ),
                 "wrong error: {result:?}"
