@@ -1223,7 +1223,7 @@ mod extras {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: None,
-                    })) if reject_message == "Canister iimsn-6yaaa-aaaaa-afiaa-cai is already installed"
+                    })) if reject_message.contains("Canister iimsn-6yaaa-aaaaa-afiaa-cai is already installed")
                 ),
                 "wrong error: {result:?}"
             );
