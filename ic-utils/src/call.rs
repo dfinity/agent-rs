@@ -158,7 +158,7 @@ where
     type IntoFuture = T::IntoFuture;
 }
 #[cfg(target_family = "wasm")]
-pub use IntoFuture as CallIntoFuture;
+use IntoFuture as CallIntoFuture;
 
 /// A synchronous call encapsulation.
 #[derive(Debug)]
