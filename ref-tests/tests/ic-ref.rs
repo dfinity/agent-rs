@@ -507,7 +507,7 @@ mod management_canister {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: None,
-                    })) if *reject_message == format!("Canister {canister_id} has no update method 'update'")
+                    })) if reject_message.contains(&format!("Canister {canister_id}: Canister has no update method 'update'"))
                 ),
                 "wrong error: {result:?}"
             );
