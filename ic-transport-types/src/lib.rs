@@ -11,6 +11,7 @@ use ic_certification::Label;
 pub use request_id::{to_request_id, RequestId, RequestIdError};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use serde_with::{serde_as, Bytes};
 use thiserror::Error;
 
 mod request_id;
@@ -119,12 +120,14 @@ pub struct ReadStateResponse {
 
 /// The response from a request to the `call` endpoint.
 // TODO: Inline this enum. No need for it to be public.
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum TransportCallResponse {
     /// A certified response.
     Replied {
         /// The CBOR serialized certificate for the call response.
+        #[serde_as(as = "Bytes")]
         certificate: Vec<u8>,
     },
 
