@@ -12,7 +12,7 @@ use std::{
 use thiserror::Error;
 
 /// An error that occurred when using the agent.
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum AgentError {
     /// The replica URL was invalid.
     #[error(r#"Invalid Replica URL: "{0}""#)]
@@ -28,7 +28,7 @@ pub enum AgentError {
 
     /// The data fetched was invalid CBOR.
     #[error("Invalid CBOR data, could not deserialize: {0}")]
-    InvalidCborData(#[from] serde_cbor::Error),
+    InvalidCborData(String),
 
     /// There was an error calculating a request ID.
     #[error("Cannot calculate a RequestID: {0}")]
@@ -36,7 +36,7 @@ pub enum AgentError {
 
     /// There was an error when de/serializing with Candid.
     #[error("Candid returned an error: {0}")]
-    CandidError(Box<dyn Send + Sync + std::error::Error>),
+    CandidError(#[from] candid::Error),
 
     /// There was an error parsing a URL.
     #[error(r#"Cannot parse url: "{0}""#)]
@@ -44,7 +44,7 @@ pub enum AgentError {
 
     /// The HTTP method was invalid.
     #[error(r#"Invalid method: "{0}""#)]
-    InvalidMethodError(#[from] http::method::InvalidMethod),
+    InvalidMethodError(String),
 
     /// The principal string was not a valid principal.
     #[error("Cannot parse Principal: {0}")]
@@ -76,7 +76,7 @@ pub enum AgentError {
 
     /// There was an error reading a LEB128 value.
     #[error("Error reading LEB128 value: {0}")]
-    Leb128ReadError(#[from] read::Error),
+    Leb128ReadError(String),
 
     /// A string was invalid UTF-8.
     #[error("Error in UTF-8 string: {0}")]
@@ -185,7 +185,7 @@ pub enum AgentError {
 
     /// An unknown error occurred during communication with the replica.
     #[error("An error happened during communication with the replica: {0}")]
-    TransportError(Box<dyn std::error::Error + Send + Sync>),
+    TransportError(String),
 
     /// There was a mismatch between the expected and actual CBOR data during inspection.
     #[error("There is a mismatch between the CBOR encoded call and the arguments: field {field}, value in argument is {value_arg}, value in CBOR is {value_cbor}")]
@@ -215,12 +215,32 @@ impl PartialEq for AgentError {
     }
 }
 
-impl From<candid::Error> for AgentError {
-    fn from(e: candid::Error) -> AgentError {
-        AgentError::CandidError(e.into())
+impl From<serde_cbor::Error> for AgentError {
+    fn from(e: serde_cbor::Error) -> AgentError {
+        AgentError::InvalidCborData(e.to_string())
     }
 }
 
+impl From<http::method::InvalidMethod> for AgentError {
+    fn from(e: http::method::InvalidMethod) -> AgentError {
+        AgentError::InvalidMethodError(e.to_string())
+    }
+}
+
+impl From<read::Error> for AgentError {
+    fn from(e: read::Error) -> AgentError {
+        AgentError::Leb128ReadError(e.to_string())
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl From<reqwest::Error> for AgentError {
+    fn from(e: reqwest::Error) -> AgentError {
+        AgentError::TransportError(e.to_string())
+    }
+}
+
+#[derive(Clone)]
 /// A HTTP error from the replica.
 pub struct HttpErrorPayload {
     /// The HTTP status code.

@@ -379,7 +379,7 @@ impl Agent {
             .transport
             .query(effective_canister_id, serialized_bytes)
             .await?;
-        serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
+        serde_cbor::from_slice(&bytes).map_err(Into::into)
     }
 
     async fn read_state_endpoint<A>(
@@ -395,7 +395,7 @@ impl Agent {
             .transport
             .read_state(effective_canister_id, serialized_bytes)
             .await?;
-        serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
+        serde_cbor::from_slice(&bytes).map_err(Into::into)
     }
 
     async fn read_subnet_state_endpoint<A>(
@@ -411,7 +411,7 @@ impl Agent {
             .transport
             .read_subnet_state(subnet_id, serialized_bytes)
             .await?;
-        serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
+        serde_cbor::from_slice(&bytes).map_err(Into::into)
     }
 
     async fn call_endpoint(
@@ -465,8 +465,7 @@ impl Agent {
         effective_canister_id: Principal,
         signed_query: Vec<u8>,
     ) -> Result<Vec<u8>, AgentError> {
-        let envelope: Envelope =
-            serde_cbor::from_slice(&signed_query).map_err(AgentError::InvalidCborData)?;
+        let envelope: Envelope = serde_cbor::from_slice(&signed_query)?;
         self.query_inner(
             effective_canister_id,
             signed_query,
@@ -616,8 +615,7 @@ impl Agent {
         effective_canister_id: Principal,
         signed_update: Vec<u8>,
     ) -> Result<RequestId, AgentError> {
-        let envelope: Envelope =
-            serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
+        let envelope: Envelope = serde_cbor::from_slice(&signed_update)?;
         let request_id = to_request_id(&envelope.content)?;
         self.call_endpoint(effective_canister_id, request_id, signed_update)
             .await
@@ -776,8 +774,7 @@ impl Agent {
         let read_state_response: ReadStateResponse = self
             .read_state_endpoint(effective_canister_id, serialized_bytes)
             .await?;
-        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
-            .map_err(AgentError::InvalidCborData)?;
+        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)?;
         self.verify(&cert, effective_canister_id)?;
         Ok(cert)
     }
@@ -795,8 +792,7 @@ impl Agent {
         let read_state_response: ReadStateResponse = self
             .read_subnet_state_endpoint(subnet_id, serialized_bytes)
             .await?;
-        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
-            .map_err(AgentError::InvalidCborData)?;
+        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)?;
         self.verify_for_subnet(&cert, subnet_id)?;
         Ok(cert)
     }
@@ -894,8 +890,7 @@ impl Agent {
         match delegation {
             None => Ok(self.read_root_key()),
             Some(delegation) => {
-                let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
-                    .map_err(AgentError::InvalidCborData)?;
+                let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)?;
                 if cert.delegation.is_some() {
                     return Err(AgentError::CertificateHasTooManyDelegations);
                 }
@@ -906,8 +901,7 @@ impl Agent {
                     "canister_ranges".as_bytes(),
                 ];
                 let canister_range = lookup_value(&cert.tree, canister_range_lookup)?;
-                let ranges: Vec<(Principal, Principal)> =
-                    serde_cbor::from_slice(canister_range).map_err(AgentError::InvalidCborData)?;
+                let ranges: Vec<(Principal, Principal)> = serde_cbor::from_slice(canister_range)?;
                 if !principal_is_within_ranges(&effective_canister_id, &ranges[..]) {
                     // the certificate is not authorized to answer calls for this canister
                     return Err(AgentError::CertificateNotAuthorized());
@@ -931,8 +925,7 @@ impl Agent {
         match delegation {
             None => Ok(self.read_root_key()),
             Some(delegation) => {
-                let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
-                    .map_err(AgentError::InvalidCborData)?;
+                let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)?;
                 if cert.delegation.is_some() {
                     return Err(AgentError::CertificateHasTooManyDelegations);
                 }
@@ -1023,14 +1016,12 @@ impl Agent {
         effective_canister_id: Principal,
         signed_request_status: Vec<u8>,
     ) -> Result<RequestStatusResponse, AgentError> {
-        let _envelope: Envelope =
-            serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
+        let _envelope: Envelope = serde_cbor::from_slice(&signed_request_status)?;
         let read_state_response: ReadStateResponse = self
             .read_state_endpoint(effective_canister_id, signed_request_status)
             .await?;
 
-        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
-            .map_err(AgentError::InvalidCborData)?;
+        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)?;
         self.verify(&cert, effective_canister_id)?;
         lookup_request_status(cert, request_id)
     }
@@ -1049,8 +1040,7 @@ impl Agent {
     pub async fn status(&self) -> Result<Status, AgentError> {
         let bytes = self.transport.status().await?;
 
-        let cbor: serde_cbor::Value =
-            serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)?;
+        let cbor: serde_cbor::Value = serde_cbor::from_slice(&bytes)?;
 
         Status::try_from(&cbor).map_err(|_| AgentError::InvalidReplicaStatus)
     }
@@ -1180,8 +1170,7 @@ pub fn signed_query_inspect(
     ingress_expiry: u64,
     signed_query: Vec<u8>,
 ) -> Result<(), AgentError> {
-    let envelope: Envelope =
-        serde_cbor::from_slice(&signed_query).map_err(AgentError::InvalidCborData)?;
+    let envelope: Envelope = serde_cbor::from_slice(&signed_query)?;
     match envelope.content.as_ref() {
         EnvelopeContent::Query {
             ingress_expiry: ingress_expiry_cbor,
@@ -1255,8 +1244,7 @@ pub fn signed_update_inspect(
     ingress_expiry: u64,
     signed_update: Vec<u8>,
 ) -> Result<(), AgentError> {
-    let envelope: Envelope =
-        serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
+    let envelope: Envelope = serde_cbor::from_slice(&signed_update)?;
     match envelope.content.as_ref() {
         EnvelopeContent::Call {
             nonce: _nonce,
@@ -1329,8 +1317,7 @@ pub fn signed_request_status_inspect(
     signed_request_status: Vec<u8>,
 ) -> Result<(), AgentError> {
     let paths: Vec<Vec<Label>> = vec![vec!["request_status".into(), request_id.to_vec().into()]];
-    let envelope: Envelope =
-        serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
+    let envelope: Envelope = serde_cbor::from_slice(&signed_request_status)?;
     match envelope.content.as_ref() {
         EnvelopeContent::ReadState {
             ingress_expiry: ingress_expiry_cbor,

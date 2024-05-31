@@ -40,7 +40,7 @@ impl std::fmt::Display for Value {
 
 /// The structure returned by [`super::Agent::status`], containing the information returned
 /// by the status endpoint of a replica.
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq)]
+#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
 pub struct Status {
     /// Optional. The precise git revision of the Internet Computer Protocol implementation.
     pub impl_version: Option<String>,

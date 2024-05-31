@@ -207,7 +207,7 @@ where
     async fn call(self) -> Result<Out, AgentError> {
         let result = self.call_raw().await?;
 
-        decode_args(&result).map_err(|e| AgentError::CandidError(Box::new(e)))
+        decode_args(&result).map_err(Into::into)
     }
 }
 
@@ -263,7 +263,7 @@ where
         self.build_call()?
             .call_and_wait()
             .await
-            .and_then(|r| decode_args(&r).map_err(|e| AgentError::CandidError(Box::new(e))))
+            .and_then(|r| decode_args(&r).map_err(Into::into))
     }
 
     /// Equivalent to calling [`AsyncCall::call_and_wait`] with the expected return type `(T,)`.
@@ -274,7 +274,7 @@ where
         self.build_call()?
             .call_and_wait()
             .await
-            .and_then(|r| decode_one(&r).map_err(|e| AgentError::CandidError(Box::new(e))))
+            .and_then(|r| decode_one(&r).map_err(Into::into))
     }
 
     /// See [`AsyncCall::map`].

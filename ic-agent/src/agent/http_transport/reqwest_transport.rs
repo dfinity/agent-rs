@@ -83,11 +83,7 @@ impl ReqwestTransport {
         &self,
         http_request: Request,
     ) -> Result<(StatusCode, HeaderMap, Vec<u8>), AgentError> {
-        let response = self
-            .client
-            .execute(http_request)
-            .await
-            .map_err(|x| AgentError::TransportError(Box::new(x)))?;
+        let response = self.client.execute(http_request).await?;
 
         let http_status = response.status();
         let response_headers = response.headers().clone();
@@ -107,7 +103,7 @@ impl ReqwestTransport {
         let mut stream = response.bytes_stream();
 
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|x| AgentError::TransportError(Box::new(x)))?;
+            let chunk = chunk?;
 
             // Size Check (Body Size)
             if matches!(self
@@ -155,7 +151,7 @@ impl ReqwestTransport {
 
             let agent_error = match cbor_decoded_body {
                 Ok(replica_error) => AgentError::UncertifiedReject(replica_error),
-                Err(cbor_error) => AgentError::InvalidCborData(cbor_error),
+                Err(cbor_error) => cbor_error.into(),
             };
 
             Err(agent_error)
