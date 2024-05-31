@@ -27,8 +27,8 @@ ic-utils = { path = "ic-utils", version = "0.35.0" }
 ic-transport-types = { path = "ic-transport-types", version = "0.35.0" }
 
 ic-certification = "2.2"
-candid = "0.10.1"
-candid_parser = "0.1.1"
+candid = { git = "https://github.com/nathanosdev/candid" }
+candid_parser = { git = "https://github.com/nathanosdev/candid" }
 clap = "4.4.3"
 futures-util = "0.3.21"
 hex = "0.4.3"

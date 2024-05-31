@@ -239,7 +239,7 @@ impl TryFrom<u64> for RejectCode {
 }
 
 /// Error returned from `RejectCode::try_from`.
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 #[error("Invalid reject code {0}")]
 pub struct InvalidRejectCodeError(pub u64);
 
