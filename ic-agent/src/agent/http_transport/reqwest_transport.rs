@@ -28,6 +28,8 @@ pub struct ReqwestTransport {
     route_provider: Arc<dyn RouteProvider>,
     client: Client,
     max_response_body_size: Option<usize>,
+    #[allow(dead_code)]
+    max_tcp_error_retries: usize,
 }
 
 #[doc(hidden)]
@@ -68,6 +70,7 @@ impl ReqwestTransport {
             route_provider,
             client,
             max_response_body_size: None,
+            max_tcp_error_retries: 0,
         })
     }
 
@@ -79,15 +82,67 @@ impl ReqwestTransport {
         }
     }
 
+    /// Sets a max number of retries for tcp connection errors.
+    pub fn with_max_tcp_errors_retries(self, retries: usize) -> Self {
+        ReqwestTransport {
+            max_tcp_error_retries: retries,
+            ..self
+        }
+    }
+
     async fn request(
         &self,
-        http_request: Request,
+        method: Method,
+        endpoint: &str,
+        body: Option<Vec<u8>>,
     ) -> Result<(StatusCode, HeaderMap, Vec<u8>), AgentError> {
-        let response = self
-            .client
-            .execute(http_request)
-            .await
-            .map_err(|x| AgentError::TransportError(Box::new(x)))?;
+        let create_request_with_generated_url = || -> Result<Request, AgentError> {
+            let url = self.route_provider.route()?.join(endpoint)?;
+            let mut http_request = Request::new(method.clone(), url);
+            http_request
+                .headers_mut()
+                .insert(CONTENT_TYPE, "application/cbor".parse().unwrap());
+            *http_request.body_mut() = body.as_ref().cloned().map(Body::from);
+            Ok(http_request)
+        };
+
+        // Dispatch request with a retry logic only for non-wasm builds.
+        let response = {
+            #[cfg(target_family = "wasm")]
+            {
+                let http_request = create_request_with_generated_url()?;
+                match self.client.execute(http_request).await {
+                    Ok(response) => response,
+                    Err(err) => return Err(AgentError::TransportError(Box::new(err))),
+                }
+            }
+            #[cfg(not(target_family = "wasm"))]
+            {
+                // RouteProvider generates urls dynamically. Some of these urls can be potentially unhealthy.
+                // TCP related errors (host unreachable, connection refused, connection timed out, connection reset) can be safely retried with a newly generated url.
+
+                let mut retry_count = 0;
+
+                loop {
+                    let http_request = create_request_with_generated_url()?;
+
+                    match self.client.execute(http_request).await {
+                        Ok(response) => break response,
+                        Err(err) => {
+                            // Network-related errors can be retried.
+                            if err.is_connect() {
+                                if retry_count >= self.max_tcp_error_retries {
+                                    return Err(AgentError::TransportError(Box::new(err)));
+                                }
+                                retry_count += 1;
+                                continue;
+                            }
+                            return Err(AgentError::TransportError(Box::new(err)));
+                        }
+                    }
+                }
+            }
+        };
 
         let http_status = response.status();
         let response_headers = response.headers().clone();
@@ -128,16 +183,10 @@ impl ReqwestTransport {
         endpoint: &str,
         body: Option<Vec<u8>>,
     ) -> Result<Vec<u8>, AgentError> {
-        let url = self.route_provider.route()?.join(endpoint)?;
-        let mut http_request = Request::new(method, url);
-        http_request
-            .headers_mut()
-            .insert(CONTENT_TYPE, "application/cbor".parse().unwrap());
-
-        *http_request.body_mut() = body.map(Body::from);
-
         let request_result = loop {
-            let result = self.request(http_request.try_clone().unwrap()).await?;
+            let result = self
+                .request(method.clone(), endpoint, body.as_ref().cloned())
+                .await?;
             if result.0 != StatusCode::TOO_MANY_REQUESTS {
                 break result;
             }
