@@ -591,6 +591,9 @@ impl Agent {
 
         match response_body {
             TransportCallResponse::Replied { certificate } => {
+                let certificate =
+                    serde_cbor::from_slice(&certificate).map_err(AgentError::InvalidCborData)?;
+
                 self.verify(&certificate, effective_canister_id)?;
                 let status = lookup_request_status(certificate, &request_id)?;
 
@@ -625,12 +628,11 @@ impl Agent {
             .call_endpoint(effective_canister_id, signed_update)
             .await?;
 
-        if let TransportCallResponse::Replied { certificate } = &response_body {
-            self.verify(certificate, effective_canister_id)?;
-        }
-
         match response_body {
             TransportCallResponse::Replied { certificate } => {
+                let certificate =
+                    serde_cbor::from_slice(&certificate).map_err(AgentError::InvalidCborData)?;
+
                 self.verify(&certificate, effective_canister_id)?;
                 let status = lookup_request_status(certificate, &request_id)?;
 

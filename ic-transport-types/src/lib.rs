@@ -124,8 +124,8 @@ pub struct ReadStateResponse {
 pub enum TransportCallResponse {
     /// A certified response.
     Replied {
-        /// The certificate for the call response.
-        certificate: ic_certification::Certificate,
+        /// The CBOR serialized certificate for the call response.
+        certificate: Vec<u8>,
     },
 
     /// A non replicated rejection from the replica.
