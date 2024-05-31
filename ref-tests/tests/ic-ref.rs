@@ -507,7 +507,7 @@ mod management_canister {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: None,
-                    })) if *reject_message == format!("Canister {canister_id} has no update method 'update'")
+                    })) if reject_message.contains(&format!("Canister {canister_id}: Canister has no update method 'update'"))
                 ),
                 "wrong error: {result:?}"
             );
@@ -521,7 +521,7 @@ mod management_canister {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
-                    })) if *reject_message == format!("IC0536: Canister {} has no query method 'query'", canister_id)
+                    })) if reject_message.contains(&format!("Canister {}: Canister has no query method 'query'", canister_id))
                         && error_code == "IC0536",
                 ),
                 "wrong error: {result:?}"
@@ -1223,7 +1223,7 @@ mod extras {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: None,
-                    })) if reject_message == "Canister iimsn-6yaaa-aaaaa-afiaa-cai is already installed"
+                    })) if reject_message.contains("Canister iimsn-6yaaa-aaaaa-afiaa-cai is already installed")
                 ),
                 "wrong error: {result:?}"
             );
