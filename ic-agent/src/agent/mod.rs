@@ -590,7 +590,7 @@ impl Agent {
             .await?;
 
         match response_body {
-            TransportCallResponse::CertifiedState(certificate) => {
+            TransportCallResponse::Replied { certificate } => {
                 self.verify(&certificate, effective_canister_id)?;
                 let status = lookup_request_status(certificate, &request_id)?;
 
@@ -625,12 +625,12 @@ impl Agent {
             .call_endpoint(effective_canister_id, signed_update)
             .await?;
 
-        if let TransportCallResponse::CertifiedState(certificate) = &response_body {
+        if let TransportCallResponse::Replied { certificate } = &response_body {
             self.verify(certificate, effective_canister_id)?;
         }
 
         match response_body {
-            TransportCallResponse::CertifiedState(certificate) => {
+            TransportCallResponse::Replied { certificate } => {
                 self.verify(&certificate, effective_canister_id)?;
                 let status = lookup_request_status(certificate, &request_id)?;
 

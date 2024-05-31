@@ -123,7 +123,10 @@ pub struct ReadStateResponse {
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum TransportCallResponse {
     /// A certified response.
-    CertifiedState(ic_certification::Certificate),
+    Replied {
+        /// The certificate for the call response.
+        certificate: ic_certification::Certificate,
+    },
 
     /// A non replicated rejection from the replica.
     NonReplicatedRejection(RejectResponse),
