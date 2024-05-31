@@ -174,9 +174,9 @@ impl Transport for ReqwestTransport {
     ) -> AgentFuture<TransportCallResponse> {
         Box::pin(async move {
             let api_version = if cfg!(feature = "sync_call") {
-                "v2"
-            } else {
                 "v3"
+            } else {
+                "v2"
             };
 
             let endpoint = format!(
