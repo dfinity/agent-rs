@@ -207,8 +207,10 @@ where
                         match self.service.clone().call(http_request).await {
                             Ok(response) => break response,
                             Err(err) => {
-                                let err_msg = err.to_string();
-                                if err_msg.contains("client error (Connect)") {
+                                if (&err as &dyn Error)
+                                    .downcast_ref::<hyper_util::client::legacy::Error>()
+                                    .is_some_and(|e| e.is_connect())
+                                {
                                     if retry_count >= self.max_tcp_error_retries {
                                         return Err(map_error(err));
                                     }
