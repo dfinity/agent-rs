@@ -144,6 +144,18 @@ pub struct QueryStats {
     pub response_payload_bytes_total: Nat,
 }
 
+/// Log visibility for a canister.
+#[derive(Default, Clone, Copy, CandidType, Deserialize, Debug, PartialEq, Eq)]
+pub enum LogVisibility {
+    #[default]
+    #[serde(rename = "controllers")]
+    /// Canister logs are visible to controllers only.
+    Controllers,
+    #[serde(rename = "public")]
+    /// Canister logs are visible to everyone.
+    Public,
+}
+
 /// The concrete settings of a canister.
 #[derive(Clone, Debug, Deserialize, CandidType)]
 pub struct DefiniteCanisterSettings {
@@ -159,6 +171,8 @@ pub struct DefiniteCanisterSettings {
     pub reserved_cycles_limit: Option<Nat>,
     /// A soft limit on the Wasm memory usage of the canister in bytes (up to 256TiB).
     pub wasm_memory_limit: Option<Nat>,
+    /// The canister log visibility. Defines which principals are allowed to fetch logs.
+    pub log_visibility: LogVisibility,
 }
 
 impl std::fmt::Display for StatusCallResult {

@@ -4,7 +4,7 @@
 pub use super::attributes::{
     ComputeAllocation, FreezingThreshold, MemoryAllocation, ReservedCyclesLimit, WasmMemoryLimit,
 };
-use super::{ChunkHash, ManagementCanister};
+use super::{ChunkHash, LogVisibility, ManagementCanister};
 use crate::call::CallFuture;
 use crate::{
     call::AsyncCall, canister::Argument, interfaces::management_canister::MgmtMethod, Canister,
@@ -74,6 +74,11 @@ pub struct CanisterSettings {
     ///
     /// Must be a number between 0 and 2^48^ (i.e 256TB), inclusively.
     pub wasm_memory_limit: Option<Nat>,
+
+    /// The canister log visibility of the canister.
+    ///
+    /// If unspecified and a canister is being created with these settings, defaults to `Controllers`, i.e. private by default.
+    pub log_visibility: Option<LogVisibility>,
 }
 
 /// A builder for a `create_canister` call.
@@ -87,6 +92,7 @@ pub struct CreateCanisterBuilder<'agent, 'canister: 'agent> {
     freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
     reserved_cycles_limit: Option<Result<ReservedCyclesLimit, AgentError>>,
     wasm_memory_limit: Option<Result<WasmMemoryLimit, AgentError>>,
+    log_visibility: Option<Result<LogVisibility, AgentError>>,
     is_provisional_create: bool,
     amount: Option<u128>,
     specified_id: Option<Principal>,
@@ -104,6 +110,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             freezing_threshold: None,
             reserved_cycles_limit: None,
             wasm_memory_limit: None,
+            log_visibility: None,
             is_provisional_create: false,
             amount: None,
             specified_id: None,
@@ -318,6 +325,32 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         }
     }
 
+    /// Pass in a log visibility setting for the canister.
+    pub fn with_log_visibility<C, E>(self, log_visibility: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<LogVisibility, Error = E>,
+    {
+        self.with_optional_log_visibility(Some(log_visibility))
+    }
+
+    /// Pass in a log visibility optional setting for the canister. If this is [None],
+    /// it will revert the log visibility to default.
+    pub fn with_optional_log_visibility<E, C>(self, log_visibility: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<LogVisibility, Error = E>,
+    {
+        Self {
+            log_visibility: log_visibility.map(|visibility| {
+                visibility
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+            }),
+            ..self
+        }
+    }
+
     /// Create an [AsyncCall] implementation that, when called, will create a
     /// canister.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = (Principal,)>, AgentError> {
@@ -351,6 +384,11 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
+        let log_visibility = match self.log_visibility {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Ok(x)) => Some(x),
+            None => None,
+        };
 
         #[derive(Deserialize, CandidType)]
         struct Out {
@@ -373,6 +411,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     freezing_threshold,
                     reserved_cycles_limit,
                     wasm_memory_limit,
+                    log_visibility,
                 },
                 specified_id: self.specified_id,
             };
@@ -390,6 +429,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     freezing_threshold,
                     reserved_cycles_limit,
                     wasm_memory_limit,
+                    log_visibility,
                 })
                 .with_effective_canister_id(self.effective_canister_id)
         };
@@ -899,6 +939,7 @@ pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent> {
     freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
     reserved_cycles_limit: Option<Result<ReservedCyclesLimit, AgentError>>,
     wasm_memory_limit: Option<Result<WasmMemoryLimit, AgentError>>,
+    log_visibility: Option<Result<LogVisibility, AgentError>>,
 }
 
 impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
@@ -913,6 +954,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             freezing_threshold: None,
             reserved_cycles_limit: None,
             wasm_memory_limit: None,
+            log_visibility: None,
         }
     }
 
@@ -1081,6 +1123,32 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         }
     }
 
+    /// Pass in a log visibility setting for the canister.
+    pub fn with_log_visibility<C, E>(self, log_visibility: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<LogVisibility, Error = E>,
+    {
+        self.with_optional_log_visibility(Some(log_visibility))
+    }
+
+    /// Pass in a log visibility optional setting for the canister. If this is [None],
+    /// leaves the log visibility unchanged.
+    pub fn with_optional_log_visibility<E, C>(self, log_visibility: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<LogVisibility, Error = E>,
+    {
+        Self {
+            log_visibility: log_visibility.map(|limit| {
+                limit
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+            }),
+            ..self
+        }
+    }
+
     /// Create an [AsyncCall] implementation that, when called, will update a
     /// canisters settings.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = ()>, AgentError> {
@@ -1120,6 +1188,11 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
+        let log_visibility = match self.log_visibility {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Ok(x)) => Some(x),
+            None => None,
+        };
 
         Ok(self
             .canister
@@ -1133,6 +1206,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
                     freezing_threshold,
                     reserved_cycles_limit,
                     wasm_memory_limit,
+                    log_visibility,
                 },
             })
             .with_effective_canister_id(self.canister_id)
