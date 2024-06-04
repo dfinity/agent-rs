@@ -673,6 +673,7 @@ impl<'agent> WalletCanister<'agent> {
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
             wasm_memory_limit: None,
+            log_visibility: None,
         };
 
         self.update("wallet_create_canister")
@@ -703,6 +704,7 @@ impl<'agent> WalletCanister<'agent> {
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
             wasm_memory_limit: None,
+            log_visibility: None,
         };
 
         self.update("wallet_create_canister128")
@@ -717,9 +719,9 @@ impl<'agent> WalletCanister<'agent> {
     /// as the wallet does not support the setting.  If you need to create a canister
     /// with a `reserved_cycles_limit` set, use the management canister.
     ///
-    /// This method does not have a `wasm_memory_limit` parameter,
+    /// This method does not have a `wasm_memory_limit` or `log_visibility` parameter,
     /// as the wallet does not support the setting.  If you need to create a canister
-    /// with a `wasm_memory_limit` set, use the management canister.
+    /// with a `wasm_memory_limit` or `log_visibility` set, use the management canister.
     pub async fn wallet_create_canister(
         &self,
         cycles: u128,
@@ -831,6 +833,7 @@ impl<'agent> WalletCanister<'agent> {
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
             wasm_memory_limit: None,
+            log_visibility: None,
         };
 
         self.update("wallet_create_wallet")
@@ -861,6 +864,7 @@ impl<'agent> WalletCanister<'agent> {
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
             wasm_memory_limit: None,
+            log_visibility: None,
         };
 
         self.update("wallet_create_wallet128")

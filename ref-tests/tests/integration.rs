@@ -425,6 +425,7 @@ fn wallet_create_wallet() {
                 freezing_threshold: None,
                 reserved_cycles_limit: None,
                 wasm_memory_limit: None,
+                log_visibility: None,
             },
         };
         let args = Argument::from_candid((create_args,));
