@@ -37,7 +37,8 @@ pub struct ReqwestTransport {
 pub use ReqwestTransport as ReqwestHttpReplicaV2Transport; // delete after 0.31
 
 impl ReqwestTransport {
-    /// Creates a replica transport from a HTTP URL.
+    /// Creates a replica transport from a HTTP URL. By default a request timeout of 6 minutes is used.
+    /// Use `create_with_client` to configure this and other client options.
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
         #[cfg(not(target_family = "wasm"))]
         {
@@ -45,6 +46,7 @@ impl ReqwestTransport {
                 url,
                 Client::builder()
                     .use_rustls_tls()
+                    .timeout(Duration::from_secs(360))
                     .build()
                     .expect("Could not create HTTP client."),
             )
