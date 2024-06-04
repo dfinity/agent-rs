@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.36.0] - 2024-06-04
+
 * Added a default request timeout to `ReqwestTransport`.
 * Introduced transparent http request retry logic for network-related failures. `ReqwestTransport::with_max_tcp_errors_retries()`, `HyperTransport::with_max_tcp_errors_retries()`.
 * Changed the SyncCall and AsyncCall traits to use an associated type for their output instead of a generic parameter.

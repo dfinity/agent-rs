@@ -32,10 +32,6 @@ pub struct ReqwestTransport {
     max_tcp_error_retries: usize,
 }
 
-#[doc(hidden)]
-#[deprecated(since = "0.30.0", note = "use ReqwestTransport")]
-pub use ReqwestTransport as ReqwestHttpReplicaV2Transport; // delete after 0.31
-
 impl ReqwestTransport {
     /// Creates a replica transport from a HTTP URL. By default a request timeout of 6 minutes is used.
     /// Use `create_with_client` to configure this and other client options.
