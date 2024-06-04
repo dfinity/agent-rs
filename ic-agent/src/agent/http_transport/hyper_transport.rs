@@ -36,10 +36,6 @@ pub struct HyperTransport<B1, S = Client<HttpsConnector<HttpConnector>, B1>> {
     service: S,
 }
 
-#[doc(hidden)]
-#[deprecated(since = "0.30.0", note = "use HyperTransport")]
-pub use HyperTransport as HyperReplicaV2Transport; // delete after 0.31
-
 /// Trait representing the contraints on [`HttpBody`] that [`HyperTransport`] requires
 pub trait HyperBody:
     Body<Data = Self::BodyData, Error = Self::BodyError> + Send + Unpin + 'static
