@@ -1,8 +1,9 @@
 //! Errors that can occur when using the replica agent.
 
 use crate::{agent::status::Status, RequestIdError};
+use ed25519_consensus::VerificationKey;
 use ic_certification::Label;
-use ic_transport_types::{InvalidRejectCodeError, RejectResponse};
+use ic_transport_types::{InvalidRejectCodeError, NodeSignature, RejectResponse};
 use leb128::read;
 use std::time::Duration;
 use std::{
@@ -103,8 +104,8 @@ pub enum AgentError {
     CertificateVerificationFailed(),
 
     /// The signature verification for a query call failed.
-    #[error("Query signature verification failed.")]
-    QuerySignatureVerificationFailed,
+    #[error("Query signature verification failed for node {node} (public key: {key}).", node = .0.signature.identity, key = hex::encode(.0.public_key.to_bytes()))]
+    QuerySignatureVerificationFailed(Box<QuerySignatureVerificationFailed>), // boxed for size
 
     /// The certificate contained a delegation that does not include the effective_canister_id in the canister_ranges field.
     #[error("Certificate is not authorized to respond to queries for this canister. While developing: Did you forget to set effective_canister_id?")]
@@ -219,6 +220,15 @@ impl From<candid::Error> for AgentError {
     fn from(e: candid::Error) -> AgentError {
         AgentError::CandidError(e.into())
     }
+}
+
+/// See [`AgentError::QuerySignatureVerificationFailed`].
+#[derive(Debug, Clone)]
+pub struct QuerySignatureVerificationFailed {
+    /// The signature that could not be verified.
+    pub signature: NodeSignature,
+    /// The public key of the node.
+    pub public_key: VerificationKey,
 }
 
 /// A HTTP error from the replica.

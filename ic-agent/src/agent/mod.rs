@@ -541,7 +541,12 @@ impl Agent {
 
                 match pubkey.verify(&sig, &signable) {
                     Err(Ed25519Error::InvalidSignature) => {
-                        return Err(AgentError::QuerySignatureVerificationFailed)
+                        return Err(AgentError::QuerySignatureVerificationFailed(Box::new(
+                            agent_error::QuerySignatureVerificationFailed {
+                                signature: signature.clone(),
+                                public_key: pubkey,
+                            },
+                        )))
                     }
                     Err(Ed25519Error::InvalidSliceLength) => {
                         return Err(AgentError::MalformedSignature)
