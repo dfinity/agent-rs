@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Removed the Bitcoin query methods from `ManagementCanister`. Users should use `BitcoinCanister` for that.
+* Added `BitcoinCanister` to `ic-utils`.
+
 ## [0.36.0] - 2024-06-04
 
 * Added a default request timeout to `ReqwestTransport`.

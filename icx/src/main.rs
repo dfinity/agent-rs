@@ -323,9 +323,6 @@ pub fn get_effective_canister_id(
                     .context("Argument is not valid for InstallChunkedCode")?;
                 Ok(in_args.target_canister)
             }
-            MgmtMethod::BitcoinGetBalanceQuery | MgmtMethod::BitcoinGetUtxosQuery => {
-                Ok(Principal::management_canister())
-            }
             MgmtMethod::BitcoinGetBalance
             | MgmtMethod::BitcoinGetUtxos
             | MgmtMethod::BitcoinSendTransaction
