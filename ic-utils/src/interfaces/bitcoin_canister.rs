@@ -157,6 +157,7 @@ impl<'agent> BitcoinCanister<'agent> {
             .build()
     }
     /// Gets the block headers for the specified range of blocks. If `end_height` is `None`, the returned `tip_height` provides the tip at the moment
+    /// the chain was queried.
     pub fn get_block_headers(
         &self,
         start_height: u32,
