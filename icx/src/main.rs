@@ -22,11 +22,13 @@ use ic_utils::interfaces::management_canister::{
 };
 use ring::signature::Ed25519KeyPair;
 use std::{
-    collections::VecDeque, convert::TryFrom, io::BufRead, path::PathBuf, str::FromStr,
+    convert::TryFrom,
+    io::Read,
+    path::{Path, PathBuf},
+    str::FromStr,
     time::Duration,
 };
-
-const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
+use url::{Host, Url};
 
 #[derive(Parser)]
 #[clap(
@@ -35,19 +37,23 @@ const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
     propagate_version(true),
 )]
 struct Opts {
-    /// Some input. Because this isn't an Option<T> it's required to be used
-    #[clap(default_value = "http://localhost:8000/")]
-    replica: String,
+    /// The URL of the replica to connect to.
+    #[clap(default_value = "http://localhost:4943/", conflicts_with = "ic")]
+    replica: Url,
 
     /// An optional PEM file to read the identity from. If none is passed,
     /// a random identity will be created.
-    #[clap(long)]
+    #[clap(long, global = true)]
     pem: Option<PathBuf>,
 
     /// An optional field to set the expiry time on requests. Can be a human
     /// readable time (like `100s`) or a number of seconds.
-    #[clap(long)]
+    #[clap(long, global = true)]
     ttl: Option<humantime::Duration>,
+
+    /// Alias for `--replica https://icp0.io`.
+    #[clap(long, global = true)]
+    ic: bool,
 
     #[clap(subcommand)]
     subcommand: SubCommand,
@@ -64,10 +70,10 @@ enum SubCommand {
     /// Checks the `status` endpoints of the replica.
     Status,
 
-    /// Send a serialized request, taking from STDIN.
-    Send,
+    /// Send a serialized request, taking from a provided file or STDIN.
+    Send(SendOpts),
 
-    /// Transform Principal from hex to new text.
+    /// Transform a principal between text and hex.
     PrincipalConvert(PrincipalConvertOpts),
 }
 
@@ -119,11 +125,18 @@ impl std::str::FromStr for ArgType {
 }
 
 #[derive(Parser)]
+struct SendOpts {
+    /// The input file. Use `-` for STDIN.
+    #[clap(long, short, default_value = "-")]
+    input_file: PathBuf,
+}
+
+#[derive(Parser)]
 struct PrincipalConvertOpts {
-    /// Convert from hexadecimal to the new group-based Principal text.
+    /// Convert from hexadecimal to textual format.
     #[clap(long)]
     from_hex: Option<String>,
-    /// Convert from the new group-based Principal text to hexadecimal.
+    /// Convert from textual format to hexadecimal.
     #[clap(long)]
     to_hex: Option<String>,
 }
@@ -177,11 +190,10 @@ fn blob_from_arguments(
     arg_type: &ArgType,
     method_type: &Option<(TypeEnv, Function)>,
 ) -> Result<Vec<u8>> {
-    let mut buffer = Vec::new();
+    let mut buffer = String::new();
     let arguments = if arguments == Some("-") {
-        use std::io::Read;
-        std::io::stdin().read_to_end(&mut buffer).unwrap();
-        std::str::from_utf8(&buffer).ok()
+        std::io::stdin().read_to_string(&mut buffer)?;
+        Some(&buffer[..])
     } else {
         arguments
     };
@@ -251,16 +263,28 @@ fn print_idl_blob(
     Ok(())
 }
 
-async fn fetch_root_key_from_non_ic(agent: &Agent, replica: &str) -> Result<()> {
-    let normalized_replica = replica.strip_suffix('/').unwrap_or(replica);
-    if normalized_replica != DEFAULT_IC_GATEWAY {
-        agent
-            .fetch_root_key()
-            .await
-            .context("Failed to fetch root key from replica")?;
+async fn fetch_root_key_from_non_ic(agent: &Agent, replica: &Url) -> Result<()> {
+    if is_mainnet(replica) {
+        agent.fetch_root_key().await?;
     }
     Ok(())
 }
+
+fn is_mainnet(replica: &Url) -> bool {
+    if let Some(Host::Domain(domain)) = replica.host() {
+        let domain = domain.strip_suffix('.').unwrap_or(domain);
+        let subdomain_end = domain.rmatch_indices('.').nth(1);
+        let domain = if let Some((n, _)) = subdomain_end {
+            &domain[n + 1..]
+        } else {
+            domain
+        };
+        ["ic0.app", "icp0.io", "icp-api.io"].contains(&domain)
+    } else {
+        false
+    }
+}
+
 pub fn get_effective_canister_id(
     is_management_canister: bool,
     method_name: &str,
@@ -281,7 +305,7 @@ pub fn get_effective_canister_id(
             ),
             MgmtMethod::InstallCode => {
                 let install_args = Decode!(arg_value, CanisterInstall)
-                    .context("Argument is not valid for CanisterInstall")?;
+                    .context("Argument is not valid for install_code")?;
                 Ok(install_args.canister_id)
             }
             MgmtMethod::StartCanister
@@ -300,7 +324,7 @@ pub fn get_effective_canister_id(
                     canister_id: Principal,
                 }
                 let in_args =
-                    Decode!(arg_value, In).context("Argument is not a valid Principal")?;
+                    Decode!(arg_value, In).context("Argument is not a valid principal")?;
                 Ok(in_args.canister_id)
             }
             MgmtMethod::ProvisionalCreateCanisterWithCycles => Ok(Principal::management_canister()),
@@ -311,7 +335,7 @@ pub fn get_effective_canister_id(
                     settings: CanisterSettings,
                 }
                 let in_args =
-                    Decode!(arg_value, In).context("Argument is not valid for UpdateSettings")?;
+                    Decode!(arg_value, In).context("Argument is not valid for update_settings")?;
                 Ok(in_args.canister_id)
             }
             MgmtMethod::InstallChunkedCode => {
@@ -338,19 +362,19 @@ pub fn get_effective_canister_id(
     }
 }
 
-fn create_identity(maybe_pem: Option<PathBuf>) -> impl Identity {
+fn create_identity(maybe_pem: Option<PathBuf>) -> Result<impl Identity> {
     if let Some(pem_path) = maybe_pem {
-        BasicIdentity::from_pem_file(pem_path).expect("Could not read the key pair.")
+        BasicIdentity::from_pem_file(pem_path).context("Could not read the key pair.")
     } else {
         let rng = ring::rand::SystemRandom::new();
         let pkcs8_bytes = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
-            .expect("Could not generate a key pair.")
+            .context("Could not generate a key pair.")?
             .as_ref()
             .to_vec();
 
-        BasicIdentity::from_key_pair(
-            Ed25519KeyPair::from_pkcs8(&pkcs8_bytes).expect("Could not generate the key pair."),
-        )
+        Ok(BasicIdentity::from_key_pair(
+            Ed25519KeyPair::from_pkcs8(&pkcs8_bytes).context("Could not generate the key pair.")?,
+        ))
     }
 }
 
@@ -358,12 +382,18 @@ fn create_identity(maybe_pem: Option<PathBuf>) -> impl Identity {
 async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
 
+    let replica = if opts.ic {
+        "https://icp0.io".parse().unwrap()
+    } else {
+        opts.replica
+    };
+
     let agent = Agent::builder()
         .with_transport(
-            agent::http_transport::ReqwestTransport::create(opts.replica.clone())
+            agent::http_transport::ReqwestTransport::create(replica.as_str())
                 .context("Failed to create Transport for Agent")?,
         )
-        .with_boxed_identity(Box::new(create_identity(opts.pem)))
+        .with_boxed_identity(Box::new(create_identity(opts.pem)?))
         .build()
         .context("Failed to build the Agent")?;
 
@@ -395,7 +425,7 @@ async fn main() -> Result<()> {
                 let result = match &opts.subcommand {
                     SubCommand::Update(_) => {
                         // We need to fetch the root key for updates.
-                        fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
+                        fetch_root_key_from_non_ic(&agent, &replica).await?;
 
                         let mut builder = agent.update(&t.canister_id, &t.method_name);
 
@@ -421,7 +451,7 @@ async fn main() -> Result<()> {
                         result.unwrap_or(Err(AgentError::TimeoutWaitingForResponse()))
                     }
                     SubCommand::Query(_) => {
-                        fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
+                        fetch_root_key_from_non_ic(&agent, &replica).await?;
                         let mut builder = agent.query(&t.canister_id, &t.method_name);
                         if let Some(d) = expire_after {
                             builder = builder.expire_after(d);
@@ -477,7 +507,7 @@ async fn main() -> Result<()> {
                         // For local emulator, we need to fetch the root key for updates.
                         // So on an air-gapped machine, we can only generate message for the IC main net
                         // which agent hard-coded its root key
-                        fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
+                        fetch_root_key_from_non_ic(&agent, &replica).await?;
 
                         let mut builder = agent.update(&t.canister_id, &t.method_name);
                         if let Some(d) = expire_after {
@@ -488,7 +518,7 @@ async fn main() -> Result<()> {
                             .with_effective_canister_id(effective_canister_id)
                             .sign()
                             .context("Failed to sign the update call")?;
-                        let serialized = serde_json::to_string(&signed_update).unwrap();
+                        let serialized = serde_json::to_string(&signed_update)?;
                         println!("{}", serialized);
 
                         let signed_request_status = agent
@@ -496,11 +526,11 @@ async fn main() -> Result<()> {
                             .context(
                                 "Failed to sign the request_status call accompany with the update",
                             )?;
-                        let serialized = serde_json::to_string(&signed_request_status).unwrap();
+                        let serialized = serde_json::to_string(&signed_request_status)?;
                         println!("{}", serialized);
                     }
                     &SubCommand::Query(_) => {
-                        fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
+                        fetch_root_key_from_non_ic(&agent, &replica).await?;
                         let mut builder = agent.query(&t.canister_id, &t.method_name);
                         if let Some(d) = expire_after {
                             builder = builder.expire_after(d);
@@ -510,7 +540,7 @@ async fn main() -> Result<()> {
                             .with_effective_canister_id(effective_canister_id)
                             .sign()
                             .context("Failed to sign the query call")?;
-                        let serialized = serde_json::to_string(&signed_query).unwrap();
+                        let serialized = serde_json::to_string(&signed_query)?;
                         println!("{}", serialized);
                     }
                     _ => unreachable!(),
@@ -526,30 +556,31 @@ async fn main() -> Result<()> {
         }
         SubCommand::PrincipalConvert(t) => {
             if let Some(hex) = &t.from_hex {
-                let p = Principal::try_from(hex::decode(hex).expect("Could not decode hex: {}"))
-                    .expect("Could not transform into a Principal: {}");
+                let p = Principal::try_from(hex::decode(hex).context("Could not decode hex")?)
+                    .context("Could not transform into a principal")?;
                 eprintln!("Principal: {}", p);
             } else if let Some(txt) = &t.to_hex {
                 let p = Principal::from_text(txt.as_str())
-                    .expect("Could not transform into a Principal: {}");
+                    .context("Could not transform into a principal")?;
                 eprintln!("Hexadecimal: {}", hex::encode(p.as_slice()));
             }
         }
-        SubCommand::Send => {
-            let input: VecDeque<String> = std::io::stdin()
-                .lock()
-                .lines()
-                .collect::<Result<VecDeque<String>, std::io::Error>>()
-                .context("Failed to read from stdin")?;
+        SubCommand::Send(t) => {
             let mut buffer = String::new();
-            for line in input {
-                buffer.push_str(&line);
+            if t.input_file == Path::new("-") {
+                std::io::stdin()
+                    .lock()
+                    .read_to_string(&mut buffer)
+                    .context("failed to read from stdin")?;
+            } else {
+                buffer = std::fs::read_to_string(&t.input_file).with_context(|| {
+                    format!("failed to read from file {}", t.input_file.display())
+                })?;
             }
-
             println!("{}", buffer);
 
             if let Ok(signed_update) = serde_json::from_str::<SignedUpdate>(&buffer) {
-                fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
+                fetch_root_key_from_non_ic(&agent, &replica).await?;
                 let request_id = agent
                     .update_signed(
                         signed_update.effective_canister_id,
@@ -571,7 +602,7 @@ async fn main() -> Result<()> {
             } else if let Ok(signed_request_status) =
                 serde_json::from_str::<SignedRequestStatus>(&buffer)
             {
-                fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
+                fetch_root_key_from_non_ic(&agent, &replica).await?;
                 let response = agent
                     .request_status_signed(
                         &signed_request_status.request_id,
@@ -607,11 +638,33 @@ async fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::Opts;
+    use crate::{is_mainnet, Opts};
+    use anyhow::Result;
     use clap::CommandFactory;
 
     #[test]
     fn valid_command() {
         Opts::command().debug_assert();
+    }
+
+    #[test]
+    fn detects_mainnet() -> Result<()> {
+        assert!(is_mainnet(&"https://icp-api.io".parse()?));
+        assert!(is_mainnet(&"https://ic0.app".parse()?));
+        assert!(is_mainnet(&"https://icp0.io".parse()?));
+        assert!(is_mainnet(&"https://icp-api.io:443".parse()?));
+        assert!(is_mainnet(&"https://icp-api.io.".parse()?));
+        assert!(is_mainnet(&"https://icp-api.io.:443".parse()?));
+        assert!(is_mainnet(
+            &"https://ryjl3-tyaaa-aaaaa-aaaba-cai.icp0.io".parse()?
+        ));
+
+        assert!(!is_mainnet(&"http://localhost".parse()?));
+        assert!(!is_mainnet(&"http://[::1]".parse()?));
+        assert!(!is_mainnet(&"http://127.0.0.1".parse()?));
+        assert!(!is_mainnet(
+            &"http://ryjl3-tyaaa-aaaaa-aaaba-cai.localhost".parse()?
+        ));
+        Ok(())
     }
 }
