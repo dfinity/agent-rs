@@ -22,11 +22,14 @@ use crate::agent::{
 
 const NODES_FETCH_ACTOR: &str = "NodesFetchActor";
 
+///
 #[async_trait]
 pub trait Fetch: Sync + Send + Debug {
+    ///
     async fn fetch(&self, url: Url) -> anyhow::Result<Vec<Node>>;
 }
 
+///
 #[derive(Debug)]
 pub struct NodesFetcher {
     http_client: Client,
@@ -34,6 +37,7 @@ pub struct NodesFetcher {
 }
 
 impl NodesFetcher {
+    ///
     pub fn new(http_client: Client, subnet_id: Principal) -> Self {
         Self {
             http_client,
@@ -67,6 +71,7 @@ impl Fetch for NodesFetcher {
     }
 }
 
+///
 pub struct NodesFetchActor<S> {
     fetcher: Arc<dyn Fetch>,
     period: Duration,
@@ -80,6 +85,7 @@ impl<S> NodesFetchActor<S>
 where
     S: RoutingSnapshot,
 {
+    ///
     pub fn new(
         fetcher: Arc<dyn Fetch>,
         period: Duration,
@@ -98,6 +104,7 @@ where
         }
     }
 
+    ///
     pub async fn run(self) {
         let mut interval = time::interval(self.period);
         loop {

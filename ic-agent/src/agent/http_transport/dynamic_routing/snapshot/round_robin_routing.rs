@@ -10,6 +10,7 @@ use crate::agent::http_transport::dynamic_routing::{
     health_check::HealthCheckStatus, node::Node, snapshot::routing_snapshot::RoutingSnapshot,
 };
 
+///
 #[derive(Default, Debug, Clone)]
 pub struct RoundRobinRoutingSnapshot {
     current_idx: Arc<AtomicUsize>,
@@ -18,6 +19,7 @@ pub struct RoundRobinRoutingSnapshot {
 }
 
 impl RoundRobinRoutingSnapshot {
+    ///
     pub fn new() -> Self {
         Self {
             current_idx: Arc::new(AtomicUsize::new(0)),
@@ -44,7 +46,7 @@ impl RoutingSnapshot for RoundRobinRoutingSnapshot {
     }
 
     fn sync_nodes(&mut self, nodes: &[Node]) -> anyhow::Result<bool> {
-        let new_nodes = HashSet::from_iter(nodes.into_iter().cloned());
+        let new_nodes = HashSet::from_iter(nodes.iter().cloned());
         // Find nodes removed from snapshot.
         let nodes_removed: Vec<_> = self
             .existing_nodes
@@ -69,13 +71,13 @@ impl RoutingSnapshot for RoundRobinRoutingSnapshot {
     }
 
     fn update_node(&mut self, node: &Node, health: HealthCheckStatus) -> anyhow::Result<bool> {
-        if !self.existing_nodes.contains(&node) {
+        if !self.existing_nodes.contains(node) {
             return Ok(false);
         }
         if health.latency.is_some() {
             Ok(self.healthy_nodes.insert(node.clone()))
         } else {
-            Ok(self.healthy_nodes.remove(&node))
+            Ok(self.healthy_nodes.remove(node))
         }
     }
 }
@@ -192,10 +194,7 @@ mod tests {
             snapshot.existing_nodes,
             HashSet::from_iter(vec![node_1.clone()])
         );
-        assert_eq!(
-            snapshot.healthy_nodes,
-            HashSet::from_iter(vec![node_1.clone()])
-        );
+        assert_eq!(snapshot.healthy_nodes, HashSet::from_iter(vec![node_1]));
         // Sync with node_2
         let node_2 = Node::new("api2.com").unwrap();
         let nodes_changed = snapshot.sync_nodes(&[node_2.clone()]).unwrap();
@@ -218,11 +217,8 @@ mod tests {
             snapshot.existing_nodes,
             HashSet::from_iter(vec![node_3.clone(), node_2.clone()])
         );
-        assert_eq!(
-            snapshot.healthy_nodes,
-            HashSet::from_iter(vec![node_2.clone()])
-        );
-        snapshot.healthy_nodes.insert(node_3.clone());
+        assert_eq!(snapshot.healthy_nodes, HashSet::from_iter(vec![node_2]));
+        snapshot.healthy_nodes.insert(node_3);
         // Sync with []
         let nodes_changed = snapshot.sync_nodes(&[]).unwrap();
         assert!(nodes_changed);

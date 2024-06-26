@@ -21,33 +21,43 @@ use crate::agent::http_transport::dynamic_routing::{
 
 const CHANNEL_BUFFER: usize = 128;
 
+///
 #[async_trait]
 pub trait HealthCheck: Send + Sync + Debug {
+    ///
     async fn check(&self, node: &Node) -> anyhow::Result<HealthCheckStatus>;
 }
 
+///
 #[derive(Clone, PartialEq, Debug, Default)]
 pub struct HealthCheckStatus {
+    ///
     pub latency: Option<Duration>,
 }
 
+///
 impl HealthCheckStatus {
+    ///
     pub fn new(latency: Option<Duration>) -> Self {
         Self { latency }
     }
 
+    ///
     pub fn is_healthy(&self) -> bool {
         self.latency.is_some()
     }
 }
 
+///
 #[derive(Debug)]
 pub struct HealthChecker {
     http_client: Client,
     timeout: Duration,
 }
 
+///
 impl HealthChecker {
+    ///
     pub fn new(http_client: Client, timeout: Duration) -> Self {
         Self {
             http_client,
@@ -133,8 +143,10 @@ impl HealthCheckActor {
     }
 }
 
+///
 pub const HEALTH_MANAGER_ACTOR: &str = "HealthManagerActor";
 
+///
 pub struct HealthManagerActor<S> {
     checker: Arc<dyn HealthCheck>,
     period: Duration,
@@ -153,6 +165,7 @@ impl<S> HealthManagerActor<S>
 where
     S: RoutingSnapshot,
 {
+    ///
     pub fn new(
         checker: Arc<dyn HealthCheck>,
         period: Duration,
@@ -178,6 +191,7 @@ where
         }
     }
 
+    ///
     pub async fn run(mut self) {
         loop {
             tokio::select! {

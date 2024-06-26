@@ -32,6 +32,7 @@ use crate::{
     AgentError,
 };
 
+///
 pub const IC0_SEED_DOMAIN: &str = "ic0.app";
 
 const MAINNET_ROOT_SUBNET_ID: &str =
@@ -45,6 +46,7 @@ const HEALTH_CHECK_PERIOD: Duration = Duration::from_secs(1);
 
 const DYNAMIC_ROUTE_PROVIDER: &str = "DynamicRouteProvider";
 
+///
 #[derive(Debug)]
 pub struct DynamicRouteProvider<S> {
     fetcher: Arc<dyn Fetch>,
@@ -75,6 +77,7 @@ impl<S> DynamicRouteProvider<S>
 where
     S: RoutingSnapshot + 'static,
 {
+    ///
     pub fn new(snapshot: S, seeds: Vec<Node>, http_client: Client) -> Self {
         let fetcher = Arc::new(NodesFetcher::new(
             http_client.clone(),
@@ -94,21 +97,25 @@ where
         }
     }
 
+    ///
     pub fn with_fetcher(mut self, fetcher: Arc<dyn Fetch>) -> Self {
         self.fetcher = fetcher;
         self
     }
 
+    ///
     pub fn with_fetch_period(mut self, period: Duration) -> Self {
         self.fetch_period = period;
         self
     }
 
+    ///
     pub fn with_checker(mut self, checker: Arc<dyn HealthCheck>) -> Self {
         self.checker = checker;
         self
     }
 
+    ///
     pub fn with_check_period(mut self, period: Duration) -> Self {
         self.check_period = period;
         self
@@ -183,11 +190,11 @@ where
         );
 
         (found_healthy_seeds)
-            .then(|| ())
-            .ok_or_else(|| anyhow!("No healthy seeds found"))
+            .then_some(())
+            .ok_or(anyhow!("No healthy seeds found"))
     }
 
-    // Kill all running tasks.
+    /// Kill all running tasks.
     pub async fn stop(&self) {
         self.token.cancel();
         self.tracker.close();
@@ -517,7 +524,6 @@ mod tests {
         // Setup.
         setup_tracing();
         let node_1 = Node::new(IC0_SEED_DOMAIN).unwrap();
-        let node_2 = Node::new("api1.com").unwrap();
         // Set nodes fetching params: topology, fetching periodicity.
         let fetcher = Arc::new(NodesFetcherMock::new());
         let fetch_interval = Duration::from_secs(2);

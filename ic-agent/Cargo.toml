@@ -44,14 +44,6 @@ simple_asn1 = "0.6.1"
 thiserror = { workspace = true }
 time = { workspace = true }
 url = "2.1.0"
-tokio = {version = "1.24.2", features = ["full"]}
-async-trait = "0.1.80"
-tracing = "0.1.40"
-arc-swap = "1.7.1"
-anyhow = "1.0.86"
-simple_moving_average = "1.0.2"
-tracing-subscriber = "0.3.18"
-tokio-util = { version = "0.7.11", features = ["full"] }
 
 [dependencies.hyper]
 version = "1.0.1"
@@ -80,9 +72,16 @@ hyper-rustls = { version = "0.26.0", features = [
     "webpki-roots",
     "http2",
 ], optional = true }
-tokio = { version = "1.24.2", features = ["time"] }
+tokio = { version = "1.24.2", features = ["full"] }
 tower = { version = "0.4.13", optional = true }
 rustls-webpki = "0.101.4"
+async-trait = "0.1.80"
+tracing = "0.1.40"
+arc-swap = "1.7.1"
+anyhow = "1.0.86"
+simple_moving_average = "1.0.2"
+tracing-subscriber = "0.3.18"
+tokio-util = { version = "0.7.11", features = ["full"] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 getrandom = { version = "0.2", features = ["js"], optional = true }

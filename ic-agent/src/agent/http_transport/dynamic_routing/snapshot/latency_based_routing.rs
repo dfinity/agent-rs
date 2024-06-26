@@ -21,13 +21,16 @@ struct WeightedNode {
     weight: f64,
 }
 
+///
 #[derive(Default, Debug, Clone)]
 pub struct LatencyRoutingSnapshot {
     weighted_nodes: Vec<WeightedNode>,
     existing_nodes: HashSet<Node>,
 }
 
+///
 impl LatencyRoutingSnapshot {
+    ///
     pub fn new() -> Self {
         Self {
             weighted_nodes: vec![],
@@ -39,7 +42,7 @@ impl LatencyRoutingSnapshot {
 // select weight index based on the input number in range [0, 1]
 #[inline(always)]
 fn weighted_sample(weights: &[f64], number: f64) -> Option<usize> {
-    if number < 0.0 || number > 1.0 {
+    if !(0.0..=1.0).contains(&number) {
         return None;
     }
     let sum: f64 = weights.iter().sum();
@@ -74,7 +77,7 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
     }
 
     fn sync_nodes(&mut self, nodes: &[Node]) -> anyhow::Result<bool> {
-        let new_nodes = HashSet::from_iter(nodes.into_iter().cloned());
+        let new_nodes = HashSet::from_iter(nodes.iter().cloned());
         // Find nodes removed from snapshot.
         let nodes_removed: Vec<_> = self
             .existing_nodes
@@ -292,7 +295,7 @@ mod tests {
         assert_eq!(snapshot.weighted_nodes[0].node, node_2);
         // Add node_3 to weighted_nodes manually
         snapshot.weighted_nodes.push(WeightedNode {
-            node: node_3.clone(),
+            node: node_3,
             latency_mov_avg: LatencyMovAvg::new(),
             weight: 0.0,
         });
