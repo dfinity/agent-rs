@@ -62,7 +62,7 @@ const HEALTH_CHECKER: &str = "HealthChecker";
 impl HealthCheck for HealthChecker {
     async fn check(&self, node: &Node) -> anyhow::Result<HealthCheckStatus> {
         // API boundary node exposes /health endpoint and should respond with 204 (No Content) if it's healthy.
-        let url = Url::parse(&format!("https://{}/health", node.domain))?;
+        let url = Url::parse(&format!("https://{}/health", node.domain()))?;
 
         let mut request = Request::new(Method::GET, url.clone());
         *request.timeout_mut() = Some(self.timeout);

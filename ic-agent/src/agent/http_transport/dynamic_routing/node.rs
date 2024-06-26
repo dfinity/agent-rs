@@ -5,7 +5,7 @@ use anyhow::anyhow;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Node {
-    pub domain: String,
+    domain: String,
 }
 
 impl Node {
@@ -17,6 +17,10 @@ impl Node {
             domain: domain.to_string(),
         })
     }
+
+    pub fn domain(&self) -> String {
+        self.domain.clone()
+    }
 }
 
 impl Node {
@@ -27,17 +31,21 @@ impl Node {
 
 impl From<&Node> for Url {
     fn from(node: &Node) -> Self {
+        // Parsing can't fail, as the domain was checked at node instantiation.
         Url::parse(&format!("https://{}", node.domain)).expect("failed to parse URL")
     }
 }
 
-impl From<&ApiBoundaryNode> for Node {
-    fn from(api_bn: &ApiBoundaryNode) -> Self {
-        Node::new(api_bn.domain.as_str()).unwrap()
+impl TryFrom<&ApiBoundaryNode> for Node {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &ApiBoundaryNode) -> Result<Self, Self::Error> {
+        Node::new(&value.domain)
     }
 }
 
 pub fn is_valid_domain<S: AsRef<str>>(domain: S) -> bool {
-    // TODO
-    true
+    // Prepend scheme to make it a valid URL
+    let url_string = format!("http://{}", domain.as_ref());
+    Url::parse(&url_string).is_ok()
 }

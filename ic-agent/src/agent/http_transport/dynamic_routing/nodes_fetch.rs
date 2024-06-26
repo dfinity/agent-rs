@@ -58,7 +58,11 @@ impl Fetch for NodesFetcher {
         let api_bns = agent
             .fetch_api_boundary_nodes_by_subnet_id(self.subnet_id)
             .await?;
-        let nodes: Vec<Node> = api_bns.iter().map(|node| node.into()).collect();
+        // If some API BNs have invalid domain names, they are discarded.
+        let nodes = api_bns
+            .iter()
+            .filter_map(|api_node| api_node.try_into().ok())
+            .collect();
         return Ok(nodes);
     }
 }

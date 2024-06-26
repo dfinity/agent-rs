@@ -263,7 +263,7 @@ mod tests {
         // Only a single node exists, which is initially healthy.
         tokio::time::sleep(snapshot_update_duration).await;
         let routed_domains = route_n_times(6, Arc::clone(&route_provider));
-        assert_routed_domains(routed_domains, vec![node_1.domain.clone()], 6);
+        assert_routed_domains(routed_domains, vec![node_1.domain()], 6);
 
         // Test 2: multiple route() calls return 3 different domains with equal fairness (repetition).
         // Two healthy nodes are added to the topology.
@@ -275,11 +275,7 @@ mod tests {
         let routed_domains = route_n_times(6, Arc::clone(&route_provider));
         assert_routed_domains(
             routed_domains,
-            vec![
-                node_1.clone().domain,
-                node_2.clone().domain,
-                node_3.clone().domain,
-            ],
+            vec![node_1.domain(), node_2.domain(), node_3.domain()],
             2,
         );
 
@@ -288,11 +284,7 @@ mod tests {
         checker.overwrite_healthy_nodes(vec![node_1.clone(), node_3.clone()]);
         tokio::time::sleep(snapshot_update_duration).await;
         let routed_domains = route_n_times(6, Arc::clone(&route_provider));
-        assert_routed_domains(
-            routed_domains,
-            vec![node_1.clone().domain, node_3.clone().domain],
-            3,
-        );
+        assert_routed_domains(routed_domains, vec![node_1.domain(), node_3.domain()], 3);
 
         // Test 4: multiple route() calls return 3 different domains with equal fairness (repetition).
         // Unhealthy node is set back to healthy.
@@ -301,11 +293,7 @@ mod tests {
         let routed_domains = route_n_times(6, Arc::clone(&route_provider));
         assert_routed_domains(
             routed_domains,
-            vec![
-                node_1.clone().domain,
-                node_2.clone().domain,
-                node_3.clone().domain,
-            ],
+            vec![node_1.domain(), node_2.domain(), node_3.domain()],
             2,
         );
 
@@ -323,11 +311,7 @@ mod tests {
         let routed_domains = route_n_times(6, Arc::clone(&route_provider));
         assert_routed_domains(
             routed_domains,
-            vec![
-                node_2.clone().domain,
-                node_3.clone().domain,
-                node_4.clone().domain,
-            ],
+            vec![node_2.domain(), node_3.domain(), node_4.domain()],
             2,
         );
 
@@ -337,7 +321,7 @@ mod tests {
         fetcher.overwrite_nodes(vec![node_1.clone(), node_2.clone(), node_4.clone()]);
         tokio::time::sleep(snapshot_update_duration).await;
         let routed_domains = route_n_times(3, Arc::clone(&route_provider));
-        assert_routed_domains(routed_domains, vec![node_2.clone().domain], 3);
+        assert_routed_domains(routed_domains, vec![node_2.domain()], 3);
 
         // Teardown.
         route_provider.stop().await;
@@ -389,11 +373,7 @@ mod tests {
         checker.overwrite_healthy_nodes(vec![node_1.clone(), node_2.clone()]);
         tokio::time::sleep(3 * check_interval).await;
         let routed_domains = route_n_times(6, Arc::clone(&route_provider));
-        assert_routed_domains(
-            routed_domains,
-            vec![node_1.domain.clone(), node_2.domain.clone()],
-            3,
-        );
+        assert_routed_domains(routed_domains, vec![node_1.domain(), node_2.domain()], 3);
 
         // Teardown.
         route_provider.stop().await;
@@ -428,7 +408,7 @@ mod tests {
         // Test 1: multiple route() calls return a single domain=ic0.app, as the seed is healthy.
         tokio::time::sleep(2 * check_interval).await;
         let routed_domains = route_n_times(3, Arc::clone(&route_provider));
-        assert_routed_domains(routed_domains, vec![node_1.clone().domain], 3);
+        assert_routed_domains(routed_domains, vec![node_1.domain()], 3);
 
         // Test 2: calls to route() return an error, as no healthy nodes exist.
         checker.overwrite_healthy_nodes(vec![]);
@@ -519,17 +499,13 @@ mod tests {
 
         // Test 1: calls to route() return only a healthy seed ic0.app.
         let routed_domains = route_n_times(3, Arc::clone(&route_provider));
-        assert_routed_domains(routed_domains, vec![node_1.clone().domain], 3);
+        assert_routed_domains(routed_domains, vec![node_1.domain()], 3);
 
         // Test 2: calls to route() return two healthy seeds, as the unhealthy seed becomes healthy.
         checker.overwrite_healthy_nodes(vec![node_1.clone(), node_2.clone()]);
         tokio::time::sleep(2 * check_interval).await;
         let routed_domains = route_n_times(6, Arc::clone(&route_provider));
-        assert_routed_domains(
-            routed_domains,
-            vec![node_1.clone().domain, node_2.clone().domain],
-            3,
-        );
+        assert_routed_domains(routed_domains, vec![node_1.domain(), node_2.domain()], 3);
 
         // Teardown.
         route_provider.stop().await;
@@ -570,7 +546,7 @@ mod tests {
         // HealthManagerActor shouldn't update the snapshot, if the list of fetched nodes is empty, thus we observe the healthy seed.
         tokio::time::sleep(snapshot_update_duration).await;
         let routed_domains = route_n_times(3, Arc::clone(&route_provider));
-        assert_routed_domains(routed_domains, vec![node_1.clone().domain], 3);
+        assert_routed_domains(routed_domains, vec![node_1.domain()], 3);
 
         // Test 2: multiple route() calls should now return 3 different domains with equal fairness (repetition).
         // Three nodes are added to the topology, i.e. now the fetched nodes list is non-empty.
@@ -582,11 +558,7 @@ mod tests {
         let routed_domains = route_n_times(6, Arc::clone(&route_provider));
         assert_routed_domains(
             routed_domains,
-            vec![
-                node_1.clone().domain,
-                node_2.clone().domain,
-                node_3.clone().domain,
-            ],
+            vec![node_1.domain(), node_2.domain(), node_3.domain()],
             2,
         );
 
