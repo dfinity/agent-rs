@@ -10,7 +10,7 @@ use crate::agent::http_transport::dynamic_routing::{
     health_check::HealthCheckStatus, node::Node, snapshot::routing_snapshot::RoutingSnapshot,
 };
 
-///
+/// Routing snapshot, which samples nodes in a round-robin fashion.
 #[derive(Default, Debug, Clone)]
 pub struct RoundRobinRoutingSnapshot {
     current_idx: Arc<AtomicUsize>,
@@ -19,7 +19,7 @@ pub struct RoundRobinRoutingSnapshot {
 }
 
 impl RoundRobinRoutingSnapshot {
-    ///
+    /// Creates a new instance of `RoundRobinRoutingSnapshot`.
     pub fn new() -> Self {
         Self {
             current_idx: Arc::new(AtomicUsize::new(0)),
@@ -47,14 +47,14 @@ impl RoutingSnapshot for RoundRobinRoutingSnapshot {
 
     fn sync_nodes(&mut self, nodes: &[Node]) -> anyhow::Result<bool> {
         let new_nodes = HashSet::from_iter(nodes.iter().cloned());
-        // Find nodes removed from snapshot.
+        // Find nodes removed from topology.
         let nodes_removed: Vec<_> = self
             .existing_nodes
             .difference(&new_nodes)
             .cloned()
             .collect();
         let has_removed_nodes = !nodes_removed.is_empty();
-        // Find nodes added to snapshot.
+        // Find nodes added to topology.
         let nodes_added: Vec<_> = new_nodes
             .difference(&self.existing_nodes)
             .cloned()
@@ -74,7 +74,7 @@ impl RoutingSnapshot for RoundRobinRoutingSnapshot {
         if !self.existing_nodes.contains(node) {
             return Ok(false);
         }
-        if health.latency.is_some() {
+        if health.is_healthy() {
             Ok(self.healthy_nodes.insert(node.clone()))
         } else {
             Ok(self.healthy_nodes.remove(node))
@@ -113,10 +113,8 @@ mod tests {
         let mut snapshot = RoundRobinRoutingSnapshot::new();
         // This node is not present in existing_nodes
         let node = Node::new("api1.com").unwrap();
-        let healthy = HealthCheckStatus {
-            latency: Some(Duration::from_secs(1)),
-        };
-        let unhealthy = HealthCheckStatus { latency: None };
+        let healthy = HealthCheckStatus::new(Some(Duration::from_secs(1)));
+        let unhealthy = HealthCheckStatus::new(None);
         // Act 1
         let is_updated = snapshot
             .update_node(&node, healthy)
@@ -142,9 +140,7 @@ mod tests {
         let node = Node::new("api1.com").unwrap();
         // node is present in existing_nodes, but not in healthy_nodes
         snapshot.existing_nodes.insert(node.clone());
-        let health = HealthCheckStatus {
-            latency: Some(Duration::from_secs(1)),
-        };
+        let health = HealthCheckStatus::new(Some(Duration::from_secs(1)));
         // Act
         let is_updated = snapshot
             .update_node(&node, health)
@@ -162,7 +158,7 @@ mod tests {
         let node = Node::new("api1.com").unwrap();
         snapshot.existing_nodes.insert(node.clone());
         snapshot.healthy_nodes.insert(node.clone());
-        let unhealthy = HealthCheckStatus { latency: None };
+        let unhealthy = HealthCheckStatus::new(None);
         // Act
         let is_updated = snapshot
             .update_node(&node, unhealthy)

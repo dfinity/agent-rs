@@ -11,7 +11,7 @@ use crate::agent::http_transport::{
         health_check::{HealthCheck, HealthCheckStatus},
         node::Node,
         nodes_fetch::Fetch,
-        type_aliases::GlobalShared,
+        type_aliases::AtomicSwap,
     },
     route_provider::RouteProvider,
 };
@@ -54,8 +54,8 @@ where
 
 #[derive(Debug)]
 pub struct NodesFetcherMock {
-    // A mocked set of nodes existing in the topology.
-    pub nodes: GlobalShared<Vec<Node>>,
+    // A set of nodes, existing in the topology.
+    pub nodes: AtomicSwap<Vec<Node>>,
 }
 
 #[async_trait]
@@ -86,7 +86,7 @@ impl NodesFetcherMock {
 
 #[derive(Debug)]
 pub struct NodeHealthCheckerMock {
-    pub healthy_nodes: GlobalShared<HashSet<Node>>,
+    healthy_nodes: Arc<ArcSwap<HashSet<Node>>>,
 }
 
 impl Default for NodeHealthCheckerMock {
@@ -103,7 +103,7 @@ impl HealthCheck for NodeHealthCheckerMock {
             true => Some(Duration::from_secs(1)),
             false => None,
         };
-        Ok(HealthCheckStatus { latency })
+        Ok(HealthCheckStatus::new(latency))
     }
 }
 

@@ -16,23 +16,28 @@ const WINDOW_SIZE: usize = 15;
 // Space complexity: O(N)
 type LatencyMovAvg = SumTreeSMA<Duration, u32, WINDOW_SIZE>;
 
+/// A node, which stores health check latencies in the form of moving average.
 #[derive(Clone, Debug)]
 struct WeightedNode {
     node: Node,
+    /// Moving mean of latencies measurements.
     latency_mov_avg: LatencyMovAvg,
+    /// Weight of the node (invers of the average latency), used for stochastic weighted random sampling.
     weight: f64,
 }
 
-///
+/// Routing snapshot for latency-based routing.
+/// In this routing strategy, nodes are randomly selected based on their averaged latency of the last WINDOW_SIZE health checks.
+/// Nodes with smaller average latencies are preferred for routing.
 #[derive(Default, Debug, Clone)]
 pub struct LatencyRoutingSnapshot {
     weighted_nodes: Vec<WeightedNode>,
     existing_nodes: HashSet<Node>,
 }
 
-///
+/// Implementation of the LatencyRoutingSnapshot.
 impl LatencyRoutingSnapshot {
-    ///
+    /// Creates a new LatencyRoutingSnapshot.
     pub fn new() -> Self {
         Self {
             weighted_nodes: vec![],
@@ -41,7 +46,8 @@ impl LatencyRoutingSnapshot {
     }
 }
 
-// select weight index based on the input number in range [0, 1]
+/// Helper function to sample nodes based on their weights.
+/// Here weight index is selected based on the input number in range [0, 1]
 #[inline(always)]
 fn weighted_sample(weights: &[f64], number: f64) -> Option<usize> {
     if !(0.0..=1.0).contains(&number) {
@@ -80,7 +86,7 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
 
     fn sync_nodes(&mut self, nodes: &[Node]) -> anyhow::Result<bool> {
         let new_nodes = HashSet::from_iter(nodes.iter().cloned());
-        // Find nodes removed from snapshot.
+        // Find nodes removed from topology.
         let nodes_removed: Vec<_> = self
             .existing_nodes
             .difference(&new_nodes)
@@ -110,7 +116,7 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
         }
 
         // If latency is None (meaning Node is unhealthy), we assign some big value
-        let latency = health.latency.unwrap_or(MAX_LATENCY);
+        let latency = health.latency().unwrap_or(MAX_LATENCY);
 
         if let Some(idx) = self.weighted_nodes.iter().position(|x| &x.node == node) {
             // Node is already in the array (it is not the first update_node() call).
@@ -166,9 +172,7 @@ mod tests {
         // Arrange
         let mut snapshot = LatencyRoutingSnapshot::new();
         let node = Node::new("api1.com").unwrap();
-        let health = HealthCheckStatus {
-            latency: Some(Duration::from_secs(1)),
-        };
+        let health = HealthCheckStatus::new(Some(Duration::from_secs(1)));
         // Act
         let is_updated = snapshot
             .update_node(&node, health)
@@ -185,9 +189,7 @@ mod tests {
         // Arrange
         let mut snapshot = LatencyRoutingSnapshot::new();
         let node = Node::new("api1.com").unwrap();
-        let health = HealthCheckStatus {
-            latency: Some(Duration::from_secs(1)),
-        };
+        let health = HealthCheckStatus::new(Some(Duration::from_secs(1)));
         snapshot.existing_nodes.insert(node.clone());
         // Check first update
         let is_updated = snapshot
@@ -203,9 +205,7 @@ mod tests {
         assert_eq!(weighted_node.weight, 1.0);
         assert_eq!(snapshot.next().unwrap(), node);
         // Check second update
-        let health = HealthCheckStatus {
-            latency: Some(Duration::from_secs(2)),
-        };
+        let health = HealthCheckStatus::new(Some(Duration::from_secs(2)));
         let is_updated = snapshot
             .update_node(&node, health)
             .expect("node update failed");
@@ -217,9 +217,7 @@ mod tests {
         );
         assert_eq!(weighted_node.weight, 1.0 / 1.5);
         // Check third update
-        let health = HealthCheckStatus {
-            latency: Some(Duration::from_secs(3)),
-        };
+        let health = HealthCheckStatus::new(Some(Duration::from_secs(3)));
         let is_updated = snapshot
             .update_node(&node, health)
             .expect("node update failed");
@@ -231,7 +229,7 @@ mod tests {
         );
         assert_eq!(weighted_node.weight, 0.5);
         // Check forth update with none
-        let health = HealthCheckStatus { latency: None };
+        let health = HealthCheckStatus::new(None);
         let is_updated = snapshot
             .update_node(&node, health)
             .expect("node update failed");

@@ -12,7 +12,7 @@ use crate::agent::{
     http_transport::{
         dynamic_routing::{
             health_check::HEALTH_MANAGER_ACTOR, messages::FetchedNodes, node::Node,
-            snapshot::routing_snapshot::RoutingSnapshot, type_aliases::GlobalShared,
+            snapshot::routing_snapshot::RoutingSnapshot, type_aliases::AtomicSwap,
             type_aliases::SenderWatch,
         },
         reqwest_transport::ReqwestTransport,
@@ -22,14 +22,14 @@ use crate::agent::{
 
 const NODES_FETCH_ACTOR: &str = "NodesFetchActor";
 
-///
+/// Fetcher of nodes in the topology.
 #[async_trait]
 pub trait Fetch: Sync + Send + Debug {
-    ///
+    /// Fetches the nodes from the topology.
     async fn fetch(&self, url: Url) -> anyhow::Result<Vec<Node>>;
 }
 
-///
+/// A struct representing the fetcher of the nodes from the topology.
 #[derive(Debug)]
 pub struct NodesFetcher {
     http_client: Client,
@@ -37,7 +37,7 @@ pub struct NodesFetcher {
 }
 
 impl NodesFetcher {
-    ///
+    /// Creates a new `NodesFetcher` instance.
     pub fn new(http_client: Client, subnet_id: Principal) -> Self {
         Self {
             http_client,
@@ -71,13 +71,19 @@ impl Fetch for NodesFetcher {
     }
 }
 
-///
+/// A struct representing the actor responsible for fetching existing nodes and communicating it with the listener.
 pub struct NodesFetchActor<S> {
+    /// The fetcher object responsible for fetching the nodes.
     fetcher: Arc<dyn Fetch>,
+    /// Time period between fetches.
     period: Duration,
+    /// The interval to wait before retrying to fetch the nodes in case of failures.
     fetch_retry_interval: Duration,
+    /// Communication channel with the listener.
     fetch_sender: SenderWatch<FetchedNodes>,
-    snapshot: GlobalShared<S>,
+    /// The snapshot of the routing table.
+    routing_snapshot: AtomicSwap<S>,
+    /// The token to cancel/stop the actor.
     token: CancellationToken,
 }
 
@@ -85,13 +91,13 @@ impl<S> NodesFetchActor<S>
 where
     S: RoutingSnapshot,
 {
-    ///
+    /// Creates a new `NodesFetchActor` instance.
     pub fn new(
         fetcher: Arc<dyn Fetch>,
         period: Duration,
         retry_interval: Duration,
         fetch_sender: SenderWatch<FetchedNodes>,
-        snapshot: GlobalShared<S>,
+        snapshot: AtomicSwap<S>,
         token: CancellationToken,
     ) -> Self {
         Self {
@@ -99,26 +105,26 @@ where
             period,
             fetch_retry_interval: retry_interval,
             fetch_sender,
-            snapshot,
+            routing_snapshot: snapshot,
             token,
         }
     }
 
-    ///
+    /// Runs the actor.
     pub async fn run(self) {
         let mut interval = time::interval(self.period);
         loop {
             tokio::select! {
                 _ = interval.tick() => {
                         // Retry until success:
-                        // - try to get a healthy node from the snapshot
+                        // - try to get a healthy node from the routing snapshot
                         //   - if snapshot is empty, break the cycle and wait for the next fetch cycle
-                        // - using the healthy node, try to fetch new nodes from topology
+                        // - using the healthy node, try to fetch nodes from topology
                         //   - if failure, sleep and retry
                         // - try send fetched nodes to the listener
-                        //   - failure should never happen
+                        //   - failure should never happen, but we trace it if it does
                         loop {
-                            let snapshot = self.snapshot.load();
+                            let snapshot = self.routing_snapshot.load();
                             if let Some(node) = snapshot.next() {
                                 match self.fetcher.fetch((&node).into()).await {
                                     Ok(nodes) => {

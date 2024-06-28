@@ -25,7 +25,7 @@ use crate::{
             node::Node,
             nodes_fetch::{Fetch, NodesFetchActor, NodesFetcher},
             snapshot::routing_snapshot::RoutingSnapshot,
-            type_aliases::GlobalShared,
+            type_aliases::AtomicSwap,
         },
         route_provider::RouteProvider,
     },
@@ -46,17 +46,28 @@ const HEALTH_CHECK_PERIOD: Duration = Duration::from_secs(1);
 
 const DYNAMIC_ROUTE_PROVIDER: &str = "DynamicRouteProvider";
 
-///
+/// A dynamic route provider.
+/// It spawns the discovery service (`NodesFetchActor`) for fetching the latest nodes topology.
+/// It also spawns the `HealthManagerActor`, which orchestrates the health check tasks for each node and updates routing snapshot.
 #[derive(Debug)]
 pub struct DynamicRouteProvider<S> {
+    /// Fetcher for fetching the latest nodes topology.
     fetcher: Arc<dyn Fetch>,
+    /// Periodicity of fetching the latest nodes topology.
     fetch_period: Duration,
+    /// Interval for retrying fetching the nodes in case of error.
     fetch_retry_interval: Duration,
+    /// Health checker for checking the health of the nodes.
     checker: Arc<dyn HealthCheck>,
+    /// Periodicity of checking the health of the nodes.
     check_period: Duration,
-    snapshot: GlobalShared<S>,
+    /// Snapshot of the routing nodes.
+    routing_snapshot: AtomicSwap<S>,
+    /// Task tracker for managing the spawned tasks.
     tracker: TaskTracker,
+    /// Initial seed nodes, which are used for the initial fetching of the nodes.
     seeds: Vec<Node>,
+    /// Cancellation token for stopping the spawned tasks.
     token: CancellationToken,
 }
 
@@ -65,7 +76,7 @@ where
     S: RoutingSnapshot + 'static,
 {
     fn route(&self) -> Result<Url, AgentError> {
-        let snapshot = self.snapshot.load();
+        let snapshot = self.routing_snapshot.load();
         let node = snapshot.next().ok_or_else(|| {
             AgentError::RouteProviderError("No healthy API nodes found.".to_string())
         })?;
@@ -77,7 +88,7 @@ impl<S> DynamicRouteProvider<S>
 where
     S: RoutingSnapshot + 'static,
 {
-    ///
+    /// Creates a new instance of `DynamicRouteProvider`.
     pub fn new(snapshot: S, seeds: Vec<Node>, http_client: Client) -> Self {
         let fetcher = Arc::new(NodesFetcher::new(
             http_client.clone(),
@@ -91,31 +102,31 @@ where
             checker,
             check_period: HEALTH_CHECK_PERIOD,
             seeds,
-            snapshot: Arc::new(ArcSwap::from_pointee(snapshot)),
+            routing_snapshot: Arc::new(ArcSwap::from_pointee(snapshot)),
             tracker: TaskTracker::new(),
             token: CancellationToken::new(),
         }
     }
 
-    ///
+    /// Sets the fetcher for fetching the latest nodes topology.
     pub fn with_fetcher(mut self, fetcher: Arc<dyn Fetch>) -> Self {
         self.fetcher = fetcher;
         self
     }
 
-    ///
+    /// Sets the periodicity of fetching the latest nodes topology.
     pub fn with_fetch_period(mut self, period: Duration) -> Self {
         self.fetch_period = period;
         self
     }
 
-    ///
+    /// Sets the interval for retrying fetching the nodes in case of error.
     pub fn with_checker(mut self, checker: Arc<dyn HealthCheck>) -> Self {
         self.checker = checker;
         self
     }
 
-    ///
+    /// Sets the periodicity of checking the health of the nodes.
     pub fn with_check_period(mut self, period: Duration) -> Self {
         self.check_period = period;
         self
@@ -133,14 +144,14 @@ where
         // Communication channel between NodesFetchActor and HealthManagerActor.
         let (fetch_sender, fetch_receiver) = watch::channel(None);
 
-        // Communication channel with HealthManagerActor to receive info about healthy seeds.
+        // Communication channel with HealthManagerActor to receive info about healthy seed nodes (used only once).
         let (init_sender, mut init_receiver) = mpsc::channel(1);
 
         // Start the receiving part first.
         let health_manager_actor = HealthManagerActor::new(
             Arc::clone(&self.checker),
             self.check_period,
-            Arc::clone(&self.snapshot),
+            Arc::clone(&self.routing_snapshot),
             fetch_receiver,
             init_sender,
             self.token.clone(),
@@ -156,7 +167,7 @@ where
             error!("{DYNAMIC_ROUTE_PROVIDER}: failed to send results to HealthManager: {err:?}");
         }
 
-        // Try await healthy seeds.
+        // Try await for healthy seeds.
         let found_healthy_seeds =
             match timeout(TIMEOUT_AWAIT_HEALTHY_SEED, init_receiver.recv()).await {
                 Ok(_) => {
@@ -174,6 +185,7 @@ where
                     false
                 }
             };
+        // We can close the channel now.
         init_receiver.close();
 
         let fetch_actor = NodesFetchActor::new(
@@ -181,7 +193,7 @@ where
             self.fetch_period,
             self.fetch_retry_interval,
             fetch_sender,
-            Arc::clone(&self.snapshot),
+            Arc::clone(&self.routing_snapshot),
             self.token.clone(),
         );
         self.tracker.spawn(async move { fetch_actor.run().await });
@@ -189,9 +201,9 @@ where
             "{DYNAMIC_ROUTE_PROVIDER}: NodesFetchActor and HealthManagerActor started successfully"
         );
 
-        (found_healthy_seeds)
-            .then_some(())
-            .ok_or(anyhow!("No healthy seeds found"))
+        (found_healthy_seeds).then_some(()).ok_or(anyhow!(
+            "No healthy seeds found, they may become healthy later ..."
+        ))
     }
 
     /// Kill all running tasks.
@@ -364,7 +376,7 @@ mod tests {
             .await
             .unwrap_err()
             .to_string()
-            .contains("No healthy seeds found"));
+            .contains("No healthy seeds found, they may become healthy later ..."));
 
         // Test 1: calls to route() return an error, as no healthy seeds exist.
         for _ in 0..4 {
@@ -461,7 +473,7 @@ mod tests {
             .await
             .unwrap_err()
             .to_string()
-            .contains("No healthy seeds found"));
+            .contains("No healthy seeds found, they may become healthy later ..."));
 
         // Test: calls to route() return an error, as no healthy seeds exist.
         for _ in 0..4 {

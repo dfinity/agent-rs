@@ -16,48 +16,50 @@ use crate::agent::http_transport::dynamic_routing::{
     messages::{FetchedNodes, NodeHealthState},
     node::Node,
     snapshot::routing_snapshot::RoutingSnapshot,
-    type_aliases::{GlobalShared, ReceiverMpsc, ReceiverWatch, SenderMpsc},
+    type_aliases::{AtomicSwap, ReceiverMpsc, ReceiverWatch, SenderMpsc},
 };
 
 const CHANNEL_BUFFER: usize = 128;
 
-///
+/// A trait representing a health check of the node.
 #[async_trait]
 pub trait HealthCheck: Send + Sync + Debug {
-    ///
+    /// Checks the health of the node.
     async fn check(&self, node: &Node) -> anyhow::Result<HealthCheckStatus>;
 }
 
-///
+/// A struct representing the health check status of the node.
 #[derive(Clone, PartialEq, Debug, Default)]
 pub struct HealthCheckStatus {
-    ///
-    pub latency: Option<Duration>,
+    latency: Option<Duration>,
 }
 
-///
 impl HealthCheckStatus {
-    ///
+    /// Creates a new `HealthCheckStatus` instance.
     pub fn new(latency: Option<Duration>) -> Self {
         Self { latency }
     }
 
-    ///
+    /// Checks if the node is healthy.
     pub fn is_healthy(&self) -> bool {
         self.latency.is_some()
     }
+
+    /// Get the latency of the health check.
+    pub fn latency(&self) -> Option<Duration> {
+        self.latency
+    }
 }
 
-///
+/// A struct implementing the `HealthCheck` for the nodes.
 #[derive(Debug)]
 pub struct HealthChecker {
     http_client: Client,
     timeout: Duration,
 }
 
-///
 impl HealthChecker {
-    ///
+    /// Creates a new `HealthChecker` instance.
     pub fn new(http_client: Client, timeout: Duration) -> Self {
         Self {
             http_client,
@@ -96,16 +98,22 @@ impl HealthCheck for HealthChecker {
 
 const HEALTH_CHECK_ACTOR: &str = "HealthCheckActor";
 
+/// A struct performing the health check of the node and sending the health status to the listener.
 struct HealthCheckActor {
+    /// The health checker.
     checker: Arc<dyn HealthCheck>,
+    /// The period of the health check.
     period: Duration,
+    /// The node to check.
     node: Node,
+    /// The sender channel (listener) to send the health status.
     sender_channel: SenderMpsc<NodeHealthState>,
+    /// The cancellation token of the actor.
     token: CancellationToken,
 }
 
 impl HealthCheckActor {
-    pub fn new(
+    fn new(
         checker: Arc<dyn HealthCheck>,
         period: Duration,
         node: Node,
@@ -121,7 +129,8 @@ impl HealthCheckActor {
         }
     }
 
-    pub async fn run(self) {
+    /// Runs the actor.
+    async fn run(self) {
         let mut interval = time::interval(self.period);
         loop {
             tokio::select! {
@@ -143,21 +152,34 @@ impl HealthCheckActor {
     }
 }
 
-///
+/// The name of the health manager actor.
 pub const HEALTH_MANAGER_ACTOR: &str = "HealthManagerActor";
 
-///
+/// A struct managing the health checks of the nodes.
+/// It receives the fetched nodes from the `NodesFetchActor` and starts the health checks for them.
+/// It also receives the health status of the nodes from the `HealthCheckActor/s` and updates the routing snapshot.
 pub struct HealthManagerActor<S> {
+    /// The health checker.
     checker: Arc<dyn HealthCheck>,
+    /// The period of the health check.
     period: Duration,
-    nodes_snapshot: GlobalShared<S>,
+    /// The routing snapshot, storing the nodes.   
+    routing_snapshot: AtomicSwap<S>,
+    /// The receiver channel to listen to the fetched nodes messages.
     fetch_receiver: ReceiverWatch<FetchedNodes>,
+    /// The sender channel to send the health status of the nodes back to HealthManagerActor.
     check_sender: SenderMpsc<NodeHealthState>,
+    /// The receiver channel to receive the health status of the nodes from the `HealthCheckActor/s`.
     check_receiver: ReceiverMpsc<NodeHealthState>,
+    /// The sender channel to send the initialization status to DynamicRouteProvider (used only once in the init phase).
     init_sender: SenderMpsc<bool>,
+    /// The cancellation token of the actor.
     token: CancellationToken,
+    /// The cancellation token for all the health checks.
     nodes_token: CancellationToken,
+    /// The task tracker of the health checks, waiting for the tasks to exit (graceful termination).
     nodes_tracker: TaskTracker,
+    /// The flag indicating if this actor is initialized with healthy nodes.
     is_initialized: bool,
 }
 
@@ -165,11 +187,11 @@ impl<S> HealthManagerActor<S>
 where
     S: RoutingSnapshot,
 {
-    ///
+    /// Creates a new `HealthManagerActor` instance.
     pub fn new(
         checker: Arc<dyn HealthCheck>,
         period: Duration,
-        nodes_snapshot: GlobalShared<S>,
+        routing_snapshot: AtomicSwap<S>,
         fetch_receiver: ReceiverWatch<FetchedNodes>,
         init_sender: SenderMpsc<bool>,
         token: CancellationToken,
@@ -179,7 +201,7 @@ where
         Self {
             checker,
             period,
-            nodes_snapshot,
+            routing_snapshot,
             fetch_receiver,
             check_sender,
             check_receiver,
@@ -191,11 +213,11 @@ where
         }
     }
 
-    ///
+    /// Runs the actor.
     pub async fn run(mut self) {
         loop {
             tokio::select! {
-                // Check if a new array of fetched nodes appeared in the channel from NodesFetchService.
+                // Process a new array of fetched nodes from NodesFetchActor, if it appeared in the channel.
                 result = self.fetch_receiver.changed() => {
                     if let Err(err) = result {
                         error!("{HEALTH_MANAGER_ACTOR}: nodes fetch sender has been dropped: {err:?}");
@@ -206,7 +228,7 @@ where
                     let Some(FetchedNodes { nodes }) = self.fetch_receiver.borrow_and_update().clone() else { continue };
                     self.handle_fetch_update(nodes).await;
                 }
-                // Receive health check messages from all running NodeHealthChecker/s.
+                // Receive health check messages from all running HealthCheckActor/s.
                 Some(msg) = self.check_receiver.recv() => {
                     self.handle_health_update(msg).await;
                 }
@@ -221,13 +243,13 @@ where
     }
 
     async fn handle_health_update(&mut self, msg: NodeHealthState) {
-        let current_snapshot = self.nodes_snapshot.load_full();
+        let current_snapshot = self.routing_snapshot.load_full();
         let mut new_snapshot = (*current_snapshot).clone();
         if let Err(err) = new_snapshot.update_node(&msg.node, msg.health.clone()) {
             error!("{HEALTH_MANAGER_ACTOR}: failed to update snapshot: {err:?}");
             return;
         }
-        self.nodes_snapshot.store(Arc::new(new_snapshot));
+        self.routing_snapshot.store(Arc::new(new_snapshot));
         if !self.is_initialized && msg.health.is_healthy() {
             self.is_initialized = true;
             // If TIMEOUT_AWAIT_HEALTHY_SEED has been exceeded, the receiver was dropped and send would thus fail. We ignore the failure.
@@ -244,11 +266,11 @@ where
             return;
         }
         debug!("{HEALTH_MANAGER_ACTOR}: fetched nodes received {:?}", nodes);
-        let current_snapshot = self.nodes_snapshot.load_full();
+        let current_snapshot = self.routing_snapshot.load_full();
         let mut new_snapshot = (*current_snapshot).clone();
         // If the snapshot has changed, store it and restart all node's health checks.
         if let Ok(true) = new_snapshot.sync_nodes(&nodes) {
-            self.nodes_snapshot.store(Arc::new(new_snapshot));
+            self.routing_snapshot.store(Arc::new(new_snapshot));
             self.stop_all_checks().await;
             self.start_checks(nodes.to_vec());
         }
