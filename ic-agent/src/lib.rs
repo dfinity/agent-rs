@@ -73,7 +73,6 @@
 //!   let response = agent.update(&management_canister_id, "provisional_create_canister_with_cycles")
 //!     .with_effective_canister_id(effective_canister_id)
 //!     .with_arg(Encode!(&Argument { amount: None})?)
-//!     .call_and_wait()
 //!     .await?;
 //!
 //!   let result = Decode!(response.as_slice(), CreateCanisterResult)?;
@@ -116,6 +115,7 @@ compile_error!("Feature `hyper` cannot be used from WASM.");
 pub mod agent;
 pub mod export;
 pub mod identity;
+mod util;
 
 use agent::response_authentication::LookupPath;
 #[doc(inline)]

@@ -185,18 +185,21 @@ fn canister_reject_call() {
 
         let result = alice.wallet_send(*bob.canister_id(), 1_000_000).await;
 
-        assert!(matches!(
-            result,
-            Err(AgentError::ReplicaError(RejectResponse {
-                reject_code: RejectCode::DestinationInvalid,
-                reject_message,
-                error_code: None,
-                ..
-            })) if reject_message == format!(
-                "Canister {} has no update method 'wallet_send'",
-                alice.canister_id()
-            )
-        ));
+        assert!(
+            matches!(
+                &result,
+                Err(AgentError::CertifiedReject(RejectResponse {
+                    reject_code: RejectCode::CanisterError,
+                    reject_message,
+                    error_code: None,
+                    ..
+                })) if reject_message.contains(&format!(
+                    "Canister {}: Canister has no update method 'wallet_send'",
+                    alice.canister_id()
+                ))
+            ),
+            "wrong error: {result:?}"
+        );
 
         Ok(())
     });
@@ -421,6 +424,8 @@ fn wallet_create_wallet() {
                 memory_allocation: None,
                 freezing_threshold: None,
                 reserved_cycles_limit: None,
+                wasm_memory_limit: None,
+                log_visibility: None,
             },
         };
         let args = Argument::from_candid((create_args,));

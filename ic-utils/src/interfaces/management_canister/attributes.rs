@@ -207,6 +207,53 @@ try_from_reserved_cycles_limit_decl!(i64);
 try_from_reserved_cycles_limit_decl!(i128);
 try_from_reserved_cycles_limit_decl!(u128);
 
+/// An error encountered when attempting to construct a [`WasmMemoryLimit`].
+#[derive(Error, Debug)]
+pub enum WasmMemoryLimitError {
+    /// The provided value was not in the range [0, 2^48] (i.e. 256 TiB).
+    #[error("Wasm memory limit must be between 0 and 2^48 (i.e 256TiB), inclusively. Got {0}.")]
+    InvalidMemoryLimit(i64),
+}
+
+/// A soft limit on the Wasm memory usage of the canister. Update calls,
+/// timers, heartbeats, install, and post-upgrade fail if the Wasm memory
+/// usage exceeds this limit. The main purpose of this field is to protect
+/// against the case when the canister reaches the hard 4GiB limit.
+/// Must be a number between 0 and 2^48^ (i.e 256TB), inclusively.
+#[derive(Copy, Clone, Debug)]
+pub struct WasmMemoryLimit(u64);
+
+impl std::convert::From<WasmMemoryLimit> for u64 {
+    fn from(wasm_memory_limit: WasmMemoryLimit) -> Self {
+        wasm_memory_limit.0
+    }
+}
+
+macro_rules! try_from_wasm_memory_limit_decl {
+    ( $t: ty ) => {
+        impl std::convert::TryFrom<$t> for WasmMemoryLimit {
+            type Error = WasmMemoryLimitError;
+
+            fn try_from(value: $t) -> Result<Self, Self::Error> {
+                if (value as i64) < 0 || (value as i64) > (1i64 << 48) {
+                    Err(Self::Error::InvalidMemoryLimit(value as i64))
+                } else {
+                    Ok(Self(value as u64))
+                }
+            }
+        }
+    };
+}
+
+try_from_wasm_memory_limit_decl!(u8);
+try_from_wasm_memory_limit_decl!(u16);
+try_from_wasm_memory_limit_decl!(u32);
+try_from_wasm_memory_limit_decl!(u64);
+try_from_wasm_memory_limit_decl!(i8);
+try_from_wasm_memory_limit_decl!(i16);
+try_from_wasm_memory_limit_decl!(i32);
+try_from_wasm_memory_limit_decl!(i64);
+
 #[test]
 #[allow(clippy::useless_conversion)]
 fn can_convert_compute_allocation() {
@@ -295,4 +342,33 @@ fn can_convert_reserved_cycles_limit() {
 
     let ft = ReservedCyclesLimit(100);
     let _ft_ft: ReservedCyclesLimit = ReservedCyclesLimit::try_from(ft).unwrap();
+}
+
+#[test]
+#[allow(clippy::useless_conversion)]
+fn can_convert_wasm_memory_limit() {
+    use std::convert::{TryFrom, TryInto};
+
+    // This is more of a compiler test than an actual test.
+    let _ma_u8: WasmMemoryLimit = 1u8.try_into().unwrap();
+    let _ma_u16: WasmMemoryLimit = 1u16.try_into().unwrap();
+    let _ma_u32: WasmMemoryLimit = 1u32.try_into().unwrap();
+    let _ma_u64: WasmMemoryLimit = 1u64.try_into().unwrap();
+    let _ma_i8: WasmMemoryLimit = 1i8.try_into().unwrap();
+    let _ma_i16: WasmMemoryLimit = 1i16.try_into().unwrap();
+    let _ma_i32: WasmMemoryLimit = 1i32.try_into().unwrap();
+    let _ma_i64: WasmMemoryLimit = 1i64.try_into().unwrap();
+
+    let ma = WasmMemoryLimit(100);
+    let _ma_ma: WasmMemoryLimit = WasmMemoryLimit::try_from(ma).unwrap();
+
+    assert!(matches!(
+        WasmMemoryLimit::try_from(-4).unwrap_err(),
+        WasmMemoryLimitError::InvalidMemoryLimit(-4)
+    ));
+
+    assert!(matches!(
+        WasmMemoryLimit::try_from(562949953421312_u64).unwrap_err(),
+        WasmMemoryLimitError::InvalidMemoryLimit(562949953421312)
+    ));
 }

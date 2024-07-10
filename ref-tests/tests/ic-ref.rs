@@ -96,7 +96,7 @@ mod management_canister {
                     .await;
 
                 assert!(matches!(result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                     reject_code: RejectCode::DestinationInvalid,
                     reject_message,
                     error_code: Some(ref error_code)
@@ -136,7 +136,7 @@ mod management_canister {
                 .call_and_wait()
                 .await;
 
-            assert!(matches!(result, Err(AgentError::ReplicaError { .. })));
+            assert!(matches!(result, Err(AgentError::CertifiedReject { .. })));
 
             // Reinstall should succeed.
             ic00.install_code(&canister_id, &canister_wasm)
@@ -157,7 +157,7 @@ mod management_canister {
                 .with_mode(InstallMode::Reinstall)
                 .call_and_wait()
                 .await;
-            assert!(matches!(result, Err(AgentError::ReplicaError(..))));
+            assert!(matches!(result, Err(AgentError::UncertifiedReject(..))));
 
             // Upgrade should succeed.
             ic00.install_code(&canister_id, &canister_wasm)
@@ -171,7 +171,7 @@ mod management_canister {
                 .with_mode(InstallMode::Upgrade(None))
                 .call_and_wait()
                 .await;
-            assert!(matches!(result, Err(AgentError::ReplicaError(..))));
+            assert!(matches!(result, Err(AgentError::UncertifiedReject(..))));
 
             // Change controller.
             ic00.update_settings(&canister_id)
@@ -186,7 +186,7 @@ mod management_canister {
                 .call_and_wait()
                 .await;
             assert!(
-                matches!(result, Err(AgentError::ReplicaError(RejectResponse{
+                matches!(result, Err(AgentError::UncertifiedReject(RejectResponse{
                 reject_code: RejectCode::CanisterError,
                 reject_message,
                 error_code: Some(ref error_code),
@@ -400,7 +400,7 @@ mod management_canister {
     ) {
         for expected_rc in &allowed_reject_codes {
             if matches!(result,
-                Err(AgentError::ReplicaError(RejectResponse {
+                Err(AgentError::UncertifiedReject(RejectResponse {
                 reject_code,
                 ..
             })) if reject_code == *expected_rc)
@@ -411,7 +411,7 @@ mod management_canister {
 
         assert!(
             matches!(result, Err(AgentError::HttpError(_))),
-            "expect an HttpError, or a ReplicaError with reject_code in {:?}",
+            "expect an HttpError, or a CertifiedReject with reject_code in {:?}",
             allowed_reject_codes
         );
     }
@@ -454,7 +454,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
@@ -469,7 +469,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
@@ -497,11 +497,11 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
-                        reject_code: RejectCode::DestinationInvalid,
+                    Err(AgentError::CertifiedReject(RejectResponse {
+                        reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: None,
-                    })) if *reject_message == format!("Canister {canister_id} has no update method 'update'")
+                    })) if reject_message.contains(&format!("Canister {canister_id}: Canister has no update method 'update'"))
                 ),
                 "wrong error: {result:?}"
             );
@@ -511,12 +511,12 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
-                        reject_code: RejectCode::DestinationInvalid,
+                    Err(AgentError::UncertifiedReject(RejectResponse {
+                        reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
-                    })) if *reject_message == format!("IC0302: Canister {} has no query method 'query'", canister_id)
-                        && error_code == "IC0302",
+                    })) if reject_message.contains(&format!("Canister {}: Canister has no query method 'query'", canister_id))
+                        && error_code == "IC0536",
                 ),
                 "wrong error: {result:?}"
             );
@@ -535,7 +535,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::DestinationInvalid,
                         reject_message,
                         error_code: Some(error_code),
@@ -550,7 +550,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::DestinationInvalid,
                         reject_message,
                         error_code: Some(error_code),
@@ -564,7 +564,7 @@ mod management_canister {
             let result = ic00.canister_status(&canister_id).call_and_wait().await;
             assert!(
                 match &result {
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::DestinationInvalid,
                         reject_message,
                         error_code: Some(error_code),
@@ -584,7 +584,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse{
+                    Err(AgentError::UncertifiedReject(RejectResponse{
                         reject_code: RejectCode::DestinationInvalid,
                         reject_message,
                         error_code: Some(error_code),
@@ -630,7 +630,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
@@ -645,7 +645,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
@@ -663,7 +663,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
@@ -681,7 +681,7 @@ mod management_canister {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
+                    Err(AgentError::UncertifiedReject(RejectResponse {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
@@ -717,6 +717,8 @@ mod management_canister {
                     memory_allocation: None,
                     freezing_threshold: None,
                     reserved_cycles_limit: None,
+                    wasm_memory_limit: None,
+                    log_visibility: None,
                 },
             };
 
@@ -837,25 +839,25 @@ mod management_canister {
     #[test]
     fn chunked_wasm() {
         with_agent(|agent| async move {
-            let asm = b"\0asm\x01\0\0\0";
-            let asm_hash = Sha256::digest(asm).into();
+            let wasm = b"\0asm\x01\0\0\0";
+            let wasm_hash = Sha256::digest(wasm).to_vec();
             let mgmt = ManagementCanister::create(&agent);
-            let (canister,) = mgmt
+            let (canister_id,) = mgmt
                 .create_canister()
                 .as_provisional_create_with_amount(None)
                 .with_effective_canister_id(get_effective_canister_id())
                 .call_and_wait()
                 .await?;
             let (pt1,) = mgmt
-                .upload_chunk(&canister, &asm[0..4])
+                .upload_chunk(&canister_id, &wasm[0..4])
                 .call_and_wait()
                 .await?;
             let (pt2,) = mgmt
-                .upload_chunk(&canister, &asm[4..8])
+                .upload_chunk(&canister_id, &wasm[4..8])
                 .call_and_wait()
                 .await?;
-            mgmt.install_chunked_code(&canister, asm_hash)
-                .with_chunk_hashes(vec![pt1.hash, pt2.hash])
+            mgmt.install_chunked_code(&canister_id, &wasm_hash)
+                .with_chunk_hashes(vec![pt1, pt2])
                 .call_and_wait()
                 .await?;
             Ok(())
@@ -953,8 +955,8 @@ mod simple_calls {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
-                        reject_code: RejectCode::DestinationInvalid,
+                    Err(AgentError::CertifiedReject(RejectResponse {
+                        reject_code: RejectCode::CanisterError,
                         ..
                     })),
                 ),
@@ -978,8 +980,8 @@ mod simple_calls {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
-                        reject_code: RejectCode::DestinationInvalid,
+                    Err(AgentError::UncertifiedReject(RejectResponse {
+                        reject_code: RejectCode::CanisterError,
                         ..
                     }))
                 ),
@@ -999,7 +1001,10 @@ mod extras {
     };
     use ic_utils::{
         call::AsyncCall,
-        interfaces::{management_canister::builders::ComputeAllocation, ManagementCanister},
+        interfaces::{
+            management_canister::{builders::ComputeAllocation, LogVisibility},
+            ManagementCanister,
+        },
     };
     use ref_tests::get_effective_canister_id;
     use ref_tests::with_agent;
@@ -1212,11 +1217,11 @@ mod extras {
             assert!(
                 matches!(
                     &result,
-                    Err(AgentError::ReplicaError(RejectResponse {
-                        reject_code: RejectCode::DestinationInvalid,
+                    Err(AgentError::CertifiedReject(RejectResponse {
+                        reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: None,
-                    })) if reject_message == "Canister iimsn-6yaaa-aaaaa-afiaa-cai is already installed"
+                    })) if reject_message.contains("Canister iimsn-6yaaa-aaaaa-afiaa-cai is already installed")
                 ),
                 "wrong error: {result:?}"
             );
@@ -1229,6 +1234,138 @@ mod extras {
                 .call_and_wait()
                 .await
                 .unwrap();
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn create_with_wasm_memory_limit() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
+                .with_wasm_memory_limit(1_000_000_000)
+                .call_and_wait()
+                .await
+                .unwrap();
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.wasm_memory_limit,
+                Some(Nat::from(1_000_000_000_u64))
+            );
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn update_wasm_memory_limit() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
+                .with_effective_canister_id(get_effective_canister_id())
+                .with_wasm_memory_limit(1_000_000_000)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.wasm_memory_limit,
+                Some(Nat::from(1_000_000_000_u64))
+            );
+
+            ic00.update_settings(&canister_id)
+                .with_wasm_memory_limit(3_000_000_000_u64)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.wasm_memory_limit,
+                Some(Nat::from(3_000_000_000_u64))
+            );
+
+            let no_change: Option<u64> = None;
+            ic00.update_settings(&canister_id)
+                .with_optional_wasm_memory_limit(no_change)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.wasm_memory_limit,
+                Some(Nat::from(3_000_000_000_u64))
+            );
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn create_with_log_visibility() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
+                .with_log_visibility(LogVisibility::Public)
+                .call_and_wait()
+                .await
+                .unwrap();
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(result.0.settings.log_visibility, LogVisibility::Public);
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn update_log_visibility() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
+                .with_effective_canister_id(get_effective_canister_id())
+                .with_log_visibility(LogVisibility::Controllers)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(result.0.settings.log_visibility, LogVisibility::Controllers);
+
+            ic00.update_settings(&canister_id)
+                .with_log_visibility(LogVisibility::Public)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(result.0.settings.log_visibility, LogVisibility::Public);
+
+            let no_change: Option<LogVisibility> = None;
+            ic00.update_settings(&canister_id)
+                .with_optional_log_visibility(no_change)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(result.0.settings.log_visibility, LogVisibility::Public);
 
             Ok(())
         })
