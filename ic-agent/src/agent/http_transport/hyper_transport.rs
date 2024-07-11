@@ -281,8 +281,9 @@ where
                 &api_version,
                 effective_canister_id.to_text()
             );
-            let (status_code, response_body) =
-                self.request(Method::POST, endpoint, Some(envelope)).await?;
+            let (status_code, response_body) = self
+                .request(Method::POST, &endpoint, Some(envelope))
+                .await?;
 
             if status_code == StatusCode::ACCEPTED {
                 return Ok(TransportCallResponse::Accepted);

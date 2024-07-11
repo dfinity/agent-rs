@@ -52,7 +52,7 @@ pub trait AsyncCall: CallIntoFuture<Output = Result<Self::Value, AgentError>> {
     /// the result, and try to deserialize it as a [String]. This would be caught by
     /// Rust type system, but in this case it will be checked at runtime (as Request
     /// Id does not have a type associated with it).
-    async fn call(self) -> Result<CallResponse<Out>, AgentError>;
+    async fn call(self) -> Result<CallResponse<Self::Value>, AgentError>;
 
     /// Execute the call, and wait for an answer using an exponential-backoff strategy. The return
     /// type is encoded in the trait.

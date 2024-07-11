@@ -23,8 +23,6 @@ use std::{
     convert::{From, TryInto},
     future::IntoFuture,
     pin::Pin,
-    pin::Pin,
-    str::FromStr,
     str::FromStr,
 };
 
@@ -458,7 +456,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
 impl<'agent, 'canister: 'agent> AsyncCall for CreateCanisterBuilder<'agent, 'canister> {
     type Value = (Principal,);
 
-    async fn call(self) -> Result<CallResponse<(RequestId, _)>, AgentError> {
+    async fn call(self) -> Result<CallResponse<(Principal,)>, AgentError> {
         self.build()?.call().await
     }
 
