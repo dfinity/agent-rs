@@ -32,14 +32,12 @@ pub struct HyperTransport<B1, S = Client<HttpsConnector<HttpConnector>, B1>> {
     _marker: PhantomData<AtomicPtr<B1>>,
     route_provider: Arc<dyn RouteProvider>,
     max_response_body_size: Option<usize>,
+    #[allow(dead_code)]
+    max_tcp_error_retries: usize,
     service: S,
 }
 
-#[doc(hidden)]
-#[deprecated(since = "0.30.0", note = "use HyperTransport")]
-pub use HyperTransport as HyperReplicaV2Transport; // delete after 0.31
-
-/// Trait representing the constraints on [`HttpBody`] that [`HyperTransport`] requires
+/// Trait representing the contraints on [`HttpBody`] that [`HyperTransport`] requires
 pub trait HyperBody:
     Body<Data = Self::BodyData, Error = Self::BodyError> + Send + Unpin + 'static
 {
@@ -126,6 +124,7 @@ where
             route_provider,
             service,
             max_response_body_size: None,
+            max_tcp_error_retries: 0,
         })
     }
 
@@ -137,10 +136,18 @@ where
         }
     }
 
+    /// Sets a max number of retries for tcp connection errors.
+    pub fn with_max_tcp_errors_retries(self, retries: usize) -> Self {
+        HyperTransport {
+            max_tcp_error_retries: retries,
+            ..self
+        }
+    }
+
     async fn request(
         &self,
         method: Method,
-        url: String,
+        endpoint: &str,
         body: Option<Vec<u8>>,
     ) -> Result<(StatusCode, Vec<u8>), AgentError> {
         let body = body.unwrap_or_default();
@@ -162,19 +169,58 @@ where
             }
             AgentError::TransportError(Box::new(err))
         }
-        let response = loop {
+
+        let create_request_with_generated_url = || -> Result<Request<_>, AgentError> {
+            let url = self.route_provider.route()?.join(endpoint)?;
+            println!("{url}");
             let http_request = Request::builder()
                 .method(&method)
-                .uri(url.to_string())
+                .uri(url.as_str())
                 .header(CONTENT_TYPE, "application/cbor")
                 .body(body.clone().into())
                 .map_err(|err| AgentError::TransportError(Box::new(err)))?;
-            let response = self
-                .service
-                .clone()
-                .call(http_request)
-                .await
-                .map_err(map_error)?;
+            Ok(http_request)
+        };
+
+        let response = loop {
+            let response = {
+                #[cfg(target_family = "wasm")]
+                {
+                    let http_request = create_request_with_generated_url()?;
+                    match self.client.execute(http_request).await {
+                        Ok(response) => response,
+                        Err(err) => return Err(AgentError::TransportError(Box::new(err))),
+                    }
+                }
+                #[cfg(not(target_family = "wasm"))]
+                {
+                    // RouteProvider generates urls dynamically. Some of these urls can be potentially unhealthy.
+                    // TCP related errors (host unreachable, connection refused, connection timed out, connection reset) can be safely retried with a newly generated url.
+
+                    let mut retry_count = 0;
+                    loop {
+                        let http_request = create_request_with_generated_url()?;
+
+                        match self.service.clone().call(http_request).await {
+                            Ok(response) => break response,
+                            Err(err) => {
+                                if (&err as &dyn Error)
+                                    .downcast_ref::<hyper_util::client::legacy::Error>()
+                                    .is_some_and(|e| e.is_connect())
+                                {
+                                    if retry_count >= self.max_tcp_error_retries {
+                                        return Err(map_error(err));
+                                    }
+                                    retry_count += 1;
+                                    continue;
+                                }
+                                return Err(map_error(err));
+                            }
+                        }
+                    }
+                }
+            };
+
             if response.status() != StatusCode::TOO_MANY_REQUESTS {
                 break response;
             }
@@ -232,7 +278,7 @@ where
 
             let endpoint = format!(
                 "api/{}/canister/{}/call",
-                api_version,
+                &api_version,
                 effective_canister_id.to_text()
             );
             let (status_code, response_body) =
@@ -264,7 +310,7 @@ where
                 "{}api/v2/canister/{effective_canister_id}/read_state",
                 self.route_provider.route()?
             );
-            self.request(Method::POST, url, Some(envelope))
+            self.request(Method::POST, &url, Some(envelope))
                 .await
                 .map(|(_, body)| body)
         })
@@ -276,7 +322,7 @@ where
                 "{}api/v2/subnet/{subnet_id}/read_state",
                 self.route_provider.route()?
             );
-            self.request(Method::POST, url, Some(envelope))
+            self.request(Method::POST, &url, Some(envelope))
                 .await
                 .map(|(_, body)| body)
         })
@@ -288,7 +334,7 @@ where
                 "{}api/v2/canister/{effective_canister_id}/query",
                 self.route_provider.route()?
             );
-            self.request(Method::POST, url, Some(envelope))
+            self.request(Method::POST, &url, Some(envelope))
                 .await
                 .map(|(_, body)| body)
         })
@@ -297,7 +343,7 @@ where
     fn status(&self) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
             let url = format!("{}api/v2/status", self.route_provider.route()?);
-            self.request(Method::GET, url, None)
+            self.request(Method::GET, &url, None)
                 .await
                 .map(|(_, body)| body)
         })

@@ -507,7 +507,7 @@ mod management_canister {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: None,
-                    })) if *reject_message == format!("Canister {canister_id} has no update method 'update'")
+                    })) if reject_message.contains(&format!("Canister {canister_id}: Canister has no update method 'update'"))
                 ),
                 "wrong error: {result:?}"
             );
@@ -521,7 +521,7 @@ mod management_canister {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
-                    })) if *reject_message == format!("IC0536: Canister {} has no query method 'query'", canister_id)
+                    })) if reject_message.contains(&format!("Canister {}: Canister has no query method 'query'", canister_id))
                         && error_code == "IC0536",
                 ),
                 "wrong error: {result:?}"
@@ -724,6 +724,7 @@ mod management_canister {
                     freezing_threshold: None,
                     reserved_cycles_limit: None,
                     wasm_memory_limit: None,
+                    log_visibility: None,
                 },
             };
 
@@ -1006,7 +1007,10 @@ mod extras {
     };
     use ic_utils::{
         call::AsyncCall,
-        interfaces::{management_canister::builders::ComputeAllocation, ManagementCanister},
+        interfaces::{
+            management_canister::{builders::ComputeAllocation, LogVisibility},
+            ManagementCanister,
+        },
     };
     use ref_tests::get_effective_canister_id;
     use ref_tests::with_agent;
@@ -1223,7 +1227,7 @@ mod extras {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: None,
-                    })) if reject_message == "Canister iimsn-6yaaa-aaaaa-afiaa-cai is already installed"
+                    })) if reject_message.contains("Canister iimsn-6yaaa-aaaaa-afiaa-cai is already installed")
                 ),
                 "wrong error: {result:?}"
             );
@@ -1308,6 +1312,66 @@ mod extras {
                 result.0.settings.wasm_memory_limit,
                 Some(Nat::from(3_000_000_000_u64))
             );
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn create_with_log_visibility() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
+                .with_log_visibility(LogVisibility::Public)
+                .call_and_wait()
+                .await
+                .unwrap();
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(result.0.settings.log_visibility, LogVisibility::Public);
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn update_log_visibility() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
+                .with_effective_canister_id(get_effective_canister_id())
+                .with_log_visibility(LogVisibility::Controllers)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(result.0.settings.log_visibility, LogVisibility::Controllers);
+
+            ic00.update_settings(&canister_id)
+                .with_log_visibility(LogVisibility::Public)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(result.0.settings.log_visibility, LogVisibility::Public);
+
+            let no_change: Option<LogVisibility> = None;
+            ic00.update_settings(&canister_id)
+                .with_optional_log_visibility(no_change)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(result.0.settings.log_visibility, LogVisibility::Public);
 
             Ok(())
         })

@@ -193,10 +193,10 @@ fn canister_reject_call() {
                     reject_message,
                     error_code: None,
                     ..
-                })) if *reject_message == format!(
-                    "Canister {} has no update method 'wallet_send'",
+                })) if reject_message.contains(&format!(
+                    "Canister {}: Canister has no update method 'wallet_send'",
                     alice.canister_id()
-                )
+                ))
             ),
             "wrong error: {result:?}"
         );
@@ -425,6 +425,7 @@ fn wallet_create_wallet() {
                 freezing_threshold: None,
                 reserved_cycles_limit: None,
                 wasm_memory_limit: None,
+                log_visibility: None,
             },
         };
         let args = Argument::from_candid((create_args,));
