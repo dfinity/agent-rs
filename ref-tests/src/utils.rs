@@ -102,6 +102,7 @@ pub async fn create_agent(identity: impl Identity + 'static) -> Result<Agent, St
     Agent::builder()
         .with_transport(ReqwestTransport::create(format!("http://127.0.0.1:{}", port)).unwrap())
         .with_identity(identity)
+        .with_auto_fetch_root_key(true)
         .build()
         .map_err(|e| format!("{:?}", e))
 }
@@ -126,10 +127,6 @@ where
         let agent = create_agent(agent_identity)
             .await
             .expect("Could not create an agent.");
-        agent
-            .fetch_root_key()
-            .await
-            .expect("could not fetch root key");
         match f(agent).await {
             Ok(_) => {}
             Err(e) => panic!("{:?}", e),

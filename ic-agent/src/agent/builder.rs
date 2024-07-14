@@ -106,4 +106,18 @@ impl AgentBuilder {
         self.config.max_concurrent_requests = max_concurrent_requests;
         self
     }
+
+    /// By default, the agent is configured to talk to the main Internet Computer, and verifies
+    /// responses using a hard-coded public key.
+    ///
+    /// This flag will instruct the agent to ask the endpoint for its public key automatically on
+    /// first request and use that instead. This is required when talking to a local test instance,
+    /// for example.
+    ///
+    /// *Only use this when you are  _not_ talking to the main Internet Computer, otherwise
+    /// you are prone to man-in-the-middle attacks! Do not enable this flag by default.*
+    pub fn with_auto_fetch_root_key(mut self, auto_fetch_root_key: bool) -> Self {
+        self.config.auto_fetch_root_key = auto_fetch_root_key;
+        self
+    }
 }
