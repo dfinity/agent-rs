@@ -50,7 +50,10 @@ use std::{
     fmt,
     future::{Future, IntoFuture},
     pin::Pin,
-    sync::{Arc, Mutex, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, RwLock,
+    },
     task::{Context, Poll},
     time::Duration,
 };
@@ -259,6 +262,7 @@ pub struct Agent {
     subnet_key_cache: Arc<Mutex<SubnetCache>>,
     concurrent_requests_semaphore: Arc<Semaphore>,
     verify_query_signatures: bool,
+    fetch_root_key_fuse: Arc<AtomicBool>,
     auto_fetch_root_key: bool,
 }
 
@@ -290,6 +294,7 @@ impl Agent {
             subnet_key_cache: Arc::new(Mutex::new(SubnetCache::new())),
             verify_query_signatures: config.verify_query_signatures,
             concurrent_requests_semaphore: Arc::new(Semaphore::new(config.max_concurrent_requests)),
+            fetch_root_key_fuse: Arc::new(AtomicBool::new(false)),
             auto_fetch_root_key: config.auto_fetch_root_key,
         })
     }
@@ -328,7 +333,7 @@ impl Agent {
     /// *Only use this when you are  _not_ talking to the main Internet Computer, otherwise
     /// you are prone to man-in-the-middle attacks! Do not call this function by default.*
     pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
-        if self.read_root_key()[..] != IC_ROOT_KEY[..] {
+        if self.fetch_root_key_fuse.load(Ordering::Acquire) {
             // already fetched the root key
             return Ok(());
         }
@@ -338,6 +343,7 @@ impl Agent {
             None => return Err(AgentError::NoRootKeyInStatus(status)),
         };
         self.set_root_key(root_key);
+        self.fetch_root_key_fuse.store(true, Ordering::Release);
         Ok(())
     }
 
