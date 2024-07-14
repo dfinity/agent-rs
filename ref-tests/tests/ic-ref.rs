@@ -148,7 +148,6 @@ mod management_canister {
             let other_agent_identity = create_basic_identity()?;
             let other_agent_principal = other_agent_identity.sender()?;
             let other_agent = create_agent(other_agent_identity).await?;
-            other_agent.fetch_root_key().await?;
             let other_ic00 = ManagementCanister::create(&other_agent);
 
             // Reinstall with another agent should fail.
@@ -265,19 +264,16 @@ mod management_canister {
             let other_agent_identity = create_basic_identity()?;
             let other_agent_principal = other_agent_identity.sender()?;
             let other_agent = create_agent(other_agent_identity).await?;
-            other_agent.fetch_root_key().await?;
             let other_ic00 = ManagementCanister::create(&other_agent);
 
             let secp256k1_identity = create_secp256k1_identity()?;
             let secp256k1_principal = secp256k1_identity.sender()?;
             let secp256k1_agent = create_agent(secp256k1_identity).await?;
-            secp256k1_agent.fetch_root_key().await?;
             let secp256k1_ic00 = ManagementCanister::create(&secp256k1_agent);
 
             let prime256v1_identity = create_prime256v1_identity()?;
             let prime256v1_principal = prime256v1_identity.sender()?;
             let prime256v1_agent = create_agent(prime256v1_identity).await?;
-            prime256v1_agent.fetch_root_key().await?;
             let prime256v1_ic00 = ManagementCanister::create(&prime256v1_agent);
 
             let ic00 = ManagementCanister::create(&agent);
@@ -625,7 +621,6 @@ mod management_canister {
             // Create another agent with different identity.
             let other_agent_identity = create_basic_identity()?;
             let other_agent = create_agent(other_agent_identity).await?;
-            other_agent.fetch_root_key().await?;
             let other_ic00 = ManagementCanister::create(&other_agent);
 
             // Start as a wrong controller should fail.

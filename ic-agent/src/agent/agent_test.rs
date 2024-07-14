@@ -659,7 +659,7 @@ async fn too_many_delegations() {
         .expect("read state failed");
     let new_cert = self_delegate_cert(subnet_id, &cert, 1);
     assert!(matches!(
-        agent.verify(&new_cert, canister_id).unwrap_err(),
+        agent.verify(&new_cert, canister_id).await.unwrap_err(),
         AgentError::CertificateHasTooManyDelegations
     ));
 }

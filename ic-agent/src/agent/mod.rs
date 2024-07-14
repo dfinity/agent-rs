@@ -50,7 +50,10 @@ use std::{
     fmt,
     future::{Future, IntoFuture},
     pin::Pin,
-    sync::{Arc, Mutex, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, RwLock,
+    },
     task::{Context, Poll},
     time::Duration,
 };
@@ -218,13 +221,13 @@ pub enum PollResult {
 ///   let agent = Agent::builder()
 ///     .with_url(url)
 ///     .with_identity(create_identity())
+///     // Only enable the following flag when not contacting the IC main net (e.g. a local emulator).
+///     // This is important as the main net public key is static and a rogue network could return
+///     // a different key.
+///     // If you know the root key ahead of time, you can use `agent.set_root_key(root_key);`.
+///     .with_auto_fetch_root_key(true)
 ///     .build()?;
 ///
-///   // Only do the following call when not contacting the IC main net (e.g. a local emulator).
-///   // This is important as the main net public key is static and a rogue network could return
-///   // a different key.
-///   // If you know the root key ahead of time, you can use `agent.set_root_key(root_key);`.
-///   agent.fetch_root_key().await?;
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 ///
 ///   // Create a call to the management canister to create a new canister ID,
@@ -259,6 +262,8 @@ pub struct Agent {
     subnet_key_cache: Arc<Mutex<SubnetCache>>,
     concurrent_requests_semaphore: Arc<Semaphore>,
     verify_query_signatures: bool,
+    fetch_root_key_fuse: Arc<AtomicBool>,
+    auto_fetch_root_key: bool,
 }
 
 impl fmt::Debug for Agent {
@@ -289,6 +294,8 @@ impl Agent {
             subnet_key_cache: Arc::new(Mutex::new(SubnetCache::new())),
             verify_query_signatures: config.verify_query_signatures,
             concurrent_requests_semaphore: Arc::new(Semaphore::new(config.max_concurrent_requests)),
+            fetch_root_key_fuse: Arc::new(AtomicBool::new(false)),
+            auto_fetch_root_key: config.auto_fetch_root_key,
         })
     }
 
@@ -326,7 +333,7 @@ impl Agent {
     /// *Only use this when you are  _not_ talking to the main Internet Computer, otherwise
     /// you are prone to man-in-the-middle attacks! Do not call this function by default.*
     pub async fn fetch_root_key(&self) -> Result<(), AgentError> {
-        if self.read_root_key()[..] != IC_ROOT_KEY[..] {
+        if self.fetch_root_key_fuse.load(Ordering::Acquire) {
             // already fetched the root key
             return Ok(());
         }
@@ -336,6 +343,7 @@ impl Agent {
             None => return Err(AgentError::NoRootKeyInStatus(status)),
         };
         self.set_root_key(root_key);
+        self.fetch_root_key_fuse.store(true, Ordering::Release);
         Ok(())
     }
 
@@ -348,6 +356,18 @@ impl Agent {
     }
 
     /// Return the root key currently in use.
+    /// this may perform a network request if automatic fetching
+    /// of the root key is enabled.
+    pub async fn read_or_fetch_root_key(&self) -> Result<Vec<u8>, AgentError> {
+        if self.auto_fetch_root_key {
+            self.fetch_root_key().await?;
+        }
+        Ok(self.read_root_key())
+    }
+
+    /// Return the root key currently stored in the agent.
+    /// This key may change if the agent is configured to automatically
+    /// fetch the root key upon the first request.
     pub fn read_root_key(&self) -> Vec<u8> {
         self.root_key.read().unwrap().clone()
     }
@@ -778,7 +798,7 @@ impl Agent {
             .await?;
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
-        self.verify(&cert, effective_canister_id)?;
+        self.verify(&cert, effective_canister_id).await?;
         Ok(cert)
     }
 
@@ -797,7 +817,7 @@ impl Agent {
             .await?;
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
-        self.verify_for_subnet(&cert, subnet_id)?;
+        self.verify_for_subnet(&cert, subnet_id).await?;
         Ok(cert)
     }
 
@@ -811,12 +831,13 @@ impl Agent {
 
     /// Verify a certificate, checking delegation if present.
     /// Only passes if the certificate also has authority over the canister.
-    pub fn verify(
+    pub async fn verify(
         &self,
         cert: &Certificate,
         effective_canister_id: Principal,
     ) -> Result<(), AgentError> {
-        self.verify_cert(cert, effective_canister_id)?;
+        let root_key = self.read_or_fetch_root_key().await?;
+        self.verify_cert(cert, effective_canister_id, root_key)?;
         self.verify_cert_timestamp(cert)?;
         Ok(())
     }
@@ -825,6 +846,7 @@ impl Agent {
         &self,
         cert: &Certificate,
         effective_canister_id: Principal,
+        root_key: Vec<u8>,
     ) -> Result<(), AgentError> {
         let sig = &cert.signature;
 
@@ -833,7 +855,7 @@ impl Agent {
         msg.extend_from_slice(IC_STATE_ROOT_DOMAIN_SEPARATOR);
         msg.extend_from_slice(&root_hash);
 
-        let der_key = self.check_delegation(&cert.delegation, effective_canister_id)?;
+        let der_key = self.check_delegation(&cert.delegation, effective_canister_id, root_key)?;
         let key = extract_der(der_key)?;
 
         ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
@@ -843,12 +865,13 @@ impl Agent {
 
     /// Verify a certificate, checking delegation if present.
     /// Only passes if the certificate is for the specified subnet.
-    pub fn verify_for_subnet(
+    pub async fn verify_for_subnet(
         &self,
         cert: &Certificate,
         subnet_id: Principal,
     ) -> Result<(), AgentError> {
-        self.verify_cert_for_subnet(cert, subnet_id)?;
+        let root_key = self.read_or_fetch_root_key().await?;
+        self.verify_cert_for_subnet(cert, subnet_id, root_key)?;
         self.verify_cert_timestamp(cert)?;
         Ok(())
     }
@@ -857,6 +880,7 @@ impl Agent {
         &self,
         cert: &Certificate,
         subnet_id: Principal,
+        root_key: Vec<u8>,
     ) -> Result<(), AgentError> {
         let sig = &cert.signature;
 
@@ -865,7 +889,7 @@ impl Agent {
         msg.extend_from_slice(IC_STATE_ROOT_DOMAIN_SEPARATOR);
         msg.extend_from_slice(&root_hash);
 
-        let der_key = self.check_delegation_for_subnet(&cert.delegation, subnet_id)?;
+        let der_key = self.check_delegation_for_subnet(&cert.delegation, subnet_id, root_key)?;
         let key = extract_der(der_key)?;
 
         ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
@@ -890,16 +914,17 @@ impl Agent {
         &self,
         delegation: &Option<Delegation>,
         effective_canister_id: Principal,
+        root_key: Vec<u8>,
     ) -> Result<Vec<u8>, AgentError> {
         match delegation {
-            None => Ok(self.read_root_key()),
+            None => Ok(root_key),
             Some(delegation) => {
                 let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;
                 if cert.delegation.is_some() {
                     return Err(AgentError::CertificateHasTooManyDelegations);
                 }
-                self.verify_cert(&cert, effective_canister_id)?;
+                self.verify_cert(&cert, effective_canister_id, root_key)?;
                 let canister_range_lookup = [
                     "subnet".as_bytes(),
                     delegation.subnet_id.as_ref(),
@@ -927,16 +952,17 @@ impl Agent {
         &self,
         delegation: &Option<Delegation>,
         subnet_id: Principal,
+        root_key: Vec<u8>,
     ) -> Result<Vec<u8>, AgentError> {
         match delegation {
-            None => Ok(self.read_root_key()),
+            None => Ok(root_key),
             Some(delegation) => {
                 let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
                     .map_err(AgentError::InvalidCborData)?;
                 if cert.delegation.is_some() {
                     return Err(AgentError::CertificateHasTooManyDelegations);
                 }
-                self.verify_cert_for_subnet(&cert, subnet_id)?;
+                self.verify_cert_for_subnet(&cert, subnet_id, root_key)?;
                 let public_key_path = [
                     "subnet".as_bytes(),
                     delegation.subnet_id.as_ref(),
@@ -1031,7 +1057,7 @@ impl Agent {
 
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
-        self.verify(&cert, effective_canister_id)?;
+        self.verify(&cert, effective_canister_id).await?;
         lookup_request_status(cert, request_id)
     }
 

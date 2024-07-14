@@ -18,6 +18,8 @@ pub struct AgentConfig {
     pub verify_query_signatures: bool,
     /// See [`with_max_concurrent_requests`](super::AgentBuilder::with_max_concurrent_requests).
     pub max_concurrent_requests: usize,
+    /// See [`with_auto_fetch_root_key`](super::AgentBuilder::with_auto_fetch_root_key).
+    pub auto_fetch_root_key: bool,
 }
 
 impl Default for AgentConfig {
@@ -29,6 +31,7 @@ impl Default for AgentConfig {
             transport: None,
             verify_query_signatures: true,
             max_concurrent_requests: 50,
+            auto_fetch_root_key: false,
         }
     }
 }
