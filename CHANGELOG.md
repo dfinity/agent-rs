@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Removed the Bitcoin query methods from `ManagementCanister`. Users should use `BitcoinCanister` for that.
 * Added `BitcoinCanister` to `ic-utils`.
+* Added support for automatically fetching the root key in `ic-agent`
+* `Agent::verify` and `Agent::verify_for_subnet` are now `async`.
 
 ## [0.36.0] - 2024-06-04
 
