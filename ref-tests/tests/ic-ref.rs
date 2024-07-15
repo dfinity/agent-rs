@@ -298,7 +298,7 @@ mod management_canister {
                 .iter()
                 .cloned()
                 .collect::<HashSet<_>>();
-            let expected = vec![agent_principal, other_agent_principal]
+            let expected = [agent_principal, other_agent_principal]
                 .iter()
                 .cloned()
                 .collect::<HashSet<_>>();
@@ -316,7 +316,7 @@ mod management_canister {
                 .iter()
                 .cloned()
                 .collect::<HashSet<_>>();
-            let expected = vec![agent_principal, other_agent_principal]
+            let expected = [agent_principal, other_agent_principal]
                 .iter()
                 .cloned()
                 .collect::<HashSet<_>>();
