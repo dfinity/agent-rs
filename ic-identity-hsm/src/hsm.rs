@@ -301,7 +301,8 @@ fn get_attribute_length(
     let mut attributes = vec![CK_ATTRIBUTE::new(attribute_type)];
     ctx.get_attribute_value(session_handle, object_handle, &mut attributes)?;
 
-    let first = attributes.first()
+    let first = attributes
+        .first()
         .ok_or(HardwareIdentityError::AttributeNotFound(attribute_type))?;
     Ok(first.ulValueLen as usize)
 }
