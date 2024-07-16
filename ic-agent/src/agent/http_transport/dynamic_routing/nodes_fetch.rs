@@ -55,10 +55,6 @@ impl Fetch for NodesFetcher {
             .with_transport(transport)
             .build()
             .with_context(|| "Failed to build an agent: {err}")?;
-        agent
-            .fetch_root_key()
-            .await
-            .with_context(|| "Failed to fetch root key: {err}")?;
         let api_bns = agent
             .fetch_api_boundary_nodes_by_subnet_id(self.subnet_id)
             .await?;
