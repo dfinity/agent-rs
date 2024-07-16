@@ -57,7 +57,7 @@ features = ["blocking", "json", "rustls-tls-webpki-roots", "stream"]
 optional = true
 
 [dependencies.pem]
-version = "2.0.1"
+version = "3"
 optional = true
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
