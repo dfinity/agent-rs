@@ -18,12 +18,12 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
 anyhow = "1.0"
-base64 = "0.13"
+base64 = "0.22"
 clap = { workspace = true, features = ["derive", "cargo", "color"] }
 hex = { workspace = true }
 ic-certification = { workspace = true }
 leb128 = "0.2.4"
-reqwest = { version = "0.11", default-features = false, features = [
+reqwest = { workspace = true, default-features = false, features = [
     "blocking",
     "rustls-tls",
 ] }

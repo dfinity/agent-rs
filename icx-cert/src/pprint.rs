@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Context, Result};
+use base64::prelude::*;
 use ic_certification::{HashTree, LookupResult};
 use reqwest::header;
 use serde::{de::DeserializeOwned, Deserialize};
@@ -46,7 +47,7 @@ fn parse_structured_cert_header(value: &str) -> Result<StructuredCertHeader<'_>>
 
 /// Decodes base64-encoded CBOR value.
 fn parse_base64_cbor<T: DeserializeOwned>(s: &str) -> Result<T> {
-    let bytes = base64::decode(s).with_context(|| {
+    let bytes = BASE64_STANDARD.decode(s).with_context(|| {
         format!(
             "failed to parse {}: invalid base64 {}",
             std::any::type_name::<T>(),

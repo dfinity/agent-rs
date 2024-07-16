@@ -18,7 +18,7 @@ repository = "https://github.com/dfinity/agent-rs"
 # MSRV
 # Avoid updating this field unless we use new Rust features
 # Sync rust-version in rust-toolchain.toml
-rust-version = "1.70.0"
+rust-version = "1.75.0"
 license = "Apache-2.0"
 
 [workspace.dependencies]
@@ -33,6 +33,7 @@ clap = "4.4.3"
 futures-util = "0.3.21"
 hex = "0.4.3"
 leb128 = "0.2.5"
+reqwest = { version = "0.12", default-features = false }
 ring = "0.17.7"
 serde = "1.0.162"
 serde_bytes = "0.11.13"

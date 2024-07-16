@@ -88,7 +88,7 @@ mod tests {
     fn test_routes_rotation() {
         let provider = RoundRobinRouteProvider::new(vec!["https://url1.com", "https://url2.com"])
             .expect("failed to create a route provider");
-        let url_strings = vec![
+        let url_strings = [
             "https://url1.com/api/v2/",
             "https://url2.com/api/v2/",
             "https://url1.com/api/v2/",
