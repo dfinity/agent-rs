@@ -116,6 +116,6 @@ impl NodeHealthCheckerMock {
 
     pub fn overwrite_healthy_nodes(&self, healthy_nodes: Vec<Node>) {
         self.healthy_nodes
-            .store(Arc::new(HashSet::from_iter(healthy_nodes.into_iter())));
+            .store(Arc::new(HashSet::from_iter(healthy_nodes)));
     }
 }

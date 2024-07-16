@@ -251,7 +251,7 @@ impl<S> Drop for DynamicRouteProvider<S> {
         let tracker = self.tracker.clone();
         // If no runtime is available do nothing.
         if let Ok(handle) = Handle::try_current() {
-            let _ = handle.spawn(async move {
+            handle.spawn(async move {
                 tracker.wait().await;
                 warn!("{DYNAMIC_ROUTE_PROVIDER}: stopped gracefully");
             });

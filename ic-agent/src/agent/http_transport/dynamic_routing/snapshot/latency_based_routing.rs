@@ -99,7 +99,7 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
             .cloned()
             .collect();
         let has_added_nodes = !nodes_added.is_empty();
-        self.existing_nodes.extend(nodes_added.into_iter());
+        self.existing_nodes.extend(nodes_added);
         // NOTE: newly added nodes will appear in the weighted_nodes later.
         // This happens after the first node health check round and a consequent update_node() invocation.
         for node in nodes_removed.into_iter() {
