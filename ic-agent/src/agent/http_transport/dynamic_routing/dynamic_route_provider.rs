@@ -263,10 +263,11 @@ impl<S> Drop for DynamicRouteProvider<S> {
 
 #[cfg(test)]
 mod tests {
+    use candid::Principal;
     use reqwest::Client;
     use std::{
         sync::{Arc, Once},
-        time::Duration,
+        time::{Duration, Instant},
     };
     use tracing::Level;
     use tracing_subscriber::FmtSubscriber;
@@ -274,16 +275,22 @@ mod tests {
     use crate::{
         agent::http_transport::{
             dynamic_routing::{
-                dynamic_route_provider::{DynamicRouteProviderBuilder, IC0_SEED_DOMAIN},
+                dynamic_route_provider::{
+                    DynamicRouteProviderBuilder, IC0_SEED_DOMAIN, MAINNET_ROOT_SUBNET_ID,
+                },
                 node::Node,
-                snapshot::round_robin_routing::RoundRobinRoutingSnapshot,
+                snapshot::{
+                    latency_based_routing::LatencyRoutingSnapshot,
+                    round_robin_routing::RoundRobinRoutingSnapshot,
+                },
                 test_utils::{
                     assert_routed_domains, route_n_times, NodeHealthCheckerMock, NodesFetcherMock,
                 },
             },
             route_provider::RouteProvider,
+            ReqwestTransport,
         },
-        AgentError,
+        Agent, AgentError,
     };
 
     static TRACING_INIT: Once = Once::new();
@@ -292,6 +299,82 @@ mod tests {
         TRACING_INIT.call_once(|| {
             FmtSubscriber::builder().with_max_level(Level::TRACE).init();
         });
+    }
+
+    async fn assert_no_routing_via_domains(
+        route_provider: Arc<dyn RouteProvider>,
+        excluded_domains: Vec<&str>,
+        timeout: Duration,
+        route_call_interval: Duration,
+    ) {
+        if excluded_domains.is_empty() {
+            panic!("List of excluded domains can't be empty");
+        }
+
+        let route_calls = 30;
+        let start = Instant::now();
+
+        while start.elapsed() < timeout {
+            let routed_domains = (0..route_calls)
+                .map(|_| {
+                    route_provider.route().map(|url| {
+                        let domain = url.domain().expect("no domain name in url");
+                        domain.to_string()
+                    })
+                })
+                .collect::<Result<Vec<String>, _>>()
+                .unwrap_or_default();
+
+            // Exit when excluded domains are not used for routing any more.
+            if !routed_domains.is_empty()
+                && !routed_domains
+                    .iter()
+                    .any(|d| excluded_domains.contains(&d.as_str()))
+            {
+                return;
+            }
+
+            tokio::time::sleep(route_call_interval).await;
+        }
+        panic!("Expected excluded domains {excluded_domains:?} are still observed in routing over the last {route_calls} calls");
+    }
+
+    #[tokio::test]
+    async fn test_mainnet() {
+        // Setup.
+        setup_tracing();
+        let seed = Node::new(IC0_SEED_DOMAIN).unwrap();
+        let client = Client::builder().build().unwrap();
+        let route_provider = DynamicRouteProviderBuilder::new(
+            LatencyRoutingSnapshot::new(),
+            vec![seed],
+            client.clone(),
+        )
+        .build()
+        .await;
+        let route_provider = Arc::new(route_provider) as Arc<dyn RouteProvider>;
+        let transport =
+            ReqwestTransport::create_with_client_route(Arc::clone(&route_provider), client)
+                .expect("failed to create transport");
+        let agent = Agent::builder()
+            .with_transport(transport)
+            .build()
+            .expect("failed to create an agent");
+        let subnet_id = Principal::from_text(MAINNET_ROOT_SUBNET_ID).unwrap();
+        // Assert that seed (ic0.app) is not used for routing. Henceforth, only discovered API nodes are used.
+        assert_no_routing_via_domains(
+            Arc::clone(&route_provider),
+            vec![IC0_SEED_DOMAIN],
+            Duration::from_secs(40),
+            Duration::from_secs(2),
+        )
+        .await;
+        // Act: perform /read_state call via dynamically discovered API BNs.
+        let api_bns = agent
+            .fetch_api_boundary_nodes_by_subnet_id(subnet_id)
+            .await
+            .expect("failed to fetch api boundary nodes");
+        assert!(!api_bns.is_empty());
     }
 
     #[tokio::test]

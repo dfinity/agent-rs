@@ -16,7 +16,7 @@ use crate::agent::http_transport::{
     route_provider::RouteProvider,
 };
 
-pub fn route_n_times(n: usize, f: Arc<impl RouteProvider>) -> Vec<String> {
+pub fn route_n_times(n: usize, f: Arc<impl RouteProvider + ?Sized>) -> Vec<String> {
     (0..n)
         .map(|_| f.route().unwrap().domain().unwrap().to_string())
         .collect()
