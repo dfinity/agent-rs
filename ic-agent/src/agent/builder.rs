@@ -1,18 +1,5 @@
-use reqwest::Client;
-
 use crate::{
-    agent::{
-        agent_config::AgentConfig,
-        http_transport::{
-            dynamic_routing::{
-                dynamic_route_provider::{DynamicRouteProviderBuilder, IC0_SEED_DOMAIN},
-                node::Node,
-                snapshot::latency_based_routing::LatencyRoutingSnapshot,
-            },
-            route_provider::RouteProvider,
-        },
-        Agent, Transport,
-    },
+    agent::{agent_config::AgentConfig, Agent, Transport},
     AgentError, Identity, NonceFactory, NonceGenerator,
 };
 use std::sync::Arc;
@@ -29,9 +16,18 @@ impl AgentBuilder {
         Agent::new(self.config)
     }
 
+    #[cfg(all(feature = "reqwest", not(target_family = "wasm")))]
     /// Set the dynamic transport layer for the [`Agent`], performing continuos discovery of the API boundary nodes and routing traffic via them based on the latencies.
-    pub async fn with_discovery_transport(self, client: Client) -> Self {
-        use crate::agent::http_transport::ReqwestTransport;
+    pub async fn with_discovery_transport(self, client: reqwest::Client) -> Self {
+        use crate::agent::http_transport::{
+            dynamic_routing::{
+                dynamic_route_provider::{DynamicRouteProviderBuilder, IC0_SEED_DOMAIN},
+                node::Node,
+                snapshot::latency_based_routing::LatencyRoutingSnapshot,
+            },
+            route_provider::RouteProvider,
+            ReqwestTransport,
+        };
 
         // TODO: This is a temporary solution to get the seed node.
         let seed = Node::new(IC0_SEED_DOMAIN).unwrap();

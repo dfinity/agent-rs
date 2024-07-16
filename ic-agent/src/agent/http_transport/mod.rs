@@ -30,8 +30,6 @@ const ICP0_SUB_DOMAIN: &str = ".icp0.io";
 const ICP_API_SUB_DOMAIN: &str = ".icp-api.io";
 #[allow(dead_code)]
 const LOCALHOST_SUB_DOMAIN: &str = ".localhost";
-///
-#[cfg(not(target_family = "wasm"))]
-#[cfg(feature = "reqwest")]
+#[cfg(all(feature = "reqwest", not(target_family = "wasm")))]
 pub mod dynamic_routing;
 pub mod route_provider;
