@@ -335,7 +335,7 @@ where
     fn status(&self) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
             let endpoint = "api/v2/status";
-            self.request(Method::GET, &endpoint, None)
+            self.request(Method::GET, endpoint, None)
                 .await
                 .map(|(_, body)| body)
         })
