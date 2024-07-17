@@ -8,6 +8,7 @@ use url::Url;
 
 use crate::agent::http_transport::{
     dynamic_routing::{
+        dynamic_route_provider::DynamicRouteProviderError,
         health_check::{HealthCheck, HealthCheckStatus},
         node::Node,
         nodes_fetch::Fetch,
@@ -60,7 +61,7 @@ pub struct NodesFetcherMock {
 
 #[async_trait]
 impl Fetch for NodesFetcherMock {
-    async fn fetch(&self, _url: Url) -> anyhow::Result<Vec<Node>> {
+    async fn fetch(&self, _url: Url) -> Result<Vec<Node>, DynamicRouteProviderError> {
         let nodes = (*self.nodes.load_full()).clone();
         Ok(nodes)
     }
@@ -97,7 +98,7 @@ impl Default for NodeHealthCheckerMock {
 
 #[async_trait]
 impl HealthCheck for NodeHealthCheckerMock {
-    async fn check(&self, node: &Node) -> anyhow::Result<HealthCheckStatus> {
+    async fn check(&self, node: &Node) -> Result<HealthCheckStatus, DynamicRouteProviderError> {
         let nodes = self.healthy_nodes.load_full();
         let latency = match nodes.contains(node) {
             true => Some(Duration::from_secs(1)),

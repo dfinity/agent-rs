@@ -1,4 +1,3 @@
-use anyhow::Context;
 use async_trait::async_trait;
 use candid::Principal;
 use reqwest::Client;
@@ -11,9 +10,12 @@ use url::Url;
 use crate::agent::{
     http_transport::{
         dynamic_routing::{
-            health_check::HEALTH_MANAGER_ACTOR, messages::FetchedNodes, node::Node,
-            snapshot::routing_snapshot::RoutingSnapshot, type_aliases::AtomicSwap,
-            type_aliases::SenderWatch,
+            dynamic_route_provider::DynamicRouteProviderError,
+            health_check::HEALTH_MANAGER_ACTOR,
+            messages::FetchedNodes,
+            node::Node,
+            snapshot::routing_snapshot::RoutingSnapshot,
+            type_aliases::{AtomicSwap, SenderWatch},
         },
         reqwest_transport::ReqwestTransport,
     },
@@ -26,7 +28,7 @@ const NODES_FETCH_ACTOR: &str = "NodesFetchActor";
 #[async_trait]
 pub trait Fetch: Sync + Send + Debug {
     /// Fetches the nodes from the topology.
-    async fn fetch(&self, url: Url) -> anyhow::Result<Vec<Node>>;
+    async fn fetch(&self, url: Url) -> Result<Vec<Node>, DynamicRouteProviderError>;
 }
 
 /// A struct representing the fetcher of the nodes from the topology.
@@ -48,16 +50,29 @@ impl NodesFetcher {
 
 #[async_trait]
 impl Fetch for NodesFetcher {
-    async fn fetch(&self, url: Url) -> anyhow::Result<Vec<Node>> {
+    async fn fetch(&self, url: Url) -> Result<Vec<Node>, DynamicRouteProviderError> {
         let transport = ReqwestTransport::create_with_client(url, self.http_client.clone())
-            .with_context(|| "Failed to build transport: {err}")?;
+            .map_err(|err| {
+                DynamicRouteProviderError::NodesFetchError(format!(
+                    "Failed to build transport: {err}"
+                ))
+            })?;
         let agent = Agent::builder()
             .with_transport(transport)
             .build()
-            .with_context(|| "Failed to build an agent: {err}")?;
+            .map_err(|err| {
+                DynamicRouteProviderError::NodesFetchError(format!(
+                    "Failed to build the agent: {err}"
+                ))
+            })?;
         let api_bns = agent
             .fetch_api_boundary_nodes_by_subnet_id(self.subnet_id)
-            .await?;
+            .await
+            .map_err(|err| {
+                DynamicRouteProviderError::NodesFetchError(format!(
+                    "Failed to fetch API nodes: {err}"
+                ))
+            })?;
         // If some API BNs have invalid domain names, they are discarded.
         let nodes = api_bns
             .iter()

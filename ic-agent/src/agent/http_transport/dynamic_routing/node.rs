@@ -1,7 +1,8 @@
 use url::Url;
 
 use crate::agent::ApiBoundaryNode;
-use anyhow::anyhow;
+
+use super::dynamic_route_provider::DynamicRouteProviderError;
 
 /// Represents a node in the dynamic routing.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -11,9 +12,11 @@ pub struct Node {
 
 impl Node {
     /// Creates a new `Node` instance from the domain name.
-    pub fn new(domain: &str) -> anyhow::Result<Self> {
+    pub fn new(domain: &str) -> Result<Self, DynamicRouteProviderError> {
         if !is_valid_domain(domain) {
-            return Err(anyhow!("Invalid domain name {domain}"));
+            return Err(DynamicRouteProviderError::InvalidDomainName(
+                domain.to_string(),
+            ));
         }
         Ok(Self {
             domain: domain.to_string(),
@@ -41,7 +44,7 @@ impl From<&Node> for Url {
 }
 
 impl TryFrom<&ApiBoundaryNode> for Node {
-    type Error = anyhow::Error;
+    type Error = DynamicRouteProviderError;
 
     fn try_from(value: &ApiBoundaryNode) -> Result<Self, Self::Error> {
         Node::new(&value.domain)

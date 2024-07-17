@@ -1,4 +1,3 @@
-use anyhow::bail;
 use async_trait::async_trait;
 use http::{Method, StatusCode};
 use reqwest::{Client, Request};
@@ -13,6 +12,7 @@ use tracing::{debug, error, info, warn};
 use url::Url;
 
 use crate::agent::http_transport::dynamic_routing::{
+    dynamic_route_provider::DynamicRouteProviderError,
     messages::{FetchedNodes, NodeHealthState},
     node::Node,
     snapshot::routing_snapshot::RoutingSnapshot,
@@ -25,7 +25,7 @@ const CHANNEL_BUFFER: usize = 128;
 #[async_trait]
 pub trait HealthCheck: Send + Sync + Debug {
     /// Checks the health of the node.
-    async fn check(&self, node: &Node) -> anyhow::Result<HealthCheckStatus>;
+    async fn check(&self, node: &Node) -> Result<HealthCheckStatus, DynamicRouteProviderError>;
 }
 
 /// A struct representing the health check status of the node.
@@ -72,15 +72,19 @@ const HEALTH_CHECKER: &str = "HealthChecker";
 
 #[async_trait]
 impl HealthCheck for HealthChecker {
-    async fn check(&self, node: &Node) -> anyhow::Result<HealthCheckStatus> {
+    async fn check(&self, node: &Node) -> Result<HealthCheckStatus, DynamicRouteProviderError> {
         // API boundary node exposes /health endpoint and should respond with 204 (No Content) if it's healthy.
-        let url = Url::parse(&format!("https://{}/health", node.domain()))?;
+        let url = Url::parse(&format!("https://{}/health", node.domain())).unwrap();
 
         let mut request = Request::new(Method::GET, url.clone());
         *request.timeout_mut() = Some(self.timeout);
 
         let start = Instant::now();
-        let response = self.http_client.execute(request).await?;
+        let response = self.http_client.execute(request).await.map_err(|err| {
+            DynamicRouteProviderError::HealthCheckError(format!(
+                "Failed to execute GET request to {url}: {err}"
+            ))
+        })?;
         let latency = start.elapsed();
 
         if response.status() != StatusCode::NO_CONTENT {
@@ -89,7 +93,7 @@ impl HealthCheck for HealthChecker {
                 response.status()
             );
             error!(err_msg);
-            bail!(err_msg);
+            return Err(DynamicRouteProviderError::HealthCheckError(err_msg));
         }
 
         Ok(HealthCheckStatus::new(Some(latency)))

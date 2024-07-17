@@ -8,6 +8,7 @@ use std::{
 use arc_swap::ArcSwap;
 use candid::Principal;
 use reqwest::Client;
+use thiserror::Error;
 use tokio::{
     runtime::Handle,
     sync::{mpsc, watch},
@@ -69,6 +70,20 @@ pub struct DynamicRouteProvider<S> {
     seeds: Vec<Node>,
     /// Cancellation token for stopping the spawned tasks.
     token: CancellationToken,
+}
+
+/// An error that occurred when the DynamicRouteProvider service was running.
+#[derive(Error, Debug)]
+pub enum DynamicRouteProviderError {
+    /// An error when fetching topology of the API nodes.
+    #[error("An error when fetching API nodes: {0}")]
+    NodesFetchError(String),
+    /// An error when checking API node's health.
+    #[error("An error when checking API node's health: {0}")]
+    HealthCheckError(String),
+    /// An invalid domain name provided.
+    #[error("Provided domain name is invalid: {0}")]
+    InvalidDomainName(String),
 }
 
 /// A builder for the `DynamicRouteProvider`.
