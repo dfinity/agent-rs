@@ -36,7 +36,6 @@ impl RouteProvider for RoundRobinRouteProvider {
         }
         // This operation wraps around an overflow, i.e. after max is reached the value is reset back to 0.
         let prev_idx = self.current_idx.fetch_add(1, Ordering::Relaxed);
-
         Ok(self.routes[prev_idx % self.routes.len()].clone())
     }
 }
@@ -64,7 +63,6 @@ impl RoundRobinRouteProvider {
                 })
             })
             .collect();
-
         Ok(Self {
             routes: routes?,
             current_idx: AtomicUsize::new(0),

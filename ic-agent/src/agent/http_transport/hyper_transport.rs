@@ -307,11 +307,8 @@ where
         envelope: Vec<u8>,
     ) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let url = format!(
-                "{}api/v2/canister/{effective_canister_id}/read_state",
-                self.route_provider.route()?
-            );
-            self.request(Method::POST, &url, Some(envelope))
+            let endpoint = format!("canister/{effective_canister_id}/read_state",);
+            self.request(Method::POST, &endpoint, Some(envelope))
                 .await
                 .map(|(_, body)| body)
         })
@@ -319,11 +316,8 @@ where
 
     fn read_subnet_state(&self, subnet_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let url = format!(
-                "{}api/v2/subnet/{subnet_id}/read_state",
-                self.route_provider.route()?
-            );
-            self.request(Method::POST, &url, Some(envelope))
+            let endpoint = format!("api/v2/subnet/{subnet_id}/read_state",);
+            self.request(Method::POST, &endpoint, Some(envelope))
                 .await
                 .map(|(_, body)| body)
         })
@@ -331,11 +325,8 @@ where
 
     fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let url = format!(
-                "{}api/v2/canister/{effective_canister_id}/query",
-                self.route_provider.route()?
-            );
-            self.request(Method::POST, &url, Some(envelope))
+            let endpoint = format!("api/v2/canister/{effective_canister_id}/query",);
+            self.request(Method::POST, &endpoint, Some(envelope))
                 .await
                 .map(|(_, body)| body)
         })
@@ -343,8 +334,8 @@ where
 
     fn status(&self) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let url = format!("{}api/v2/status", self.route_provider.route()?);
-            self.request(Method::GET, &url, None)
+            let endpoint = "api/v2/status";
+            self.request(Method::GET, &endpoint, None)
                 .await
                 .map(|(_, body)| body)
         })
