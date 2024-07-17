@@ -26,7 +26,7 @@ http = "1.0.0"
 http-body = "1.0.0"
 ic-certification = { workspace = true }
 ic-transport-types = { workspace = true }
-ic-verify-bls-signature = "0.1"
+ic-verify-bls-signature = "0.5"
 k256 = { version = "0.13.1", features = ["pem"] }
 p256 = { version = "0.13.2", features = ["pem"] }
 leb128 = { workspace = true }
