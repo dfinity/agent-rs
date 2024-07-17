@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Removed the Bitcoin query methods from `ManagementCanister`. Users should use `BitcoinCanister` for that.
 * Added `BitcoinCanister` to `ic-utils`.
+* Upgraded MSRV to 1.75.0.
+* Changed `ic_utils::interfaces::management_canister::builders::InstallMode::Upgrade` variant to be `Option<CanisterUpgradeOptions>`:
+  * `CanisterUpgradeOptions` is a new struct which covers the new upgrade option: `wasm_memory_persistence: Option<WasmMemoryPersistence>`.
+  * `WasmMemoryPersistence` is a new enum which controls Wasm main memory retention on upgrades which has two variants: `Keep` and `Replace`.
 
 ## [0.36.0] - 2024-06-04
 

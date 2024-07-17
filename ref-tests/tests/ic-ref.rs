@@ -33,7 +33,9 @@ mod management_canister {
         call::AsyncCall,
         interfaces::{
             management_canister::{
-                builders::{CanisterSettings, InstallMode},
+                builders::{
+                    CanisterSettings, CanisterUpgradeOptions, InstallMode, WasmMemoryPersistence,
+                },
                 CanisterStatus, StatusCallResult,
             },
             wallet::CreateResult,
@@ -161,18 +163,20 @@ mod management_canister {
 
             // Upgrade should succeed.
             ic00.install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Upgrade {
-                    skip_pre_upgrade: None,
-                })
+                .with_mode(InstallMode::Upgrade(Some(CanisterUpgradeOptions {
+                    skip_pre_upgrade: Some(true),
+                    wasm_memory_persistence: None,
+                })))
                 .call_and_wait()
                 .await?;
 
             // Upgrade with another agent should fail.
             let result = other_ic00
                 .install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Upgrade {
+                .with_mode(InstallMode::Upgrade(Some(CanisterUpgradeOptions {
                     skip_pre_upgrade: None,
-                })
+                    wasm_memory_persistence: Some(WasmMemoryPersistence::Keep),
+                })))
                 .call_and_wait()
                 .await;
             assert!(matches!(result, Err(AgentError::UncertifiedReject(..))));
@@ -485,9 +489,10 @@ mod management_canister {
 
             // Upgrade should succeed
             ic00.install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Upgrade {
+                .with_mode(InstallMode::Upgrade(Some(CanisterUpgradeOptions {
                     skip_pre_upgrade: None,
-                })
+                    wasm_memory_persistence: Some(WasmMemoryPersistence::Replace),
+                })))
                 .call_and_wait()
                 .await?;
 
