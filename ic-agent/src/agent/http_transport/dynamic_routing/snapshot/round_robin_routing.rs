@@ -45,7 +45,7 @@ impl RoutingSnapshot for RoundRobinRoutingSnapshot {
             .cloned()
     }
 
-    fn sync_nodes(&mut self, nodes: &[Node]) -> anyhow::Result<bool> {
+    fn sync_nodes(&mut self, nodes: &[Node]) -> bool {
         let new_nodes = HashSet::from_iter(nodes.iter().cloned());
         // Find nodes removed from topology.
         let nodes_removed: Vec<_> = self
@@ -67,17 +67,18 @@ impl RoutingSnapshot for RoundRobinRoutingSnapshot {
             self.existing_nodes.remove(node);
             self.healthy_nodes.remove(node);
         });
-        Ok(has_added_nodes || has_removed_nodes)
+
+        has_added_nodes || has_removed_nodes
     }
 
-    fn update_node(&mut self, node: &Node, health: HealthCheckStatus) -> anyhow::Result<bool> {
+    fn update_node(&mut self, node: &Node, health: HealthCheckStatus) -> bool {
         if !self.existing_nodes.contains(node) {
-            return Ok(false);
+            return false;
         }
         if health.is_healthy() {
-            Ok(self.healthy_nodes.insert(node.clone()))
+            self.healthy_nodes.insert(node.clone())
         } else {
-            Ok(self.healthy_nodes.remove(node))
+            self.healthy_nodes.remove(node)
         }
     }
 }
@@ -116,17 +117,13 @@ mod tests {
         let healthy = HealthCheckStatus::new(Some(Duration::from_secs(1)));
         let unhealthy = HealthCheckStatus::new(None);
         // Act 1
-        let is_updated = snapshot
-            .update_node(&node, healthy)
-            .expect("node update failed");
+        let is_updated = snapshot.update_node(&node, healthy);
         // Assert
         assert!(!is_updated);
         assert!(snapshot.existing_nodes.is_empty());
         assert!(snapshot.next().is_none());
         // Act 2
-        let is_updated = snapshot
-            .update_node(&node, unhealthy)
-            .expect("node update failed");
+        let is_updated = snapshot.update_node(&node, unhealthy);
         // Assert
         assert!(!is_updated);
         assert!(snapshot.existing_nodes.is_empty());
@@ -142,9 +139,7 @@ mod tests {
         snapshot.existing_nodes.insert(node.clone());
         let health = HealthCheckStatus::new(Some(Duration::from_secs(1)));
         // Act
-        let is_updated = snapshot
-            .update_node(&node, health)
-            .expect("node update failed");
+        let is_updated = snapshot.update_node(&node, health);
         assert!(is_updated);
         assert!(snapshot.has_nodes());
         assert_eq!(snapshot.next().unwrap(), node);
@@ -160,9 +155,7 @@ mod tests {
         snapshot.healthy_nodes.insert(node.clone());
         let unhealthy = HealthCheckStatus::new(None);
         // Act
-        let is_updated = snapshot
-            .update_node(&node, unhealthy)
-            .expect("node update failed");
+        let is_updated = snapshot.update_node(&node, unhealthy);
         assert!(is_updated);
         assert!(!snapshot.has_nodes());
         assert!(snapshot.next().is_none());
@@ -174,7 +167,7 @@ mod tests {
         let mut snapshot = RoundRobinRoutingSnapshot::new();
         let node_1 = Node::new("api1.com").unwrap();
         // Sync with node_1
-        let nodes_changed = snapshot.sync_nodes(&[node_1.clone()]).unwrap();
+        let nodes_changed = snapshot.sync_nodes(&[node_1.clone()]);
         assert!(nodes_changed);
         assert!(snapshot.healthy_nodes.is_empty());
         assert_eq!(
@@ -184,7 +177,7 @@ mod tests {
         // Add node_1 to healthy_nodes manually
         snapshot.healthy_nodes.insert(node_1.clone());
         // Sync with node_1 again
-        let nodes_changed = snapshot.sync_nodes(&[node_1.clone()]).unwrap();
+        let nodes_changed = snapshot.sync_nodes(&[node_1.clone()]);
         assert!(!nodes_changed);
         assert_eq!(
             snapshot.existing_nodes,
@@ -193,7 +186,7 @@ mod tests {
         assert_eq!(snapshot.healthy_nodes, HashSet::from_iter(vec![node_1]));
         // Sync with node_2
         let node_2 = Node::new("api2.com").unwrap();
-        let nodes_changed = snapshot.sync_nodes(&[node_2.clone()]).unwrap();
+        let nodes_changed = snapshot.sync_nodes(&[node_2.clone()]);
         assert!(nodes_changed);
         assert_eq!(
             snapshot.existing_nodes,
@@ -205,9 +198,7 @@ mod tests {
         snapshot.healthy_nodes.insert(node_2.clone());
         // Sync with [node_2, node_3]
         let node_3 = Node::new("api3.com").unwrap();
-        let nodes_changed = snapshot
-            .sync_nodes(&[node_3.clone(), node_2.clone()])
-            .unwrap();
+        let nodes_changed = snapshot.sync_nodes(&[node_3.clone(), node_2.clone()]);
         assert!(nodes_changed);
         assert_eq!(
             snapshot.existing_nodes,
@@ -216,13 +207,13 @@ mod tests {
         assert_eq!(snapshot.healthy_nodes, HashSet::from_iter(vec![node_2]));
         snapshot.healthy_nodes.insert(node_3);
         // Sync with []
-        let nodes_changed = snapshot.sync_nodes(&[]).unwrap();
+        let nodes_changed = snapshot.sync_nodes(&[]);
         assert!(nodes_changed);
         assert!(snapshot.existing_nodes.is_empty());
         // Make sure all nodes were removed from the healthy_nodes
         assert!(snapshot.healthy_nodes.is_empty());
         // Sync with [] again
-        let nodes_changed = snapshot.sync_nodes(&[]).unwrap();
+        let nodes_changed = snapshot.sync_nodes(&[]);
         assert!(!nodes_changed);
         assert!(snapshot.existing_nodes.is_empty());
     }

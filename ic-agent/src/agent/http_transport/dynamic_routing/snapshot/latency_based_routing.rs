@@ -84,7 +84,7 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
         idx.map(|idx| self.weighted_nodes[idx].node.clone())
     }
 
-    fn sync_nodes(&mut self, nodes: &[Node]) -> anyhow::Result<bool> {
+    fn sync_nodes(&mut self, nodes: &[Node]) -> bool {
         let new_nodes = HashSet::from_iter(nodes.iter().cloned());
         // Find nodes removed from topology.
         let nodes_removed: Vec<_> = self
@@ -107,12 +107,13 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
             let idx = self.weighted_nodes.iter().position(|x| x.node == node);
             idx.map(|idx| self.weighted_nodes.swap_remove(idx));
         }
-        Ok(has_added_nodes || has_removed_nodes)
+
+        has_added_nodes || has_removed_nodes
     }
 
-    fn update_node(&mut self, node: &Node, health: HealthCheckStatus) -> anyhow::Result<bool> {
+    fn update_node(&mut self, node: &Node, health: HealthCheckStatus) -> bool {
         if !self.existing_nodes.contains(node) {
-            return Ok(false);
+            return false;
         }
 
         // If latency is None (meaning Node is unhealthy), we assign some big value
@@ -135,7 +136,8 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
                 weight,
             })
         }
-        Ok(true)
+
+        true
     }
 }
 
@@ -174,9 +176,7 @@ mod tests {
         let node = Node::new("api1.com").unwrap();
         let health = HealthCheckStatus::new(Some(Duration::from_secs(1)));
         // Act
-        let is_updated = snapshot
-            .update_node(&node, health)
-            .expect("node update failed");
+        let is_updated = snapshot.update_node(&node, health);
         // Assert
         assert!(!is_updated);
         assert!(snapshot.weighted_nodes.is_empty());
@@ -192,9 +192,7 @@ mod tests {
         let health = HealthCheckStatus::new(Some(Duration::from_secs(1)));
         snapshot.existing_nodes.insert(node.clone());
         // Check first update
-        let is_updated = snapshot
-            .update_node(&node, health)
-            .expect("node update failed");
+        let is_updated = snapshot.update_node(&node, health);
         assert!(is_updated);
         assert!(snapshot.has_nodes());
         let weighted_node = snapshot.weighted_nodes.first().unwrap();
@@ -206,9 +204,7 @@ mod tests {
         assert_eq!(snapshot.next().unwrap(), node);
         // Check second update
         let health = HealthCheckStatus::new(Some(Duration::from_secs(2)));
-        let is_updated = snapshot
-            .update_node(&node, health)
-            .expect("node update failed");
+        let is_updated = snapshot.update_node(&node, health);
         assert!(is_updated);
         let weighted_node = snapshot.weighted_nodes.first().unwrap();
         assert_eq!(
@@ -218,9 +214,7 @@ mod tests {
         assert_eq!(weighted_node.weight, 1.0 / 1.5);
         // Check third update
         let health = HealthCheckStatus::new(Some(Duration::from_secs(3)));
-        let is_updated = snapshot
-            .update_node(&node, health)
-            .expect("node update failed");
+        let is_updated = snapshot.update_node(&node, health);
         assert!(is_updated);
         let weighted_node = snapshot.weighted_nodes.first().unwrap();
         assert_eq!(
@@ -230,9 +224,7 @@ mod tests {
         assert_eq!(weighted_node.weight, 0.5);
         // Check forth update with none
         let health = HealthCheckStatus::new(None);
-        let is_updated = snapshot
-            .update_node(&node, health)
-            .expect("node update failed");
+        let is_updated = snapshot.update_node(&node, health);
         assert!(is_updated);
         let weighted_node = snapshot.weighted_nodes.first().unwrap();
         let avg_latency = Duration::from_secs_f64((MAX_LATENCY.as_secs() as f64 + 6.0) / 4.0);
@@ -249,7 +241,7 @@ mod tests {
         let mut snapshot = LatencyRoutingSnapshot::new();
         let node_1 = Node::new("api1.com").unwrap();
         // Sync with node_1
-        let nodes_changed = snapshot.sync_nodes(&[node_1.clone()]).unwrap();
+        let nodes_changed = snapshot.sync_nodes(&[node_1.clone()]);
         assert!(nodes_changed);
         assert!(snapshot.weighted_nodes.is_empty());
         assert_eq!(
@@ -263,7 +255,7 @@ mod tests {
             weight: 0.0,
         });
         // Sync with node_1 again
-        let nodes_changed = snapshot.sync_nodes(&[node_1.clone()]).unwrap();
+        let nodes_changed = snapshot.sync_nodes(&[node_1.clone()]);
         assert!(!nodes_changed);
         assert_eq!(
             snapshot.existing_nodes,
@@ -272,7 +264,7 @@ mod tests {
         assert_eq!(snapshot.weighted_nodes[0].node, node_1);
         // Sync with node_2
         let node_2 = Node::new("api2.com").unwrap();
-        let nodes_changed = snapshot.sync_nodes(&[node_2.clone()]).unwrap();
+        let nodes_changed = snapshot.sync_nodes(&[node_2.clone()]);
         assert!(nodes_changed);
         assert_eq!(
             snapshot.existing_nodes,
@@ -288,9 +280,7 @@ mod tests {
         });
         // Sync with [node_2, node_3]
         let node_3 = Node::new("api3.com").unwrap();
-        let nodes_changed = snapshot
-            .sync_nodes(&[node_3.clone(), node_2.clone()])
-            .unwrap();
+        let nodes_changed = snapshot.sync_nodes(&[node_3.clone(), node_2.clone()]);
         assert!(nodes_changed);
         assert_eq!(
             snapshot.existing_nodes,
@@ -304,13 +294,13 @@ mod tests {
             weight: 0.0,
         });
         // Sync with []
-        let nodes_changed = snapshot.sync_nodes(&[]).unwrap();
+        let nodes_changed = snapshot.sync_nodes(&[]);
         assert!(nodes_changed);
         assert!(snapshot.existing_nodes.is_empty());
         // Make sure all nodes were removed from the healthy_nodes
         assert!(snapshot.weighted_nodes.is_empty());
         // Sync with [] again
-        let nodes_changed = snapshot.sync_nodes(&[]).unwrap();
+        let nodes_changed = snapshot.sync_nodes(&[]);
         assert!(!nodes_changed);
         assert!(snapshot.existing_nodes.is_empty());
     }

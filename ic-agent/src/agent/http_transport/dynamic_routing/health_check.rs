@@ -245,10 +245,7 @@ where
     async fn handle_health_update(&mut self, msg: NodeHealthState) {
         let current_snapshot = self.routing_snapshot.load_full();
         let mut new_snapshot = (*current_snapshot).clone();
-        if let Err(err) = new_snapshot.update_node(&msg.node, msg.health.clone()) {
-            error!("{HEALTH_MANAGER_ACTOR}: failed to update snapshot: {err:?}");
-            return;
-        }
+        new_snapshot.update_node(&msg.node, msg.health.clone());
         self.routing_snapshot.store(Arc::new(new_snapshot));
         if !self.is_initialized && msg.health.is_healthy() {
             self.is_initialized = true;
@@ -269,7 +266,7 @@ where
         let current_snapshot = self.routing_snapshot.load_full();
         let mut new_snapshot = (*current_snapshot).clone();
         // If the snapshot has changed, store it and restart all node's health checks.
-        if let Ok(true) = new_snapshot.sync_nodes(&nodes) {
+        if new_snapshot.sync_nodes(&nodes) {
             self.routing_snapshot.store(Arc::new(new_snapshot));
             self.stop_all_checks().await;
             self.start_checks(nodes.to_vec());
