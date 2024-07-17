@@ -5,7 +5,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::anyhow;
 use arc_swap::ArcSwap;
 use candid::Principal;
 use reqwest::Client;
@@ -143,9 +142,7 @@ impl<S> DynamicRouteProviderBuilder<S> {
             token: CancellationToken::new(),
         };
 
-        if let Err(err) = route_provider.run().await {
-            error!("{DYNAMIC_ROUTE_PROVIDER}: started in unhealthy state: {err:?}");
-        }
+        route_provider.run().await;
 
         route_provider
     }
@@ -175,8 +172,8 @@ where
     ///   - Listens to the fetched nodes messages from the NodesFetchActor.
     ///   - Starts/stops health check tasks (HealthCheckActors) based on the newly added/removed nodes.
     ///   - These spawned health check tasks periodically update the snapshot with the latest node health info.
-    pub async fn run(&self) -> anyhow::Result<()> {
-        info!("{DYNAMIC_ROUTE_PROVIDER}: start run() ");
+    pub async fn run(&self) {
+        info!("{DYNAMIC_ROUTE_PROVIDER}: started ...");
         // Communication channel between NodesFetchActor and HealthManagerActor.
         let (fetch_sender, fetch_receiver) = watch::channel(None);
 
@@ -196,7 +193,6 @@ where
             .spawn(async move { health_manager_actor.run().await });
 
         // Dispatch all seed nodes for initial health checks
-        let start = Instant::now();
         if let Err(err) = fetch_sender.send(Some(FetchedNodes {
             nodes: self.seeds.clone(),
         })) {
@@ -204,23 +200,17 @@ where
         }
 
         // Try await for healthy seeds.
-        let found_healthy_seeds =
-            match timeout(TIMEOUT_AWAIT_HEALTHY_SEED, init_receiver.recv()).await {
-                Ok(_) => {
-                    info!(
-                        "{DYNAMIC_ROUTE_PROVIDER}: found healthy seeds within {:?}",
-                        start.elapsed()
-                    );
-                    true
-                }
-                Err(_) => {
-                    warn!(
-                        "{DYNAMIC_ROUTE_PROVIDER}: no healthy seeds found within {:?}",
-                        start.elapsed()
-                    );
-                    false
-                }
-            };
+        let start = Instant::now();
+        match timeout(TIMEOUT_AWAIT_HEALTHY_SEED, init_receiver.recv()).await {
+            Ok(_) => info!(
+                "{DYNAMIC_ROUTE_PROVIDER}: found healthy seeds within {:?}",
+                start.elapsed()
+            ),
+            Err(_) => warn!(
+                "{DYNAMIC_ROUTE_PROVIDER}: no healthy seeds found within {:?}",
+                start.elapsed()
+            ),
+        };
         // We can close the channel now.
         init_receiver.close();
 
@@ -236,10 +226,6 @@ where
         info!(
             "{DYNAMIC_ROUTE_PROVIDER}: NodesFetchActor and HealthManagerActor started successfully"
         );
-
-        (found_healthy_seeds).then_some(()).ok_or(anyhow!(
-            "No healthy seeds found within {TIMEOUT_AWAIT_HEALTHY_SEED:?}, they may become healthy later ..."
-        ))
     }
 }
 
@@ -696,3 +682,7 @@ mod tests {
         );
     }
 }
+
+// - none of the seeds [] are healthy
+// - none of the API node [] is healthy
+// - return a vector of errors: HealthCheckErrors, FetchErrors, etc.
