@@ -1,8 +1,9 @@
 use url::Url;
 
-use crate::agent::ApiBoundaryNode;
-
-use super::dynamic_route_provider::DynamicRouteProviderError;
+use crate::agent::{
+    http_transport::dynamic_routing::dynamic_route_provider::DynamicRouteProviderError,
+    ApiBoundaryNode,
+};
 
 /// Represents a node in the dynamic routing.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -52,7 +53,7 @@ impl TryFrom<&ApiBoundaryNode> for Node {
 }
 
 /// Checks if the given domain is a valid URL.
-pub fn is_valid_domain<S: AsRef<str>>(domain: S) -> bool {
+fn is_valid_domain<S: AsRef<str>>(domain: S) -> bool {
     // Prepend scheme to make it a valid URL
     let url_string = format!("http://{}", domain.as_ref());
     Url::parse(&url_string).is_ok()

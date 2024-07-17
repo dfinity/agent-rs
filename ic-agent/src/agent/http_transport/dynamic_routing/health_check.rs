@@ -157,12 +157,12 @@ impl HealthCheckActor {
 }
 
 /// The name of the health manager actor.
-pub const HEALTH_MANAGER_ACTOR: &str = "HealthManagerActor";
+pub(super) const HEALTH_MANAGER_ACTOR: &str = "HealthManagerActor";
 
 /// A struct managing the health checks of the nodes.
 /// It receives the fetched nodes from the `NodesFetchActor` and starts the health checks for them.
 /// It also receives the health status of the nodes from the `HealthCheckActor/s` and updates the routing snapshot.
-pub struct HealthManagerActor<S> {
+pub(super) struct HealthManagerActor<S> {
     /// The health checker.
     checker: Arc<dyn HealthCheck>,
     /// The period of the health check.

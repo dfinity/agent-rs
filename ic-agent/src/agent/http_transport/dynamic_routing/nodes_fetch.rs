@@ -83,7 +83,7 @@ impl Fetch for NodesFetcher {
 }
 
 /// A struct representing the actor responsible for fetching existing nodes and communicating it with the listener.
-pub struct NodesFetchActor<S> {
+pub(super) struct NodesFetchActor<S> {
     /// The fetcher object responsible for fetching the nodes.
     fetcher: Arc<dyn Fetch>,
     /// Time period between fetches.

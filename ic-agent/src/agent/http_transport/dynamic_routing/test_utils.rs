@@ -17,14 +17,17 @@ use crate::agent::http_transport::{
     route_provider::RouteProvider,
 };
 
-pub fn route_n_times(n: usize, f: Arc<impl RouteProvider + ?Sized>) -> Vec<String> {
+pub(super) fn route_n_times(n: usize, f: Arc<impl RouteProvider + ?Sized>) -> Vec<String> {
     (0..n)
         .map(|_| f.route().unwrap().domain().unwrap().to_string())
         .collect()
 }
 
-pub fn assert_routed_domains<T>(actual: Vec<T>, expected: Vec<T>, expected_repetitions: usize)
-where
+pub(super) fn assert_routed_domains<T>(
+    actual: Vec<T>,
+    expected: Vec<T>,
+    expected_repetitions: usize,
+) where
     T: AsRef<str> + Eq + Hash + Debug + Ord,
 {
     fn build_count_map<T>(items: &[T]) -> HashMap<&T, usize>
@@ -54,7 +57,7 @@ where
 }
 
 #[derive(Debug)]
-pub struct NodesFetcherMock {
+pub(super) struct NodesFetcherMock {
     // A set of nodes, existing in the topology.
     pub nodes: AtomicSwap<Vec<Node>>,
 }
@@ -86,7 +89,7 @@ impl NodesFetcherMock {
 }
 
 #[derive(Debug)]
-pub struct NodeHealthCheckerMock {
+pub(super) struct NodeHealthCheckerMock {
     healthy_nodes: Arc<ArcSwap<HashSet<Node>>>,
 }
 
