@@ -215,7 +215,20 @@ async fn query_rejected() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn call_error() -> Result<(), AgentError> {
-    let (call_mock, url) = mock("POST", "/api/v3/canister/aaaaa-aa/call", 500, vec![], None).await;
+    let version = if cfg!(feature = "sync_call") {
+        "3"
+    } else {
+        "2"
+    };
+
+    let (call_mock, url) = mock(
+        "POST",
+        format!("/api/v{version}/canister/aaaaa-aa/call").as_str(),
+        500,
+        vec![],
+        None,
+    )
+    .await;
 
     let agent = make_agent(&url);
 
@@ -245,9 +258,15 @@ async fn call_rejected() -> Result<(), AgentError> {
 
     let body = serde_cbor::to_vec(&reject_body).unwrap();
 
+    let version = if cfg!(feature = "sync_call") {
+        "3"
+    } else {
+        "2"
+    };
+
     let (call_mock, url) = mock(
         "POST",
-        "/api/v3/canister/aaaaa-aa/call",
+        format!("/api/v{version}/canister/aaaaa-aa/call").as_str(),
         200,
         body,
         Some("application/cbor"),
@@ -285,9 +304,15 @@ async fn call_rejected_without_error_code() -> Result<(), AgentError> {
 
     let body = serde_cbor::to_vec(&reject_body).unwrap();
 
+    let version = if cfg!(feature = "sync_call") {
+        "3"
+    } else {
+        "2"
+    };
+
     let (call_mock, url) = mock(
         "POST",
-        format!("/api/v3/canister/{}/call", canister_id_str).as_str(),
+        format!("/api/v{version}/canister/{}/call", canister_id_str).as_str(),
         200,
         body,
         Some("application/cbor"),
