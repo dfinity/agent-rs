@@ -1,5 +1,5 @@
 [package]
-name = "ic-agent"
+name = "ic-agent-with-discovery"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
