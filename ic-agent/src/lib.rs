@@ -121,7 +121,7 @@ use agent::response_authentication::LookupPath;
 #[doc(inline)]
 pub use agent::{agent_error, agent_error::AgentError, Agent, NonceFactory, NonceGenerator};
 #[doc(inline)]
-pub use ic_transport_types::{to_request_id, RequestId, RequestIdError};
+pub use ic_transport_types::{to_request_id, RequestId, RequestIdError, TransportCallResponse};
 #[doc(inline)]
 pub use identity::{Identity, Signature};
 

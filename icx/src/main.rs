@@ -7,10 +7,11 @@ use candid::{
 use candid_parser::{check_prog, parse_idl_args, parse_idl_value, IDLProg};
 use clap::{crate_authors, crate_version, Parser, ValueEnum};
 use ic_agent::{
-    agent::{self, signed::SignedUpdate},
     agent::{
+        self,
         agent_error::HttpErrorPayload,
-        signed::{SignedQuery, SignedRequestStatus},
+        signed::{SignedQuery, SignedRequestStatus, SignedUpdate},
+        CallResponse,
     },
     export::Principal,
     identity::BasicIdentity,
@@ -550,14 +551,23 @@ async fn main() -> Result<()> {
 
             if let Ok(signed_update) = serde_json::from_str::<SignedUpdate>(&buffer) {
                 fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
-                let request_id = agent
+                let call_response = agent
                     .update_signed(
                         signed_update.effective_canister_id,
                         signed_update.signed_update,
                     )
                     .await
                     .context("Got an AgentError when send the signed update call")?;
-                eprintln!("RequestID: 0x{}", String::from(request_id));
+
+                match call_response {
+                    CallResponse::Response(blob) => {
+                        print_idl_blob(&blob, &ArgType::Idl, &None)
+                            .context("Failed to print update result")?;
+                    }
+                    CallResponse::Poll(request_id) => {
+                        eprintln!("RequestID: 0x{}", String::from(request_id));
+                    }
+                };
             } else if let Ok(signed_query) = serde_json::from_str::<SignedQuery>(&buffer) {
                 let blob = agent
                     .query_signed(

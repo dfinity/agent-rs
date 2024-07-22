@@ -1,10 +1,9 @@
 //! A [`Transport`] that connects using a [`reqwest`] client.
 #![cfg(feature = "reqwest")]
 
-use std::{sync::Arc, time::Duration};
-
-use ic_transport_types::RejectResponse;
+use ic_transport_types::{RejectResponse, TransportCallResponse};
 pub use reqwest;
+use std::{sync::Arc, time::Duration};
 
 use futures_util::StreamExt;
 use reqwest::{
@@ -19,7 +18,7 @@ use crate::{
         AgentFuture, Transport,
     },
     export::Principal,
-    AgentError, RequestId,
+    AgentError,
 };
 
 /// A [`Transport`] using [`reqwest`] to make HTTP calls to the Internet Computer.
@@ -30,6 +29,7 @@ pub struct ReqwestTransport {
     max_response_body_size: Option<usize>,
     #[allow(dead_code)]
     max_tcp_error_retries: usize,
+    use_call_v3_endpoint: bool,
 }
 
 impl ReqwestTransport {
@@ -69,6 +69,7 @@ impl ReqwestTransport {
             client,
             max_response_body_size: None,
             max_tcp_error_retries: 0,
+            use_call_v3_endpoint: false,
         })
     }
 
@@ -88,6 +89,15 @@ impl ReqwestTransport {
         }
     }
 
+    /// Use call v3 endpoint for update calls.
+    #[cfg(feature = "experimental_sync_call")]
+    pub fn with_use_call_v3_endpoint(self) -> Self {
+        ReqwestTransport {
+            use_call_v3_endpoint: true,
+            ..self
+        }
+    }
+
     async fn request(
         &self,
         method: Method,
@@ -96,6 +106,7 @@ impl ReqwestTransport {
     ) -> Result<(StatusCode, HeaderMap, Vec<u8>), AgentError> {
         let create_request_with_generated_url = || -> Result<Request, AgentError> {
             let url = self.route_provider.route()?.join(endpoint)?;
+            println!("url = {}", url);
             let mut http_request = Request::new(method.clone(), url);
             http_request
                 .headers_mut()
@@ -180,7 +191,7 @@ impl ReqwestTransport {
         method: Method,
         endpoint: &str,
         body: Option<Vec<u8>>,
-    ) -> Result<Vec<u8>, AgentError> {
+    ) -> Result<(StatusCode, Vec<u8>), AgentError> {
         let request_result = loop {
             let result = self
                 .request(method.clone(), endpoint, body.as_ref().cloned())
@@ -194,19 +205,7 @@ impl ReqwestTransport {
         let headers = request_result.1;
         let body = request_result.2;
 
-        // status == OK means we have an error message for call requests
-        // see https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call
-        if status == StatusCode::OK && endpoint.ends_with("call") {
-            let cbor_decoded_body: Result<RejectResponse, serde_cbor::Error> =
-                serde_cbor::from_slice(&body);
-
-            let agent_error = match cbor_decoded_body {
-                Ok(replica_error) => AgentError::UncertifiedReject(replica_error),
-                Err(cbor_error) => AgentError::InvalidCborData(cbor_error),
-            };
-
-            Err(agent_error)
-        } else if status.is_client_error() || status.is_server_error() {
+        if status.is_client_error() || status.is_server_error() {
             Err(AgentError::HttpError(HttpErrorPayload {
                 status: status.into(),
                 content_type: headers
@@ -215,8 +214,13 @@ impl ReqwestTransport {
                     .map(|x| x.to_string()),
                 content: body,
             }))
+        } else if !(status == StatusCode::OK || status == StatusCode::ACCEPTED) {
+            Err(AgentError::InvalidHttpResponse(format!(
+                "Expected `200`, `202`, 4xx`, or `5xx` HTTP status code. Got: {}",
+                status
+            )))
         } else {
-            Ok(body)
+            Ok((status, body))
         }
     }
 }
@@ -226,13 +230,36 @@ impl Transport for ReqwestTransport {
         &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-        _request_id: RequestId,
-    ) -> AgentFuture<()> {
+    ) -> AgentFuture<TransportCallResponse> {
         Box::pin(async move {
-            let endpoint = format!("canister/{}/call", effective_canister_id.to_text());
-            self.execute(Method::POST, &endpoint, Some(envelope))
+            let api_version = if self.use_call_v3_endpoint {
+                "v3"
+            } else {
+                "v2"
+            };
+
+            let endpoint = format!(
+                "api/{}/canister/{}/call",
+                api_version,
+                effective_canister_id.to_text()
+            );
+            let (status_code, response_body) = self
+                .execute(Method::POST, &endpoint, Some(envelope))
                 .await?;
-            Ok(())
+
+            if status_code == StatusCode::ACCEPTED {
+                return Ok(TransportCallResponse::Accepted);
+            }
+
+            // status_code == OK (200)
+            if self.use_call_v3_endpoint {
+                serde_cbor::from_slice(&response_body).map_err(AgentError::InvalidCborData)
+            } else {
+                let reject_response = serde_cbor::from_slice::<RejectResponse>(&response_body)
+                    .map_err(AgentError::InvalidCborData)?;
+
+                Err(AgentError::UncertifiedReject(reject_response))
+            }
         })
     }
 
@@ -241,28 +268,41 @@ impl Transport for ReqwestTransport {
         effective_canister_id: Principal,
         envelope: Vec<u8>,
     ) -> AgentFuture<Vec<u8>> {
+        let endpoint = format!(
+            "api/v2/canister/{}/read_state",
+            effective_canister_id.to_text()
+        );
+
         Box::pin(async move {
-            let endpoint = format!("canister/{effective_canister_id}/read_state");
-            self.execute(Method::POST, &endpoint, Some(envelope)).await
+            self.execute(Method::POST, &endpoint, Some(envelope))
+                .await
+                .map(|r| r.1)
         })
     }
 
     fn read_subnet_state(&self, subnet_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let endpoint = format!("subnet/{subnet_id}/read_state");
-            self.execute(Method::POST, &endpoint, Some(envelope)).await
+            let endpoint = format!("api/v2/subnet/{}/read_state", subnet_id.to_text());
+            self.execute(Method::POST, &endpoint, Some(envelope))
+                .await
+                .map(|r| r.1)
         })
     }
 
     fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let endpoint = format!("canister/{effective_canister_id}/query");
-            self.execute(Method::POST, &endpoint, Some(envelope)).await
+            let endpoint = format!("api/v2/canister/{}/query", effective_canister_id.to_text());
+            self.execute(Method::POST, &endpoint, Some(envelope))
+                .await
+                .map(|r| r.1)
         })
     }
 
     fn status(&self) -> AgentFuture<Vec<u8>> {
-        Box::pin(async move { self.execute(Method::GET, "status", None).await })
+        Box::pin(async move {
+            let endpoint = "api/v2/status";
+            self.execute(Method::GET, endpoint, None).await.map(|r| r.1)
+        })
     }
 }
 
@@ -288,45 +328,45 @@ mod test {
             );
         }
 
-        test("https://ic0.app", "https://ic0.app/api/v2/");
-        test("https://IC0.app", "https://ic0.app/api/v2/");
-        test("https://foo.ic0.app", "https://ic0.app/api/v2/");
-        test("https://foo.IC0.app", "https://ic0.app/api/v2/");
-        test("https://foo.Ic0.app", "https://ic0.app/api/v2/");
-        test("https://foo.iC0.app", "https://ic0.app/api/v2/");
-        test("https://foo.bar.ic0.app", "https://ic0.app/api/v2/");
-        test("https://ic0.app/foo/", "https://ic0.app/foo/api/v2/");
-        test("https://foo.ic0.app/foo/", "https://ic0.app/foo/api/v2/");
+        test("https://ic0.app", "https://ic0.app/");
+        test("https://IC0.app", "https://ic0.app/");
+        test("https://foo.ic0.app", "https://ic0.app/");
+        test("https://foo.IC0.app", "https://ic0.app/");
+        test("https://foo.Ic0.app", "https://ic0.app/");
+        test("https://foo.iC0.app", "https://ic0.app/");
+        test("https://foo.bar.ic0.app", "https://ic0.app/");
+        test("https://ic0.app/foo/", "https://ic0.app/foo/");
+        test("https://foo.ic0.app/foo/", "https://ic0.app/foo/");
         test(
             "https://ryjl3-tyaaa-aaaaa-aaaba-cai.ic0.app",
-            "https://ic0.app/api/v2/",
+            "https://ic0.app/",
         );
 
-        test("https://ic1.app", "https://ic1.app/api/v2/");
-        test("https://foo.ic1.app", "https://foo.ic1.app/api/v2/");
-        test("https://ic0.app.ic1.app", "https://ic0.app.ic1.app/api/v2/");
+        test("https://ic1.app", "https://ic1.app/");
+        test("https://foo.ic1.app", "https://foo.ic1.app/");
+        test("https://ic0.app.ic1.app", "https://ic0.app.ic1.app/");
 
-        test("https://fooic0.app", "https://fooic0.app/api/v2/");
-        test("https://fooic0.app.ic0.app", "https://ic0.app/api/v2/");
+        test("https://fooic0.app", "https://fooic0.app/");
+        test("https://fooic0.app.ic0.app", "https://ic0.app/");
 
-        test("https://icp0.io", "https://icp0.io/api/v2/");
+        test("https://icp0.io", "https://icp0.io/");
         test(
             "https://ryjl3-tyaaa-aaaaa-aaaba-cai.icp0.io",
-            "https://icp0.io/api/v2/",
+            "https://icp0.io/",
         );
-        test("https://ic0.app.icp0.io", "https://icp0.io/api/v2/");
+        test("https://ic0.app.icp0.io", "https://icp0.io/");
 
-        test("https://icp-api.io", "https://icp-api.io/api/v2/");
+        test("https://icp-api.io", "https://icp-api.io/");
         test(
             "https://ryjl3-tyaaa-aaaaa-aaaba-cai.icp-api.io",
-            "https://icp-api.io/api/v2/",
+            "https://icp-api.io/",
         );
-        test("https://icp0.io.icp-api.io", "https://icp-api.io/api/v2/");
+        test("https://icp0.io.icp-api.io", "https://icp-api.io/");
 
-        test("http://localhost:4943", "http://localhost:4943/api/v2/");
+        test("http://localhost:4943", "http://localhost:4943/");
         test(
             "http://ryjl3-tyaaa-aaaaa-aaaba-cai.localhost:4943",
-            "http://localhost:4943/api/v2/",
+            "http://localhost:4943/",
         );
     }
 }

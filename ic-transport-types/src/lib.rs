@@ -11,6 +11,7 @@ use ic_certification::Label;
 pub use request_id::{to_request_id, RequestId, RequestIdError};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use serde_with::{serde_as, Bytes};
 use thiserror::Error;
 
 mod request_id;
@@ -115,6 +116,36 @@ pub struct ReadStateResponse {
     /// Use the [`ic-certification`](https://docs.rs/ic-certification) crate to process it.
     #[serde(with = "serde_bytes")]
     pub certificate: Vec<u8>,
+}
+
+/// The response from a request to the `call` endpoint.
+// TODO: Inline this enum. No need for it to be public.
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum TransportCallResponse {
+    /// A certified response.
+    Replied {
+        /// The CBOR serialized certificate for the call response.
+        #[serde_as(as = "Bytes")]
+        certificate: Vec<u8>,
+    },
+
+    /// A non replicated rejection from the replica.
+    NonReplicatedRejection(RejectResponse),
+
+    /// The replica timed out the sync request. The status of the request must be polled.
+    Accepted,
+}
+
+/// The response from a request to the `call` endpoint.
+#[derive(Debug, PartialEq, Eq)]
+pub enum CallResponse<Out> {
+    /// The call complted, and the response is available.
+    Response(Out),
+    /// The replica timed out the update call, and the request id should be used to poll for the response
+    /// using the `request_status` request type.
+    Poll(RequestId),
 }
 
 /// Possible responses to a query call.
