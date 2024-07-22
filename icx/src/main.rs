@@ -294,7 +294,11 @@ pub fn get_effective_canister_id(
             | MgmtMethod::UploadChunk
             | MgmtMethod::ClearChunkStore
             | MgmtMethod::StoredChunks
-            | MgmtMethod::FetchCanisterLogs => {
+            | MgmtMethod::FetchCanisterLogs
+            | MgmtMethod::TakeCanisterSnapshot
+            | MgmtMethod::ListCanisterSnapshots
+            | MgmtMethod::DeleteCanisterSnapshot
+            | MgmtMethod::LoadCanisterSnapshot => {
                 #[derive(CandidType, Deserialize)]
                 struct In {
                     canister_id: Principal,

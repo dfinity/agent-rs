@@ -69,6 +69,14 @@ pub enum MgmtMethod {
     InstallChunkedCode,
     /// See [`ManagementCanister::fetch_canister_logs`].
     FetchCanisterLogs,
+    /// See [`ManagementCanister::take_canister_snapshot`].
+    TakeCanisterSnapshot,
+    /// See [`ManagementCanister::load_canister_snapshot`].
+    LoadCanisterSnapshot,
+    /// See [`ManagementCanister::list_canister_snapshots`].
+    ListCanisterSnapshots,
+    /// See [`ManagementCanister::delete_canister_snapshot`].
+    DeleteCanisterSnapshot,
     /// There is no corresponding agent function as only canisters can call it.
     EcdsaPublicKey,
     /// There is no corresponding agent function as only canisters can call it.
@@ -230,6 +238,18 @@ pub type StoreChunksResult = Vec<ChunkHash>;
 
 /// Return type of [ManagementCanister::upload_chunk].
 pub type UploadChunkResult = ChunkHash;
+
+/// A recorded snapshot of a canister. Can be restored with [`ManagementCanister::load_canister_snapshot`].
+#[derive(Debug, Clone, CandidType, Deserialize)]
+pub struct Snapshot {
+    /// The ID of the snapshot.
+    #[serde(with = "serde_bytes")]
+    pub id: Vec<u8>,
+    /// The Unix nanosecond timestamp the snapshot was taken at.
+    pub taken_at_timestamp: u64,
+    /// The size of the snapshot in bytes.
+    pub total_size: u64,
+}
 
 impl<'agent> ManagementCanister<'agent> {
     /// Get the status of a canister.
@@ -478,6 +498,88 @@ impl<'agent> ManagementCanister<'agent> {
                 canister_id: *canister_id,
             })
             .with_effective_canister_id(*canister_id)
+            .build()
+    }
+
+    /// Creates a canister snapshot, optionally replacing an existing snapshot.
+    ///  
+    /// <div class="warning">Canisters should be stopped before running this method!</div>
+    pub fn take_canister_snapshot(
+        &self,
+        canister_id: &Principal,
+        replace_snapshot: Option<&[u8]>,
+    ) -> impl 'agent + AsyncCall<Value = (Snapshot,)> {
+        #[derive(CandidType)]
+        struct In<'a> {
+            canister_id: Principal,
+            replace_snapshot: Option<&'a [u8]>,
+        }
+        self.update(MgmtMethod::TakeCanisterSnapshot.as_ref())
+            .with_arg(In {
+                canister_id: *canister_id,
+                replace_snapshot,
+            })
+            .with_effective_canister_id(*canister_id)
+            .build()
+    }
+
+    /// Loads a canister snapshot by ID, replacing the canister's state with its state at the time the snapshot was taken.
+    ///
+    /// <div class="warning">Canisters should be stopped before running this method!</div>
+    pub fn load_canister_snapshot(
+        &self,
+        canister_id: &Principal,
+        snapshot_id: &[u8],
+    ) -> impl 'agent + AsyncCall<Value = ()> {
+        #[derive(CandidType)]
+        struct In<'a> {
+            canister_id: Principal,
+            snapshot_id: &'a [u8],
+            sender_canister_version: Option<u64>,
+        }
+        self.update(MgmtMethod::LoadCanisterSnapshot.as_ref())
+            .with_arg(In {
+                canister_id: *canister_id,
+                snapshot_id,
+                sender_canister_version: None,
+            })
+            .with_effective_canister_id(*canister_id)
+            .build()
+    }
+
+    /// List a canister's recorded snapshots.
+    pub fn list_canister_snapshots(
+        &self,
+        canister_id: &Principal,
+    ) -> impl 'agent + AsyncCall<Value = (Vec<Snapshot>,)> {
+        #[derive(CandidType)]
+        struct In {
+            canister_id: Principal,
+        }
+        self.update(MgmtMethod::ListCanisterSnapshots.as_ref())
+            .with_arg(In {
+                canister_id: *canister_id,
+            })
+            .with_effective_canister_id(*canister_id)
+            .build()
+    }
+
+    /// Deletes a recorded canister snapshot by ID.
+    pub fn delete_canister_snapshot(
+        &self,
+        canister_id: &Principal,
+        snapshot_id: &[u8],
+    ) -> impl 'agent + AsyncCall<Value = ()> {
+        #[derive(CandidType)]
+        struct In<'a> {
+            canister_id: Principal,
+            snapshot_id: &'a [u8],
+        }
+        self.update(MgmtMethod::DeleteCanisterSnapshot.as_ref())
+            .with_arg(In {
+                canister_id: *canister_id,
+                snapshot_id,
+            })
             .build()
     }
 }
