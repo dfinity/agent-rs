@@ -118,23 +118,24 @@ pub struct ReadStateResponse {
     pub certificate: Vec<u8>,
 }
 
-/// The response from a request to the `call` endpoint.
-// TODO: Inline this enum. No need for it to be public.
+/// The parsed response from a request to the v3 `call` endpoint. A request to the `call` endpoint.
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum TransportCallResponse {
-    /// A certified response.
+    /// The IC responded with a certified response.
     Replied {
         /// The CBOR serialized certificate for the call response.
         #[serde_as(as = "Bytes")]
         certificate: Vec<u8>,
     },
 
-    /// A non replicated rejection from the replica.
+    /// The replica responded with a non replicated rejection.
     NonReplicatedRejection(RejectResponse),
 
-    /// The replica timed out the sync request. The status of the request must be polled.
+    /// The replica timed out the sync request, but forwarded the ingress message
+    /// to the canister. The request id should be used to poll for the response
+    /// The status of the request must be polled.
     Accepted,
 }
 
@@ -144,7 +145,7 @@ pub enum CallResponse<Out> {
     /// The call completed, and the response is available.
     Response(Out),
     /// The replica timed out the update call, and the request id should be used to poll for the response
-    /// using the `request_status` request type.
+    /// using the `Agent::wait` method.
     Poll(RequestId),
 }
 
