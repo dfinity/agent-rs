@@ -112,7 +112,6 @@ impl ReqwestTransport {
     ) -> Result<(StatusCode, HeaderMap, Vec<u8>), AgentError> {
         let create_request_with_generated_url = || -> Result<Request, AgentError> {
             let url = self.route_provider.route()?.join(endpoint)?;
-            println!("url = {}", url);
             let mut http_request = Request::new(method.clone(), url);
             http_request
                 .headers_mut()
