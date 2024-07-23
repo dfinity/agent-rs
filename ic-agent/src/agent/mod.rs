@@ -564,7 +564,7 @@ impl Agent {
         })
     }
 
-    /// The simplest way to do an update call; Sends a byte array and will return a response, [`CallResponse`], from the replica.
+    /// The simplest way to do an update call; sends a byte array and will return a response, [`CallResponse`], from the replica.
     async fn update_raw(
         &self,
         canister_id: Principal,

@@ -141,7 +141,7 @@ pub enum TransportCallResponse {
 /// The response from a request to the `call` endpoint.
 #[derive(Debug, PartialEq, Eq)]
 pub enum CallResponse<Out> {
-    /// The call complted, and the response is available.
+    /// The call completed, and the response is available.
     Response(Out),
     /// The replica timed out the update call, and the request id should be used to poll for the response
     /// using the `request_status` request type.
