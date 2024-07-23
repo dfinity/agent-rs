@@ -19,7 +19,6 @@ thiserror.workspace = true
 serde.workspace = true
 serde_bytes.workspace = true
 serde_repr.workspace = true
-serde_with = "3.8.1"
 sha2.workspace = true
 
 [dev-dependencies]
