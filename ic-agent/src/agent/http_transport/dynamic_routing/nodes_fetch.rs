@@ -65,9 +65,6 @@ impl Fetch for NodesFetcher {
                     "Failed to build the agent: {err}"
                 ))
             })?;
-        agent.fetch_root_key().await.map_err(|err| {
-            DynamicRouteProviderError::NodesFetchError(format!("Failed to fetch root key: {err}"))
-        })?;
         let api_bns = agent
             .fetch_api_boundary_nodes_by_subnet_id(self.subnet_id)
             .await
