@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 candid = { workspace = true }
-ic-agent = { path = "../ic-agent", features = ["experimental_sync_call"] }
+ic-agent = { path = "../ic-agent" }
 ic-identity-hsm = { path = "../ic-identity-hsm" }
 ic-utils = { path = "../ic-utils", features = ["raw"] }
 ring = { workspace = true }
@@ -20,4 +20,4 @@ serde_cbor = { workspace = true }
 ic-certification = { workspace = true }
 
 [features]
-experimental_sync_call = ["ic-agent:experimental_sync_call"]
+experimental_sync_call = ["ic-agent/experimental_sync_call"]
