@@ -104,6 +104,7 @@ web-sys = { version = "0.3", features = [
 
 [features]
 default = ["pem", "reqwest"]
+experimental_sync_call = []
 reqwest = ["dep:reqwest"]
 hyper = [
     "dep:hyper",

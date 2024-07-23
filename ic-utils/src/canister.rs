@@ -134,7 +134,7 @@ impl<'agent> Canister<'agent> {
     /// Call request_status on the RequestId in a loop and return the response as a byte vector.
     pub async fn wait<'canister>(
         &'canister self,
-        request_id: RequestId,
+        request_id: &RequestId,
     ) -> Result<Vec<u8>, AgentError> {
         self.agent.wait(request_id, self.canister_id).await
     }

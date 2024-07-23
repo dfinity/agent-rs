@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Changed `ic_utils::interfaces::management_canister::builders::InstallMode::Upgrade` variant to be `Option<CanisterUpgradeOptions>`:
   * `CanisterUpgradeOptions` is a new struct which covers the new upgrade option: `wasm_memory_persistence: Option<WasmMemoryPersistence>`.
   * `WasmMemoryPersistence` is a new enum which controls Wasm main memory retention on upgrades which has two variants: `Keep` and `Replace`.
+* Added an experimental feature, `experimental_sync_call`, to enable synchronous update calls. The feature adds a toggle to the `ReqwestTransport` and `HyperTransport` to enable synchronous update calls.
 
 ## [0.36.0] - 2024-06-04
 
