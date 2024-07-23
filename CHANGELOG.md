@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.37.0] - 2024-07-23
+
 * Removed the Bitcoin query methods from `ManagementCanister`. Users should use `BitcoinCanister` for that.
 * Added `BitcoinCanister` to `ic-utils`.
 * Upgraded MSRV to 1.75.0.
