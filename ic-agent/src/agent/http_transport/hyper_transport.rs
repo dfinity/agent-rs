@@ -324,7 +324,7 @@ where
         envelope: Vec<u8>,
     ) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let endpoint = format!("canister/{effective_canister_id}/read_state",);
+            let endpoint = format!("api/v2/canister/{effective_canister_id}/read_state",);
             self.request(Method::POST, &endpoint, Some(envelope))
                 .await
                 .map(|(_, body)| body)
