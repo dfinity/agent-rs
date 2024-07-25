@@ -1,4 +1,3 @@
-
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -8,111 +7,113 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Bug fix: add `api/v2` prefix to read_state requests for hyper transport
+
 ## [0.37.0] - 2024-07-23
 
-* Removed the Bitcoin query methods from `ManagementCanister`. Users should use `BitcoinCanister` for that.
-* Added `BitcoinCanister` to `ic-utils`.
-* Upgraded MSRV to 1.75.0.
-* Changed `ic_utils::interfaces::management_canister::builders::InstallMode::Upgrade` variant to be `Option<CanisterUpgradeOptions>`:
-  * `CanisterUpgradeOptions` is a new struct which covers the new upgrade option: `wasm_memory_persistence: Option<WasmMemoryPersistence>`.
-  * `WasmMemoryPersistence` is a new enum which controls Wasm main memory retention on upgrades which has two variants: `Keep` and `Replace`.
-* Added an experimental feature, `experimental_sync_call`, to enable synchronous update calls. The feature adds a toggle to the `ReqwestTransport` and `HyperTransport` to enable synchronous update calls.
+- Removed the Bitcoin query methods from `ManagementCanister`. Users should use `BitcoinCanister` for that.
+- Added `BitcoinCanister` to `ic-utils`.
+- Upgraded MSRV to 1.75.0.
+- Changed `ic_utils::interfaces::management_canister::builders::InstallMode::Upgrade` variant to be `Option<CanisterUpgradeOptions>`:
+  - `CanisterUpgradeOptions` is a new struct which covers the new upgrade option: `wasm_memory_persistence: Option<WasmMemoryPersistence>`.
+  - `WasmMemoryPersistence` is a new enum which controls Wasm main memory retention on upgrades which has two variants: `Keep` and `Replace`.
+- Added an experimental feature, `experimental_sync_call`, to enable synchronous update calls. The feature adds a toggle to the `ReqwestTransport` and `HyperTransport` to enable synchronous update calls.
 
 ## [0.36.0] - 2024-06-04
 
-* Added a default request timeout to `ReqwestTransport`.
-* Introduced transparent http request retry logic for network-related failures. `ReqwestTransport::with_max_tcp_errors_retries()`, `HyperTransport::with_max_tcp_errors_retries()`.
-* Changed the SyncCall and AsyncCall traits to use an associated type for their output instead of a generic parameter.
-* Call builders now generally implement `IntoFuture`, allowing `.call_and_wait().await` to be shortened to `.await`.
-* Added `log_visibility` to canister creation and canister setting update options.
+- Added a default request timeout to `ReqwestTransport`.
+- Introduced transparent http request retry logic for network-related failures. `ReqwestTransport::with_max_tcp_errors_retries()`, `HyperTransport::with_max_tcp_errors_retries()`.
+- Changed the SyncCall and AsyncCall traits to use an associated type for their output instead of a generic parameter.
+- Call builders now generally implement `IntoFuture`, allowing `.call_and_wait().await` to be shortened to `.await`.
+- Added `log_visibility` to canister creation and canister setting update options.
 
 ## [0.35.0] - 2024-05-10
 
-* Added a limit to the concurrent requests an agent will make at once. This should make server-side ratelimiting much rarer to encounter, even when sending a high volume of requests (for example, a large `ic_utils::ManagementCanister::install` call).
-* The agent will now automatically retry 429 Too Many Requests responses after a short delay.
-* BREAKING: Changed Chunk Store API to conform to the interface specification:
-  * `ChunkHash` was changed from `[u8; 32]` to a struct.
-  * Return types of `ManagementCanister::stored_chunks()` and `ManagementCanister::upload_chunk()`.
-  * Argument type of `ManagementCanister::install_chunked_code()`.
-  * `InstallChunkedCodeBuilder`.
-    * All occurrences of `storage_canister` were changed to `store_canister`.
-    * The field `chunk_hashes_list` was changed from `vec<vec<u8>>` to `vec<ChunkHash>`.
-* Changed `WalletCanister::from_canister/create`'s version check to not rely on the reject code.
-* Added `QueryBuilder::call_with_verification()` and `QueryBuilder::call_without_verification()` which always/never verify query signatures
+- Added a limit to the concurrent requests an agent will make at once. This should make server-side ratelimiting much rarer to encounter, even when sending a high volume of requests (for example, a large `ic_utils::ManagementCanister::install` call).
+- The agent will now automatically retry 429 Too Many Requests responses after a short delay.
+- BREAKING: Changed Chunk Store API to conform to the interface specification:
+  - `ChunkHash` was changed from `[u8; 32]` to a struct.
+  - Return types of `ManagementCanister::stored_chunks()` and `ManagementCanister::upload_chunk()`.
+  - Argument type of `ManagementCanister::install_chunked_code()`.
+  - `InstallChunkedCodeBuilder`.
+    - All occurrences of `storage_canister` were changed to `store_canister`.
+    - The field `chunk_hashes_list` was changed from `vec<vec<u8>>` to `vec<ChunkHash>`.
+- Changed `WalletCanister::from_canister/create`'s version check to not rely on the reject code.
+- Added `QueryBuilder::call_with_verification()` and `QueryBuilder::call_without_verification()` which always/never verify query signatures
   regardless the Agent level configuration from `AgentBuilder::with_verify_query_signatures`.
-* Function `Agent::fetch_api_boundary_nodes()` is split into two functions: `fetch_api_boundary_nodes_by_canister_id()` and `fetch_api_boundary_nodes_by_subnet_id()`.
-* `ReqwestTransport` and `HyperTransport` structures storing the trait object `route_provider: Box<dyn RouteProvider>` have been modified to allow for shared ownership via `Arc<dyn RouteProvider>`.
-* Added `wasm_memory_limit` to canister creation and canister setting update options.
-* Bumped Reqwest version from `0.11.7` to `0.12.4`
- 
+- Function `Agent::fetch_api_boundary_nodes()` is split into two functions: `fetch_api_boundary_nodes_by_canister_id()` and `fetch_api_boundary_nodes_by_subnet_id()`.
+- `ReqwestTransport` and `HyperTransport` structures storing the trait object `route_provider: Box<dyn RouteProvider>` have been modified to allow for shared ownership via `Arc<dyn RouteProvider>`.
+- Added `wasm_memory_limit` to canister creation and canister setting update options.
+- Bumped Reqwest version from `0.11.7` to `0.12.4`
+
 ## [0.34.0] - 2024-03-18
 
-* Changed `AgentError::ReplicaError` to `CertifiedReject` or `UncertifiedReject`. `CertifiedReject`s went through consensus, and `UncertifiedReject`s did not. If your code uses `ReplicaError`:
-    * for queries: use `UncertifiedReject` in all cases (for now)
-    * for updates: use `CertifiedReject` for errors raised after the message successfully reaches the canister, and `UncertifiedReject` otherwise
-* Added `Agent::fetch_api_boundary_nodes` for looking up API boundary nodes in the state tree.
-* Timestamps are now being checked in `Agent::verify` and `Agent::verify_for_subnet`. If you were using it with old certificates, increase the expiry timeout to continue to verify them.
-* Added node metrics, ECDSA, and Bitcoin functions to `MgmtMethod`. Most do not have wrappers in `ManagementCanister` because only canisters can call these functions.
-* Added `FetchCanisterLogs` function to `MgmtMethod` and a corresponding wrapper to `ManagementCanister`.
-* Updated the `ring` crate to 0.17.7.  `ring` 0.16 has a bug where it requires incorrect Ed25519 PEM encoding. 0.17.7 fixes that and is backwards compatible.
-* Removed serde and candid serialization traits from the `Status` type.
-* Added commas and newlines to the `Status` fmt::Display output. It is valid JSON now (it was close before).
+- Changed `AgentError::ReplicaError` to `CertifiedReject` or `UncertifiedReject`. `CertifiedReject`s went through consensus, and `UncertifiedReject`s did not. If your code uses `ReplicaError`:
+  - for queries: use `UncertifiedReject` in all cases (for now)
+  - for updates: use `CertifiedReject` for errors raised after the message successfully reaches the canister, and `UncertifiedReject` otherwise
+- Added `Agent::fetch_api_boundary_nodes` for looking up API boundary nodes in the state tree.
+- Timestamps are now being checked in `Agent::verify` and `Agent::verify_for_subnet`. If you were using it with old certificates, increase the expiry timeout to continue to verify them.
+- Added node metrics, ECDSA, and Bitcoin functions to `MgmtMethod`. Most do not have wrappers in `ManagementCanister` because only canisters can call these functions.
+- Added `FetchCanisterLogs` function to `MgmtMethod` and a corresponding wrapper to `ManagementCanister`.
+- Updated the `ring` crate to 0.17.7. `ring` 0.16 has a bug where it requires incorrect Ed25519 PEM encoding. 0.17.7 fixes that and is backwards compatible.
+- Removed serde and candid serialization traits from the `Status` type.
+- Added commas and newlines to the `Status` fmt::Display output. It is valid JSON now (it was close before).
 
 ## [0.33.0] - 2024-02-08
 
-* Changed the return type of `stored_chunks` to a struct.
-* Added a prime256v1-based `Identity` impl to complement the ed25519 and secp256k1 `Identity` impls.
-* Changed the type of `InstallMode.skip_pre_upgrade` from `bool` to `Option<bool>` to match the interface specification.
+- Changed the return type of `stored_chunks` to a struct.
+- Added a prime256v1-based `Identity` impl to complement the ed25519 and secp256k1 `Identity` impls.
+- Changed the type of `InstallMode.skip_pre_upgrade` from `bool` to `Option<bool>` to match the interface specification.
 
 ## [0.32.0] - 2024-01-18
 
-* Added the chunked wasm API to ic-utils. Existing code that uses `install_code` should probably update to `install`, which works the same but silently handles large wasm modules.
-* Added query stats to `StatusCallResult`.
-* Upgraded `ic-certification` to v2.2.
+- Added the chunked wasm API to ic-utils. Existing code that uses `install_code` should probably update to `install`, which works the same but silently handles large wasm modules.
+- Added query stats to `StatusCallResult`.
+- Upgraded `ic-certification` to v2.2.
 
 ## [0.31.0] - 2023-11-27
 
-* Breaking change: Bump candid to 0.10. Downstream libraries need to bump Candid to 0.10 as well.
-* Feat: add `idle_cycles_burned_per_day` field to `StatusCallResult`.
+- Breaking change: Bump candid to 0.10. Downstream libraries need to bump Candid to 0.10 as well.
+- Feat: add `idle_cycles_burned_per_day` field to `StatusCallResult`.
 
 ## [0.30.2] - 2023-11-16
 
-* Fixed a spurious certificate validation error in the five minutes after a node is added to a subnet
+- Fixed a spurious certificate validation error in the five minutes after a node is added to a subnet
 
 ## [0.30.1] - 2023-11-15
 
-* Fixed `HyperTransport` endpoint construction (`//` in the format `/api/v2//canister/5v3p4-iyaaa-aaaaa-qaaaa-cai/query`)
+- Fixed `HyperTransport` endpoint construction (`//` in the format `/api/v2//canister/5v3p4-iyaaa-aaaaa-qaaaa-cai/query`)
 
 ## [0.30.0] - 2023-11-07
 
-* Added node signature certification to query calls, for protection against rogue boundary nodes. This can be disabled with `with_verify_query_signatures`.
-* Added `with_nonce_generation` to `QueryBuilder` for precise cache control.
-* Added the ability to dispatch to multiple URLs to `ReqwestTransport` and `HyperTransport`, with a `RouteProvider` trait and a provided `RoundRobinRouteProvider` implementation.
-* Added `read_subnet_state_raw` to `Agent` and `read_subnet_state` to `Transport` for looking up raw state by subnet ID instead of canister ID.
-* Added `read_state_subnet_metrics` to `Agent` to access subnet metrics, such as total spent cycles.
-* Types passed to the `to_request_id` function can now contain nested structs, signed integers, and externally tagged enums.
-* `Envelope` struct is public also outside of the crate.
-* Remove non-optional `ic_api_version` field (whose value is not meaningfully populated by the replica) and optional `impl_source` and `impl_revision` fields (that are not populated by the replica) from the expected `/api/v2/status` endpoint response.
-* Drop `senders` field from user delegations (type `Delegation`).
+- Added node signature certification to query calls, for protection against rogue boundary nodes. This can be disabled with `with_verify_query_signatures`.
+- Added `with_nonce_generation` to `QueryBuilder` for precise cache control.
+- Added the ability to dispatch to multiple URLs to `ReqwestTransport` and `HyperTransport`, with a `RouteProvider` trait and a provided `RoundRobinRouteProvider` implementation.
+- Added `read_subnet_state_raw` to `Agent` and `read_subnet_state` to `Transport` for looking up raw state by subnet ID instead of canister ID.
+- Added `read_state_subnet_metrics` to `Agent` to access subnet metrics, such as total spent cycles.
+- Types passed to the `to_request_id` function can now contain nested structs, signed integers, and externally tagged enums.
+- `Envelope` struct is public also outside of the crate.
+- Remove non-optional `ic_api_version` field (whose value is not meaningfully populated by the replica) and optional `impl_source` and `impl_revision` fields (that are not populated by the replica) from the expected `/api/v2/status` endpoint response.
+- Drop `senders` field from user delegations (type `Delegation`).
 
 ## [0.29.0] - 2023-09-29
 
-* Added `reserved_cycles_limit` to canister creation and canister setting update options.
-* Added `reserved_cycles` and `reserved_cycles_limit` to canister status call result.
+- Added `reserved_cycles_limit` to canister creation and canister setting update options.
+- Added `reserved_cycles` and `reserved_cycles_limit` to canister status call result.
 
 ## [0.28.0] - 2023-09-21
 
-* Added `DelegatedIdentity`, an `Identity` implementation for consuming delegations such as those from Internet Identity.
-* Replica protocol type definitions have been moved to an `ic-transport-types` crate. `ic-agent` still reexports the ones for its API.
-* The `Unknown` lookup of a request_status path in a certificate results in an `AgentError` (the IC returns `Absent` for non-existing paths).
-* For `Canister` type, added methods with no trailing underscore: update(), query(), canister_id(), clone_with()
+- Added `DelegatedIdentity`, an `Identity` implementation for consuming delegations such as those from Internet Identity.
+- Replica protocol type definitions have been moved to an `ic-transport-types` crate. `ic-agent` still reexports the ones for its API.
+- The `Unknown` lookup of a request_status path in a certificate results in an `AgentError` (the IC returns `Absent` for non-existing paths).
+- For `Canister` type, added methods with no trailing underscore: update(), query(), canister_id(), clone_with()
 
 ## [0.27.0] - 2023-08-30
 
-* Breaking change: Remove argument builder form `ic-utils`. `CallBuilder::with_arg` sets a single argument, instead of pushing a new argument to the list. This function can be called at most once. If it's called multiple times, it panics. If you have multiple arguments, use `CallBuilder::with_args((arg1, arg2))` or `CallBuilder::set_raw_arg(candid::Encode!(arg1, arg2)?)`.
-* feat: Added `public_key`, `sign_arbitrary`, `sign_delegation` functions to `Identity`.
-* Add `From` trait to coerce `candid::Error` into `ic_agent::AgentError`.
-* Add `Agent::set_arc_identity` method to switch identity.
+- Breaking change: Remove argument builder form `ic-utils`. `CallBuilder::with_arg` sets a single argument, instead of pushing a new argument to the list. This function can be called at most once. If it's called multiple times, it panics. If you have multiple arguments, use `CallBuilder::with_args((arg1, arg2))` or `CallBuilder::set_raw_arg(candid::Encode!(arg1, arg2)?)`.
+- feat: Added `public_key`, `sign_arbitrary`, `sign_delegation` functions to `Identity`.
+- Add `From` trait to coerce `candid::Error` into `ic_agent::AgentError`.
+- Add `Agent::set_arc_identity` method to switch identity.
 
 ## [0.26.1] - 2023-08-22
 
@@ -120,93 +121,94 @@ Switched from rustls crate to rustls-webpki fork to address https://rustsec.org/
 
 ## [0.26.0] - 2023-08-21
 
-Removed the `arc_type` feature requirement for candid, in order to avoid deprecation warnings.  This is a breaking change.  The call and call_and_wait are no longer `async fn` and instead return a Future or BoxFuture.
+Removed the `arc_type` feature requirement for candid, in order to avoid deprecation warnings. This is a breaking change. The call and call_and_wait are no longer `async fn` and instead return a Future or BoxFuture.
 
 ## [0.25.0] - 2023-07-05
 
-* Breaking Change: builders are now owning-style rather than borrowing-style; with_arg takes an owned Vec rather than a borrowed Vec
-* Breaking Change: Identity::sign takes &EnvelopeContent rather than the request ID.
-* Bump Candid crate to 0.9.0
+- Breaking Change: builders are now owning-style rather than borrowing-style; with_arg takes an owned Vec rather than a borrowed Vec
+- Breaking Change: Identity::sign takes &EnvelopeContent rather than the request ID.
+- Bump Candid crate to 0.9.0
 
 ## [0.24.0] - 2023-05-19
 
-* fix: Adjust the default polling parameters to provide better UX. Remove the `CouldNotReadRootKey` error and panic on poisoned mutex.
-* chore: remove deprecated code and fix style
-* Breaking Change: removing the PasswordManager
-* Breaking Change: Enum variant `AgentError::ReplicaError` is now a tuple struct containing `RejectResponse`.
-* Handling rejected update calls where status code is 200. See IC-1462
-* Reject code type is changed from `u64` to enum `RejectCode`.
+- fix: Adjust the default polling parameters to provide better UX. Remove the `CouldNotReadRootKey` error and panic on poisoned mutex.
+- chore: remove deprecated code and fix style
+- Breaking Change: removing the PasswordManager
+- Breaking Change: Enum variant `AgentError::ReplicaError` is now a tuple struct containing `RejectResponse`.
+- Handling rejected update calls where status code is 200. See IC-1462
+- Reject code type is changed from `u64` to enum `RejectCode`.
 
-* Support WASM targets in the browser via `wasm-bindgen`. Feature `wasm-bindgen` required.
-* Do not send `certificate_version` on HTTP Update requests
-* Update `certificate_version` to `u16` instead of `u128`, fixes an issue where the asset canister always responds with v1 response verification
+- Support WASM targets in the browser via `wasm-bindgen`. Feature `wasm-bindgen` required.
+- Do not send `certificate_version` on HTTP Update requests
+- Update `certificate_version` to `u16` instead of `u128`, fixes an issue where the asset canister always responds with v1 response verification
 
 ### ic-certification
 
-* Breaking change: Content and path storage has been changed from a `Cow<[u8]>` to a user-provided `T: AsRef<u8>`, removing the lifetime from various types.
+- Breaking change: Content and path storage has been changed from a `Cow<[u8]>` to a user-provided `T: AsRef<u8>`, removing the lifetime from various types.
 
 ### icx-cert
 
-* Fixed issue where a missing request header caused the canister to not respond with an `ic-certificate` header.
+- Fixed issue where a missing request header caused the canister to not respond with an `ic-certificate` header.
 
 ## [0.23.2] - 2023-04-21
 
-* Expose the root key to clients through `read_root_key`
+- Expose the root key to clients through `read_root_key`
 
 ## [0.23.1] - 2023-03-09
 
-* Add `lookup_subtree` method to HashTree & HashTreeNode to allow for subtree lookups.
-* Derive `Clone` on `Certificate` and `Delegation` structs.
-* Add certificate version to http_request canister interface.
-* (ic-utils) Add specified_id in provisional_create_canister_with_cycles.
+- Add `lookup_subtree` method to HashTree & HashTreeNode to allow for subtree lookups.
+- Derive `Clone` on `Certificate` and `Delegation` structs.
+- Add certificate version to http_request canister interface.
+- (ic-utils) Add specified_id in provisional_create_canister_with_cycles.
 
 ## [0.23.0] - 2022-12-01
 
-* Remove `garcon` from API. Callers can remove the dependency and any usages of it; all waiting functions no longer take a waiter parameter.
-* Create `ic-certification` crate and move HashTree and Certificate types.
+- Remove `garcon` from API. Callers can remove the dependency and any usages of it; all waiting functions no longer take a waiter parameter.
+- Create `ic-certification` crate and move HashTree and Certificate types.
 
 ## [0.22.0] - 2022-10-17
 
-* Drop `disable_range_check` flag from certificate delegation checking.
+- Drop `disable_range_check` flag from certificate delegation checking.
 
 ## [0.21.0] - 2022-10-03
 
-* Update `candid` to v0.8.0.
-* Move `hash_tree` from `ic-types` and no more re-export ic-types.
+- Update `candid` to v0.8.0.
+- Move `hash_tree` from `ic-types` and no more re-export ic-types.
 
 ## [0.20.1] - 2022-09-27
 
-* Set `default-features = false` for `ic-agent` interdependencies to reduce unused nested dependencies.
-* Bump `candid` to `0.7.18`.
+- Set `default-features = false` for `ic-agent` interdependencies to reduce unused nested dependencies.
+- Bump `candid` to `0.7.18`.
 
 ### ic-asset
 
-* Fixed custom configured HTTP headers - no longer is the header's value wrapped with double quotes.
+- Fixed custom configured HTTP headers - no longer is the header's value wrapped with double quotes.
 
 ### ic-agent
 
-* Switched to `ic-verify-bls-signature` crate for verify BLS signatures
-* Added new `hyper` transport `HyperReplicaV2Transport`
-* Added Agent::set_identity method (#379)
-* Updated lookup_request_status method to handle proofs of absent paths in certificates.
+- Switched to `ic-verify-bls-signature` crate for verify BLS signatures
+- Added new `hyper` transport `HyperReplicaV2Transport`
+- Added Agent::set_identity method (#379)
+- Updated lookup_request_status method to handle proofs of absent paths in certificates.
 
 ### ic-utils
 
-* Make it possible to specify effective canister id in CreateCanisterBuilder
+- Make it possible to specify effective canister id in CreateCanisterBuilder
 
 ## [0.20.0] - 2022-07-14
 
 ### Breaking change: Updated to ic-types 0.4.0
 
-* Remove `PrincipalInner`
-  * `Principal` directly holds `len` and `bytes` fields
-* `PrincipalError` enum has different set of variants reflecting changes in `from_text` logic.
-* `from_text` accepts input containing uppercase letters which results in Err before.
-* `from_text` verifies CRC32 check sequence
+- Remove `PrincipalInner`
+  - `Principal` directly holds `len` and `bytes` fields
+- `PrincipalError` enum has different set of variants reflecting changes in `from_text` logic.
+- `from_text` accepts input containing uppercase letters which results in Err before.
+- `from_text` verifies CRC32 check sequence
 
 ### ic-asset
 
 Added support configurable inclusion and exclusion of files and directories (including dotfiles and dot directories), done via `.ic-assets.json` config file:
+
 - example of `.ic-assets.json` file format:
   ```
   [
@@ -225,6 +227,7 @@ Added support configurable inclusion and exclusion of files and directories (inc
 - see [PR](https://github.com/dfinity/agent-rs/pull/361) and [tests](https://github.com/dfinity/agent-rs/blob/f8515d1d0825b47c8048f5528ac3b65018065779/ic-asset/src/sync.rs#L145) for more examples
 
 Added support for configuring HTTP headers for assets in asset canister (via `.ic-assets.json` config file):
+
 - example of `.ic-assets.json` file format:
   ```
   [
@@ -250,6 +253,7 @@ Added support for configuring HTTP headers for assets in asset canister (via `.i
 ### ic-asset
 
 Added support for asset canister config files in `ic-assets`.
+
 - reads configuration from `.ic-assets.json` config files if placed inside assets directory, multiple config files can be used (nested in subdirectories)
 - runs successfully only if the config file is right format (valid JSON, valid glob pattern, JSON fields in correct format)
 - example of `.ic-assets.json` file format:
@@ -275,6 +279,7 @@ Breaking change: ic-asset::sync() now synchronizes from multiple source director
 This is to allow for configuration files located alongside assets in asset source directories.
 
 Also, ic-asset::sync:
+
 - skips files and directories that begin with a ".", as dfx does when copying assets to an output directory.
 - reports an error if more than one asset file would resolve to the same asset key
 
@@ -284,7 +289,7 @@ Also, ic-asset::sync:
 
 ## [0.17.0] - 2022-05-19
 
-Updated dependencies.  Some had breaking changes: k256 0.11, pkcs 0.9, and sec1 0.3.
+Updated dependencies. Some had breaking changes: k256 0.11, pkcs 0.9, and sec1 0.3.
 
 Fixed a potential panic in secp256k1 signature generation.
 
@@ -294,7 +299,7 @@ Added `ReqwestHttpReplicaV2Transport::create_with_client`.
 
 Remove `openssl` in favor of pure rust libraries.
 
-Updated minimum version of reqwest to 0.11.7.  This is to avoid the following error, seen with reqwest 0.11.6:
+Updated minimum version of reqwest to 0.11.7. This is to avoid the following error, seen with reqwest 0.11.6:
 
 ```
 Unknown TLS backend passed to use_preconfigured_tls
@@ -302,10 +307,9 @@ Unknown TLS backend passed to use_preconfigured_tls
 
 Updated wallet interface for 128-bit API.
 
-Remove parameterized canister pattern.  Use `WalletCanister::create` rather than `Wallet::create`.
+Remove parameterized canister pattern. Use `WalletCanister::create` rather than `Wallet::create`.
 
 wallet_send takes Principal instead of &Canister.
-
 
 ## [0.15.0] - 2022-03-28
 
@@ -321,8 +325,8 @@ Added conversion helpers for `HttpResponse`, `StreamingStrategy` and `CallbackSt
 
 Changes to `Canister<HttpRequestCanister>` interface.
 
-* Made `http_request`, `http_request_update`, and `http_request_stream_callback` more generic and require fewer string copies.
-* Added `_custom` variants to enable custom `token` deserialization.
+- Made `http_request`, `http_request_update`, and `http_request_stream_callback` more generic and require fewer string copies.
+- Added `_custom` variants to enable custom `token` deserialization.
 
 ## [0.14.0] - 2022-03-17
 
@@ -331,6 +335,7 @@ Introduced HttpRequestStreamingCallback to work around https://github.com/dfinit
 Response certificate verification will check that the canister id falls within the range of valid canister ids for the subnet.
 
 ## [0.13.0] - 2022-03-07
+
 Secp256k1 identity now checks if a curve actually uses the secp256k1 parameters. It cannot be used to load non-secp256k1 identities anymore.
 
 Data type of `cycles` changed to `u128` (was `u64`).
@@ -341,7 +346,7 @@ Re-genericized Token to allow use of an arbitrary Token type with StreamingStrat
 
 ## [0.12.1] - 2022-02-09
 
-Renamed BatchOperationKind._Clear to Clear for compatibility with the certified assets canister.
+Renamed BatchOperationKind.\_Clear to Clear for compatibility with the certified assets canister.
 This avoids decode errors, even though the type isn't referenced here.
 
 ## [0.12.0] - 2022-02-03
@@ -350,7 +355,7 @@ Changed the 'HttpRequest.upgrade' field to 'Option<bool>' from 'bool'.
 
 ## [0.11.1] - 2022-01-10
 
-The `lookup_value` function now takes generics which can be iterated over (`IntoIterator<Item = &'p Label>`)  and transformed into a `Vec<Label>`, rather than just a `Vec<Label>`.
+The `lookup_value` function now takes generics which can be iterated over (`IntoIterator<Item = &'p Label>`) and transformed into a `Vec<Label>`, rather than just a `Vec<Label>`.
 
 ## [0.11.0] - 2022-01-07
 
@@ -392,14 +397,14 @@ Unified all version numbers and removed the zzz-release tool.
 
 ### ic-agent
 
-#### Fixed: rewrite all *.ic0.app domains to ic0.app to avoid redirects.
+#### Fixed: rewrite all \*.ic0.app domains to ic0.app to avoid redirects.
 
 ### icx-cert
 
 #### New feature: Add --accept-encoding parameter
 
-It's now possible to specify which encodings will be accepted.  The default (and previous) behavior
-is to accept only the identity encoding.  Specifying encodings that browsers more commonly accept
+It's now possible to specify which encodings will be accepted. The default (and previous) behavior
+is to accept only the identity encoding. Specifying encodings that browsers more commonly accept
 demonstrates the difference in the returned data and certificate.
 
 For example, here is the data and certificate returned when only accepting the identity encoding.
@@ -430,6 +435,6 @@ This project moved to https://github.com/dfinity/icx-proxy.
 #### Added
 
 - Added field `replica_health_status` to `Status`.
-    - typical values
-        - `healthy`
-        - `waiting_for_certified_state`
+  - typical values
+    - `healthy`
+    - `waiting_for_certified_state`
