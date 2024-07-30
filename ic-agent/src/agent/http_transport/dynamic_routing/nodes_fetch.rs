@@ -36,14 +36,18 @@ pub trait Fetch: Sync + Send + Debug {
 pub struct NodesFetcher {
     http_client: Client,
     subnet_id: Principal,
+    // By default, the nodes fetcher is configured to talk to the mainnet of Internet Computer, and verifies responses using a hard-coded public key.
+    // However, for testnets one can set up a custom public key.
+    root_key: Option<Vec<u8>>,
 }
 
 impl NodesFetcher {
     /// Creates a new `NodesFetcher` instance.
-    pub fn new(http_client: Client, subnet_id: Principal) -> Self {
+    pub fn new(http_client: Client, subnet_id: Principal, root_key: Option<Vec<u8>>) -> Self {
         Self {
             http_client,
             subnet_id,
+            root_key,
         }
     }
 }
@@ -65,6 +69,9 @@ impl Fetch for NodesFetcher {
                     "Failed to build the agent: {err}"
                 ))
             })?;
+        if let Some(key) = self.root_key.clone() {
+            agent.set_root_key(key);
+        }
         let api_bns = agent
             .fetch_api_boundary_nodes_by_subnet_id(self.subnet_id)
             .await

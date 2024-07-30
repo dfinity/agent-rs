@@ -103,6 +103,7 @@ impl<S> DynamicRouteProviderBuilder<S> {
         let fetcher = Arc::new(NodesFetcher::new(
             http_client.clone(),
             Principal::from_text(MAINNET_ROOT_SUBNET_ID).unwrap(),
+            None,
         ));
         let checker = Arc::new(HealthChecker::new(http_client, HEALTH_CHECK_TIMEOUT));
         Self {
