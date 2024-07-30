@@ -33,7 +33,7 @@ impl Node {
 impl Node {
     /// Converts the node to a routing URL.
     pub fn to_routing_url(&self) -> Url {
-        Url::parse(&format!("https://{}/api/v2/", self.domain)).expect("failed to parse URL")
+        Url::parse(&format!("https://{}", self.domain)).expect("failed to parse URL")
     }
 }
 
