@@ -12,10 +12,11 @@ use crate::{
 use candid::{Encode, Nat};
 use futures_util::FutureExt;
 use ic_certification::{Delegation, Label};
-use ic_transport_types::{NodeSignature, QueryResponse, RejectCode, RejectResponse, ReplyResponse};
+use ic_transport_types::{
+    NodeSignature, QueryResponse, RejectCode, RejectResponse, ReplyResponse, TransportCallResponse,
+};
 use reqwest::Client;
-use std::sync::Arc;
-use std::{collections::BTreeMap, time::Duration};
+use std::{collections::BTreeMap, str::FromStr, sync::Arc, time::Duration};
 #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -23,9 +24,21 @@ use crate::agent::http_transport::route_provider::{RoundRobinRouteProvider, Rout
 #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
+fn make_transport(url: &str) -> ReqwestTransport {
+    let transport = ReqwestTransport::create(url).unwrap();
+    #[cfg(feature = "experimental_sync_call")]
+    {
+        transport.with_use_call_v3_endpoint()
+    }
+    #[cfg(not(feature = "experimental_sync_call"))]
+    {
+        transport
+    }
+}
+
 fn make_agent(url: &str) -> Agent {
     Agent::builder()
-        .with_transport(ReqwestTransport::create(url).unwrap())
+        .with_transport(make_transport(url))
         .with_verify_query_signatures(false)
         .build()
         .unwrap()
@@ -214,7 +227,20 @@ async fn query_rejected() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn call_error() -> Result<(), AgentError> {
-    let (call_mock, url) = mock("POST", "/api/v2/canister/aaaaa-aa/call", 500, vec![], None).await;
+    let version = if cfg!(feature = "experimental_sync_call") {
+        "3"
+    } else {
+        "2"
+    };
+
+    let (call_mock, url) = mock(
+        "POST",
+        format!("/api/v{version}/canister/aaaaa-aa/call").as_str(),
+        500,
+        vec![],
+        None,
+    )
+    .await;
 
     let agent = make_agent(&url);
 
@@ -234,17 +260,25 @@ async fn call_error() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn call_rejected() -> Result<(), AgentError> {
-    let reject_body = RejectResponse {
+    let reject_response = RejectResponse {
         reject_code: RejectCode::SysTransient,
         reject_message: "Test reject message".to_string(),
         error_code: Some("Test error code".to_string()),
     };
 
+    let reject_body = TransportCallResponse::NonReplicatedRejection(reject_response.clone());
+
     let body = serde_cbor::to_vec(&reject_body).unwrap();
+
+    let version = if cfg!(feature = "experimental_sync_call") {
+        "3"
+    } else {
+        "2"
+    };
 
     let (call_mock, url) = mock(
         "POST",
-        "/api/v2/canister/aaaaa-aa/call",
+        format!("/api/v{version}/canister/aaaaa-aa/call").as_str(),
         200,
         body,
         Some("application/cbor"),
@@ -261,7 +295,7 @@ async fn call_rejected() -> Result<(), AgentError> {
 
     assert_mock(call_mock).await;
 
-    let expected_response = Err(AgentError::UncertifiedReject(reject_body));
+    let expected_response = Err(AgentError::UncertifiedReject(reject_response));
     assert_eq!(expected_response, result);
 
     Ok(())
@@ -270,17 +304,27 @@ async fn call_rejected() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn call_rejected_without_error_code() -> Result<(), AgentError> {
-    let reject_body = RejectResponse {
+    let non_replicated_reject = RejectResponse {
         reject_code: RejectCode::SysTransient,
         reject_message: "Test reject message".to_string(),
         error_code: None,
     };
 
+    let reject_body = TransportCallResponse::NonReplicatedRejection(non_replicated_reject.clone());
+
+    let canister_id_str = "aaaaa-aa";
+
     let body = serde_cbor::to_vec(&reject_body).unwrap();
+
+    let version = if cfg!(feature = "experimental_sync_call") {
+        "3"
+    } else {
+        "2"
+    };
 
     let (call_mock, url) = mock(
         "POST",
-        "/api/v2/canister/aaaaa-aa/call",
+        format!("/api/v{version}/canister/{}/call", canister_id_str).as_str(),
         200,
         body,
         Some("application/cbor"),
@@ -290,14 +334,14 @@ async fn call_rejected_without_error_code() -> Result<(), AgentError> {
     let agent = make_agent(&url);
 
     let result = agent
-        .update(&Principal::management_canister(), "greet")
+        .update(&Principal::from_str(canister_id_str).unwrap(), "greet")
         .with_arg([])
         .call()
         .await;
 
     assert_mock(call_mock).await;
 
-    let expected_response = Err(AgentError::UncertifiedReject(reject_body));
+    let expected_response = Err(AgentError::UncertifiedReject(non_replicated_reject));
     assert_eq!(expected_response, result);
 
     Ok(())

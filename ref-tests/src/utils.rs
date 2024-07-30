@@ -99,8 +99,20 @@ pub async fn create_agent(identity: impl Identity + 'static) -> Result<Agent, St
         .parse::<u32>()
         .expect("Could not parse the IC_REF_PORT environment variable as an integer.");
 
+    let transport = ReqwestTransport::create(format!("http://127.0.0.1:{}", port)).unwrap();
+    let transport = {
+        #[cfg(feature = "experimental_sync_call")]
+        {
+            transport.with_use_call_v3_endpoint()
+        }
+        #[cfg(not(feature = "experimental_sync_call"))]
+        {
+            transport
+        }
+    };
+
     Agent::builder()
-        .with_transport(ReqwestTransport::create(format!("http://127.0.0.1:{}", port)).unwrap())
+        .with_transport(transport)
         .with_identity(identity)
         .build()
         .map_err(|e| format!("{:?}", e))

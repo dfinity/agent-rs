@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 cargo publish -p ic-transport-types
 cargo publish -p ic-agent
 cargo publish -p ic-identity-hsm
