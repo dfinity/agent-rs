@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Update hyper version to 1.41.0
+
 ## [0.37.1] - 2024-07-25
 
 * Bug fix: Add `api/v2` prefix to read_state requests for hyper transport

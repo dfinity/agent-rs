@@ -46,7 +46,7 @@ time = { workspace = true }
 url = "2.1.0"
 
 [dependencies.hyper]
-version = "1.0.1"
+version = "1.4.1"
 features = ["client", "http2", "http1"]
 optional = true
 
