@@ -13,6 +13,7 @@ use hyper::{header::CONTENT_TYPE, Method, Request, Response};
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 use hyper_util::client::legacy::{connect::HttpConnector, Client};
 use hyper_util::rt::TokioExecutor;
+use ic_transport_types::{RejectResponse, TransportCallResponse};
 use tower::Service;
 
 use crate::{
@@ -22,7 +23,7 @@ use crate::{
         AgentFuture, Transport,
     },
     export::Principal,
-    AgentError, RequestId,
+    AgentError,
 };
 
 /// A [`Transport`] using [`hyper`] to make HTTP calls to the Internet Computer.
@@ -34,6 +35,7 @@ pub struct HyperTransport<B1, S = Client<HttpsConnector<HttpConnector>, B1>> {
     #[allow(dead_code)]
     max_tcp_error_retries: usize,
     service: S,
+    use_call_v3_endpoint: bool,
 }
 
 /// Trait representing the contraints on [`HttpBody`] that [`HyperTransport`] requires
@@ -56,7 +58,7 @@ where
     type BodyError = B::Error;
 }
 
-/// Trait representing the contraints on [`Service`] that [`HyperTransport`] requires.
+/// Trait representing the constraints on [`Service`] that [`HyperTransport`] requires.
 pub trait HyperService<B1: HyperBody>:
     Send
     + Sync
@@ -124,6 +126,7 @@ where
             service,
             max_response_body_size: None,
             max_tcp_error_retries: 0,
+            use_call_v3_endpoint: false,
         })
     }
 
@@ -143,12 +146,27 @@ where
         }
     }
 
+    /// Use call v3 endpoint for synchronous update calls.
+    /// __This is an experimental feature, and should not be used in production,
+    /// as the endpoint is not available yet on the mainnet IC.__
+    ///
+    /// By enabling this feature, the agent will use the `v3` endpoint for update calls,
+    /// which is synchronous. This means the replica will wait for a certificate for the call,
+    /// meaning the agent will not need to poll for the certificate.
+    #[cfg(feature = "experimental_sync_call")]
+    pub fn with_use_call_v3_endpoint(self) -> Self {
+        Self {
+            use_call_v3_endpoint: true,
+            ..self
+        }
+    }
+
     async fn request(
         &self,
         method: Method,
         endpoint: &str,
         body: Option<Vec<u8>>,
-    ) -> Result<Vec<u8>, AgentError> {
+    ) -> Result<(StatusCode, Vec<u8>), AgentError> {
         let body = body.unwrap_or_default();
         fn map_error<E: Error + Send + Sync + 'static>(err: E) -> AgentError {
             if any::TypeId::of::<E>() == any::TypeId::of::<AgentError>() {
@@ -253,7 +271,7 @@ where
                 content: body,
             }))
         } else {
-            Ok(body)
+            Ok((status, body))
         }
     }
 }
@@ -267,12 +285,36 @@ where
         &self,
         effective_canister_id: Principal,
         envelope: Vec<u8>,
-        _request_id: RequestId,
-    ) -> AgentFuture<()> {
+    ) -> AgentFuture<TransportCallResponse> {
         Box::pin(async move {
-            let endpoint = &format!("canister/{effective_canister_id}/call");
-            self.request(Method::POST, endpoint, Some(envelope)).await?;
-            Ok(())
+            let api_version = if self.use_call_v3_endpoint {
+                "v3"
+            } else {
+                "v2"
+            };
+
+            let endpoint = format!(
+                "api/{}/canister/{}/call",
+                &api_version,
+                effective_canister_id.to_text()
+            );
+            let (status_code, response_body) = self
+                .request(Method::POST, &endpoint, Some(envelope))
+                .await?;
+
+            if status_code == StatusCode::ACCEPTED {
+                return Ok(TransportCallResponse::Accepted);
+            }
+
+            // status_code == OK (200)
+            if self.use_call_v3_endpoint {
+                serde_cbor::from_slice(&response_body).map_err(AgentError::InvalidCborData)
+            } else {
+                let reject_response = serde_cbor::from_slice::<RejectResponse>(&response_body)
+                    .map_err(AgentError::InvalidCborData)?;
+
+                Err(AgentError::UncertifiedReject(reject_response))
+            }
         })
     }
 
@@ -282,29 +324,37 @@ where
         envelope: Vec<u8>,
     ) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let endpoint = &format!("canister/{effective_canister_id}/read_state");
-            self.request(Method::POST, endpoint, Some(envelope)).await
+            let endpoint = format!("api/v2/canister/{effective_canister_id}/read_state",);
+            self.request(Method::POST, &endpoint, Some(envelope))
+                .await
+                .map(|(_, body)| body)
         })
     }
 
     fn read_subnet_state(&self, subnet_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let endpoint = &format!("subnet/{subnet_id}/read_state");
-            self.request(Method::POST, endpoint, Some(envelope)).await
+            let endpoint = format!("api/v2/subnet/{subnet_id}/read_state",);
+            self.request(Method::POST, &endpoint, Some(envelope))
+                .await
+                .map(|(_, body)| body)
         })
     }
 
     fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let endpoint = &format!("canister/{effective_canister_id}/query");
-            self.request(Method::POST, endpoint, Some(envelope)).await
+            let endpoint = format!("api/v2/canister/{effective_canister_id}/query",);
+            self.request(Method::POST, &endpoint, Some(envelope))
+                .await
+                .map(|(_, body)| body)
         })
     }
 
     fn status(&self) -> AgentFuture<Vec<u8>> {
         Box::pin(async move {
-            let endpoint = "status".to_string();
-            self.request(Method::GET, &endpoint, None).await
+            let endpoint = "api/v2/status";
+            self.request(Method::GET, endpoint, None)
+                .await
+                .map(|(_, body)| body)
         })
     }
 }
@@ -341,21 +391,21 @@ mod test {
             );
         }
 
-        test("https://ic0.app", "https://ic0.app/api/v2/");
-        test("https://IC0.app", "https://ic0.app/api/v2/");
-        test("https://foo.ic0.app", "https://ic0.app/api/v2/");
-        test("https://foo.IC0.app", "https://ic0.app/api/v2/");
-        test("https://foo.Ic0.app", "https://ic0.app/api/v2/");
-        test("https://foo.iC0.app", "https://ic0.app/api/v2/");
-        test("https://foo.bar.ic0.app", "https://ic0.app/api/v2/");
-        test("https://ic0.app/foo/", "https://ic0.app/foo/api/v2/");
-        test("https://foo.ic0.app/foo/", "https://ic0.app/foo/api/v2/");
+        test("https://ic0.app", "https://ic0.app/");
+        test("https://IC0.app", "https://ic0.app/");
+        test("https://foo.ic0.app", "https://ic0.app/");
+        test("https://foo.IC0.app", "https://ic0.app/");
+        test("https://foo.Ic0.app", "https://ic0.app/");
+        test("https://foo.iC0.app", "https://ic0.app/");
+        test("https://foo.bar.ic0.app", "https://ic0.app/");
+        test("https://ic0.app/foo/", "https://ic0.app/foo/");
+        test("https://foo.ic0.app/foo/", "https://ic0.app/foo/");
 
-        test("https://ic1.app", "https://ic1.app/api/v2/");
-        test("https://foo.ic1.app", "https://foo.ic1.app/api/v2/");
-        test("https://ic0.app.ic1.app", "https://ic0.app.ic1.app/api/v2/");
+        test("https://ic1.app", "https://ic1.app/");
+        test("https://foo.ic1.app", "https://foo.ic1.app/");
+        test("https://ic0.app.ic1.app", "https://ic0.app.ic1.app/");
 
-        test("https://fooic0.app", "https://fooic0.app/api/v2/");
-        test("https://fooic0.app.ic0.app", "https://ic0.app/api/v2/");
+        test("https://fooic0.app", "https://fooic0.app/");
+        test("https://fooic0.app.ic0.app", "https://ic0.app/");
     }
 }

@@ -1,6 +1,10 @@
 use async_trait::async_trait;
 use candid::{decode_args, decode_one, utils::ArgumentDecoder, CandidType};
-use ic_agent::{agent::UpdateBuilder, export::Principal, Agent, AgentError, RequestId};
+use ic_agent::{
+    agent::{CallResponse, UpdateBuilder},
+    export::Principal,
+    Agent, AgentError,
+};
 use serde::de::DeserializeOwned;
 use std::fmt;
 use std::future::{Future, IntoFuture};
@@ -48,7 +52,7 @@ pub trait AsyncCall: CallIntoFuture<Output = Result<Self::Value, AgentError>> {
     /// the result, and try to deserialize it as a [String]. This would be caught by
     /// Rust type system, but in this case it will be checked at runtime (as Request
     /// Id does not have a type associated with it).
-    async fn call(self) -> Result<RequestId, AgentError>;
+    async fn call(self) -> Result<CallResponse<Self::Value>, AgentError>;
 
     /// Execute the call, and wait for an answer using an exponential-backoff strategy. The return
     /// type is encoded in the trait.
@@ -254,8 +258,16 @@ where
     }
 
     /// See [`AsyncCall::call`].
-    pub async fn call(self) -> Result<RequestId, AgentError> {
-        self.build_call()?.call().await
+    pub async fn call(self) -> Result<CallResponse<Out>, AgentError> {
+        let response_bytes = match self.build_call()?.call().await? {
+            CallResponse::Response(response_bytes) => response_bytes,
+            CallResponse::Poll(request_id) => return Ok(CallResponse::Poll(request_id)),
+        };
+
+        let decoded_response =
+            decode_args(&response_bytes).map_err(|e| AgentError::CandidError(Box::new(e)))?;
+
+        Ok(CallResponse::Response(decoded_response))
     }
 
     /// See [`AsyncCall::call_and_wait`].
@@ -294,7 +306,7 @@ where
     Out: for<'de> ArgumentDecoder<'de> + Send + 'agent,
 {
     type Value = Out;
-    async fn call(self) -> Result<RequestId, AgentError> {
+    async fn call(self) -> Result<CallResponse<Out>, AgentError> {
         self.call().await
     }
     async fn call_and_wait(self) -> Result<Out, AgentError> {
@@ -370,8 +382,18 @@ where
     }
 
     /// See [`AsyncCall::call`].
-    pub async fn call(self) -> Result<RequestId, AgentError> {
-        self.inner.call().await
+    pub async fn call(self) -> Result<CallResponse<Out2>, AgentError> {
+        let raw_response = self.inner.call().await?;
+
+        let response = match raw_response {
+            CallResponse::Response(response_bytes) => {
+                let mapped_response = (self.and_then)(response_bytes);
+                CallResponse::Response(mapped_response.await?)
+            }
+            CallResponse::Poll(request_id) => CallResponse::Poll(request_id),
+        };
+
+        Ok(response)
     }
     /// See [`AsyncCall::call_and_wait`].
     pub async fn call_and_wait(self) -> Result<Out2, AgentError> {
@@ -418,7 +440,7 @@ where
 {
     type Value = Out2;
 
-    async fn call(self) -> Result<RequestId, AgentError> {
+    async fn call(self) -> Result<CallResponse<Out2>, AgentError> {
         self.call().await
     }
 
@@ -495,8 +517,14 @@ where
     }
 
     /// See [`AsyncCall::call`].
-    pub async fn call(self) -> Result<RequestId, AgentError> {
-        self.inner.call().await
+    pub async fn call(self) -> Result<CallResponse<Out2>, AgentError> {
+        self.inner.call().await.map(|response| match response {
+            CallResponse::Response(response_bytes) => {
+                let mapped_response = (self.map)(response_bytes);
+                CallResponse::Response(mapped_response)
+            }
+            CallResponse::Poll(request_id) => CallResponse::Poll(request_id),
+        })
     }
 
     /// See [`AsyncCall::call_and_wait`].
@@ -539,7 +567,7 @@ where
 {
     type Value = Out2;
 
-    async fn call(self) -> Result<RequestId, AgentError> {
+    async fn call(self) -> Result<CallResponse<Out2>, AgentError> {
         self.call().await
     }
 

@@ -205,6 +205,10 @@ pub enum AgentError {
     /// Route provider failed to generate a url for some reason.
     #[error("Route provider failed to generate url: {0}")]
     RouteProviderError(String),
+
+    /// Invalid HTTP response.
+    #[error("Invalid HTTP response: {0}")]
+    InvalidHttpResponse(String),
 }
 
 impl PartialEq for AgentError {
