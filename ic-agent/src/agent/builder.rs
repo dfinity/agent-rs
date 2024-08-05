@@ -10,6 +10,9 @@ pub struct AgentBuilder {
     config: AgentConfig,
 }
 
+// Include the generated file (containing API seed nodes) into the crate’s compilation.
+include!(concat!(env!("OUT_DIR"), "/api_boundary_seed_nodes.rs"));
+
 impl AgentBuilder {
     /// Create an instance of [Agent] with the information from this builder.
     pub fn build(self) -> Result<Agent, AgentError> {
@@ -21,20 +24,21 @@ impl AgentBuilder {
     pub async fn with_discovery_transport(self, client: reqwest::Client) -> Self {
         use crate::agent::http_transport::{
             dynamic_routing::{
-                dynamic_route_provider::{DynamicRouteProviderBuilder, IC0_SEED_DOMAIN},
-                node::Node,
+                dynamic_route_provider::DynamicRouteProviderBuilder, node::Node,
                 snapshot::latency_based_routing::LatencyRoutingSnapshot,
             },
             route_provider::RouteProvider,
             ReqwestTransport,
         };
 
-        // TODO: This is a temporary solution to get the seed node.
-        let seed = Node::new(IC0_SEED_DOMAIN).unwrap();
+        let api_seed_nodes: Vec<Node> = API_SEED_NODES
+            .iter()
+            .filter_map(|domain| Node::new(domain).ok())
+            .collect();
 
         let route_provider = DynamicRouteProviderBuilder::new(
             LatencyRoutingSnapshot::new(),
-            vec![seed],
+            api_seed_nodes,
             client.clone(),
         )
         .build()
