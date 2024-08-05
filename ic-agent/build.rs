@@ -36,7 +36,7 @@ async fn try_generate_seeds_file(url: &str) -> Result<(), String> {
 
     // Save all discovered API nodes into a generated file.
     let mut file_content = String::new();
-    file_content.push_str("const API_SEED_NODES: &[&str] = &[\n");
+    file_content.push_str("#[allow(dead_code)]\nconst API_SEED_NODES: &[&str] = &[\n");
     for seed in api_nodes {
         file_content.push_str(&format!("\"{}\",\n", seed.domain));
     }

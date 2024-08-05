@@ -139,7 +139,7 @@ targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 rustdoc-args = ["--cfg=docsrs"]
 features = ["hyper"]
 
-[build-dependencies]
+[target.'cfg(not(target_family = "wasm"))'.build-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 candid = { workspace = true }
-ic-agent = { version = "0.37"}
+ic-agent = { version = "0.37.1"}

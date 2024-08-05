@@ -11,7 +11,7 @@ pub struct AgentBuilder {
 }
 
 // Include the generated file (containing API seed nodes) into the crate’s compilation.
-include!(concat!(env!("OUT_DIR"), "/api_boundary_seed_nodes.rs"));
+include!(concat!(env!("OUT_DIR"), "/api_seed_nodes.rs"));
 
 impl AgentBuilder {
     /// Create an instance of [Agent] with the information from this builder.
