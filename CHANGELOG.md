@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Add canister snapshot methods to `ManagementCanister`.
+
 ## [0.37.1] - 2024-07-25
 
 * Bug fix: Add `api/v2` prefix to read_state requests for hyper transport
