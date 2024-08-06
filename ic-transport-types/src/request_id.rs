@@ -51,7 +51,7 @@ where
 }
 
 /// A Request ID.
-#[derive(Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub struct RequestId(Sha256Hash);
 
 impl RequestId {
