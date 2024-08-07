@@ -140,6 +140,6 @@ rustdoc-args = ["--cfg=docsrs"]
 features = ["hyper"]
 
 [target.'cfg(not(target_family = "wasm"))'.build-dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 candid = { workspace = true }
 ic-agent = { version = "0.37"}
