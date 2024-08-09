@@ -78,7 +78,7 @@ async fn setup_dynamic_route_provider<S: RoutingSnapshot + 'static>(
     let fetcher = Arc::new(NodesFetcherMock::new());
     let checker = Arc::new(NodeHealthCheckerMock::new());
     let fetch_interval = Duration::from_secs(1);
-    let check_interval = Duration::from_secs(1);
+    let check_interval = Duration::from_millis(50);
 
     fetcher.overwrite_nodes(nodes.clone());
     checker.overwrite_healthy_nodes(nodes.clone());
