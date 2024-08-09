@@ -93,6 +93,7 @@ web-sys = { version = "0.3", features = ["Window"], optional = true }
 
 [dev-dependencies]
 serde_json.workspace = true
+criterion = "0.5"
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
@@ -133,8 +134,14 @@ wasm-bindgen = [
     "backoff/wasm-bindgen",
     "cached/wasm",
 ]
+bench = []
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 rustdoc-args = ["--cfg=docsrs"]
 features = ["hyper"]
+
+[[bench]]
+name = "perf_route_provider"
+path = "benches/perf_route_provider.rs"
+harness = false

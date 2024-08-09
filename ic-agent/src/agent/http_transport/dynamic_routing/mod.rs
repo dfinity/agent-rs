@@ -10,7 +10,8 @@ pub mod node;
 pub mod nodes_fetch;
 /// Routing snapshot implementation.
 pub mod snapshot;
-#[cfg(test)]
-pub(super) mod test_utils;
+/// Testing and benchmarking helpers.
+#[cfg(any(test, feature = "bench"))]
+pub mod test_utils;
 /// Type aliases used in dynamic routing.
 pub(super) mod type_aliases;
