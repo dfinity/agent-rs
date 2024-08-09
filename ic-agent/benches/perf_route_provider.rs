@@ -14,7 +14,8 @@ use ic_agent::agent::http_transport::{
     route_provider::{RoundRobinRouteProvider, RouteProvider},
 };
 use reqwest::Client;
-use tokio::{runtime::Handle, sync::oneshot, time::sleep};
+use tokio::{runtime::Handle, sync::oneshot};
+use tokio_util::sync::CancellationToken;
 
 // To run the benchmark use the command:
 // $ cargo bench --bench perf_route_provider --features bench
@@ -39,7 +40,9 @@ fn benchmark_route_providers(c: &mut Criterion) {
         .expect("failed to create runtime");
 
     // Setup all route providers
-    let route_providers = setup_route_providers(nodes_count, runtime.handle().clone());
+    let token = CancellationToken::new();
+    let route_providers =
+        setup_route_providers(nodes_count, runtime.handle().clone(), token.clone());
 
     for (name, instance) in route_providers {
         group.bench_function(name, |b| {
@@ -48,6 +51,7 @@ fn benchmark_route_providers(c: &mut Criterion) {
             })
         });
     }
+    token.cancel();
     group.finish();
 }
 
@@ -96,6 +100,7 @@ async fn setup_dynamic_route_provider<S: RoutingSnapshot + 'static>(
 fn setup_route_providers(
     nodes_count: usize,
     runtime: Handle,
+    cancellation_token: CancellationToken,
 ) -> Vec<(String, Arc<dyn RouteProvider>)> {
     // Assemble all instances for benching.
     let mut route_providers = vec![];
@@ -106,10 +111,11 @@ fn setup_route_providers(
     ));
     // Setup dynamic round-robin route provider
     let (tx, rx) = oneshot::channel();
+    let token_cloned = cancellation_token.clone();
     runtime.spawn(async move {
         let rp = setup_dynamic_route_provider(nodes_count, RoundRobinRoutingSnapshot::new()).await;
         tx.send(rp).unwrap();
-        sleep(Duration::from_secs(100000)).await;
+        token_cloned.cancelled().await;
     });
     let route_provider = runtime.block_on(async { rx.await.unwrap() });
     route_providers.push((
@@ -118,10 +124,11 @@ fn setup_route_providers(
     ));
     // Setup dynamic latency-based route provider
     let (tx, rx) = oneshot::channel();
+    let token_cloned = cancellation_token.clone();
     runtime.spawn(async move {
         let rp = setup_dynamic_route_provider(nodes_count, LatencyRoutingSnapshot::new()).await;
         tx.send(rp).unwrap();
-        sleep(Duration::from_secs(100000)).await;
+        token_cloned.cancelled().await;
     });
     let route_provider = runtime.block_on(async { rx.await.unwrap() });
     route_providers.push((
