@@ -93,11 +93,11 @@ web-sys = { version = "0.3", features = ["Window"], optional = true }
 
 [dev-dependencies]
 serde_json.workspace = true
-criterion = "0.5"
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
 mockito = "1.0.2"
+criterion = "0.5"
 
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 wasm-bindgen-test = "0.3.34"
@@ -144,4 +144,5 @@ features = ["hyper"]
 [[bench]]
 name = "perf_route_provider"
 path = "benches/perf_route_provider.rs"
+required-features = ["bench"]
 harness = false
