@@ -17,17 +17,16 @@ use crate::agent::http_transport::{
     route_provider::RouteProvider,
 };
 
-pub(super) fn route_n_times(n: usize, f: Arc<impl RouteProvider + ?Sized>) -> Vec<String> {
+///
+pub fn route_n_times(n: usize, f: Arc<impl RouteProvider + ?Sized>) -> Vec<String> {
     (0..n)
         .map(|_| f.route().unwrap().domain().unwrap().to_string())
         .collect()
 }
 
-pub(super) fn assert_routed_domains<T>(
-    actual: Vec<T>,
-    expected: Vec<T>,
-    expected_repetitions: usize,
-) where
+///
+pub fn assert_routed_domains<T>(actual: Vec<T>, expected: Vec<T>, expected_repetitions: usize)
+where
     T: AsRef<str> + Eq + Hash + Debug + Ord,
 {
     fn build_count_map<T>(items: &[T]) -> HashMap<&T, usize>
@@ -56,9 +55,10 @@ pub(super) fn assert_routed_domains<T>(
         .all(|&x| x == &expected_repetitions));
 }
 
+/// A mock implementation of the nodes Fetch trait, without http calls.
 #[derive(Debug)]
-pub(super) struct NodesFetcherMock {
-    // A set of nodes, existing in the topology.
+pub struct NodesFetcherMock {
+    /// A set of nodes, existing in the topology.
     pub nodes: AtomicSwap<Vec<Node>>,
 }
 
@@ -77,19 +77,22 @@ impl Default for NodesFetcherMock {
 }
 
 impl NodesFetcherMock {
+    /// Create a new instance.
     pub fn new() -> Self {
         Self {
             nodes: Arc::new(ArcSwap::from_pointee(vec![])),
         }
     }
 
+    /// Sets the existing nodes in the topology.
     pub fn overwrite_nodes(&self, nodes: Vec<Node>) {
         self.nodes.store(Arc::new(nodes));
     }
 }
 
+/// A mock implementation of the node's HealthCheck trait, without http calls.
 #[derive(Debug)]
-pub(super) struct NodeHealthCheckerMock {
+pub struct NodeHealthCheckerMock {
     healthy_nodes: Arc<ArcSwap<HashSet<Node>>>,
 }
 
@@ -112,12 +115,14 @@ impl HealthCheck for NodeHealthCheckerMock {
 }
 
 impl NodeHealthCheckerMock {
+    /// Creates a new instance
     pub fn new() -> Self {
         Self {
             healthy_nodes: Arc::new(ArcSwap::from_pointee(HashSet::new())),
         }
     }
 
+    /// Sets healthy nodes in the topology.
     pub fn overwrite_healthy_nodes(&self, healthy_nodes: Vec<Node>) {
         self.healthy_nodes
             .store(Arc::new(HashSet::from_iter(healthy_nodes)));
