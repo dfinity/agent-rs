@@ -2,7 +2,6 @@
 ![GitHub Workflow Status](https://github.com/dfinity/agent-rs/workflows/Tests/badge.svg)
 <!-- This file is only meant to be read on GitHub. It will not be published anywhere. -->
 
-
 ## Contributing
 Please follow the guidelines in the [CONTRIBUTING.md](.github/CONTRIBUTING.md) document.
 
