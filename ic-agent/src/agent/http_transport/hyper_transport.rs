@@ -189,7 +189,6 @@ where
 
         let create_request_with_generated_url = || -> Result<Request<_>, AgentError> {
             let url = self.route_provider.route()?.join(endpoint)?;
-            println!("{url}");
             let http_request = Request::builder()
                 .method(&method)
                 .uri(url.as_str())
