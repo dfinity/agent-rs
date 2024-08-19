@@ -253,16 +253,29 @@ mod tests {
         let node_3 = Node::new("api3.com").unwrap();
         let nodes = vec![node_1, node_2, node_3];
         snapshot.existing_nodes.extend(nodes.clone());
-        snapshot.healthy_nodes.extend(nodes);
-        // Act + Assert
-        let node = snapshot.next_node().unwrap();
-        assert_eq!(node.domain().as_str(), "api1.com");
-        let node = snapshot.next_node().unwrap();
-        assert_eq!(node.domain().as_str(), "api2.com");
-        let node = snapshot.next_node().unwrap();
-        assert_eq!(node.domain().as_str(), "api3.com");
-        let node = snapshot.next_node().unwrap();
-        assert_eq!(node.domain().as_str(), "api1.com");
+        snapshot.healthy_nodes.extend(nodes.clone());
+        // Act
+        let n = 6;
+        let mut count_map = HashMap::new();
+        for _ in 0..n {
+            let node = snapshot.next_node().unwrap();
+            count_map.entry(node).and_modify(|v| *v += 1).or_insert(1);
+        }
+        // Assert each node was returned 2 times
+        let k = 2;
+        assert_eq!(
+            count_map.len(),
+            nodes.len(),
+            "The number of unique elements is not {}",
+            nodes.len()
+        );
+        for (item, &count) in &count_map {
+            assert_eq!(
+                count, k,
+                "Element {:?} does not appear exactly {} times",
+                item, k
+            );
+        }
     }
 
     #[test]
@@ -290,11 +303,11 @@ mod tests {
         n_nodes.extend(snapshot.next_n_nodes(4).expect("failed to get nodes"));
         // Fourth call
         n_nodes.extend(snapshot.next_n_nodes(5).expect("failed to get nodes"));
-        // Assert each node was returned 2 times
-        let k = 2;
+        // Assert each node was returned 3 times
+        let k = 3;
         let mut count_map = HashMap::new();
-        for item in nodes.iter() {
-            *count_map.entry(item).or_insert(1) += 1;
+        for item in n_nodes.iter() {
+            count_map.entry(item).and_modify(|v| *v += 1).or_insert(1);
         }
         assert_eq!(
             count_map.len(),
