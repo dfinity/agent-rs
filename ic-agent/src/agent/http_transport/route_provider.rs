@@ -17,6 +17,8 @@ use crate::agent::{
 pub trait RouteProvider: std::fmt::Debug + Send + Sync {
     /// Generate next routing url
     fn route(&self) -> Result<Url, AgentError>;
+    /// Generate up to n different routing urls
+    fn n_routes(&self, n: usize) -> Result<Vec<Url>, AgentError>;
 }
 
 /// A simple implementation of the [`RouteProvider`] which produces an even distribution of the urls from the input ones.
@@ -37,6 +39,28 @@ impl RouteProvider for RoundRobinRouteProvider {
         // This operation wraps around an overflow, i.e. after max is reached the value is reset back to 0.
         let prev_idx = self.current_idx.fetch_add(1, Ordering::Relaxed);
         Ok(self.routes[prev_idx % self.routes.len()].clone())
+    }
+
+    fn n_routes(&self, n: usize) -> Result<Vec<Url>, AgentError> {
+        if n == 0 {
+            return Ok(Vec::new());
+        }
+
+        if n >= self.routes.len() {
+            return Ok(self.routes.clone());
+        }
+
+        let idx = self.current_idx.fetch_add(n, Ordering::Relaxed) % self.routes.len();
+        let mut urls = Vec::with_capacity(n);
+
+        if self.routes.len() - idx >= n {
+            urls.extend_from_slice(&self.routes[idx..idx + n]);
+        } else {
+            urls.extend_from_slice(&self.routes[idx..]);
+            urls.extend_from_slice(&self.routes[..n - urls.len()]);
+        }
+
+        Ok(urls)
     }
 }
 
@@ -98,5 +122,57 @@ mod tests {
             .map(|_| provider.route().expect("failed to get next url"))
             .collect();
         assert_eq!(expected_urls, urls);
+    }
+
+    #[test]
+    fn test_n_routes() {
+        // Test with an empty list of urls
+        let provider = RoundRobinRouteProvider::new(Vec::<&str>::new())
+            .expect("failed to create a route provider");
+        let urls_iter = provider.n_routes(1).expect("failed to get urls");
+        assert!(urls_iter.is_empty());
+        // Test with non-empty list of urls
+        let provider = RoundRobinRouteProvider::new(vec![
+            "https://url1.com",
+            "https://url2.com",
+            "https://url3.com",
+            "https://url4.com",
+            "https://url5.com",
+        ])
+        .expect("failed to create a route provider");
+        // First call
+        let urls: Vec<_> = provider.n_routes(3).expect("failed to get urls");
+        let expected_urls: Vec<Url> = ["https://url1.com", "https://url2.com", "https://url3.com"]
+            .iter()
+            .map(|url_str| Url::parse(url_str).expect("invalid URL"))
+            .collect();
+        assert_eq!(urls, expected_urls);
+        // Second call
+        let urls: Vec<_> = provider.n_routes(3).expect("failed to get urls");
+        let expected_urls: Vec<Url> = ["https://url4.com", "https://url5.com", "https://url1.com"]
+            .iter()
+            .map(|url_str| Url::parse(url_str).expect("invalid URL"))
+            .collect();
+        assert_eq!(urls, expected_urls);
+        // Third call
+        let urls: Vec<_> = provider.n_routes(2).expect("failed to get urls");
+        let expected_urls: Vec<Url> = ["https://url2.com", "https://url3.com"]
+            .iter()
+            .map(|url_str| Url::parse(url_str).expect("invalid URL"))
+            .collect();
+        assert_eq!(urls, expected_urls);
+        // Fourth call
+        let urls: Vec<_> = provider.n_routes(5).expect("failed to get urls");
+        let expected_urls: Vec<Url> = [
+            "https://url1.com",
+            "https://url2.com",
+            "https://url3.com",
+            "https://url4.com",
+            "https://url5.com",
+        ]
+        .iter()
+        .map(|url_str| Url::parse(url_str).expect("invalid URL"))
+        .collect();
+        assert_eq!(urls, expected_urls);
     }
 }
