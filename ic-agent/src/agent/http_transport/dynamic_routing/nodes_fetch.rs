@@ -143,7 +143,7 @@ where
                         //   - failure should never happen, but we trace it if it does
                         loop {
                             let snapshot = self.routing_snapshot.load();
-                            if let Some(node) = snapshot.next() {
+                            if let Some(node) = snapshot.next_node() {
                                 match self.fetcher.fetch((&node).into()).await {
                                     Ok(nodes) => {
                                         let msg = Some(

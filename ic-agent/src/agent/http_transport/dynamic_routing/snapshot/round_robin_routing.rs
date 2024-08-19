@@ -34,7 +34,7 @@ impl RoutingSnapshot for RoundRobinRoutingSnapshot {
         !self.healthy_nodes.is_empty()
     }
 
-    fn next(&self) -> Option<Node> {
+    fn next_node(&self) -> Option<Node> {
         if self.healthy_nodes.is_empty() {
             return None;
         }
@@ -43,6 +43,31 @@ impl RoutingSnapshot for RoundRobinRoutingSnapshot {
             .iter()
             .nth(prev_idx % self.healthy_nodes.len())
             .cloned()
+    }
+
+    fn next_n_nodes(&self, n: usize) -> Option<Vec<Node>> {
+        if n == 0 {
+            return Some(Vec::new());
+        }
+
+        let healthy_nodes = Vec::from_iter(self.healthy_nodes.clone());
+        let healthy_count = healthy_nodes.len();
+
+        if n >= healthy_count {
+            return Some(healthy_nodes.clone());
+        }
+
+        let idx = self.current_idx.fetch_add(n, Ordering::Relaxed) % healthy_count;
+        let mut nodes = Vec::with_capacity(n);
+
+        if healthy_count - idx >= n {
+            nodes.extend_from_slice(&healthy_nodes[idx..idx + n]);
+        } else {
+            nodes.extend_from_slice(&healthy_nodes[idx..]);
+            nodes.extend_from_slice(&healthy_nodes[..n - nodes.len()]);
+        }
+
+        Some(nodes)
     }
 
     fn sync_nodes(&mut self, nodes: &[Node]) -> bool {
@@ -85,6 +110,7 @@ impl RoutingSnapshot for RoundRobinRoutingSnapshot {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::time::Duration;
     use std::{collections::HashSet, sync::atomic::Ordering};
 
@@ -105,7 +131,7 @@ mod tests {
         assert!(snapshot.existing_nodes.is_empty());
         assert!(!snapshot.has_nodes());
         assert_eq!(snapshot.current_idx.load(Ordering::SeqCst), 0);
-        assert!(snapshot.next().is_none());
+        assert!(snapshot.next_node().is_none());
     }
 
     #[test]
@@ -121,13 +147,13 @@ mod tests {
         // Assert
         assert!(!is_updated);
         assert!(snapshot.existing_nodes.is_empty());
-        assert!(snapshot.next().is_none());
+        assert!(snapshot.next_node().is_none());
         // Act 2
         let is_updated = snapshot.update_node(&node, unhealthy);
         // Assert
         assert!(!is_updated);
         assert!(snapshot.existing_nodes.is_empty());
-        assert!(snapshot.next().is_none());
+        assert!(snapshot.next_node().is_none());
     }
 
     #[test]
@@ -142,7 +168,7 @@ mod tests {
         let is_updated = snapshot.update_node(&node, health);
         assert!(is_updated);
         assert!(snapshot.has_nodes());
-        assert_eq!(snapshot.next().unwrap(), node);
+        assert_eq!(snapshot.next_node().unwrap(), node);
         assert_eq!(snapshot.current_idx.load(Ordering::SeqCst), 1);
     }
 
@@ -158,7 +184,7 @@ mod tests {
         let is_updated = snapshot.update_node(&node, unhealthy);
         assert!(is_updated);
         assert!(!snapshot.has_nodes());
-        assert!(snapshot.next().is_none());
+        assert!(snapshot.next_node().is_none());
     }
 
     #[test]
@@ -216,5 +242,85 @@ mod tests {
         let nodes_changed = snapshot.sync_nodes(&[]);
         assert!(!nodes_changed);
         assert!(snapshot.existing_nodes.is_empty());
+    }
+
+    #[test]
+    fn test_next_node() {
+        // Arrange
+        let mut snapshot = RoundRobinRoutingSnapshot::new();
+        let node_1 = Node::new("api1.com").unwrap();
+        let node_2 = Node::new("api2.com").unwrap();
+        let node_3 = Node::new("api3.com").unwrap();
+        let nodes = vec![node_1, node_2, node_3];
+        snapshot.existing_nodes.extend(nodes.clone());
+        snapshot.healthy_nodes.extend(nodes.clone());
+        // Act
+        let n = 6;
+        let mut count_map = HashMap::new();
+        for _ in 0..n {
+            let node = snapshot.next_node().unwrap();
+            count_map.entry(node).and_modify(|v| *v += 1).or_insert(1);
+        }
+        // Assert each node was returned 2 times
+        let k = 2;
+        assert_eq!(
+            count_map.len(),
+            nodes.len(),
+            "The number of unique elements is not {}",
+            nodes.len()
+        );
+        for (item, &count) in &count_map {
+            assert_eq!(
+                count, k,
+                "Element {:?} does not appear exactly {} times",
+                item, k
+            );
+        }
+    }
+
+    #[test]
+    fn test_n_nodes() {
+        // Arrange
+        let mut snapshot = RoundRobinRoutingSnapshot::new();
+        let node_1 = Node::new("api1.com").unwrap();
+        let node_2 = Node::new("api2.com").unwrap();
+        let node_3 = Node::new("api3.com").unwrap();
+        let node_4 = Node::new("api4.com").unwrap();
+        let node_5 = Node::new("api5.com").unwrap();
+        let nodes = vec![
+            node_1.clone(),
+            node_2.clone(),
+            node_3.clone(),
+            node_4.clone(),
+            node_5.clone(),
+        ];
+        snapshot.healthy_nodes.extend(nodes.clone());
+        // First call
+        let mut n_nodes: Vec<_> = snapshot.next_n_nodes(3).expect("failed to get nodes");
+        // Second call
+        n_nodes.extend(snapshot.next_n_nodes(3).expect("failed to get nodes"));
+        // Third call
+        n_nodes.extend(snapshot.next_n_nodes(4).expect("failed to get nodes"));
+        // Fourth call
+        n_nodes.extend(snapshot.next_n_nodes(5).expect("failed to get nodes"));
+        // Assert each node was returned 3 times
+        let k = 3;
+        let mut count_map = HashMap::new();
+        for item in n_nodes.iter() {
+            count_map.entry(item).and_modify(|v| *v += 1).or_insert(1);
+        }
+        assert_eq!(
+            count_map.len(),
+            nodes.len(),
+            "The number of unique elements is not {}",
+            nodes.len()
+        );
+        for (item, &count) in &count_map {
+            assert_eq!(
+                count, k,
+                "Element {:?} does not appear exactly {} times",
+                item, k
+            );
+        }
     }
 }
