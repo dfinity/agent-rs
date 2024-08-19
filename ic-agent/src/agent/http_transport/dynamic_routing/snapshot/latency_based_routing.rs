@@ -70,21 +70,10 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
     }
 
     fn next_node(&self) -> Option<Node> {
-        // We select a node based on it's weight, using a stochastic weighted random sampling approach.
-        let weighted_nodes: Vec<_> = self
-            .weighted_nodes
-            .iter()
-            .map(|n| (n.weight, &n.node))
-            .collect();
-        // Generate a random float in the range [0, 1)
-        let mut rng = rand::thread_rng();
-        let rand_num = rng.gen::<f64>();
-        // Using this random float and an array of weights we get an index of the node.
-        let idx = weighted_sample(weighted_nodes.as_slice(), rand_num);
-        idx.map(|idx| self.weighted_nodes[idx].node.clone())
+        self.next_n_nodes(1).unwrap_or_default().into_iter().next()
     }
 
-    // Uses weighted random sampling algorithm with item replacement n times.
+    // Uses weighted random sampling algorithm without item replacement n times.
     fn next_n_nodes(&self, n: usize) -> Option<Vec<Node>> {
         if n == 0 {
             return Some(Vec::new());
@@ -397,7 +386,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    // #[ignore]
     // This test is for manual runs to see the statistics for nodes selection probability.
     fn test_stats_for_next_n_nodes() {
         // Arrange
@@ -444,7 +433,7 @@ mod tests {
 
         let mut stats = HashMap::new();
         let experiments = 30;
-        let select_nodes_count = 2;
+        let select_nodes_count = 10;
         for i in 0..experiments {
             let nodes = snapshot.next_n_nodes(select_nodes_count).unwrap();
             println!("Experiment {i}: selected nodes {nodes:?}");
