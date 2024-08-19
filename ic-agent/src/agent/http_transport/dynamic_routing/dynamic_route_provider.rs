@@ -176,7 +176,7 @@ where
         Ok(node.to_routing_url())
     }
 
-    fn n_routes(&self, n: usize) -> Result<Vec<Url>, AgentError> {
+    fn n_ordered_routes(&self, n: usize) -> Result<Vec<Url>, AgentError> {
         let snapshot = self.routing_snapshot.load();
         let nodes = snapshot.next_n_nodes(n).ok_or_else(|| {
             AgentError::RouteProviderError("No healthy API nodes found.".to_string())

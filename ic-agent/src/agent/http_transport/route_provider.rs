@@ -15,10 +15,19 @@ use crate::agent::{
 
 /// A [`RouteProvider`] for dynamic generation of routing urls.
 pub trait RouteProvider: std::fmt::Debug + Send + Sync {
-    /// Generate next routing url
+    /// Generates the next routing URL based on the internal routing logic.
+    ///
+    /// This method returns a single `Url` that can be used for routing.
+    /// The logic behind determining the next URL can vary depending on the implementation
     fn route(&self) -> Result<Url, AgentError>;
-    /// Generate up to n different routing urls
-    fn n_routes(&self, n: usize) -> Result<Vec<Url>, AgentError>;
+
+    /// Generates up to `n` different routing URLs in order of precedence.
+    ///
+    /// This method returns a vector of `Url` instances, each representing a routing
+    /// endpoint. The URLs are ordered by priority, with the most preferred route
+    /// appearing first. The returned vector can contain fewer than `n` URLs if
+    /// fewer are available.
+    fn n_ordered_routes(&self, n: usize) -> Result<Vec<Url>, AgentError>;
 }
 
 /// A simple implementation of the [`RouteProvider`] which produces an even distribution of the urls from the input ones.
@@ -41,7 +50,7 @@ impl RouteProvider for RoundRobinRouteProvider {
         Ok(self.routes[prev_idx % self.routes.len()].clone())
     }
 
-    fn n_routes(&self, n: usize) -> Result<Vec<Url>, AgentError> {
+    fn n_ordered_routes(&self, n: usize) -> Result<Vec<Url>, AgentError> {
         if n == 0 {
             return Ok(Vec::new());
         }
@@ -129,7 +138,7 @@ mod tests {
         // Test with an empty list of urls
         let provider = RoundRobinRouteProvider::new(Vec::<&str>::new())
             .expect("failed to create a route provider");
-        let urls_iter = provider.n_routes(1).expect("failed to get urls");
+        let urls_iter = provider.n_ordered_routes(1).expect("failed to get urls");
         assert!(urls_iter.is_empty());
         // Test with non-empty list of urls
         let provider = RoundRobinRouteProvider::new(vec![
@@ -141,28 +150,28 @@ mod tests {
         ])
         .expect("failed to create a route provider");
         // First call
-        let urls: Vec<_> = provider.n_routes(3).expect("failed to get urls");
+        let urls: Vec<_> = provider.n_ordered_routes(3).expect("failed to get urls");
         let expected_urls: Vec<Url> = ["https://url1.com", "https://url2.com", "https://url3.com"]
             .iter()
             .map(|url_str| Url::parse(url_str).expect("invalid URL"))
             .collect();
         assert_eq!(urls, expected_urls);
         // Second call
-        let urls: Vec<_> = provider.n_routes(3).expect("failed to get urls");
+        let urls: Vec<_> = provider.n_ordered_routes(3).expect("failed to get urls");
         let expected_urls: Vec<Url> = ["https://url4.com", "https://url5.com", "https://url1.com"]
             .iter()
             .map(|url_str| Url::parse(url_str).expect("invalid URL"))
             .collect();
         assert_eq!(urls, expected_urls);
         // Third call
-        let urls: Vec<_> = provider.n_routes(2).expect("failed to get urls");
+        let urls: Vec<_> = provider.n_ordered_routes(2).expect("failed to get urls");
         let expected_urls: Vec<Url> = ["https://url2.com", "https://url3.com"]
             .iter()
             .map(|url_str| Url::parse(url_str).expect("invalid URL"))
             .collect();
         assert_eq!(urls, expected_urls);
         // Fourth call
-        let urls: Vec<_> = provider.n_routes(5).expect("failed to get urls");
+        let urls: Vec<_> = provider.n_ordered_routes(5).expect("failed to get urls");
         let expected_urls: Vec<Url> = [
             "https://url1.com",
             "https://url2.com",
