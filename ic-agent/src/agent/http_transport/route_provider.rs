@@ -21,7 +21,7 @@ pub trait RouteProvider: std::fmt::Debug + Send + Sync {
     /// The logic behind determining the next URL can vary depending on the implementation
     fn route(&self) -> Result<Url, AgentError>;
 
-    /// Generates up to `n` different routing URLs in order of precedence.
+    /// Generates up to `n` different routing URLs in order of priority.
     ///
     /// This method returns a vector of `Url` instances, each representing a routing
     /// endpoint. The URLs are ordered by priority, with the most preferred route
