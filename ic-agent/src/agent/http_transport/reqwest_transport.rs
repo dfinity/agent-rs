@@ -59,6 +59,11 @@ impl ReqwestTransport {
         Self::create_with_client_route(route_provider, client)
     }
 
+    /// Dummy function
+    pub fn test_function(self) -> Self {
+        self
+    }
+
     /// Creates a replica transport from a [`RouteProvider`] and a [`reqwest::Client`].
     pub fn create_with_client_route(
         route_provider: Arc<dyn RouteProvider>,
