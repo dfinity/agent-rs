@@ -53,7 +53,7 @@ optional = true
 [dependencies.reqwest]
 workspace = true
 default-features = false
-features = ["blocking", "json", "rustls-tls-webpki-roots", "stream"]
+features = ["blocking", "http2", "json", "rustls-tls-webpki-roots", "stream"]
 optional = true
 
 [dependencies.pem]
