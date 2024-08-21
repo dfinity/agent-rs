@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Enable http2 for reqwest transport.
 * Add canister snapshot methods to `ManagementCanister`.
 
 ## [0.37.1] - 2024-07-25
