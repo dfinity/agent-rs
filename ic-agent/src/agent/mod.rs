@@ -153,6 +153,7 @@ pub struct Agent {
     concurrent_requests_semaphore: Arc<Semaphore>,
     verify_query_signatures: bool,
     max_response_body_size: Option<usize>,
+    #[allow(dead_code)]
     max_tcp_error_retries: usize,
     use_call_v3_endpoint: bool,
 }
