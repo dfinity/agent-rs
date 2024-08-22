@@ -5,13 +5,16 @@ use std::{
 };
 use url::Url;
 
-use crate::agent::{
-    http_transport::{
-        IC0_DOMAIN, IC0_SUB_DOMAIN, ICP0_DOMAIN, ICP0_SUB_DOMAIN, ICP_API_DOMAIN,
-        ICP_API_SUB_DOMAIN, LOCALHOST_DOMAIN, LOCALHOST_SUB_DOMAIN,
-    },
-    AgentError,
-};
+use crate::agent::AgentError;
+
+const IC0_DOMAIN: &str = "ic0.app";
+const ICP0_DOMAIN: &str = "icp0.io";
+const ICP_API_DOMAIN: &str = "icp-api.io";
+const LOCALHOST_DOMAIN: &str = "localhost";
+const IC0_SUB_DOMAIN: &str = ".ic0.app";
+const ICP0_SUB_DOMAIN: &str = ".icp0.io";
+const ICP_API_SUB_DOMAIN: &str = ".icp-api.io";
+const LOCALHOST_SUB_DOMAIN: &str = ".localhost";
 
 /// A [`RouteProvider`] for dynamic generation of routing urls.
 pub trait RouteProvider: std::fmt::Debug + Send + Sync {
@@ -67,6 +70,12 @@ impl RoundRobinRouteProvider {
             routes: routes?,
             current_idx: AtomicUsize::new(0),
         })
+    }
+}
+
+impl RouteProvider for Url {
+    fn route(&self) -> Result<Url, AgentError> {
+        Ok(self.clone())
     }
 }
 

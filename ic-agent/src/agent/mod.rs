@@ -2,17 +2,23 @@
 pub(crate) mod agent_config;
 pub mod agent_error;
 pub(crate) mod builder;
+#[doc(hidden)]
+#[deprecated(since = "0.38.0", note = "use the AgentBuilder methods")]
 pub mod http_transport;
 pub(crate) mod nonce;
 pub(crate) mod response_authentication;
+pub mod route_provider;
 pub mod status;
 
 pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
+use agent_error::HttpErrorPayload;
 use async_lock::Semaphore;
 pub use builder::AgentBuilder;
 use cached::{Cached, TimedCache};
 use ed25519_consensus::{Error as Ed25519Error, Signature, VerificationKey};
+use futures_util::StreamExt;
+use http::{header::CONTENT_TYPE, HeaderMap, Method, StatusCode};
 #[doc(inline)]
 pub use ic_transport_types::{
     signed, CallResponse, Envelope, EnvelopeContent, RejectCode, RejectResponse, ReplyResponse,
@@ -20,6 +26,8 @@ pub use ic_transport_types::{
 };
 pub use nonce::{NonceFactory, NonceGenerator};
 use rangemap::{RangeInclusiveMap, RangeInclusiveSet, StepFns};
+use reqwest::{Body, Client, Request};
+use route_provider::RouteProvider;
 use time::OffsetDateTime;
 
 #[cfg(test)]
@@ -238,10 +246,14 @@ pub struct Agent {
     identity: Arc<dyn Identity>,
     ingress_expiry: Duration,
     root_key: Arc<RwLock<Vec<u8>>>,
-    transport: Arc<dyn Transport>,
+    client: Client,
+    route_provider: Arc<dyn RouteProvider>,
     subnet_key_cache: Arc<Mutex<SubnetCache>>,
     concurrent_requests_semaphore: Arc<Semaphore>,
     verify_query_signatures: bool,
+    max_response_body_size: Option<usize>,
+    max_tcp_error_retries: usize,
+    use_call_v3_endpoint: bool,
 }
 
 impl fmt::Debug for Agent {
@@ -266,18 +278,23 @@ impl Agent {
             identity: config.identity,
             ingress_expiry: config.ingress_expiry.unwrap_or(DEFAULT_INGRESS_EXPIRY),
             root_key: Arc::new(RwLock::new(IC_ROOT_KEY.to_vec())),
-            transport: config
-                .transport
-                .ok_or_else(AgentError::MissingReplicaTransport)?,
+            client: config.client.unwrap_or_else(|| {
+                Client::builder()
+                    .use_rustls_tls()
+                    .timeout(Duration::from_secs(360))
+                    .build()
+                    .expect("Could not create HTTP client.")
+            }),
+            route_provider: config
+                .route_provider
+                .expect("missing `url` or `route_provider` in `AgentBuilder`"),
             subnet_key_cache: Arc::new(Mutex::new(SubnetCache::new())),
             verify_query_signatures: config.verify_query_signatures,
             concurrent_requests_semaphore: Arc::new(Semaphore::new(config.max_concurrent_requests)),
+            max_response_body_size: config.max_response_body_size,
+            max_tcp_error_retries: config.max_tcp_error_retries,
+            use_call_v3_endpoint: config.use_call_v3_endpoint,
         })
-    }
-
-    /// Set the transport of the [`Agent`].
-    pub fn set_transport<F: 'static + Transport>(&mut self, transport: F) {
-        self.transport = Arc::new(transport);
     }
 
     /// Set the identity provider for signing messages.
@@ -359,9 +376,13 @@ impl Agent {
     {
         let _permit = self.concurrent_requests_semaphore.acquire().await;
         let bytes = self
-            .transport
-            .query(effective_canister_id, serialized_bytes)
-            .await?;
+            .execute(
+                Method::POST,
+                &format!("api/v2/canister/{}/query", effective_canister_id.to_text()),
+                Some(serialized_bytes),
+            )
+            .await?
+            .1;
         serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
     }
 
@@ -374,10 +395,14 @@ impl Agent {
         A: serde::de::DeserializeOwned,
     {
         let _permit = self.concurrent_requests_semaphore.acquire().await;
+        let endpoint = format!(
+            "api/v2/canister/{}/read_state",
+            effective_canister_id.to_text()
+        );
         let bytes = self
-            .transport
-            .read_state(effective_canister_id, serialized_bytes)
-            .await?;
+            .execute(Method::POST, &endpoint, Some(serialized_bytes))
+            .await?
+            .1;
         serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
     }
 
@@ -390,10 +415,11 @@ impl Agent {
         A: serde::de::DeserializeOwned,
     {
         let _permit = self.concurrent_requests_semaphore.acquire().await;
+        let endpoint = format!("api/v2/subnet/{}/read_state", subnet_id.to_text());
         let bytes = self
-            .transport
-            .read_subnet_state(subnet_id, serialized_bytes)
-            .await?;
+            .execute(Method::POST, &endpoint, Some(serialized_bytes))
+            .await?
+            .1;
         serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
     }
 
@@ -403,9 +429,34 @@ impl Agent {
         serialized_bytes: Vec<u8>,
     ) -> Result<TransportCallResponse, AgentError> {
         let _permit = self.concurrent_requests_semaphore.acquire().await;
-        self.transport
-            .call(effective_canister_id, serialized_bytes)
-            .await
+        let api_version = if self.use_call_v3_endpoint {
+            "v3"
+        } else {
+            "v2"
+        };
+
+        let endpoint = format!(
+            "api/{}/canister/{}/call",
+            api_version,
+            effective_canister_id.to_text()
+        );
+        let (status_code, response_body) = self
+            .execute(Method::POST, &endpoint, Some(serialized_bytes))
+            .await?;
+
+        if status_code == StatusCode::ACCEPTED {
+            return Ok(TransportCallResponse::Accepted);
+        }
+
+        // status_code == OK (200)
+        if self.use_call_v3_endpoint {
+            serde_cbor::from_slice(&response_body).map_err(AgentError::InvalidCborData)
+        } else {
+            let reject_response = serde_cbor::from_slice::<RejectResponse>(&response_body)
+                .map_err(AgentError::InvalidCborData)?;
+
+            Err(AgentError::UncertifiedReject(reject_response))
+        }
     }
 
     /// The simplest way to do a query call; sends a byte array and will return a byte vector.
@@ -1061,7 +1112,8 @@ impl Agent {
 
     /// Calls and returns the information returned by the status endpoint of a replica.
     pub async fn status(&self) -> Result<Status, AgentError> {
-        let bytes = self.transport.status().await?;
+        let endpoint = "api/v2/status";
+        let bytes = self.execute(Method::GET, endpoint, None).await?.1;
 
         let cbor: serde_cbor::Value =
             serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)?;
@@ -1150,6 +1202,131 @@ impl Agent {
             .unwrap()
             .insert_subnet(subnet_id, subnet.clone());
         Ok(subnet)
+    }
+
+    async fn request(
+        &self,
+        method: Method,
+        endpoint: &str,
+        body: Option<Vec<u8>>,
+    ) -> Result<(StatusCode, HeaderMap, Vec<u8>), AgentError> {
+        let create_request_with_generated_url = || -> Result<Request, AgentError> {
+            let url = self.route_provider.route()?.join(endpoint)?;
+            let mut http_request = Request::new(method.clone(), url);
+            http_request
+                .headers_mut()
+                .insert(CONTENT_TYPE, "application/cbor".parse().unwrap());
+            *http_request.body_mut() = body.as_ref().cloned().map(Body::from);
+            Ok(http_request)
+        };
+
+        // Dispatch request with a retry logic only for non-wasm builds.
+        let response = {
+            #[cfg(target_family = "wasm")]
+            {
+                let http_request = create_request_with_generated_url()?;
+                match self.client.execute(http_request).await {
+                    Ok(response) => response,
+                    Err(err) => return Err(AgentError::TransportError(Box::new(err))),
+                }
+            }
+            #[cfg(not(target_family = "wasm"))]
+            {
+                // RouteProvider generates urls dynamically. Some of these urls can be potentially unhealthy.
+                // TCP related errors (host unreachable, connection refused, connection timed out, connection reset) can be safely retried with a newly generated url.
+
+                let mut retry_count = 0;
+
+                loop {
+                    let http_request = create_request_with_generated_url()?;
+
+                    match self.client.execute(http_request).await {
+                        Ok(response) => break response,
+                        Err(err) => {
+                            // Network-related errors can be retried.
+                            if err.is_connect() {
+                                if retry_count >= self.max_tcp_error_retries {
+                                    return Err(AgentError::TransportError(Box::new(err)));
+                                }
+                                retry_count += 1;
+                                continue;
+                            }
+                            return Err(AgentError::TransportError(Box::new(err)));
+                        }
+                    }
+                }
+            }
+        };
+
+        let http_status = response.status();
+        let response_headers = response.headers().clone();
+
+        // Size Check (Content-Length)
+        if matches!(self
+            .max_response_body_size
+            .zip(response.content_length()), Some((size_limit, content_length)) if content_length as usize > size_limit)
+        {
+            return Err(AgentError::ResponseSizeExceededLimit());
+        }
+
+        let mut body: Vec<u8> = response
+            .content_length()
+            .map_or_else(Vec::new, |n| Vec::with_capacity(n as usize));
+
+        let mut stream = response.bytes_stream();
+
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|x| AgentError::TransportError(Box::new(x)))?;
+
+            // Size Check (Body Size)
+            if matches!(self
+                .max_response_body_size, Some(size_limit) if body.len() + chunk.len() > size_limit)
+            {
+                return Err(AgentError::ResponseSizeExceededLimit());
+            }
+
+            body.extend_from_slice(chunk.as_ref());
+        }
+
+        Ok((http_status, response_headers, body))
+    }
+
+    async fn execute(
+        &self,
+        method: Method,
+        endpoint: &str,
+        body: Option<Vec<u8>>,
+    ) -> Result<(StatusCode, Vec<u8>), AgentError> {
+        let request_result = loop {
+            let result = self
+                .request(method.clone(), endpoint, body.as_ref().cloned())
+                .await?;
+            if result.0 != StatusCode::TOO_MANY_REQUESTS {
+                break result;
+            }
+            crate::util::sleep(Duration::from_millis(250)).await;
+        };
+        let status = request_result.0;
+        let headers = request_result.1;
+        let body = request_result.2;
+
+        if status.is_client_error() || status.is_server_error() {
+            Err(AgentError::HttpError(HttpErrorPayload {
+                status: status.into(),
+                content_type: headers
+                    .get(CONTENT_TYPE)
+                    .and_then(|value| value.to_str().ok())
+                    .map(|x| x.to_string()),
+                content: body,
+            }))
+        } else if !(status == StatusCode::OK || status == StatusCode::ACCEPTED) {
+            Err(AgentError::InvalidHttpResponse(format!(
+                "Expected `200`, `202`, 4xx`, or `5xx` HTTP status code. Got: {}",
+                status
+            )))
+        } else {
+            Ok((status, body))
+        }
     }
 }
 

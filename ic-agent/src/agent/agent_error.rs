@@ -175,10 +175,6 @@ pub enum AgentError {
     #[error("The wallet canister must be upgraded: {0}")]
     WalletUpgradeRequired(String),
 
-    /// The transport was not specified in the [`AgentBuilder`](super::AgentBuilder).
-    #[error("Missing replica transport in the Agent Builder.")]
-    MissingReplicaTransport(),
-
     /// The response size exceeded the provided limit.
     #[error("Response size exceeded limit.")]
     ResponseSizeExceededLimit(),
