@@ -8,6 +8,7 @@ use std::{sync::Arc, time::Duration};
 use super::route_provider::RouteProvider;
 
 /// A configuration for an agent.
+#[non_exhaustive]
 pub struct AgentConfig {
     /// See [`with_nonce_factory`](super::AgentBuilder::with_nonce_factory).
     pub nonce_factory: Arc<dyn NonceGenerator>,
@@ -26,9 +27,9 @@ pub struct AgentConfig {
     /// See [`with_max_response_body_size`](super::AgentBuilder::with_max_response_body_size).
     pub max_response_body_size: Option<usize>,
     /// See [`with_max_tcp_error_retries`](super::AgentBuilder::with_max_tcp_error_retries).
-    #[allow(dead_code)]
     pub max_tcp_error_retries: usize,
-    /// See [`use_call_v3_endpoint`](super::AgentBuilder::use_call_v3_endpoint).
+    /// See [`with_call_v3_endpoint`](super::AgentBuilder::with_call_v3_endpoint).
+    #[cfg(feature = "experimental_sync_call")]
     pub use_call_v3_endpoint: bool,
 }
 
@@ -44,6 +45,7 @@ impl Default for AgentConfig {
             route_provider: None,
             max_response_body_size: None,
             max_tcp_error_retries: 0,
+            #[cfg(feature = "experimental_sync_call")]
             use_call_v3_endpoint: false,
         }
     }

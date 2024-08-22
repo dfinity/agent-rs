@@ -110,4 +110,17 @@ impl AgentBuilder {
         self.config.client = Some(client);
         self
     }
+
+    /// Use call v3 endpoint for synchronous update calls.
+    /// __This is an experimental feature, and should not be used in production,
+    /// as the endpoint is not available yet on the mainnet IC.__
+    ///
+    /// By enabling this feature, the agent will use the `v3` endpoint for update calls,
+    /// which is synchronous. This means the replica will wait for a certificate for the call,
+    /// meaning the agent will not need to poll for the certificate.
+    #[cfg(feature = "experimental_sync_call")]
+    pub fn with_call_v3_endpoint(mut self) -> Self {
+        self.config.use_call_v3_endpoint = true;
+        self
+    }
 }

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Removed `Transport` and the `hyper` and `reqwest` features. `ReqwestTransport` is now the default and `HyperTransport` has been removed. Existing `ReqwestTransport` functions have been moved to `AgentBuilder`.
+* `Url` now implements `RouteProvider`.
 * Add canister snapshot methods to `ManagementCanister`.
 
 ## [0.37.1] - 2024-07-25

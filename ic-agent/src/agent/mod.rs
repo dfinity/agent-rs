@@ -75,105 +75,6 @@ type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + S
 #[cfg(target_family = "wasm")]
 type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + 'a>>;
 
-/// A facade that connects to a Replica and does requests. These requests can be of any type
-/// (does not have to be HTTP). This trait is to inverse the control from the Agent over its
-/// connection code, and to resolve any direct dependencies to tokio or HTTP code from this
-/// crate.
-///
-/// An implementation of this trait for HTTP transport is implemented using Reqwest, with the
-/// feature flag `reqwest`. This might be deprecated in the future.
-///
-/// Any error returned by these methods will bubble up to the code that called the [Agent].
-pub trait Transport: Send + Sync {
-    /// Sends a synchronous call request to a replica.
-    ///
-    /// This normally corresponds to the `/api/v3/canister/<effective_canister_id>/call` endpoint.
-    fn call(
-        &self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-    ) -> AgentFuture<TransportCallResponse>;
-
-    /// Sends a synchronous request to a replica. This call includes the body of the request message
-    /// itself (envelope).
-    ///
-    /// This normally corresponds to the `/api/v2/canister/<effective_canister_id>/read_state` endpoint.
-    fn read_state(
-        &self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-    ) -> AgentFuture<Vec<u8>>;
-
-    /// Sends a synchronous request to a replica. This call includes the body of the request message
-    /// itself (envelope).
-    ///
-    /// This normally corresponds to the `/api/v2/subnet/<subnet_id>/read_state` endpoint.
-    fn read_subnet_state(&self, subnet_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>>;
-
-    /// Sends a synchronous request to a replica. This call includes the body of the request message
-    /// itself (envelope).
-    ///
-    /// This normally corresponds to the `/api/v2/canister/<effective_canister_id>/query` endpoint.
-    fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>>;
-
-    /// Sends a status request to the replica, returning whatever the replica returns.
-    /// In the current spec v2, this is a CBOR encoded status message, but we are not
-    /// making this API attach semantics to the response.
-    fn status(&self) -> AgentFuture<Vec<u8>>;
-}
-
-impl<I: Transport + ?Sized> Transport for Box<I> {
-    fn call(
-        &self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-    ) -> AgentFuture<TransportCallResponse> {
-        (**self).call(effective_canister_id, envelope)
-    }
-
-    fn read_state(
-        &self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-    ) -> AgentFuture<Vec<u8>> {
-        (**self).read_state(effective_canister_id, envelope)
-    }
-    fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
-        (**self).query(effective_canister_id, envelope)
-    }
-    fn status(&self) -> AgentFuture<Vec<u8>> {
-        (**self).status()
-    }
-    fn read_subnet_state(&self, subnet_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
-        (**self).read_subnet_state(subnet_id, envelope)
-    }
-}
-impl<I: Transport + ?Sized> Transport for Arc<I> {
-    fn call(
-        &self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-    ) -> AgentFuture<TransportCallResponse> {
-        (**self).call(effective_canister_id, envelope)
-    }
-    fn read_state(
-        &self,
-        effective_canister_id: Principal,
-        envelope: Vec<u8>,
-    ) -> AgentFuture<Vec<u8>> {
-        (**self).read_state(effective_canister_id, envelope)
-    }
-    fn query(&self, effective_canister_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
-        (**self).query(effective_canister_id, envelope)
-    }
-    fn status(&self) -> AgentFuture<Vec<u8>> {
-        (**self).status()
-    }
-    fn read_subnet_state(&self, subnet_id: Principal, envelope: Vec<u8>) -> AgentFuture<Vec<u8>> {
-        (**self).read_subnet_state(subnet_id, envelope)
-    }
-}
-
 /// A low level Agent to make calls to a Replica endpoint.
 ///
 /// ```ignore
@@ -293,7 +194,16 @@ impl Agent {
             concurrent_requests_semaphore: Arc::new(Semaphore::new(config.max_concurrent_requests)),
             max_response_body_size: config.max_response_body_size,
             max_tcp_error_retries: config.max_tcp_error_retries,
-            use_call_v3_endpoint: config.use_call_v3_endpoint,
+            use_call_v3_endpoint: {
+                #[cfg(feature = "experimental_sync_call")]
+                {
+                    config.use_call_v3_endpoint
+                }
+                #[cfg(not(feature = "experimental_sync_call"))]
+                {
+                    false
+                }
+            },
         })
     }
 

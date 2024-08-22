@@ -364,10 +364,7 @@ async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
 
     let agent = Agent::builder()
-        .with_transport(
-            agent::http_transport::ReqwestTransport::create(opts.replica.clone())
-                .context("Failed to create Transport for Agent")?,
-        )
+        .with_url(&opts.replica)
         .with_boxed_identity(Box::new(create_identity(opts.pem)))
         .build()
         .context("Failed to build the Agent")?;
