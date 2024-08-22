@@ -180,11 +180,18 @@ impl Agent {
             ingress_expiry: config.ingress_expiry.unwrap_or(DEFAULT_INGRESS_EXPIRY),
             root_key: Arc::new(RwLock::new(IC_ROOT_KEY.to_vec())),
             client: config.client.unwrap_or_else(|| {
-                Client::builder()
-                    .use_rustls_tls()
-                    .timeout(Duration::from_secs(360))
-                    .build()
-                    .expect("Could not create HTTP client.")
+                #[cfg(not(target_family = "wasm"))]
+                {
+                    Client::builder()
+                        .use_rustls_tls()
+                        .timeout(Duration::from_secs(360))
+                        .build()
+                        .expect("Could not create HTTP client.")
+                }
+                #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
+                {
+                    Client::new()
+                }
             }),
             route_provider: config
                 .route_provider
