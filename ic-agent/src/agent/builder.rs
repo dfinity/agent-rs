@@ -123,4 +123,16 @@ impl AgentBuilder {
         self.config.use_call_v3_endpoint = true;
         self
     }
+
+    /// Retry up to the specified number of times upon encountering underlying TCP errors.
+    pub fn with_max_tcp_error_retries(mut self, retries: usize) -> Self {
+        self.config.max_tcp_error_retries = retries;
+        self
+    }
+
+    /// Don't accept HTTP bodies any larger than `max_size` bytes.
+    pub fn with_max_response_body_size(mut self, max_size: usize) -> Self {
+        self.config.max_response_body_size = Some(max_size);
+        self
+    }
 }

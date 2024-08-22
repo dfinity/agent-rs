@@ -1891,10 +1891,10 @@ impl<'agent> IntoFuture for UpdateBuilder<'agent> {
     }
 }
 
-#[cfg(all(test, feature = "reqwest", not(target_family = "wasm")))]
+#[cfg(all(test, not(target_family = "wasm")))]
 mod offline_tests {
     use super::*;
-    use futures_util::future::pending;
+    use tokio::net::TcpListener;
     // Any tests that involve the network should go in agent_test, not here.
 
     #[test]
@@ -1921,36 +1921,25 @@ mod offline_tests {
 
     #[tokio::test]
     async fn client_ratelimit() {
-        struct SlowTransport(Arc<Mutex<usize>>);
-        impl Transport for SlowTransport {
-            fn call(
-                &self,
-                _effective_canister_id: Principal,
-                _envelope: Vec<u8>,
-            ) -> AgentFuture<TransportCallResponse> {
-                *self.0.lock().unwrap() += 1;
-                Box::pin(pending())
-            }
-            fn query(&self, _: Principal, _: Vec<u8>) -> AgentFuture<Vec<u8>> {
-                *self.0.lock().unwrap() += 1;
-                Box::pin(pending())
-            }
-            fn read_state(&self, _: Principal, _: Vec<u8>) -> AgentFuture<Vec<u8>> {
-                *self.0.lock().unwrap() += 1;
-                Box::pin(pending())
-            }
-            fn read_subnet_state(&self, _: Principal, _: Vec<u8>) -> AgentFuture<Vec<u8>> {
-                *self.0.lock().unwrap() += 1;
-                Box::pin(pending())
-            }
-            fn status(&self) -> AgentFuture<Vec<u8>> {
-                *self.0.lock().unwrap() += 1;
-                Box::pin(pending())
-            }
-        }
+        let mock_server = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let count = Arc::new(Mutex::new(0));
+        let port = mock_server.local_addr().unwrap().port();
+        tokio::spawn({
+            let count = count.clone();
+            async move {
+                loop {
+                    let (mut conn, _) = mock_server.accept().await.unwrap();
+                    *count.lock().unwrap() += 1;
+                    tokio::spawn(
+                        // read all data, never reply
+                        async move { tokio::io::copy(&mut conn, &mut tokio::io::sink()).await },
+                    );
+                }
+            }
+        });
         let agent = Agent::builder()
-            .with_transport(SlowTransport(count.clone()))
+            .with_http_client(Client::builder().http1_only().build().unwrap())
+            .with_url(format!("http://127.0.0.1:{port}"))
             .with_max_concurrent_requests(2)
             .build()
             .unwrap();

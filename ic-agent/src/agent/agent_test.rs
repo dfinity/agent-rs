@@ -1,94 +1,37 @@
 // Disable these tests without the reqwest feature.
-#![cfg(feature = "reqwest")]
 
 use self::mock::{
     assert_mock, assert_single_mock, assert_single_mock_count, mock, mock_additional,
 };
-use crate::{
-    agent::{http_transport::ReqwestTransport, Status},
-    export::Principal,
-    Agent, AgentError, Certificate,
-};
+use crate::{agent::Status, export::Principal, Agent, AgentError, Certificate};
 use candid::{Encode, Nat};
 use futures_util::FutureExt;
 use ic_certification::{Delegation, Label};
 use ic_transport_types::{
     NodeSignature, QueryResponse, RejectCode, RejectResponse, ReplyResponse, TransportCallResponse,
 };
-use reqwest::Client;
 use std::{collections::BTreeMap, str::FromStr, sync::Arc, time::Duration};
 #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
 use wasm_bindgen_test::wasm_bindgen_test;
 
-use crate::agent::http_transport::route_provider::{RoundRobinRouteProvider, RouteProvider};
+use crate::agent::route_provider::{RoundRobinRouteProvider, RouteProvider};
 #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
-fn make_transport(url: &str) -> ReqwestTransport {
-    let transport = ReqwestTransport::create(url).unwrap();
-    #[cfg(feature = "experimental_sync_call")]
-    {
-        transport.with_use_call_v3_endpoint()
-    }
-    #[cfg(not(feature = "experimental_sync_call"))]
-    {
-        transport
-    }
-}
-
 fn make_agent(url: &str) -> Agent {
-    Agent::builder()
-        .with_transport(make_transport(url))
-        .with_verify_query_signatures(false)
-        .build()
-        .unwrap()
+    let builder = Agent::builder().with_url(url);
+    #[cfg(feature = "experimental_sync_call")]
+    let builder = builder.with_call_v3_endpoint();
+    builder.with_verify_query_signatures(false).build().unwrap()
 }
 
 fn make_agent_with_route_provider(
     route_provider: Arc<dyn RouteProvider>,
     tcp_retries: usize,
 ) -> Agent {
-    let client = Client::builder()
-        .build()
-        .expect("Could not create HTTP client.");
     Agent::builder()
-        .with_transport(
-            ReqwestTransport::create_with_client_route(route_provider, client)
-                .unwrap()
-                .with_max_tcp_errors_retries(tcp_retries),
-        )
-        .with_verify_query_signatures(false)
-        .build()
-        .unwrap()
-}
-
-#[cfg(feature = "hyper")]
-fn make_agent_with_hyper_transport_route_provider(
-    route_provider: Arc<dyn RouteProvider>,
-    tcp_retries: usize,
-) -> Agent {
-    use super::http_transport::HyperTransport;
-    use http_body_util::Full;
-    use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-    use hyper_util::{
-        client::legacy::{connect::HttpConnector, Client as LegacyClient},
-        rt::TokioExecutor,
-    };
-    use std::collections::VecDeque;
-
-    let connector = HttpsConnectorBuilder::new()
-        .with_webpki_roots()
-        .https_or_http()
-        .enable_http1()
-        .enable_http2()
-        .build();
-    let client: LegacyClient<HttpsConnector<HttpConnector>, Full<VecDeque<u8>>> =
-        LegacyClient::builder(TokioExecutor::new()).build(connector);
-    let transport = HyperTransport::create_with_service_route(route_provider, client)
-        .unwrap()
-        .with_max_tcp_errors_retries(tcp_retries);
-    Agent::builder()
-        .with_transport(transport)
+        .with_arc_route_provider(route_provider)
+        .with_max_tcp_error_retries(tcp_retries)
         .with_verify_query_signatures(false)
         .build()
         .unwrap()
@@ -96,7 +39,7 @@ fn make_agent_with_hyper_transport_route_provider(
 
 fn make_untimed_agent(url: &str) -> Agent {
     Agent::builder()
-        .with_transport(ReqwestTransport::create(url).unwrap())
+        .with_url(url)
         .with_verify_query_signatures(false)
         .with_ingress_expiry(Some(Duration::from_secs(u32::MAX as _)))
         .build()
@@ -105,7 +48,7 @@ fn make_untimed_agent(url: &str) -> Agent {
 
 fn make_certifying_agent(url: &str) -> Agent {
     Agent::builder()
-        .with_transport(ReqwestTransport::create(url).unwrap())
+        .with_url(url)
         .with_ingress_expiry(Some(Duration::from_secs(u32::MAX as _)))
         .build()
         .unwrap()
@@ -418,41 +361,6 @@ async fn reqwest_client_status_okay_when_request_retried() -> Result<(), AgentEr
     let tcp_retries = 1;
     let route_provider = RoundRobinRouteProvider::new(vec![non_working_url, &url]).unwrap();
     let agent = make_agent_with_route_provider(Arc::new(route_provider), tcp_retries);
-    let result = agent.status().await;
-
-    assert_mock(read_mock).await;
-
-    assert!(result.is_ok());
-    Ok(())
-}
-
-#[cfg_attr(not(target_family = "wasm"), tokio::test)]
-#[cfg(feature = "hyper")]
-async fn hyper_client_status_okay_when_request_retried() -> Result<(), AgentError> {
-    let map = BTreeMap::new();
-    let response = serde_cbor::Value::Map(map);
-    let (read_mock, url) = mock(
-        "GET",
-        "/api/v2/status",
-        200,
-        serde_cbor::to_vec(&response)?,
-        Some("application/cbor"),
-    )
-    .await;
-    // Without retry request should fail.
-    let non_working_url = "http://127.0.0.1:4444";
-    let tcp_retries = 0;
-    let route_provider = RoundRobinRouteProvider::new(vec![non_working_url, &url]).unwrap();
-    let agent =
-        make_agent_with_hyper_transport_route_provider(Arc::new(route_provider), tcp_retries);
-    let result = agent.status().await;
-    assert!(result.is_err());
-
-    // With retry request should succeed.
-    let tcp_retries = 1;
-    let route_provider = RoundRobinRouteProvider::new(vec![non_working_url, &url]).unwrap();
-    let agent =
-        make_agent_with_hyper_transport_route_provider(Arc::new(route_provider), tcp_retries);
     let result = agent.status().await;
 
     assert_mock(read_mock).await;
