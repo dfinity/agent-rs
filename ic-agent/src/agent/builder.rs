@@ -60,8 +60,7 @@ impl AgentBuilder {
         self.with_arc_identity(Arc::from(identity))
     }
 
-    /// Same as [`Self::with_identity`], but provides a `Arc` boxed implementation instead
-    /// of a direct type.
+    /// Same as [`Self::with_identity`], but reuses an existing `Arc`
     pub fn with_arc_identity(mut self, identity: Arc<dyn Identity>) -> Self {
         self.config.identity = identity;
         self

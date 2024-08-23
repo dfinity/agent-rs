@@ -219,7 +219,7 @@ impl Agent {
     /// Set the identity provider for signing messages.
     ///
     /// NOTE: if you change the identity while having update calls in
-    /// flight, you will not be able to [Agent::poll] the status of these
+    /// flight, you will not be able to [`Agent::request_status_raw`] the status of these
     /// messages.
     pub fn set_identity<I>(&mut self, identity: I)
     where
@@ -230,7 +230,7 @@ impl Agent {
     /// Set the arc identity provider for signing messages.
     ///
     /// NOTE: if you change the identity while having update calls in
-    /// flight, you will not be able to [Agent::poll] the status of these
+    /// flight, you will not be able to [`Agent::request_status_raw`] the status of these
     /// messages.
     pub fn set_arc_identity(&mut self, identity: Arc<dyn Identity>) {
         self.identity = identity;
@@ -1165,12 +1165,12 @@ impl Agent {
                             // Network-related errors can be retried.
                             if err.is_connect() {
                                 if retry_count >= self.max_tcp_error_retries {
-                                    return Err(AgentError::TransportError(Box::new(err)));
+                                    return Err(AgentError::TransportError(err));
                                 }
                                 retry_count += 1;
                                 continue;
                             }
-                            return Err(AgentError::TransportError(Box::new(err)));
+                            return Err(AgentError::TransportError(err));
                         }
                     }
                 }
@@ -1195,7 +1195,7 @@ impl Agent {
         let mut stream = response.bytes_stream();
 
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|x| AgentError::TransportError(Box::new(x)))?;
+            let chunk = chunk?;
 
             // Size Check (Body Size)
             if matches!(self

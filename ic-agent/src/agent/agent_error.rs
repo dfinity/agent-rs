@@ -181,7 +181,7 @@ pub enum AgentError {
 
     /// An unknown error occurred during communication with the replica.
     #[error("An error happened during communication with the replica: {0}")]
-    TransportError(Box<dyn std::error::Error + Send + Sync>),
+    TransportError(#[from] reqwest::Error),
 
     /// There was a mismatch between the expected and actual CBOR data during inspection.
     #[error("There is a mismatch between the CBOR encoded call and the arguments: field {field}, value in argument is {value_arg}, value in CBOR is {value_cbor}")]

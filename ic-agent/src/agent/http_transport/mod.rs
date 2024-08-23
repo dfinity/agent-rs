@@ -1,4 +1,4 @@
-//! This module has been removed in favor of builder methods on `AgentBuilder`.
+//! This module has been deprecated in favor of builder methods on `AgentBuilder`.
 
 #[deprecated(since = "0.38.0", note = "use the AgentBuilder methods")]
 #[doc(hidden)]

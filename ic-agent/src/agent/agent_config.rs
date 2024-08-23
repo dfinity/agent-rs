@@ -16,7 +16,7 @@ pub struct AgentConfig {
     pub identity: Arc<dyn Identity>,
     /// See [`with_ingress_expiry`](super::AgentBuilder::with_ingress_expiry).
     pub ingress_expiry: Option<Duration>,
-    /// See [`with_client`](super::AgentBuilder::with_client).
+    /// See [`with_http_client`](super::AgentBuilder::with_http_client).
     pub client: Option<Client>,
     /// See [`with_route_provider`](super::AgentBuilder::with_route_provider).
     pub route_provider: Option<Arc<dyn RouteProvider>>,

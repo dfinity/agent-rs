@@ -1,5 +1,3 @@
-// Disable these tests without the reqwest feature.
-
 use self::mock::{
     assert_mock, assert_single_mock, assert_single_mock_count, mock, mock_additional,
 };

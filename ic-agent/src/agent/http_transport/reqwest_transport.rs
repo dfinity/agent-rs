@@ -1,4 +1,4 @@
-//! A [`Transport`] that connects using a [`reqwest`] client.
+//! This module has been deprecated in favor of builder methods on `AgentBuilder`.
 #![allow(deprecated)]
 pub use reqwest;
 use std::{sync::Arc, time::Duration};
@@ -45,20 +45,20 @@ impl ReqwestTransport {
         }
     }
 
-    /// Equivalent to [`AgentBuilder::with_url`] and [`AgentBuilder::with_client`].
+    /// Equivalent to [`AgentBuilder::with_url`] and [`AgentBuilder::with_http_client`].
     #[deprecated(
         since = "0.38.0",
-        note = "Use AgentBuilder::with_url and AgentBuilder::with_client"
+        note = "Use AgentBuilder::with_url and AgentBuilder::with_http_client"
     )]
     pub fn create_with_client<U: Into<String>>(url: U, client: Client) -> Result<Self, AgentError> {
         let route_provider = Arc::new(RoundRobinRouteProvider::new(vec![url.into()])?);
         Self::create_with_client_route(route_provider, client)
     }
 
-    /// Equivalent to [`AgentBuilder::with_client`] and [`AgentBuilder::with_route_provider`].
+    /// Equivalent to [`AgentBuilder::with_http_client`] and [`AgentBuilder::with_route_provider`].
     #[deprecated(
         since = "0.38.0",
-        note = "Use AgentBuilder::with_client and AgentBuilder::with_arc_route_provider"
+        note = "Use AgentBuilder::with_http_client and AgentBuilder::with_arc_route_provider"
     )]
     pub fn create_with_client_route(
         route_provider: Arc<dyn RouteProvider>,
