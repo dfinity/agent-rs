@@ -1144,10 +1144,7 @@ impl Agent {
             #[cfg(target_family = "wasm")]
             {
                 let http_request = create_request_with_generated_url()?;
-                match self.client.execute(http_request).await {
-                    Ok(response) => response,
-                    Err(err) => return Err(AgentError::TransportError(Box::new(err))),
-                }
+                self.client.execute(http_request).await?
             }
             #[cfg(not(target_family = "wasm"))]
             {

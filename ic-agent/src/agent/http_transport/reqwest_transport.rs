@@ -1,7 +1,7 @@
 //! This module has been deprecated in favor of builder methods on `AgentBuilder`.
 #![allow(deprecated)]
 pub use reqwest;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use reqwest::Client;
 
@@ -34,7 +34,7 @@ impl ReqwestTransport {
                 url,
                 Client::builder()
                     .use_rustls_tls()
-                    .timeout(Duration::from_secs(360))
+                    .timeout(std::time::Duration::from_secs(360))
                     .build()
                     .expect("Could not create HTTP client."),
             )
