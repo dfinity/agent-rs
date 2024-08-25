@@ -170,10 +170,19 @@ where
 {
     fn route(&self) -> Result<Url, AgentError> {
         let snapshot = self.routing_snapshot.load();
-        let node = snapshot.next().ok_or_else(|| {
+        let node = snapshot.next_node().ok_or_else(|| {
             AgentError::RouteProviderError("No healthy API nodes found.".to_string())
         })?;
         Ok(node.to_routing_url())
+    }
+
+    fn n_ordered_routes(&self, n: usize) -> Result<Vec<Url>, AgentError> {
+        let snapshot = self.routing_snapshot.load();
+        let nodes = snapshot.next_n_nodes(n).ok_or_else(|| {
+            AgentError::RouteProviderError("No healthy API nodes found.".to_string())
+        })?;
+        let urls = nodes.iter().map(|n| n.to_routing_url()).collect();
+        Ok(urls)
     }
 }
 
