@@ -615,6 +615,8 @@ mod tests {
         node_1.score = 16.0;
         node_2.score = 8.0;
         node_3.score = 4.0;
+        // even though the score is high, this node should never be selected as it is unhealthy
+        node_4.score = 30.0;
 
         snapshot.nodes_with_metrics = vec![node_1, node_2, node_3, node_4];
 
