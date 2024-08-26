@@ -15,7 +15,7 @@
 pub mod call;
 /// A higher-level canister type for managing various aspects of a canister.
 pub mod canister;
-/// A few known canister types for use with [`Canister`](canister::Canister).
+/// A few known canister types for use with [`Canister`].
 pub mod interfaces;
 
 pub use canister::{Argument, Canister};

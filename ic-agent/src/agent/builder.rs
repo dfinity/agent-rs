@@ -1,8 +1,12 @@
+use url::Url;
+
 use crate::{
-    agent::{agent_config::AgentConfig, Agent, Transport},
+    agent::{agent_config::AgentConfig, Agent},
     AgentError, Identity, NonceFactory, NonceGenerator,
 };
 use std::sync::Arc;
+
+use super::route_provider::RouteProvider;
 
 /// A builder for an [`Agent`].
 #[derive(Default)]
@@ -17,23 +21,8 @@ impl AgentBuilder {
     }
 
     /// Set the URL of the [Agent].
-    #[cfg(feature = "reqwest")]
     pub fn with_url<S: Into<String>>(self, url: S) -> Self {
-        use crate::agent::http_transport::ReqwestTransport;
-
-        self.with_transport(ReqwestTransport::create(url).unwrap())
-    }
-
-    /// Set a Replica transport to talk to serve as the replica interface.
-    pub fn with_transport<T: 'static + Transport>(self, transport: T) -> Self {
-        self.with_arc_transport(Arc::new(transport))
-    }
-
-    /// Same as [Self::with_transport], but provides a `Arc` boxed implementation instead
-    /// of a direct type.
-    pub fn with_arc_transport(mut self, transport: Arc<dyn Transport>) -> Self {
-        self.config.transport = Some(transport);
-        self
+        self.with_route_provider(url.into().parse::<Url>().unwrap())
     }
 
     /// Add a NonceFactory to this Agent. By default, no nonce is produced.
@@ -41,7 +30,7 @@ impl AgentBuilder {
         self.with_nonce_generator(nonce_factory)
     }
 
-    /// Same as [Self::with_nonce_factory], but for any `NonceGenerator` type
+    /// Same as [`Self::with_nonce_factory`], but for any `NonceGenerator` type
     pub fn with_nonce_generator<N: 'static + NonceGenerator>(
         self,
         nonce_factory: N,
@@ -49,8 +38,7 @@ impl AgentBuilder {
         self.with_arc_nonce_generator(Arc::new(nonce_factory))
     }
 
-    /// Same as [Self::with_nonce_generator], but provides a `Arc` boxed implementation instead
-    /// of a direct type.
+    /// Same as [`Self::with_nonce_generator`], but reuses an existing `Arc`.
     pub fn with_arc_nonce_generator(
         mut self,
         nonce_factory: Arc<dyn NonceGenerator>,
@@ -67,14 +55,12 @@ impl AgentBuilder {
         self.with_arc_identity(Arc::new(identity))
     }
 
-    /// Same as [Self::with_identity], but provides a boxed implementation instead
-    /// of a direct type.
+    /// Same as [`Self::with_identity`], but reuses an existing box
     pub fn with_boxed_identity(self, identity: Box<dyn Identity>) -> Self {
         self.with_arc_identity(Arc::from(identity))
     }
 
-    /// Same as [Self::with_identity], but provides a `Arc` boxed implementation instead
-    /// of a direct type.
+    /// Same as [`Self::with_identity`], but reuses an existing `Arc`
     pub fn with_arc_identity(mut self, identity: Arc<dyn Identity>) -> Self {
         self.config.identity = identity;
         self
@@ -104,6 +90,48 @@ impl AgentBuilder {
     /// to avoid the slowdown of retrying any 429 errors.
     pub fn with_max_concurrent_requests(mut self, max_concurrent_requests: usize) -> Self {
         self.config.max_concurrent_requests = max_concurrent_requests;
+        self
+    }
+
+    /// Add a `RouteProvider` to this agent, to provide the URLs of boundary nodes.
+    pub fn with_route_provider(self, provider: impl RouteProvider + 'static) -> Self {
+        self.with_arc_route_provider(Arc::new(provider))
+    }
+
+    /// Same as [`Self::with_route_provider`], but reuses an existing `Arc`.
+    pub fn with_arc_route_provider(mut self, provider: Arc<dyn RouteProvider>) -> Self {
+        self.config.route_provider = Some(provider);
+        self
+    }
+
+    /// Provide a pre-configured HTTP client to use. Use this to set e.g. HTTP timeouts or proxy configuration.
+    pub fn with_http_client(mut self, client: reqwest::Client) -> Self {
+        self.config.client = Some(client);
+        self
+    }
+
+    /// Use call v3 endpoint for synchronous update calls.
+    /// __This is an experimental feature, and should not be used in production,
+    /// as the endpoint is not available yet on the mainnet IC.__
+    ///
+    /// By enabling this feature, the agent will use the `v3` endpoint for update calls,
+    /// which is synchronous. This means the replica will wait for a certificate for the call,
+    /// meaning the agent will not need to poll for the certificate.
+    #[cfg(feature = "experimental_sync_call")]
+    pub fn with_call_v3_endpoint(mut self) -> Self {
+        self.config.use_call_v3_endpoint = true;
+        self
+    }
+
+    /// Retry up to the specified number of times upon encountering underlying TCP errors.
+    pub fn with_max_tcp_error_retries(mut self, retries: usize) -> Self {
+        self.config.max_tcp_error_retries = retries;
+        self
+    }
+
+    /// Don't accept HTTP bodies any larger than `max_size` bytes.
+    pub fn with_max_response_body_size(mut self, max_size: usize) -> Self {
+        self.config.max_response_body_size = Some(max_size);
         self
     }
 }

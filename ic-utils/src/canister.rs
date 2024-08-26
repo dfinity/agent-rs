@@ -389,7 +389,6 @@ mod tests {
     use super::super::interfaces::ManagementCanister;
     use crate::call::AsyncCall;
     use candid::Principal;
-    use ic_agent::agent::http_transport::ReqwestTransport;
     use ic_agent::identity::BasicIdentity;
 
     fn get_effective_canister_id() -> Principal {
@@ -413,7 +412,7 @@ mod tests {
         let port = std::env::var("IC_REF_PORT").unwrap_or_else(|_| "4943".into());
 
         let agent = ic_agent::Agent::builder()
-            .with_transport(ReqwestTransport::create(format!("http://localhost:{port}")).unwrap())
+            .with_url(format!("http://localhost:{port}"))
             .with_identity(identity)
             .build()
             .unwrap();

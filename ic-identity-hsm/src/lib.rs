@@ -5,7 +5,7 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use ic_agent::agent::{Agent, http_transport::ReqwestTransport};
+//! use ic_agent::agent::Agent;
 //! use ic_identity_hsm::HardwareIdentity;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! # let replica_url = "";
@@ -13,7 +13,7 @@
 //! # let slot_index = 0;
 //! # let key_id = "";
 //! let agent = Agent::builder()
-//!     .with_transport(ReqwestTransport::create(replica_url)?)
+//!     .with_url(replica_url)
 //!     .with_identity(HardwareIdentity::new(lib_path, slot_index, key_id, || Ok("hunter2".to_string()))?)
 //!     .build();
 //! # Ok(())
