@@ -571,7 +571,7 @@ mod tests {
         let score_a = (2.0 * 0.0 + 1.0 * 1.0) / weights_sum;
         assert_eq!(score, score_l * score_a);
 
-        // Test arrays with arrays of different sizes.
+        // Test with arrays of different sizes.
         let weights: &[f64] = &[3.0, 2.0, 1.0];
         let weights_sum: f64 = weights.iter().sum();
         let availabilities = vec![true, false, true].into();
