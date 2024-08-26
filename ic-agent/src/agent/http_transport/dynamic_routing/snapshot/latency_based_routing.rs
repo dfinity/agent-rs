@@ -47,8 +47,8 @@ impl NodeWithMetrics {
             node,
             window_size,
             is_healthy: false,
-            latencies: VecDeque::with_capacity(window_size),
-            availabilities: VecDeque::with_capacity(window_size),
+            latencies: VecDeque::with_capacity(window_size + 1),
+            availabilities: VecDeque::with_capacity(window_size + 1),
             score: 0.0,
         }
     }
