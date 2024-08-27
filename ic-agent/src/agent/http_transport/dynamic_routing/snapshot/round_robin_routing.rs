@@ -45,16 +45,16 @@ impl RoutingSnapshot for RoundRobinRoutingSnapshot {
             .cloned()
     }
 
-    fn next_n_nodes(&self, n: usize) -> Option<Vec<Node>> {
+    fn next_n_nodes(&self, n: usize) -> Vec<Node> {
         if n == 0 {
-            return Some(Vec::new());
+            return Vec::new();
         }
 
         let healthy_nodes = Vec::from_iter(self.healthy_nodes.clone());
         let healthy_count = healthy_nodes.len();
 
         if n >= healthy_count {
-            return Some(healthy_nodes.clone());
+            return healthy_nodes.clone();
         }
 
         let idx = self.current_idx.fetch_add(n, Ordering::Relaxed) % healthy_count;
@@ -67,7 +67,7 @@ impl RoutingSnapshot for RoundRobinRoutingSnapshot {
             nodes.extend_from_slice(&healthy_nodes[..n - nodes.len()]);
         }
 
-        Some(nodes)
+        nodes
     }
 
     fn sync_nodes(&mut self, nodes: &[Node]) -> bool {
@@ -296,13 +296,13 @@ mod tests {
         ];
         snapshot.healthy_nodes.extend(nodes.clone());
         // First call
-        let mut n_nodes: Vec<_> = snapshot.next_n_nodes(3).expect("failed to get nodes");
+        let mut n_nodes: Vec<_> = snapshot.next_n_nodes(3);
         // Second call
-        n_nodes.extend(snapshot.next_n_nodes(3).expect("failed to get nodes"));
+        n_nodes.extend(snapshot.next_n_nodes(3));
         // Third call
-        n_nodes.extend(snapshot.next_n_nodes(4).expect("failed to get nodes"));
+        n_nodes.extend(snapshot.next_n_nodes(4));
         // Fourth call
-        n_nodes.extend(snapshot.next_n_nodes(5).expect("failed to get nodes"));
+        n_nodes.extend(snapshot.next_n_nodes(5));
         // Assert each node was returned 3 times
         let k = 3;
         let mut count_map = HashMap::new();

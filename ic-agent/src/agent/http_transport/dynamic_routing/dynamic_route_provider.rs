@@ -42,7 +42,7 @@ const MAINNET_ROOT_SUBNET_ID: &str =
 const FETCH_PERIOD: Duration = Duration::from_secs(5);
 const FETCH_RETRY_INTERVAL: Duration = Duration::from_millis(250);
 const TIMEOUT_AWAIT_HEALTHY_SEED: Duration = Duration::from_millis(1000);
-const HEALTH_CHECK_TIMEOUT: Duration = Duration::from_secs(2);
+const HEALTH_CHECK_TIMEOUT: Duration = Duration::from_secs(1);
 const HEALTH_CHECK_PERIOD: Duration = Duration::from_secs(1);
 
 const DYNAMIC_ROUTE_PROVIDER: &str = "DynamicRouteProvider";
@@ -178,9 +178,12 @@ where
 
     fn n_ordered_routes(&self, n: usize) -> Result<Vec<Url>, AgentError> {
         let snapshot = self.routing_snapshot.load();
-        let nodes = snapshot.next_n_nodes(n).ok_or_else(|| {
-            AgentError::RouteProviderError("No healthy API nodes found.".to_string())
-        })?;
+        let nodes = snapshot.next_n_nodes(n);
+        if nodes.is_empty() {
+            return Err(AgentError::RouteProviderError(
+                "No healthy API nodes found.".to_string(),
+            ));
+        };
         let urls = nodes.iter().map(|n| n.to_routing_url()).collect();
         Ok(urls)
     }
