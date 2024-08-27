@@ -1008,7 +1008,7 @@ mod extras {
     use ic_agent::{
         agent::{RejectCode, RejectResponse},
         export::Principal,
-        AgentError, Identity,
+        AgentError,
     };
     use ic_utils::{
         call::AsyncCall,
@@ -1017,7 +1017,7 @@ mod extras {
             ManagementCanister,
         },
     };
-    use ref_tests::{create_basic_identity, get_effective_canister_id, with_agent};
+    use ref_tests::{get_effective_canister_id, with_agent};
 
     #[ignore]
     #[test]
