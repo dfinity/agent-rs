@@ -9,9 +9,9 @@ use crate::agent::http_transport::dynamic_routing::{
     health_check::HealthCheckStatus, node::Node, snapshot::routing_snapshot::RoutingSnapshot,
 };
 
-// Determines the size of the sliding window used for store latencies and availabilities of the node.
+// Determines the size of the sliding window used for storing latencies and availabilities of nodes.
 const WINDOW_SIZE: usize = 15;
-// Determines the decay rate of the exponential decay function used for weights generation.
+// Determines the decay rate of the exponential decay function, which is used for generating weights over the sliding window.
 const LAMBDA_DECAY: f64 = 0.3;
 
 /// Generates exponentially decaying weights for the sliding window.
@@ -24,7 +24,8 @@ fn generate_exp_decaying_weights(n: usize, lambda: f64) -> Vec<f64> {
     weights
 }
 
-// Node with latencies and availability metrics used for generating routing URLs based on the node's score.
+// Node with meta information and metrics (latencies, availabilities).
+// Routing URLs a generated based on the score field.
 #[derive(Clone, Debug)]
 struct NodeWithMetrics {
     // Node information.
@@ -76,12 +77,12 @@ fn compute_score(
     window_weights: &[f64],
     window_weights_sum: f64,
     availabilities: &VecDeque<bool>,
-    latencies_secs: &VecDeque<f64>,
+    latencies: &VecDeque<f64>,
     use_availability_penalty: bool,
 ) -> f64 {
     let weights_size = window_weights.len();
     let availabilities_size = availabilities.len();
-    let latencies_size = latencies_secs.len();
+    let latencies_size = latencies.len();
 
     if weights_size < availabilities_size {
         panic!(
@@ -122,18 +123,18 @@ fn compute_score(
     };
 
     // Compute latency score (not normalized).
-    let score_l = if latencies_secs.is_empty() {
+    let score_l = if latencies.is_empty() {
         0.0
     } else {
         let mut score = 0.0;
 
         // Compute weighted score. Weights are applied in reverse order. Latency is inverted, so that smaller latencies have higher score.
-        for (idx, latency) in latencies_secs.iter().rev().enumerate() {
+        for (idx, latency) in latencies.iter().rev().enumerate() {
             score += window_weights[idx] / latency;
         }
 
         let weights_sum = if latencies_size < weights_size {
-            let partial_weights_sum: f64 = window_weights.iter().take(latencies_secs.len()).sum();
+            let partial_weights_sum: f64 = window_weights.iter().take(latencies.len()).sum();
             partial_weights_sum
         } else {
             // Use pre-calculated sum.
@@ -571,7 +572,7 @@ mod tests {
         let score_a = (2.0 * 0.0 + 1.0 * 1.0) / weights_sum;
         assert_eq!(score, score_l * score_a);
 
-        // Test with arrays of different sizes.
+        // Test arrays of different sizes.
         let weights: &[f64] = &[3.0, 2.0, 1.0];
         let weights_sum: f64 = weights.iter().sum();
         let availabilities = vec![true, false, true].into();
