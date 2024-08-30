@@ -96,6 +96,7 @@ serde_json.workspace = true
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
 mockito = "1.0.2"
+criterion = "0.5"
 
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 wasm-bindgen-test = "0.3.34"
@@ -132,8 +133,15 @@ wasm-bindgen = [
     "backoff/wasm-bindgen",
     "cached/wasm",
 ]
+bench = []
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 rustdoc-args = ["--cfg=docsrs"]
 features = ["hyper"]
+
+[[bench]]
+name = "perf_route_provider"
+path = "benches/perf_route_provider.rs"
+required-features = ["bench"]
+harness = false
