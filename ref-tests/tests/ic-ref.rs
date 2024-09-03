@@ -1380,20 +1380,6 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(result.0.settings.log_visibility, LogVisibility::Public);
 
-            // TODO: re-enable when supported.
-            // Update to AllowedViewers.
-            // let principals = vec![create_basic_identity()?.sender()?];
-            // ic00.update_settings(&canister_id)
-            //     .with_log_visibility(LogVisibility::AllowedViewers(principals.clone()))
-            //     .call_and_wait()
-            //     .await?;
-
-            // let result = ic00.canister_status(&canister_id).call_and_wait().await?;
-            // assert_eq!(
-            //     result.0.settings.log_visibility,
-            //     LogVisibility::AllowedViewers(principals)
-            // );
-
             Ok(())
         })
     }
