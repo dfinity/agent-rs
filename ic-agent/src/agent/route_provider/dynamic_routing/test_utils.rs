@@ -6,7 +6,7 @@ use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use url::Url;
 
-use crate::agent::http_transport::{
+use crate::agent::route_provider::{
     dynamic_routing::{
         dynamic_route_provider::DynamicRouteProviderError,
         health_check::{HealthCheck, HealthCheckStatus},
@@ -14,7 +14,7 @@ use crate::agent::http_transport::{
         nodes_fetch::Fetch,
         type_aliases::AtomicSwap,
     },
-    route_provider::RouteProvider,
+    RouteProvider,
 };
 
 pub(super) fn route_n_times(n: usize, f: Arc<impl RouteProvider + ?Sized>) -> Vec<String> {

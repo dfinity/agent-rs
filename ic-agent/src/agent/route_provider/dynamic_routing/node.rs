@@ -1,7 +1,7 @@
 use url::Url;
 
 use crate::agent::{
-    http_transport::dynamic_routing::dynamic_route_provider::DynamicRouteProviderError,
+    route_provider::dynamic_routing::dynamic_route_provider::DynamicRouteProviderError,
     ApiBoundaryNode,
 };
 

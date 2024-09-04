@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::agent::http_transport::dynamic_routing::{health_check::HealthCheckStatus, node::Node};
+use crate::agent::route_provider::dynamic_routing::{health_check::HealthCheckStatus, node::Node};
 
 /// A trait for interacting with the snapshot of nodes (routing table).
 pub trait RoutingSnapshot: Send + Sync + Clone + Debug {

@@ -1,23 +1,20 @@
 use async_trait::async_trait;
 use candid::Principal;
+use futures_util::FutureExt;
 use reqwest::Client;
 use std::{fmt::Debug, sync::Arc, time::Duration};
-use tokio::time::{self, sleep};
-use tokio_util::sync::CancellationToken;
+use stop_token::StopToken;
 use tracing::{error, warn};
 use url::Url;
 
 use crate::agent::{
-    http_transport::{
-        dynamic_routing::{
-            dynamic_route_provider::DynamicRouteProviderError,
-            health_check::HEALTH_MANAGER_ACTOR,
-            messages::FetchedNodes,
-            node::Node,
-            snapshot::routing_snapshot::RoutingSnapshot,
-            type_aliases::{AtomicSwap, SenderWatch},
-        },
-        reqwest_transport::ReqwestTransport,
+    route_provider::dynamic_routing::{
+        dynamic_route_provider::DynamicRouteProviderError,
+        health_check::HEALTH_MANAGER_ACTOR,
+        messages::FetchedNodes,
+        node::Node,
+        snapshot::routing_snapshot::RoutingSnapshot,
+        type_aliases::{AtomicSwap, SenderWatch},
     },
     Agent,
 };
@@ -55,14 +52,9 @@ impl NodesFetcher {
 #[async_trait]
 impl Fetch for NodesFetcher {
     async fn fetch(&self, url: Url) -> Result<Vec<Node>, DynamicRouteProviderError> {
-        let transport = ReqwestTransport::create_with_client(url, self.http_client.clone())
-            .map_err(|err| {
-                DynamicRouteProviderError::NodesFetchError(format!(
-                    "Failed to build transport: {err}"
-                ))
-            })?;
         let agent = Agent::builder()
-            .with_transport(transport)
+            .with_http_client(self.http_client.clone())
+            .with_url(url)
             .build()
             .map_err(|err| {
                 DynamicRouteProviderError::NodesFetchError(format!(
@@ -102,7 +94,7 @@ pub(super) struct NodesFetchActor<S> {
     /// The snapshot of the routing table.
     routing_snapshot: AtomicSwap<S>,
     /// The token to cancel/stop the actor.
-    token: CancellationToken,
+    token: StopToken,
 }
 
 impl<S> NodesFetchActor<S>
@@ -116,7 +108,7 @@ where
         retry_interval: Duration,
         fetch_sender: SenderWatch<FetchedNodes>,
         snapshot: AtomicSwap<S>,
-        token: CancellationToken,
+        token: StopToken,
     ) -> Self {
         Self {
             fetcher,
@@ -130,10 +122,9 @@ where
 
     /// Runs the actor.
     pub async fn run(self) {
-        let mut interval = time::interval(self.period);
         loop {
-            tokio::select! {
-                _ = interval.tick() => {
+            futures_util::select! {
+                _ = crate::util::sleep(self.period).fuse() => {
                         // Retry until success:
                         // - try to get a healthy node from the routing snapshot
                         //   - if snapshot is empty, break the cycle and wait for the next fetch cycle
@@ -146,8 +137,7 @@ where
                             if let Some(node) = snapshot.next_node() {
                                 match self.fetcher.fetch((&node).into()).await {
                                     Ok(nodes) => {
-                                        let msg = Some(
-                                            FetchedNodes {nodes});
+                                        let msg = Some(FetchedNodes {nodes});
                                         match self.fetch_sender.send(msg) {
                                             Ok(()) => break, // message sent successfully, exist the loop
                                             Err(err) => {
@@ -165,10 +155,10 @@ where
                                 break;
                             };
                             warn!("Retrying to fetch the nodes in {:?}", self.fetch_retry_interval);
-                            sleep(self.fetch_retry_interval).await;
+                            crate::util::sleep(self.fetch_retry_interval).await;
                         }
                 }
-                _ = self.token.cancelled() => {
+                _ = self.token.clone().fuse() => {
                     warn!("{NODES_FETCH_ACTOR}: was gracefully cancelled");
                     break;
                 }

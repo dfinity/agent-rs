@@ -6,7 +6,7 @@ use std::{
     },
 };
 
-use crate::agent::http_transport::dynamic_routing::{
+use crate::agent::route_provider::dynamic_routing::{
     health_check::HealthCheckStatus, node::Node, snapshot::routing_snapshot::RoutingSnapshot,
 };
 
@@ -114,7 +114,7 @@ mod tests {
     use std::time::Duration;
     use std::{collections::HashSet, sync::atomic::Ordering};
 
-    use crate::agent::http_transport::dynamic_routing::{
+    use crate::agent::route_provider::dynamic_routing::{
         health_check::HealthCheckStatus,
         node::Node,
         snapshot::{
