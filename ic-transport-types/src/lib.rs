@@ -138,13 +138,57 @@ pub enum TransportCallResponse {
 }
 
 /// The response from a request to the `call` endpoint.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum CallResponse<Out> {
     /// The call completed, and the response is available.
     Response(Out),
     /// The replica timed out the update call, and the request id should be used to poll for the response
     /// using the `Agent::wait` method.
     Poll(RequestId),
+}
+
+impl<Out> CallResponse<Out> {
+    /// Maps the inner value, if this is `Response`.
+    #[inline]
+    pub fn map<Out2>(self, f: impl FnOnce(Out) -> Out2) -> CallResponse<Out2> {
+        match self {
+            Self::Poll(p) => CallResponse::Poll(p),
+            Self::Response(r) => CallResponse::Response(f(r)),
+        }
+    }
+}
+
+impl<T, E> CallResponse<Result<T, E>> {
+    /// Extracts an inner `Result`, if this is `Response`.
+    #[inline]
+    pub fn transpose(self) -> Result<CallResponse<T>, E> {
+        match self {
+            Self::Poll(p) => Ok(CallResponse::Poll(p)),
+            Self::Response(r) => r.map(CallResponse::Response),
+        }
+    }
+}
+
+impl<T> CallResponse<Option<T>> {
+    /// Extracts an inner `Option`, if this is `Response`.
+    #[inline]
+    pub fn transpose(self) -> Option<CallResponse<T>> {
+        match self {
+            Self::Poll(p) => Some(CallResponse::Poll(p)),
+            Self::Response(r) => r.map(CallResponse::Response),
+        }
+    }
+}
+
+impl<T> CallResponse<(T,)> {
+    /// Extracts the inner value of a 1-tuple, if this is `Response`.`
+    #[inline]
+    pub fn detuple(self) -> CallResponse<T> {
+        match self {
+            Self::Poll(p) => CallResponse::Poll(p),
+            Self::Response(r) => CallResponse::Response(r.0),
+        }
+    }
 }
 
 /// Possible responses to a query call.

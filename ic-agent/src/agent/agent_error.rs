@@ -175,17 +175,13 @@ pub enum AgentError {
     #[error("The wallet canister must be upgraded: {0}")]
     WalletUpgradeRequired(String),
 
-    /// The transport was not specified in the [`AgentBuilder`](super::AgentBuilder).
-    #[error("Missing replica transport in the Agent Builder.")]
-    MissingReplicaTransport(),
-
     /// The response size exceeded the provided limit.
     #[error("Response size exceeded limit.")]
     ResponseSizeExceededLimit(),
 
     /// An unknown error occurred during communication with the replica.
     #[error("An error happened during communication with the replica: {0}")]
-    TransportError(Box<dyn std::error::Error + Send + Sync>),
+    TransportError(#[from] reqwest::Error),
 
     /// There was a mismatch between the expected and actual CBOR data during inspection.
     #[error("There is a mismatch between the CBOR encoded call and the arguments: field {field}, value in argument is {value_arg}, value in CBOR is {value_cbor}")]

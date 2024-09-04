@@ -108,10 +108,6 @@
 )]
 #![cfg_attr(not(target_family = "wasm"), warn(clippy::future_not_send))]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
-
-#[cfg(all(feature = "hyper", target_family = "wasm"))]
-compile_error!("Feature `hyper` cannot be used from WASM.");
-
 pub mod agent;
 pub mod export;
 pub mod identity;
