@@ -1017,8 +1017,7 @@ mod extras {
             ManagementCanister,
         },
     };
-    use ref_tests::get_effective_canister_id;
-    use ref_tests::with_agent;
+    use ref_tests::{get_effective_canister_id, with_agent};
 
     #[ignore]
     #[test]
@@ -1350,6 +1349,7 @@ mod extras {
         with_agent(|agent| async move {
             let ic00 = ManagementCanister::create(&agent);
 
+            // Create with Controllers.
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
@@ -1361,6 +1361,7 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(result.0.settings.log_visibility, LogVisibility::Controllers);
 
+            // Update to Public.
             ic00.update_settings(&canister_id)
                 .with_log_visibility(LogVisibility::Public)
                 .call_and_wait()
@@ -1369,6 +1370,7 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(result.0.settings.log_visibility, LogVisibility::Public);
 
+            // Update with no change.
             let no_change: Option<LogVisibility> = None;
             ic00.update_settings(&canister_id)
                 .with_optional_log_visibility(no_change)

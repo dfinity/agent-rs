@@ -149,7 +149,7 @@ pub struct QueryStats {
 }
 
 /// Log visibility for a canister.
-#[derive(Default, Clone, Copy, CandidType, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Default, Clone, CandidType, Deserialize, Debug, PartialEq, Eq)]
 pub enum LogVisibility {
     #[default]
     #[serde(rename = "controllers")]
@@ -158,6 +158,9 @@ pub enum LogVisibility {
     #[serde(rename = "public")]
     /// Canister logs are visible to everyone.
     Public,
+    #[serde(rename = "allowed_viewers")]
+    /// Canister logs are visible to a set of principals.
+    AllowedViewers(Vec<Principal>),
 }
 
 /// The concrete settings of a canister.
