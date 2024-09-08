@@ -58,6 +58,23 @@ impl Secp256k1Identity {
         Err(pem::PemError::MissingData.into())
     }
 
+    #[cfg(feature = "pem")]
+    pub fn from_pem_wo_parameter<R: io::Read>(pem_reader: R) -> Result<Self, PemError> {
+        use sec1::{pem::PemLabel, EcPrivateKey};
+
+        let contents = pem_reader.bytes().collect::<Result<Vec<u8>, io::Error>>()?;
+
+        for pem in pem::parse_many(contents)? {
+            if pem.tag() != EcPrivateKey::PEM_LABEL {
+                continue;
+            }
+            let private_key =
+                SecretKey::from_sec1_der(pem.contents()).map_err(|_| pkcs8::Error::KeyMalformed)?;
+            return Ok(Self::from_private_key(private_key));
+        }
+        Err(pem::PemError::MissingData.into())
+    }
+
     /// Creates an identity from a private key.
     pub fn from_private_key(private_key: SecretKey) -> Self {
         let public_key = private_key.public_key();
@@ -161,6 +178,15 @@ N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
 -----END EC PRIVATE KEY-----
 ";
 
+    // IDENTITY_FILE_WITHOUT_PARAMS is exported from the following command:
+    // > dfx identity export identity
+    const IDENTITY_FILE_WITHOUT_PARAMS: &str = "-----BEGIN EC PRIVATE KEY-----
+MHQCAQEEIAgy7nZEcVHkQ4Z1Kdqby8SwyAiyKDQmtbEHTIM+WNeBoAcGBSuBBAAK
+oUQDQgAEgO87rJ1ozzdMvJyZQ+GABDqUxGLvgnAnTlcInV3NuhuPv4O3VGzMGzeB
+N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
+-----END EC PRIVATE KEY-----
+";
+
     // DER_ENCODED_PUBLIC_KEY was generated from the the following commands:
     // > openssl ec -in identity.pem -pubout -outform DER -out public.der
     // > hexdump -ve '1/1 "%.2x"' public.der
@@ -182,6 +208,16 @@ N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
     fn test_secp256k1_public_key() {
         // Create a secp256k1 identity from a PEM file.
         let identity = Secp256k1Identity::from_pem(IDENTITY_FILE.as_bytes())
+            .expect("Cannot create secp256k1 identity from PEM file.");
+
+        // Assert the DER-encoded secp256k1 public key matches what we would expect.
+        assert!(DER_ENCODED_PUBLIC_KEY == hex::encode(identity.der_encoded_public_key));
+    }
+
+    #[test]
+    fn test_secp256k1_public_key_wo_params() {
+        // Create a secp256k1 identity from a PEM file.
+        let identity = Secp256k1Identity::from_pem_wo_parameter(IDENTITY_FILE_WITHOUT_PARAMS.as_bytes())
             .expect("Cannot create secp256k1 identity from PEM file.");
 
         // Assert the DER-encoded secp256k1 public key matches what we would expect.
