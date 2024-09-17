@@ -5,9 +5,10 @@ use crate::{
 use reqwest::Client;
 use std::{sync::Arc, time::Duration};
 
-use super::route_provider::RouteProvider;
+use super::{route_provider::RouteProvider, IC_ROOT_KEY};
 
 /// A configuration for an agent.
+#[derive(Clone)]
 #[non_exhaustive]
 pub struct AgentConfig {
     /// See [`with_nonce_factory`](super::AgentBuilder::with_nonce_factory).
@@ -31,6 +32,8 @@ pub struct AgentConfig {
     /// See [`with_call_v3_endpoint`](super::AgentBuilder::with_call_v3_endpoint).
     #[cfg(feature = "experimental_sync_call")]
     pub use_call_v3_endpoint: bool,
+    /// See [`with_preset_root_key`](super::AgentBuilder::with_preset_root_key).
+    pub root_key: Option<Vec<u8>>,
 }
 
 impl Default for AgentConfig {
@@ -47,6 +50,7 @@ impl Default for AgentConfig {
             max_tcp_error_retries: 0,
             #[cfg(feature = "experimental_sync_call")]
             use_call_v3_endpoint: false,
+            root_key: None,
         }
     }
 }

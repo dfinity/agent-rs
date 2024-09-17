@@ -17,16 +17,13 @@ use url::Url;
 use crate::{
     agent::route_provider::{
         dynamic_routing::{
-            health_check::{HealthCheck, HealthChecker, HealthManagerActor},
-            messages::FetchedNodes,
-            node::Node,
-            nodes_fetch::{Fetch, NodesFetchActor, NodesFetcher},
-            snapshot::routing_snapshot::RoutingSnapshot,
+            health_check::health_check_manager_actor, messages::FetchedNodes, node::Node,
+            nodes_fetch::nodes_fetch_actor, snapshot::routing_snapshot::RoutingSnapshot,
             type_aliases::AtomicSwap,
         },
         RouteProvider,
     },
-    AgentError,
+    Agent, AgentError,
 };
 
 ///
@@ -48,16 +45,14 @@ const DYNAMIC_ROUTE_PROVIDER: &str = "DynamicRouteProvider";
 /// It also spawns the `HealthManagerActor`, which orchestrates the health check tasks for each node and updates routing snapshot.
 #[derive(Debug)]
 pub struct DynamicRouteProvider<S> {
-    /// Fetcher for fetching the latest nodes topology.
-    fetcher: Arc<dyn Fetch>,
     /// Periodicity of fetching the latest nodes topology.
     fetch_period: Duration,
     /// Interval for retrying fetching the nodes in case of error.
     fetch_retry_interval: Duration,
-    /// Health checker for checking the health of the nodes.
-    checker: Arc<dyn HealthCheck>,
     /// Periodicity of checking the health of the nodes.
     check_period: Duration,
+    /// Timeout for checking the health of the nodes.
+    check_timeout: Duration,
     /// Snapshot of the routing nodes.
     routing_snapshot: AtomicSwap<S>,
     /// Initial seed nodes, which are used for the initial fetching of the nodes.
@@ -82,11 +77,10 @@ pub enum DynamicRouteProviderError {
 
 /// A builder for the `DynamicRouteProvider`.
 pub struct DynamicRouteProviderBuilder<S> {
-    fetcher: Arc<dyn Fetch>,
     fetch_period: Duration,
     fetch_retry_interval: Duration,
-    checker: Arc<dyn HealthCheck>,
     check_period: Duration,
+    check_timeout: Duration,
     routing_snapshot: AtomicSwap<S>,
     seeds: Vec<Node>,
 }
@@ -94,27 +88,14 @@ pub struct DynamicRouteProviderBuilder<S> {
 impl<S> DynamicRouteProviderBuilder<S> {
     /// Creates a new instance of the builder.
     pub fn new(snapshot: S, seeds: Vec<Node>, http_client: Client) -> Self {
-        let fetcher = Arc::new(NodesFetcher::new(
-            http_client.clone(),
-            Principal::from_text(MAINNET_ROOT_SUBNET_ID).unwrap(),
-            None,
-        ));
-        let checker = Arc::new(HealthChecker::new(http_client, HEALTH_CHECK_TIMEOUT));
         Self {
-            fetcher,
             fetch_period: FETCH_PERIOD,
             fetch_retry_interval: FETCH_RETRY_INTERVAL,
-            checker,
             check_period: HEALTH_CHECK_PERIOD,
+            check_timeout: HEALTH_CHECK_TIMEOUT,
             seeds,
             routing_snapshot: Arc::new(ArcSwap::from_pointee(snapshot)),
         }
-    }
-
-    /// Sets the fetcher of the nodes in the topology.
-    pub fn with_fetcher(mut self, fetcher: Arc<dyn Fetch>) -> Self {
-        self.fetcher = fetcher;
-        self
     }
 
     /// Sets the fetching periodicity.
@@ -123,9 +104,9 @@ impl<S> DynamicRouteProviderBuilder<S> {
         self
     }
 
-    /// Sets the node health checker.
-    pub fn with_checker(mut self, checker: Arc<dyn HealthCheck>) -> Self {
-        self.checker = checker;
+    /// Sets the timeout for node health checking.
+    pub fn with_check_timeout(mut self, timeout: Duration) -> Self {
+        self.check_timeout = timeout;
         self
     }
 
@@ -140,20 +121,15 @@ impl<S> DynamicRouteProviderBuilder<S> {
     where
         S: RoutingSnapshot + 'static,
     {
-        let route_provider = DynamicRouteProvider {
-            fetcher: self.fetcher,
+        DynamicRouteProvider {
             fetch_period: self.fetch_period,
             fetch_retry_interval: self.fetch_retry_interval,
-            checker: self.checker,
             check_period: self.check_period,
+            check_timeout: self.check_timeout,
             routing_snapshot: self.routing_snapshot,
             seeds: self.seeds,
             stop: StopSource::new(),
-        };
-
-        route_provider.run().await;
-
-        route_provider
+        }
     }
 }
 
@@ -180,12 +156,7 @@ where
         let urls = nodes.iter().map(|n| n.to_routing_url()).collect();
         Ok(urls)
     }
-}
 
-impl<S> DynamicRouteProvider<S>
-where
-    S: RoutingSnapshot + 'static,
-{
     /// Starts two background tasks:
     /// - Task1: NodesFetchActor
     ///   - Periodically fetches existing API nodes (gets latest nodes topology) and sends discovered nodes to HealthManagerActor.
@@ -193,7 +164,7 @@ where
     ///   - Listens to the fetched nodes messages from the NodesFetchActor.
     ///   - Starts/stops health check tasks (HealthCheckActors) based on the newly added/removed nodes.
     ///   - These spawned health check tasks periodically update the snapshot with the latest node health info.
-    pub async fn run(&self) {
+    fn notify_start(&self, agent: Agent) {
         info!("{DYNAMIC_ROUTE_PROVIDER}: started ...");
         // Communication channel between NodesFetchActor and HealthManagerActor.
         let (fetch_sender, fetch_receiver) = async_watch::channel(None);
@@ -202,47 +173,54 @@ where
         let (init_sender, init_receiver) = async_channel::bounded(1);
 
         // Start the receiving part first.
-        let health_manager_actor = HealthManagerActor::new(
-            Arc::clone(&self.checker),
+        crate::util::spawn(health_check_manager_actor(
+            agent.client.clone(),
             self.check_period,
+            self.check_timeout,
             Arc::clone(&self.routing_snapshot),
             fetch_receiver,
             init_sender,
             self.stop.token(),
-        );
-        crate::util::spawn(async move { health_manager_actor.run().await });
+        ));
+        let seeds = self.seeds.clone();
+        let routing_snapshot = self.routing_snapshot.clone();
+        let fetch_period = self.fetch_period;
+        let fetch_retry_interval = self.fetch_retry_interval;
+        let stop_token = self.stop.token();
 
-        // Dispatch all seed nodes for initial health checks
-        if let Err(err) = fetch_sender.send(Some(FetchedNodes {
-            nodes: self.seeds.clone(),
-        })) {
-            error!("{DYNAMIC_ROUTE_PROVIDER}: failed to send results to HealthManager: {err:?}");
-        }
+        crate::util::spawn(async move {
+            // Dispatch all seed nodes for initial health checks
+            if let Err(err) = fetch_sender.send(Some(FetchedNodes { nodes: seeds })) {
+                error!(
+                    "{DYNAMIC_ROUTE_PROVIDER}: failed to send results to HealthManager: {err:?}"
+                );
+            }
 
-        // Try await for healthy seeds.
-        let start = Instant::now();
-        select! {
-            _ = crate::util::sleep(TIMEOUT_AWAIT_HEALTHY_SEED).fuse() => warn!(
-                "{DYNAMIC_ROUTE_PROVIDER}: no healthy seeds found within {:?}",
-                start.elapsed()
-            ),
-            _ = init_receiver.recv().fuse() => info!(
-                "{DYNAMIC_ROUTE_PROVIDER}: found healthy seeds within {:?}",
-                start.elapsed()
+            // Try await for healthy seeds.
+            let start = Instant::now();
+            select! {
+                _ = crate::util::sleep(TIMEOUT_AWAIT_HEALTHY_SEED).fuse() => warn!(
+                    "{DYNAMIC_ROUTE_PROVIDER}: no healthy seeds found within {:?}",
+                    start.elapsed()
+                ),
+                _ = init_receiver.recv().fuse() => info!(
+                    "{DYNAMIC_ROUTE_PROVIDER}: found healthy seeds within {:?}",
+                    start.elapsed()
+                )
+            }
+            // We can close the channel now.
+            init_receiver.close();
+            nodes_fetch_actor(
+                agent,
+                Principal::from_text(MAINNET_ROOT_SUBNET_ID).unwrap(),
+                fetch_period,
+                fetch_retry_interval,
+                fetch_sender,
+                routing_snapshot,
+                stop_token,
             )
-        }
-        // We can close the channel now.
-        init_receiver.close();
-
-        let fetch_actor = NodesFetchActor::new(
-            Arc::clone(&self.fetcher),
-            self.fetch_period,
-            self.fetch_retry_interval,
-            fetch_sender,
-            Arc::clone(&self.routing_snapshot),
-            self.stop.token(),
-        );
-        crate::util::spawn(async move { fetch_actor.run().await });
+            .await;
+        });
         info!(
             "{DYNAMIC_ROUTE_PROVIDER}: NodesFetchActor and HealthManagerActor started successfully"
         );
@@ -252,32 +230,42 @@ where
 #[cfg(test)]
 mod tests {
     use candid::Principal;
+    use ic_certification::{empty, fork, label, labeled, leaf, Certificate, HashTree};
+    use k256::ecdsa::{
+        signature::{Keypair, Signer},
+        Signature, SigningKey,
+    };
+    use mockito::{Mock, Server, ServerOpts};
+    use rand::thread_rng;
     use reqwest::Client;
     use std::{
-        sync::{Arc, Once},
+        collections::HashMap,
+        sync::{Arc, Once, OnceLock},
         time::{Duration, Instant},
     };
     use tracing::Level;
     use tracing_subscriber::FmtSubscriber;
 
-    use crate::agent::{
-        route_provider::{
-            dynamic_routing::{
-                dynamic_route_provider::{
-                    DynamicRouteProviderBuilder, IC0_SEED_DOMAIN, MAINNET_ROOT_SUBNET_ID,
+    use crate::{
+        agent::{
+            route_provider::{
+                dynamic_routing::{
+                    dynamic_route_provider::{
+                        DynamicRouteProviderBuilder, IC0_SEED_DOMAIN, MAINNET_ROOT_SUBNET_ID,
+                    },
+                    node::Node,
+                    snapshot::{
+                        latency_based_routing::LatencyRoutingSnapshot,
+                        round_robin_routing::RoundRobinRoutingSnapshot,
+                    },
+                    test_utils::{assert_routed_domains, route_n_times},
                 },
-                node::Node,
-                snapshot::{
-                    latency_based_routing::LatencyRoutingSnapshot,
-                    round_robin_routing::RoundRobinRoutingSnapshot,
-                },
-                test_utils::{
-                    assert_routed_domains, route_n_times, NodeHealthCheckerMock, NodesFetcherMock,
-                },
+                RouteProvider,
             },
-            RouteProvider,
+            Agent, AgentError,
         },
-        Agent, AgentError,
+        identity::Secp256k1Identity,
+        Identity,
     };
 
     static TRACING_INIT: Once = Once::new();
@@ -286,6 +274,74 @@ mod tests {
         TRACING_INIT.call_once(|| {
             FmtSubscriber::builder().with_max_level(Level::TRACE).init();
         });
+    }
+
+    static MOCK_SERVER: OnceLock<Server> = OnceLock::new();
+
+    pub fn mock_topology(nodes: Vec<(Node, bool)>, root_domain: &str) -> (Vec<Mock>, Agent) {
+        let server = MOCK_SERVER.get_or_init(|| {
+            Server::new_with_opts(ServerOpts {
+                port: 80,
+                ..<_>::default()
+            })
+        });
+        let mut node_tree = empty();
+        let mut mocks = vec![];
+        for (node, healthy) in &nodes {
+            let nk = SigningKey::random(&mut thread_rng());
+            let id = Secp256k1Identity::from_private_key(nk.into());
+            mocks.push(
+                server
+                    .mock("GET", "/health")
+                    .match_header("host", &*node.domain())
+                    .with_status(if *healthy { 204 } else { 418 })
+                    .create(),
+            );
+            node_tree = fork(
+                node_tree,
+                label(
+                    id.sender().unwrap().to_text(),
+                    fork(
+                        fork(
+                            label("domain", leaf(node.domain())),
+                            label("ipv4_address", leaf("127.0.0.1")),
+                        ),
+                        label("ipv6_address", leaf("::1")),
+                    ),
+                ),
+            );
+        }
+        let sk = SigningKey::random(&mut thread_rng());
+        let final_tree = label("api_boundary_nodes", node_tree);
+        let signature: Signature = sk.sign(&final_tree.digest());
+        let certificate = Certificate {
+            delegation: None,
+            tree: final_tree,
+            signature: signature.to_bytes().to_vec(),
+        };
+        mocks.push(
+            server
+                .mock(
+                    "POST",
+                    &*format!("/api/v2/subnet/{}/read_state", MAINNET_ROOT_SUBNET_ID),
+                )
+                .match_header("host", root_domain)
+                .with_body(serde_cbor::to_vec(&certificate).unwrap())
+                .create(),
+        );
+        mocks.push(
+            server
+                .mock("GET", "/health")
+                .match_header("host", root_domain)
+                .with_status(204)
+                .create(),
+        );
+        let agent = Agent::builder()
+            .with_url(&format!("http://{root_domain}"))
+            .with_preset_root_key(sk.verifying_key().to_sec1_bytes().into_vec())
+            .build()
+            .unwrap();
+        (mocks, agent)
     }
 
     async fn assert_no_routing_via_domains(
@@ -365,24 +421,18 @@ mod tests {
     async fn test_routing_with_topology_and_node_health_updates() {
         // Setup.
         setup_tracing();
-        let node_1 = Node::new(IC0_SEED_DOMAIN).unwrap();
+        let node_1 = Node::new("n1.routing_with_topology.localhost").unwrap();
         // Set nodes fetching params: topology, fetching periodicity.
-        let fetcher = Arc::new(NodesFetcherMock::new());
-        fetcher.overwrite_nodes(vec![node_1.clone()]);
+        // A single healthy node exists in the topology. This node happens to be the seed node.
+        let (_mocks, agent) = mock_topology(vec![], "routing_with_topology_1.localhost");
         let fetch_interval = Duration::from_secs(2);
         // Set health checking params: healthy nodes, checking periodicity.
-        let checker = Arc::new(NodeHealthCheckerMock::new());
         let check_interval = Duration::from_secs(1);
-        // A single healthy node exists in the topology. This node happens to be the seed node.
-        fetcher.overwrite_nodes(vec![node_1.clone()]);
-        checker.overwrite_healthy_nodes(vec![node_1.clone()]);
         // Configure RouteProvider
         let snapshot = RoundRobinRoutingSnapshot::new();
         let client = Client::builder().build().unwrap();
         let route_provider =
             DynamicRouteProviderBuilder::new(snapshot, vec![node_1.clone()], client)
-                .with_fetcher(fetcher.clone())
-                .with_checker(checker.clone())
                 .with_fetch_period(fetch_interval)
                 .with_check_period(check_interval)
                 .build()

@@ -30,6 +30,7 @@ use rangemap::{RangeInclusiveMap, RangeInclusiveSet, StepFns};
 use reqwest::{Body, Client, Request};
 use route_provider::RouteProvider;
 use time::OffsetDateTime;
+use url::Url;
 
 #[cfg(test)]
 mod agent_test;
@@ -144,6 +145,7 @@ type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + '
 /// This agent does not understand Candid, and only acts on byte buffers.
 #[derive(Clone)]
 pub struct Agent {
+    // If adding any BN-specific fields, exclude them from clone_with_url.
     nonce_factory: Arc<dyn NonceGenerator>,
     identity: Arc<dyn Identity>,
     ingress_expiry: Duration,
@@ -176,11 +178,13 @@ impl Agent {
 
     /// Create an instance of an [`Agent`].
     pub fn new(config: agent_config::AgentConfig) -> Result<Agent, AgentError> {
-        Ok(Agent {
+        let agent = Agent {
             nonce_factory: config.nonce_factory,
             identity: config.identity,
             ingress_expiry: config.ingress_expiry.unwrap_or(DEFAULT_INGRESS_EXPIRY),
-            root_key: Arc::new(RwLock::new(IC_ROOT_KEY.to_vec())),
+            root_key: Arc::new(RwLock::new(
+                config.root_key.unwrap_or_else(|| IC_ROOT_KEY.to_vec()),
+            )),
             client: config.client.unwrap_or_else(|| {
                 #[cfg(not(target_family = "wasm"))]
                 {
@@ -213,7 +217,9 @@ impl Agent {
                     false
                 }
             },
-        })
+        };
+        agent.route_provider.notify_start(agent.clone());
+        Ok(agent)
     }
 
     /// Set the identity provider for signing messages.
@@ -1243,6 +1249,12 @@ impl Agent {
         } else {
             Ok((status, body))
         }
+    }
+
+    fn clone_with_url(&self, url: Url) -> Self {
+        let mut clone = self.clone();
+        clone.route_provider = Arc::new(url);
+        clone
     }
 }
 

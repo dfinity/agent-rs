@@ -5,7 +5,7 @@ use std::{
 };
 use url::Url;
 
-use crate::agent::AgentError;
+use crate::{agent::AgentError, Agent};
 
 pub mod dynamic_routing;
 
@@ -33,6 +33,8 @@ pub trait RouteProvider: std::fmt::Debug + Send + Sync {
     /// appearing first. The returned vector can contain fewer than `n` URLs if
     /// fewer are available.
     fn n_ordered_routes(&self, n: usize) -> Result<Vec<Url>, AgentError>;
+
+    fn notify_start(&self, agent: Agent) {}
 }
 
 /// A simple implementation of the [`RouteProvider`] which produces an even distribution of the urls from the input ones.

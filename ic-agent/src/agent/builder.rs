@@ -1,12 +1,21 @@
 use url::Url;
 
 use crate::{
-    agent::{agent_config::AgentConfig, Agent},
+    agent::{
+        agent_config::AgentConfig,
+        route_provider::{
+            dynamic_routing::{
+                dynamic_route_provider::{DynamicRouteProviderBuilder, IC0_SEED_DOMAIN},
+                node::Node,
+                snapshot::latency_based_routing::LatencyRoutingSnapshot,
+            },
+            RouteProvider,
+        },
+        Agent,
+    },
     AgentError, Identity, NonceFactory, NonceGenerator,
 };
 use std::sync::Arc;
-
-use super::route_provider::RouteProvider;
 
 /// A builder for an [`Agent`].
 #[derive(Default)]
@@ -20,19 +29,8 @@ impl AgentBuilder {
         Agent::new(self.config)
     }
 
-    #[cfg(all(feature = "reqwest", not(target_family = "wasm")))]
     /// Set the dynamic transport layer for the [`Agent`], performing continuos discovery of the API boundary nodes and routing traffic via them based on the latencies.
     pub async fn with_discovery_transport(self, client: reqwest::Client) -> Self {
-        use crate::agent::http_transport::{
-            dynamic_routing::{
-                dynamic_route_provider::{DynamicRouteProviderBuilder, IC0_SEED_DOMAIN},
-                node::Node,
-                snapshot::latency_based_routing::LatencyRoutingSnapshot,
-            },
-            route_provider::RouteProvider,
-            ReqwestTransport,
-        };
-
         // TODO: This is a temporary solution to get the seed node.
         let seed = Node::new(IC0_SEED_DOMAIN).unwrap();
 
@@ -46,10 +44,8 @@ impl AgentBuilder {
 
         let route_provider = Arc::new(route_provider) as Arc<dyn RouteProvider>;
 
-        let transport = ReqwestTransport::create_with_client_route(route_provider, client)
-            .expect("failed to create transport");
-
-        self.with_transport(transport)
+        self.with_http_client(client)
+            .with_arc_route_provider(route_provider)
     }
 
     /// Set the URL of the [Agent].
