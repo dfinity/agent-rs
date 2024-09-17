@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::time::Duration;
 
 pub async fn sleep(d: Duration) {
@@ -18,4 +19,14 @@ pub async fn sleep(d: Duration) {
     #[cfg(all(target_family = "wasm", not(feature = "wasm-bindgen")))]
     const _: () =
         { panic!("Using ic-agent from WASM requires enabling the `wasm-bindgen` feature") };
+}
+
+#[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
+pub fn spawn(f: impl Future<Output = ()> + 'static) {
+    wasm_bindgen_futures::spawn_local(f);
+}
+
+#[cfg(not(all(target_family = "wasm", feature = "wasm-bindgen")))]
+pub fn spawn(f: impl Future<Output = ()> + Send + 'static) {
+    tokio::spawn(f);
 }

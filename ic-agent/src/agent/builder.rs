@@ -1,12 +1,21 @@
 use url::Url;
 
 use crate::{
-    agent::{agent_config::AgentConfig, Agent},
+    agent::{
+        agent_config::AgentConfig,
+        route_provider::{
+            dynamic_routing::{
+                dynamic_route_provider::{DynamicRouteProviderBuilder, IC0_SEED_DOMAIN},
+                node::Node,
+                snapshot::latency_based_routing::LatencyRoutingSnapshot,
+            },
+            RouteProvider,
+        },
+        Agent,
+    },
     AgentError, Identity, NonceFactory, NonceGenerator,
 };
 use std::sync::Arc;
-
-use super::route_provider::RouteProvider;
 
 /// A builder for an [`Agent`].
 #[derive(Default)]
@@ -18,6 +27,25 @@ impl AgentBuilder {
     /// Create an instance of [Agent] with the information from this builder.
     pub fn build(self) -> Result<Agent, AgentError> {
         Agent::new(self.config)
+    }
+
+    /// Set the dynamic transport layer for the [`Agent`], performing continuos discovery of the API boundary nodes and routing traffic via them based on the latencies.
+    pub async fn with_discovery_transport(self, client: reqwest::Client) -> Self {
+        // TODO: This is a temporary solution to get the seed node.
+        let seed = Node::new(IC0_SEED_DOMAIN).unwrap();
+
+        let route_provider = DynamicRouteProviderBuilder::new(
+            LatencyRoutingSnapshot::new(),
+            vec![seed],
+            client.clone(),
+        )
+        .build()
+        .await;
+
+        let route_provider = Arc::new(route_provider) as Arc<dyn RouteProvider>;
+
+        self.with_http_client(client)
+            .with_arc_route_provider(route_provider)
     }
 
     /// Set the URL of the [Agent].
