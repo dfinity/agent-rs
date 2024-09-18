@@ -28,9 +28,6 @@ pub struct AgentConfig {
     pub max_response_body_size: Option<usize>,
     /// See [`with_max_tcp_error_retries`](super::AgentBuilder::with_max_tcp_error_retries).
     pub max_tcp_error_retries: usize,
-    /// See [`with_call_v3_endpoint`](super::AgentBuilder::with_call_v3_endpoint).
-    #[cfg(feature = "experimental_sync_call")]
-    pub use_call_v3_endpoint: bool,
 }
 
 impl Default for AgentConfig {
@@ -45,8 +42,6 @@ impl Default for AgentConfig {
             route_provider: None,
             max_response_body_size: None,
             max_tcp_error_retries: 0,
-            #[cfg(feature = "experimental_sync_call")]
-            use_call_v3_endpoint: false,
         }
     }
 }

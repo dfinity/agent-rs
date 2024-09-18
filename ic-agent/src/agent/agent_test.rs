@@ -18,8 +18,6 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
 fn make_agent(url: &str) -> Agent {
     let builder = Agent::builder().with_url(url);
-    #[cfg(feature = "experimental_sync_call")]
-    let builder = builder.with_call_v3_endpoint();
     builder.with_verify_query_signatures(false).build().unwrap()
 }
 
@@ -168,15 +166,9 @@ async fn query_rejected() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn call_error() -> Result<(), AgentError> {
-    let version = if cfg!(feature = "experimental_sync_call") {
-        "3"
-    } else {
-        "2"
-    };
-
     let (call_mock, url) = mock(
         "POST",
-        format!("/api/v{version}/canister/aaaaa-aa/call").as_str(),
+        format!("/api/v3/canister/aaaaa-aa/call").as_str(),
         500,
         vec![],
         None,
@@ -211,15 +203,9 @@ async fn call_rejected() -> Result<(), AgentError> {
 
     let body = serde_cbor::to_vec(&reject_body).unwrap();
 
-    let version = if cfg!(feature = "experimental_sync_call") {
-        "3"
-    } else {
-        "2"
-    };
-
     let (call_mock, url) = mock(
         "POST",
-        format!("/api/v{version}/canister/aaaaa-aa/call").as_str(),
+        format!("/api/v3/canister/aaaaa-aa/call").as_str(),
         200,
         body,
         Some("application/cbor"),
@@ -257,15 +243,9 @@ async fn call_rejected_without_error_code() -> Result<(), AgentError> {
 
     let body = serde_cbor::to_vec(&reject_body).unwrap();
 
-    let version = if cfg!(feature = "experimental_sync_call") {
-        "3"
-    } else {
-        "2"
-    };
-
     let (call_mock, url) = mock(
         "POST",
-        format!("/api/v{version}/canister/{}/call", canister_id_str).as_str(),
+        format!("/api/v3/canister/{}/call", canister_id_str).as_str(),
         200,
         body,
         Some("application/cbor"),

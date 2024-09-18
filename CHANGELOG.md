@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * `Url` now implements `RouteProvider`.
 * Add canister snapshot methods to `ManagementCanister`.
 * Add `AllowedViewers` to `LogVisibility` enum.
+* Remove the cargo feature, `experimental_sync_call`, and enable synchronous update calls by default. 
 
 ## [0.37.1] - 2024-07-25
 
