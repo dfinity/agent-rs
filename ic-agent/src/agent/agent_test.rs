@@ -166,14 +166,7 @@ async fn query_rejected() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn call_error() -> Result<(), AgentError> {
-    let (call_mock, url) = mock(
-        "POST",
-        format!("/api/v3/canister/aaaaa-aa/call").as_str(),
-        500,
-        vec![],
-        None,
-    )
-    .await;
+    let (call_mock, url) = mock("POST", "/api/v3/canister/aaaaa-aa/call", 500, vec![], None).await;
 
     let agent = make_agent(&url);
 
@@ -205,7 +198,7 @@ async fn call_rejected() -> Result<(), AgentError> {
 
     let (call_mock, url) = mock(
         "POST",
-        format!("/api/v3/canister/aaaaa-aa/call").as_str(),
+        "/api/v3/canister/aaaaa-aa/call",
         200,
         body,
         Some("application/cbor"),
