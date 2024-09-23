@@ -1,4 +1,4 @@
-//! An implementation of the [`RouteProvider`](crate::agent::http_transport::route_provider::RouteProvider) for dynamic generation of routing urls.
+//! An implementation of [`RouteProvider`] for dynamic generation of routing urls.
 
 use std::{
     sync::Arc,
