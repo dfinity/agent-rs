@@ -2,10 +2,9 @@ use crate::{
     agent::{NonceFactory, NonceGenerator},
     identity::{anonymous::AnonymousIdentity, Identity},
 };
-use reqwest::Client;
 use std::{sync::Arc, time::Duration};
 
-use super::route_provider::RouteProvider;
+use super::{route_provider::RouteProvider, HttpService};
 
 /// A configuration for an agent.
 #[non_exhaustive]
@@ -17,7 +16,7 @@ pub struct AgentConfig {
     /// See [`with_ingress_expiry`](super::AgentBuilder::with_ingress_expiry).
     pub ingress_expiry: Option<Duration>,
     /// See [`with_http_client`](super::AgentBuilder::with_http_client).
-    pub client: Option<Client>,
+    pub client: Option<Arc<dyn HttpService>>,
     /// See [`with_route_provider`](super::AgentBuilder::with_route_provider).
     pub route_provider: Option<Arc<dyn RouteProvider>>,
     /// See [`verify_query_signatures`](super::AgentBuilder::with_verify_query_signatures).

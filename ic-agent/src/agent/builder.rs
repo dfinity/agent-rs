@@ -6,7 +6,7 @@ use crate::{
 };
 use std::sync::Arc;
 
-use super::route_provider::RouteProvider;
+use super::{route_provider::RouteProvider, HttpService};
 
 /// A builder for an [`Agent`].
 #[derive(Default)]
@@ -106,7 +106,17 @@ impl AgentBuilder {
 
     /// Provide a pre-configured HTTP client to use. Use this to set e.g. HTTP timeouts or proxy configuration.
     pub fn with_http_client(mut self, client: reqwest::Client) -> Self {
-        self.config.client = Some(client);
+        self.config.client = Some(Arc::new(client));
+        self
+    }
+
+    /// Provide a custom `reqwest`-compatible HTTP service, e.g. to add per-request headers for custom boundary nodes.
+    /// Most users will not need this and should use `with_http_client`.
+    ///
+    /// The trait is automatically implemented for any `tower::Service` impl matching the one `reqwest::Client` uses,
+    /// including `reqwest-middleware`. Implementations must provide all automatic retry logic.
+    pub fn with_arc_http_middleware(mut self, service: Arc<dyn HttpService>) -> Self {
+        self.config.client = Some(service);
         self
     }
 

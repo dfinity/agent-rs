@@ -27,9 +27,10 @@ pub use ic_transport_types::{
 };
 pub use nonce::{NonceFactory, NonceGenerator};
 use rangemap::{RangeInclusiveMap, RangeInclusiveSet, StepFns};
-use reqwest::{Body, Client, Request};
+use reqwest::{Body, Client, Request, Response};
 use route_provider::RouteProvider;
 use time::OffsetDateTime;
+use tower_service::Service;
 
 #[cfg(test)]
 mod agent_test;
@@ -148,7 +149,7 @@ pub struct Agent {
     identity: Arc<dyn Identity>,
     ingress_expiry: Duration,
     root_key: Arc<RwLock<Vec<u8>>>,
-    client: Client,
+    client: Arc<dyn HttpService>,
     route_provider: Arc<dyn RouteProvider>,
     subnet_key_cache: Arc<Mutex<SubnetCache>>,
     concurrent_requests_semaphore: Arc<Semaphore>,
@@ -182,18 +183,23 @@ impl Agent {
             ingress_expiry: config.ingress_expiry.unwrap_or(DEFAULT_INGRESS_EXPIRY),
             root_key: Arc::new(RwLock::new(IC_ROOT_KEY.to_vec())),
             client: config.client.unwrap_or_else(|| {
-                #[cfg(not(target_family = "wasm"))]
-                {
-                    Client::builder()
-                        .use_rustls_tls()
-                        .timeout(Duration::from_secs(360))
-                        .build()
-                        .expect("Could not create HTTP client.")
-                }
-                #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
-                {
-                    Client::new()
-                }
+                Arc::new(DefaultRetryLogic {
+                    _max_tcp_error_retries: config.max_tcp_error_retries,
+                    client: {
+                        #[cfg(not(target_family = "wasm"))]
+                        {
+                            Client::builder()
+                                .use_rustls_tls()
+                                .timeout(Duration::from_secs(360))
+                                .build()
+                                .expect("Could not create HTTP client.")
+                        }
+                        #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
+                        {
+                            Client::new()
+                        }
+                    },
+                })
             }),
             route_provider: config
                 .route_provider
@@ -1139,40 +1145,10 @@ impl Agent {
             Ok(http_request)
         };
 
-        // Dispatch request with a retry logic only for non-wasm builds.
-        let response = {
-            #[cfg(target_family = "wasm")]
-            {
-                let http_request = create_request_with_generated_url()?;
-                self.client.execute(http_request).await?
-            }
-            #[cfg(not(target_family = "wasm"))]
-            {
-                // RouteProvider generates urls dynamically. Some of these urls can be potentially unhealthy.
-                // TCP related errors (host unreachable, connection refused, connection timed out, connection reset) can be safely retried with a newly generated url.
-
-                let mut retry_count = 0;
-
-                loop {
-                    let http_request = create_request_with_generated_url()?;
-
-                    match self.client.execute(http_request).await {
-                        Ok(response) => break response,
-                        Err(err) => {
-                            // Network-related errors can be retried.
-                            if err.is_connect() {
-                                if retry_count >= self.max_tcp_error_retries {
-                                    return Err(AgentError::TransportError(err));
-                                }
-                                retry_count += 1;
-                                continue;
-                            }
-                            return Err(AgentError::TransportError(err));
-                        }
-                    }
-                }
-            }
-        };
+        let response = self
+            .client
+            .call(create_request_with_generated_url()?)
+            .await?;
 
         let http_status = response.status();
         let response_headers = response.headers().clone();
@@ -1894,6 +1870,72 @@ impl<'agent> IntoFuture for UpdateBuilder<'agent> {
     type Output = Result<Vec<u8>, AgentError>;
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(self.call_and_wait())
+    }
+}
+
+/// HTTP client middleware. Implemented automatically for `reqwest`-compatible by-ref `tower::Service`, such as `reqwest_middleware`.
+pub trait HttpService: Send + Sync {
+    /// Perform a HTTP request.
+    fn call(&self, req: Request) -> AgentFuture<Response>;
+}
+#[cfg(not(target_family = "wasm"))]
+impl<T> HttpService for T
+where
+    for<'a> &'a T: Service<Request, Response = Response, Error = reqwest::Error>,
+    for<'a> <&'a Self as Service<Request>>::Future: Send,
+    T: Send + Sync + ?Sized,
+{
+    fn call(mut self: &Self, req: Request) -> AgentFuture<Response> {
+        Box::pin(async move { Ok(Service::call(&mut self, req).await?) })
+    }
+}
+
+#[cfg(target_family = "wasm")]
+impl<T> HttpService for T
+where
+    for<'a> &'a T: Service<Request, Response = Response, Error = reqwest::Error>,
+    T: Send + Sync + ?Sized,
+{
+    fn call(mut self: &Self, req: Request) -> AgentFuture<Response> {
+        Box::pin(async move { Ok(Service::call(&mut self, req).await?) })
+    }
+}
+
+struct DefaultRetryLogic {
+    client: Client,
+    _max_tcp_error_retries: usize,
+}
+
+impl HttpService for DefaultRetryLogic {
+    fn call(&self, req: Request) -> AgentFuture<Response> {
+        Box::pin(async move {
+            let mut _retry_count = 0;
+            loop {
+                let result = self
+                    .client
+                    .execute(req.try_clone().expect("failed to clone request"))
+                    .await;
+                match result {
+                    Ok(resp) => {
+                        if resp.status() == StatusCode::TOO_MANY_REQUESTS {
+                            crate::util::sleep(Duration::from_millis(250)).await;
+                        } else {
+                            break Ok(resp);
+                        }
+                    }
+                    Err(err) => {
+                        // Network-related errors can be retried.
+                        #[cfg(not(target_family = "wasm"))]
+                        if err.is_connect() {
+                            if _retry_count >= self._max_tcp_error_retries {
+                                return Err(AgentError::TransportError(err));
+                            }
+                            _retry_count += 1;
+                        }
+                    }
+                }
+            }
+        })
     }
 }
 

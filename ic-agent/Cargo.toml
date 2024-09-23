@@ -43,6 +43,7 @@ sha2 = { workspace = true }
 simple_asn1 = "0.6.1"
 thiserror = { workspace = true }
 time = { workspace = true }
+tower-service = "0.3"
 url = "2.1.0"
 
 [dependencies.reqwest]
