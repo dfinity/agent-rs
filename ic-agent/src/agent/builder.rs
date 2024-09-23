@@ -118,7 +118,7 @@ impl AgentBuilder {
     /// Most users will not need this and should use `with_http_client`. Cannot be called with `with_http_client`.
     ///
     /// The trait is automatically implemented for any `tower::Service` impl matching the one `reqwest::Client` uses,
-    /// including `reqwest-middleware`. This is a low-level interface, and implementations must provide all automatic retry logic.
+    /// including `reqwest-middleware`. This is a low-level interface, and direct implementations must provide all automatic retry logic.
     pub fn with_arc_http_middleware(mut self, service: Arc<dyn HttpService>) -> Self {
         assert!(
             self.config.client.is_none(),

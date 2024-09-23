@@ -182,8 +182,7 @@ impl Agent {
             ingress_expiry: config.ingress_expiry.unwrap_or(DEFAULT_INGRESS_EXPIRY),
             root_key: Arc::new(RwLock::new(IC_ROOT_KEY.to_vec())),
             client: config.http_service.unwrap_or_else(|| {
-                Arc::new(DefaultRetryLogic {
-                    _max_tcp_error_retries: config.max_tcp_error_retries,
+                Arc::new(Retry429Logic {
                     client: config.client.unwrap_or_else(|| {
                         #[cfg(not(target_family = "wasm"))]
                         {
@@ -1118,7 +1117,10 @@ impl Agent {
 
         let response = self
             .client
-            .call(create_request_with_generated_url()?)
+            .call(
+                &create_request_with_generated_url,
+                self.max_tcp_error_retries,
+            )
             .await?;
 
         let http_status = response.status();
@@ -1160,15 +1162,10 @@ impl Agent {
         endpoint: &str,
         body: Option<Vec<u8>>,
     ) -> Result<(StatusCode, Vec<u8>), AgentError> {
-        let request_result = loop {
-            let result = self
-                .request(method.clone(), endpoint, body.as_ref().cloned())
-                .await?;
-            if result.0 != StatusCode::TOO_MANY_REQUESTS {
-                break result;
-            }
-            crate::util::sleep(Duration::from_millis(250)).await;
-        };
+        let request_result = self
+            .request(method.clone(), endpoint, body.as_ref().cloned())
+            .await?;
+
         let status = request_result.0;
         let headers = request_result.1;
         let body = request_result.2;
@@ -1846,8 +1843,12 @@ impl<'agent> IntoFuture for UpdateBuilder<'agent> {
 
 /// HTTP client middleware. Implemented automatically for `reqwest`-compatible by-ref `tower::Service`, such as `reqwest_middleware`.
 pub trait HttpService: Send + Sync {
-    /// Perform a HTTP request.
-    fn call(&self, req: Request) -> AgentFuture<Response>;
+    /// Perform a HTTP request. Any retry logic should call `req` again, instead of `Request::try_clone`.
+    fn call<'a>(
+        &'a self,
+        req: &'a (dyn Fn() -> Result<Request, AgentError> + Send + Sync),
+        max_retries: usize,
+    ) -> AgentFuture<'a, Response>;
 }
 #[cfg(not(target_family = "wasm"))]
 impl<T> HttpService for T
@@ -1856,8 +1857,28 @@ where
     for<'a> <&'a Self as Service<Request>>::Future: Send,
     T: Send + Sync + ?Sized,
 {
-    fn call(mut self: &Self, req: Request) -> AgentFuture<Response> {
-        Box::pin(async move { Ok(Service::call(&mut self, req).await?) })
+    fn call<'a>(
+        mut self: &'a Self,
+        req: &'a (dyn Fn() -> Result<Request, AgentError> + Send + Sync),
+        max_retries: usize,
+    ) -> AgentFuture<'a, Response> {
+        Box::pin(async move {
+            let mut retry_count = 0;
+            loop {
+                match Service::call(&mut self, req()?).await {
+                    Err(err) => {
+                        // Network-related errors can be retried.
+                        if err.is_connect() {
+                            if retry_count >= max_retries {
+                                return Err(AgentError::TransportError(err));
+                            }
+                            retry_count += 1;
+                        }
+                    }
+                    Ok(resp) => return Ok(resp),
+                }
+            }
+        })
     }
 }
 
@@ -1867,25 +1888,29 @@ where
     for<'a> &'a T: Service<Request, Response = Response, Error = reqwest::Error>,
     T: Send + Sync + ?Sized,
 {
-    fn call(mut self: &Self, req: Request) -> AgentFuture<Response> {
-        Box::pin(async move { Ok(Service::call(&mut self, req).await?) })
+    fn call<'a>(
+        mut self: &'a Self,
+        req: &'a (dyn Fn() -> Result<Request, AgentError> + Send + Sync),
+        _: usize,
+    ) -> AgentFuture<'a, Response> {
+        Box::pin(async move { Ok(Service::call(&mut self, req()).await?) })
     }
 }
 
-struct DefaultRetryLogic {
+struct Retry429Logic {
     client: Client,
-    _max_tcp_error_retries: usize,
 }
 
-impl HttpService for DefaultRetryLogic {
-    fn call(&self, req: Request) -> AgentFuture<Response> {
+impl HttpService for Retry429Logic {
+    fn call<'a>(
+        &'a self,
+        req: &'a (dyn Fn() -> Result<Request, AgentError> + Send + Sync),
+        max_retries: usize,
+    ) -> AgentFuture<'a, Response> {
         Box::pin(async move {
             let mut _retry_count = 0;
             loop {
-                let result = self
-                    .client
-                    .execute(req.try_clone().expect("failed to clone request"))
-                    .await;
+                let result = self.client.call(req, max_retries).await;
                 match result {
                     Ok(resp) => {
                         if resp.status() == StatusCode::TOO_MANY_REQUESTS {
@@ -1894,15 +1919,8 @@ impl HttpService for DefaultRetryLogic {
                             break Ok(resp);
                         }
                     }
-                    Err(_err) => {
-                        // Network-related errors can be retried.
-                        #[cfg(not(target_family = "wasm"))]
-                        if _err.is_connect() {
-                            if _retry_count >= self._max_tcp_error_retries {
-                                return Err(AgentError::TransportError(_err));
-                            }
-                            _retry_count += 1;
-                        }
+                    Err(err) => {
+                        break Err(err);
                     }
                 }
             }
