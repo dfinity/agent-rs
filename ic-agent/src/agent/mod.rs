@@ -1894,12 +1894,12 @@ impl HttpService for DefaultRetryLogic {
                             break Ok(resp);
                         }
                     }
-                    Err(err) => {
+                    Err(_err) => {
                         // Network-related errors can be retried.
                         #[cfg(not(target_family = "wasm"))]
-                        if err.is_connect() {
+                        if _err.is_connect() {
                             if _retry_count >= self._max_tcp_error_retries {
-                                return Err(AgentError::TransportError(err));
+                                return Err(AgentError::TransportError(_err));
                             }
                             _retry_count += 1;
                         }
