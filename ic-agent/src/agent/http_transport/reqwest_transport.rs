@@ -20,8 +20,6 @@ pub struct ReqwestTransport {
     client: Client,
     max_response_body_size: Option<usize>,
     max_tcp_error_retries: usize,
-    #[allow(dead_code)]
-    use_call_v3_endpoint: bool,
 }
 
 impl ReqwestTransport {
@@ -69,7 +67,6 @@ impl ReqwestTransport {
             client,
             max_response_body_size: None,
             max_tcp_error_retries: 0,
-            use_call_v3_endpoint: false,
         })
     }
 
@@ -96,16 +93,6 @@ impl ReqwestTransport {
             ..self
         }
     }
-
-    /// Equivalent to [`AgentBuilder::with_call_v3_endpoint`].
-    #[cfg(feature = "experimental_sync_call")]
-    #[deprecated(since = "0.38.0", note = "Use AgentBuilder::with_call_v3_endpoint")]
-    pub fn with_use_call_v3_endpoint(self) -> Self {
-        ReqwestTransport {
-            use_call_v3_endpoint: true,
-            ..self
-        }
-    }
 }
 
 impl AgentBuilder {
@@ -118,10 +105,6 @@ impl AgentBuilder {
             .with_max_tcp_error_retries(transport.max_tcp_error_retries);
         if let Some(max_size) = transport.max_response_body_size {
             builder = builder.with_max_response_body_size(max_size);
-        }
-        #[cfg(feature = "experimental_sync_call")]
-        if transport.use_call_v3_endpoint {
-            builder = builder.with_call_v3_endpoint();
         }
         builder
     }

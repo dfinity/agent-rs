@@ -157,7 +157,6 @@ pub struct Agent {
     max_response_body_size: Option<usize>,
     #[allow(dead_code)]
     max_tcp_error_retries: usize,
-    use_call_v3_endpoint: bool,
 }
 
 impl fmt::Debug for Agent {
@@ -209,16 +208,6 @@ impl Agent {
             concurrent_requests_semaphore: Arc::new(Semaphore::new(config.max_concurrent_requests)),
             max_response_body_size: config.max_response_body_size,
             max_tcp_error_retries: config.max_tcp_error_retries,
-            use_call_v3_endpoint: {
-                #[cfg(feature = "experimental_sync_call")]
-                {
-                    config.use_call_v3_endpoint
-                }
-                #[cfg(not(feature = "experimental_sync_call"))]
-                {
-                    false
-                }
-            },
         })
     }
 
@@ -354,17 +343,7 @@ impl Agent {
         serialized_bytes: Vec<u8>,
     ) -> Result<TransportCallResponse, AgentError> {
         let _permit = self.concurrent_requests_semaphore.acquire().await;
-        let api_version = if self.use_call_v3_endpoint {
-            "v3"
-        } else {
-            "v2"
-        };
-
-        let endpoint = format!(
-            "api/{}/canister/{}/call",
-            api_version,
-            effective_canister_id.to_text()
-        );
+        let endpoint = format!("api/v3/canister/{}/call", effective_canister_id.to_text());
         let (status_code, response_body) = self
             .execute(Method::POST, &endpoint, Some(serialized_bytes))
             .await?;
@@ -373,15 +352,7 @@ impl Agent {
             return Ok(TransportCallResponse::Accepted);
         }
 
-        // status_code == OK (200)
-        if self.use_call_v3_endpoint {
-            serde_cbor::from_slice(&response_body).map_err(AgentError::InvalidCborData)
-        } else {
-            let reject_response = serde_cbor::from_slice::<RejectResponse>(&response_body)
-                .map_err(AgentError::InvalidCborData)?;
-
-            Err(AgentError::UncertifiedReject(reject_response))
-        }
+        serde_cbor::from_slice(&response_body).map_err(AgentError::InvalidCborData)
     }
 
     /// The simplest way to do a query call; sends a byte array and will return a byte vector.

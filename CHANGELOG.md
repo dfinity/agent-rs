@@ -9,10 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 * Added `AgentBuilder::with_arc_http_middleware` for `Transport`-like functionality at the level of HTTP requests.
+
+## [0.38.1] - 2024-09-23
+
+* Fix `ic-agent` manifest so that documentation can be built for docs.rs.
+
+## [0.38.0] - 2024-09-20
+
 * Breaking: Removed `Transport` and the `hyper` and `reqwest` features. `ReqwestTransport` is now the default and `HyperTransport` has been removed. Existing `ReqwestTransport` functions have been moved to `AgentBuilder`.
 * `Url` now implements `RouteProvider`.
 * Add canister snapshot methods to `ManagementCanister`.
 * Add `AllowedViewers` to `LogVisibility` enum.
+* Remove the cargo feature, `experimental_sync_call`, and enable synchronous update calls by default. 
 
 ## [0.37.1] - 2024-07-25
 
