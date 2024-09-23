@@ -1044,7 +1044,7 @@ dependencies = [
 
 [[package]]
 name = "ic-agent"
-version = "0.37.1"
+version = "0.38.0"
 dependencies = [
  "arc-swap",
  "async-channel",
@@ -1110,7 +1110,7 @@ dependencies = [
 
 [[package]]
 name = "ic-identity-hsm"
-version = "0.37.1"
+version = "0.38.0"
 dependencies = [
  "hex",
  "ic-agent",
@@ -1122,7 +1122,7 @@ dependencies = [
 
 [[package]]
 name = "ic-transport-types"
-version = "0.37.1"
+version = "0.38.0"
 dependencies = [
  "candid",
  "hex",
@@ -1138,7 +1138,7 @@ dependencies = [
 
 [[package]]
 name = "ic-utils"
-version = "0.37.1"
+version = "0.38.0"
 dependencies = [
  "async-trait",
  "candid",
@@ -1201,7 +1201,7 @@ dependencies = [
 
 [[package]]
 name = "icx"
-version = "0.37.1"
+version = "0.38.0"
 dependencies = [
  "anyhow",
  "candid",
@@ -1219,7 +1219,7 @@ dependencies = [
 
 [[package]]
 name = "icx-cert"
-version = "0.37.1"
+version = "0.38.0"
 dependencies = [
  "anyhow",
  "base64",
@@ -1827,9 +1827,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.6"
+version = "0.11.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba92fb39ec7ad06ca2582c0ca834dfeadcaf06ddfc8e635c80aa7e1c05315fdd"
+checksum = "fadfaed2cd7f389d0161bb73eeb07b7b78f8691047a6f3e73caaeae55310a4a6"
 dependencies = [
  "bytes",
  "rand",

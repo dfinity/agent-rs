@@ -19,6 +19,3 @@ tokio = { workspace = true, features = ["full"] }
 [dev-dependencies]
 serde_cbor = { workspace = true }
 ic-certification = { workspace = true }
-
-[features]
-experimental_sync_call = ["ic-agent/experimental_sync_call"]
