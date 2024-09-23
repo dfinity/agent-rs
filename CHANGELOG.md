@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Add support for dynamic routing based on boundary node discovery. This is an internal feature for now, with a feature flag `_internal_dynamic-routing`.
+
 ## [0.38.1] - 2024-09-23
 
 * Fix `ic-agent` manifest so that documentation can be built for docs.rs.
