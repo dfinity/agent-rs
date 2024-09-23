@@ -1893,7 +1893,7 @@ where
         req: &'a (dyn Fn() -> Result<Request, AgentError> + Send + Sync),
         _: usize,
     ) -> AgentFuture<'a, Response> {
-        Box::pin(async move { Ok(Service::call(&mut self, req()).await?) })
+        Box::pin(async move { Ok(Service::call(&mut self, req()?).await?) })
     }
 }
 
@@ -1905,23 +1905,20 @@ impl HttpService for Retry429Logic {
     fn call<'a>(
         &'a self,
         req: &'a (dyn Fn() -> Result<Request, AgentError> + Send + Sync),
-        max_retries: usize,
+        _max_retries: usize,
     ) -> AgentFuture<'a, Response> {
         Box::pin(async move {
-            let mut _retry_count = 0;
             loop {
-                let result = self.client.call(req, max_retries).await;
-                match result {
-                    Ok(resp) => {
-                        if resp.status() == StatusCode::TOO_MANY_REQUESTS {
-                            crate::util::sleep(Duration::from_millis(250)).await;
-                        } else {
-                            break Ok(resp);
-                        }
-                    }
-                    Err(err) => {
-                        break Err(err);
-                    }
+                #[cfg(not(target_family = "wasm"))]
+                let resp = self.client.call(req, _max_retries).await?;
+                // Client inconveniently does not implement Service on wasm
+                #[cfg(target_family = "wasm")]
+                let resp = self.client.execute(req()?).await?;
+                if resp.status() == StatusCode::TOO_MANY_REQUESTS {
+                    crate::util::sleep(Duration::from_millis(250)).await;
+                    continue;
+                } else {
+                    break Ok(resp);
                 }
             }
         })
