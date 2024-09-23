@@ -1,4 +1,4 @@
-use crate::agent::http_transport::dynamic_routing::{health_check::HealthCheckStatus, node::Node};
+use crate::agent::route_provider::dynamic_routing::{health_check::HealthCheckStatus, node::Node};
 
 /// Represents a message with fetched nodes.
 #[derive(Debug, Clone)]

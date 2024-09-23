@@ -1,4 +1,7 @@
 //! Dynamic routing implementation.
+//!
+//! This is an internal unstable feature. It works, but it's still in the oven; its design will go through drastic changes before it is released.
+
 pub mod dynamic_route_provider;
 /// Health check implementation.
 pub mod health_check;

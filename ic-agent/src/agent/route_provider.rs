@@ -7,6 +7,9 @@ use url::Url;
 
 use crate::agent::AgentError;
 
+#[cfg(feature = "_internal_dynamic-routing")]
+pub mod dynamic_routing;
+
 const IC0_DOMAIN: &str = "ic0.app";
 const ICP0_DOMAIN: &str = "icp0.io";
 const ICP_API_DOMAIN: &str = "icp-api.io";

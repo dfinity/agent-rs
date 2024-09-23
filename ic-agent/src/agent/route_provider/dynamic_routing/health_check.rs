@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use futures_util::FutureExt;
 use http::{Method, StatusCode};
 use reqwest::{Client, Request};
 use std::{
@@ -6,12 +7,11 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use tokio::{sync::mpsc, time};
-use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use stop_token::{StopSource, StopToken};
 use tracing::{debug, error, info, warn};
 use url::Url;
 
-use crate::agent::http_transport::dynamic_routing::{
+use crate::agent::route_provider::dynamic_routing::{
     dynamic_route_provider::DynamicRouteProviderError,
     messages::{FetchedNodes, NodeHealthState},
     node::Node,
@@ -113,7 +113,7 @@ struct HealthCheckActor {
     /// The sender channel (listener) to send the health status.
     sender_channel: SenderMpsc<NodeHealthState>,
     /// The cancellation token of the actor.
-    token: CancellationToken,
+    token: StopToken,
 }
 
 impl HealthCheckActor {
@@ -122,7 +122,7 @@ impl HealthCheckActor {
         period: Duration,
         node: Node,
         sender_channel: SenderMpsc<NodeHealthState>,
-        token: CancellationToken,
+        token: StopToken,
     ) -> Self {
         Self {
             checker,
@@ -135,19 +135,22 @@ impl HealthCheckActor {
 
     /// Runs the actor.
     async fn run(self) {
-        let mut interval = time::interval(self.period);
         loop {
-            tokio::select! {
-                _ = interval.tick() => {
-                    let health = self.checker.check(&self.node).await.unwrap_or_default();
-                    let message = NodeHealthState {
-                        node: self.node.clone(),
-                        health,
-                    };
-                    // Inform the listener about node's health. It can only fail if the listener was closed/dropped.
-                    self.sender_channel.send(message).await.expect("Failed to send node's health state");
+            let health = self.checker.check(&self.node).await.unwrap_or_default();
+            let message = NodeHealthState {
+                node: self.node.clone(),
+                health,
+            };
+            // Inform the listener about node's health. It can only fail if the listener was closed/dropped.
+            self.sender_channel
+                .send(message)
+                .await
+                .expect("Failed to send node's health state");
+            futures_util::select! {
+                _ = crate::util::sleep(self.period).fuse() => {
+                    continue;
                 }
-                _ = self.token.cancelled() => {
+                _ = self.token.clone().fuse() => {
                     info!("{HEALTH_CHECK_ACTOR}: was gracefully cancelled for node {:?}", self.node);
                     break;
                 }
@@ -178,11 +181,9 @@ pub(super) struct HealthManagerActor<S> {
     /// The sender channel to send the initialization status to DynamicRouteProvider (used only once in the init phase).
     init_sender: SenderMpsc<bool>,
     /// The cancellation token of the actor.
-    token: CancellationToken,
+    token: StopToken,
     /// The cancellation token for all the health checks.
-    nodes_token: CancellationToken,
-    /// The task tracker of the health checks, waiting for the tasks to exit (graceful termination).
-    nodes_tracker: TaskTracker,
+    nodes_token: StopSource,
     /// The flag indicating if this actor is initialized with healthy nodes.
     is_initialized: bool,
 }
@@ -198,9 +199,9 @@ where
         routing_snapshot: AtomicSwap<S>,
         fetch_receiver: ReceiverWatch<FetchedNodes>,
         init_sender: SenderMpsc<bool>,
-        token: CancellationToken,
+        token: StopToken,
     ) -> Self {
-        let (check_sender, check_receiver) = mpsc::channel(CHANNEL_BUFFER);
+        let (check_sender, check_receiver) = async_channel::bounded(CHANNEL_BUFFER);
 
         Self {
             checker,
@@ -211,8 +212,7 @@ where
             check_receiver,
             init_sender,
             token,
-            nodes_token: CancellationToken::new(),
-            nodes_tracker: TaskTracker::new(),
+            nodes_token: StopSource::new(),
             is_initialized: false,
         }
     }
@@ -220,23 +220,27 @@ where
     /// Runs the actor.
     pub async fn run(mut self) {
         loop {
-            tokio::select! {
+            futures_util::select! {
                 // Process a new array of fetched nodes from NodesFetchActor, if it appeared in the channel.
-                result = self.fetch_receiver.changed() => {
-                    if let Err(err) = result {
-                        error!("{HEALTH_MANAGER_ACTOR}: nodes fetch sender has been dropped: {err:?}");
-                        self.token.cancel();
-                        continue;
-                    }
+                result = self.fetch_receiver.recv().fuse() => {
+                    let value = match result {
+                        Ok(value) => value,
+                        Err(err) => {
+                            error!("{HEALTH_MANAGER_ACTOR}: nodes fetch sender has been dropped: {err:?}");
+                            continue;
+                        }
+                    };
                     // Get the latest value from the channel and mark it as seen.
-                    let Some(FetchedNodes { nodes }) = self.fetch_receiver.borrow_and_update().clone() else { continue };
+                    let Some(FetchedNodes { nodes }) = value else { continue };
                     self.handle_fetch_update(nodes).await;
                 }
                 // Receive health check messages from all running HealthCheckActor/s.
-                Some(msg) = self.check_receiver.recv() => {
-                    self.handle_health_update(msg).await;
+                msg_opt = self.check_receiver.recv().fuse() => {
+                    if let Ok(msg) = msg_opt {
+                        self.handle_health_update(msg).await;
+                    }
                 }
-                _ = self.token.cancelled() => {
+                _ = self.token.clone().fuse() => {
                     self.stop_all_checks().await;
                     self.check_receiver.close();
                     warn!("{HEALTH_MANAGER_ACTOR}: was gracefully cancelled, all nodes health checks stopped");
@@ -279,7 +283,7 @@ where
 
     fn start_checks(&mut self, nodes: Vec<Node>) {
         // Create a single cancellation token for all started health checks.
-        self.nodes_token = CancellationToken::new();
+        self.nodes_token = StopSource::new();
         for node in nodes {
             debug!("{HEALTH_MANAGER_ACTOR}: starting health check for node {node:?}");
             let actor = HealthCheckActor::new(
@@ -287,16 +291,14 @@ where
                 self.period,
                 node,
                 self.check_sender.clone(),
-                self.nodes_token.clone(),
+                self.nodes_token.token(),
             );
-            self.nodes_tracker.spawn(async move { actor.run().await });
+            crate::util::spawn(async move { actor.run().await });
         }
     }
 
-    async fn stop_all_checks(&self) {
+    async fn stop_all_checks(&mut self) {
         warn!("{HEALTH_MANAGER_ACTOR}: stopping all running health checks");
-        self.nodes_token.cancel();
-        self.nodes_tracker.close();
-        self.nodes_tracker.wait().await;
+        self.nodes_token = StopSource::new();
     }
 }

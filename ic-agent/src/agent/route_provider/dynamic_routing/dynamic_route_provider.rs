@@ -7,19 +7,15 @@ use std::{
 
 use arc_swap::ArcSwap;
 use candid::Principal;
+use futures_util::FutureExt;
 use reqwest::Client;
+use stop_token::StopSource;
 use thiserror::Error;
-use tokio::{
-    runtime::Handle,
-    sync::{mpsc, watch},
-    time::timeout,
-};
-use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::{error, info, warn};
 use url::Url;
 
 use crate::{
-    agent::http_transport::{
+    agent::route_provider::{
         dynamic_routing::{
             health_check::{HealthCheck, HealthChecker, HealthManagerActor},
             messages::FetchedNodes,
@@ -28,7 +24,7 @@ use crate::{
             snapshot::routing_snapshot::RoutingSnapshot,
             type_aliases::AtomicSwap,
         },
-        route_provider::RouteProvider,
+        RouteProvider,
     },
     AgentError,
 };
@@ -64,12 +60,10 @@ pub struct DynamicRouteProvider<S> {
     check_period: Duration,
     /// Snapshot of the routing nodes.
     routing_snapshot: AtomicSwap<S>,
-    /// Task tracker for managing the spawned tasks.
-    tracker: TaskTracker,
     /// Initial seed nodes, which are used for the initial fetching of the nodes.
     seeds: Vec<Node>,
     /// Cancellation token for stopping the spawned tasks.
-    token: CancellationToken,
+    token: StopSource,
 }
 
 /// An error that occurred when the DynamicRouteProvider service was running.
@@ -153,9 +147,8 @@ impl<S> DynamicRouteProviderBuilder<S> {
             checker: self.checker,
             check_period: self.check_period,
             routing_snapshot: self.routing_snapshot,
-            tracker: TaskTracker::new(),
             seeds: self.seeds,
-            token: CancellationToken::new(),
+            token: StopSource::new(),
         };
 
         route_provider.run().await;
@@ -203,10 +196,10 @@ where
     pub async fn run(&self) {
         info!("{DYNAMIC_ROUTE_PROVIDER}: started ...");
         // Communication channel between NodesFetchActor and HealthManagerActor.
-        let (fetch_sender, fetch_receiver) = watch::channel(None);
+        let (fetch_sender, fetch_receiver) = async_watch::channel(None);
 
         // Communication channel with HealthManagerActor to receive info about healthy seed nodes (used only once).
-        let (init_sender, mut init_receiver) = mpsc::channel(1);
+        let (init_sender, init_receiver) = async_channel::bounded(1);
 
         // Start the receiving part first.
         let health_manager_actor = HealthManagerActor::new(
@@ -215,10 +208,9 @@ where
             Arc::clone(&self.routing_snapshot),
             fetch_receiver,
             init_sender,
-            self.token.clone(),
+            self.token.token(),
         );
-        self.tracker
-            .spawn(async move { health_manager_actor.run().await });
+        crate::util::spawn(async move { health_manager_actor.run().await });
 
         // Dispatch all seed nodes for initial health checks
         if let Err(err) = fetch_sender.send(Some(FetchedNodes {
@@ -229,16 +221,20 @@ where
 
         // Try await for healthy seeds.
         let start = Instant::now();
-        match timeout(TIMEOUT_AWAIT_HEALTHY_SEED, init_receiver.recv()).await {
-            Ok(_) => info!(
-                "{DYNAMIC_ROUTE_PROVIDER}: found healthy seeds within {:?}",
-                start.elapsed()
-            ),
-            Err(_) => warn!(
-                "{DYNAMIC_ROUTE_PROVIDER}: no healthy seeds found within {:?}",
-                start.elapsed()
-            ),
-        };
+        futures_util::select! {
+            _ = crate::util::sleep(TIMEOUT_AWAIT_HEALTHY_SEED).fuse() => {
+                warn!(
+                    "{DYNAMIC_ROUTE_PROVIDER}: no healthy seeds found within {:?}",
+                    start.elapsed()
+                );
+            }
+            _ = init_receiver.recv().fuse() => {
+                info!(
+                    "{DYNAMIC_ROUTE_PROVIDER}: found healthy seeds within {:?}",
+                    start.elapsed()
+                );
+            }
+        }
         // We can close the channel now.
         init_receiver.close();
 
@@ -248,30 +244,12 @@ where
             self.fetch_retry_interval,
             fetch_sender,
             Arc::clone(&self.routing_snapshot),
-            self.token.clone(),
+            self.token.token(),
         );
-        self.tracker.spawn(async move { fetch_actor.run().await });
+        crate::util::spawn(async move { fetch_actor.run().await });
         info!(
             "{DYNAMIC_ROUTE_PROVIDER}: NodesFetchActor and HealthManagerActor started successfully"
         );
-    }
-}
-
-// Gracefully stop the inner spawned tasks running in the background.
-impl<S> Drop for DynamicRouteProvider<S> {
-    fn drop(&mut self) {
-        self.token.cancel();
-        self.tracker.close();
-        let tracker = self.tracker.clone();
-        // If no runtime is available do nothing.
-        if let Ok(handle) = Handle::try_current() {
-            handle.spawn(async move {
-                tracker.wait().await;
-                warn!("{DYNAMIC_ROUTE_PROVIDER}: stopped gracefully");
-            });
-        } else {
-            error!("{DYNAMIC_ROUTE_PROVIDER}: no runtime available, cannot stop the spawned tasks");
-        }
     }
 }
 
@@ -287,7 +265,7 @@ mod tests {
     use tracing_subscriber::FmtSubscriber;
 
     use crate::{
-        agent::http_transport::{
+        agent::route_provider::{
             dynamic_routing::{
                 dynamic_route_provider::{
                     DynamicRouteProviderBuilder, IC0_SEED_DOMAIN, MAINNET_ROOT_SUBNET_ID,
@@ -301,8 +279,7 @@ mod tests {
                     assert_routed_domains, route_n_times, NodeHealthCheckerMock, NodesFetcherMock,
                 },
             },
-            route_provider::RouteProvider,
-            ReqwestTransport,
+            RouteProvider,
         },
         Agent, AgentError,
     };
@@ -367,11 +344,9 @@ mod tests {
         .build()
         .await;
         let route_provider = Arc::new(route_provider) as Arc<dyn RouteProvider>;
-        let transport =
-            ReqwestTransport::create_with_client_route(Arc::clone(&route_provider), client)
-                .expect("failed to create transport");
         let agent = Agent::builder()
-            .with_transport(transport)
+            .with_arc_route_provider(Arc::clone(&route_provider))
+            .with_http_client(client)
             .build()
             .expect("failed to create an agent");
         let subnet_id = Principal::from_text(MAINNET_ROOT_SUBNET_ID).unwrap();
