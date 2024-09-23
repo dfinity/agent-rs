@@ -1044,7 +1044,7 @@ dependencies = [
 
 [[package]]
 name = "ic-agent"
-version = "0.38.0"
+version = "0.38.1"
 dependencies = [
  "arc-swap",
  "async-channel",
@@ -1110,7 +1110,7 @@ dependencies = [
 
 [[package]]
 name = "ic-identity-hsm"
-version = "0.38.0"
+version = "0.38.1"
 dependencies = [
  "hex",
  "ic-agent",
@@ -1122,7 +1122,7 @@ dependencies = [
 
 [[package]]
 name = "ic-transport-types"
-version = "0.38.0"
+version = "0.38.1"
 dependencies = [
  "candid",
  "hex",
@@ -1138,7 +1138,7 @@ dependencies = [
 
 [[package]]
 name = "ic-utils"
-version = "0.38.0"
+version = "0.38.1"
 dependencies = [
  "async-trait",
  "candid",
@@ -1201,7 +1201,7 @@ dependencies = [
 
 [[package]]
 name = "icx"
-version = "0.38.0"
+version = "0.38.1"
 dependencies = [
  "anyhow",
  "candid",
@@ -1219,7 +1219,7 @@ dependencies = [
 
 [[package]]
 name = "icx-cert"
-version = "0.38.0"
+version = "0.38.1"
 dependencies = [
  "anyhow",
  "base64",

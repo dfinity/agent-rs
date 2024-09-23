@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.38.1] - 2024-09-23
+
+* Fix `ic-agent` manifest so that documentation can be built for docs.rs.
+
 ## [0.38.0] - 2024-09-20
 
 * Breaking: Removed `Transport` and the `hyper` and `reqwest` features. `ReqwestTransport` is now the default and `HyperTransport` has been removed. Existing `ReqwestTransport` functions have been moved to `AgentBuilder`.
