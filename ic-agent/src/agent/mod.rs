@@ -181,10 +181,10 @@ impl Agent {
             identity: config.identity,
             ingress_expiry: config.ingress_expiry.unwrap_or(DEFAULT_INGRESS_EXPIRY),
             root_key: Arc::new(RwLock::new(IC_ROOT_KEY.to_vec())),
-            client: config.client.unwrap_or_else(|| {
+            client: config.http_service.unwrap_or_else(|| {
                 Arc::new(DefaultRetryLogic {
                     _max_tcp_error_retries: config.max_tcp_error_retries,
-                    client: {
+                    client: config.client.unwrap_or_else(|| {
                         #[cfg(not(target_family = "wasm"))]
                         {
                             Client::builder()
@@ -197,7 +197,7 @@ impl Agent {
                         {
                             Client::new()
                         }
-                    },
+                    }),
                 })
             }),
             route_provider: config
