@@ -20,6 +20,31 @@ impl AgentBuilder {
         Agent::new(self.config)
     }
 
+    /// Set the dynamic transport layer for the [`Agent`], performing continuous discovery of the API boundary nodes and routing traffic via them based on latency.
+    #[cfg(feature = "_internal_dynamic-routing")]
+    pub async fn with_discovery_transport(self, client: reqwest::Client) -> Self {
+        use crate::agent::route_provider::dynamic_routing::{
+            dynamic_route_provider::{DynamicRouteProviderBuilder, IC0_SEED_DOMAIN},
+            node::Node,
+            snapshot::latency_based_routing::LatencyRoutingSnapshot,
+        };
+        // TODO: This is a temporary solution to get the seed node.
+        let seed = Node::new(IC0_SEED_DOMAIN).unwrap();
+
+        let route_provider = DynamicRouteProviderBuilder::new(
+            LatencyRoutingSnapshot::new(),
+            vec![seed],
+            client.clone(),
+        )
+        .build()
+        .await;
+
+        let route_provider = Arc::new(route_provider) as Arc<dyn RouteProvider>;
+
+        self.with_arc_route_provider(route_provider)
+            .with_http_client(client)
+    }
+
     /// Set the URL of the [Agent].
     pub fn with_url<S: Into<String>>(self, url: S) -> Self {
         self.with_route_provider(url.into().parse::<Url>().unwrap())
