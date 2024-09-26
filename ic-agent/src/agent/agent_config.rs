@@ -1,11 +1,12 @@
+use reqwest::Client;
+
 use crate::{
     agent::{NonceFactory, NonceGenerator},
     identity::{anonymous::AnonymousIdentity, Identity},
 };
-use reqwest::Client;
 use std::{sync::Arc, time::Duration};
 
-use super::route_provider::RouteProvider;
+use super::{route_provider::RouteProvider, HttpService};
 
 /// A configuration for an agent.
 #[non_exhaustive]
@@ -28,6 +29,8 @@ pub struct AgentConfig {
     pub max_response_body_size: Option<usize>,
     /// See [`with_max_tcp_error_retries`](super::AgentBuilder::with_max_tcp_error_retries).
     pub max_tcp_error_retries: usize,
+    /// See [`with_arc_http_middleware`](super::AgentBuilder::with_arc_http_middleware).
+    pub http_service: Option<Arc<dyn HttpService>>,
 }
 
 impl Default for AgentConfig {
@@ -37,6 +40,7 @@ impl Default for AgentConfig {
             identity: Arc::new(AnonymousIdentity {}),
             ingress_expiry: None,
             client: None,
+            http_service: None,
             verify_query_signatures: true,
             max_concurrent_requests: 50,
             route_provider: None,

@@ -18,7 +18,7 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 arc-swap = { version = "1.7", optional = true }
 async-channel = { version = "1.9", optional = true }
 async-lock = "3.3"
-async-trait = { version = "0.1", optional = true }
+async-trait = "0.1"
 async-watch = { version = "0.3", optional = true }
 backoff = "0.4.0"
 cached = { version = "0.52", features = ["ahash"], default-features = false }
@@ -48,6 +48,7 @@ simple_asn1 = "0.6.1"
 stop-token = { version = "0.7", optional = true }
 thiserror = { workspace = true }
 time = { workspace = true }
+tower-service = "0.3"
 tracing = { version = "0.1", optional = true }
 url = "2.1.0"
 
@@ -108,7 +109,6 @@ wasm-bindgen = [
 _internal_dynamic-routing = [
     "dep:arc-swap",
     "dep:async-channel",
-    "dep:async-trait",
     "dep:async-watch",
     "dep:stop-token",
     "tracing",

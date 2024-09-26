@@ -15,6 +15,7 @@ pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
 use agent_error::HttpErrorPayload;
 use async_lock::Semaphore;
+use async_trait::async_trait;
 pub use builder::AgentBuilder;
 use cached::{Cached, TimedCache};
 use ed25519_consensus::{Error as Ed25519Error, Signature, VerificationKey};
@@ -27,9 +28,10 @@ pub use ic_transport_types::{
 };
 pub use nonce::{NonceFactory, NonceGenerator};
 use rangemap::{RangeInclusiveMap, RangeInclusiveSet, StepFns};
-use reqwest::{Body, Client, Request};
+use reqwest::{Body, Client, Request, Response};
 use route_provider::RouteProvider;
 use time::OffsetDateTime;
+use tower_service::Service;
 
 #[cfg(test)]
 mod agent_test;
@@ -148,7 +150,7 @@ pub struct Agent {
     identity: Arc<dyn Identity>,
     ingress_expiry: Duration,
     root_key: Arc<RwLock<Vec<u8>>>,
-    client: Client,
+    client: Arc<dyn HttpService>,
     route_provider: Arc<dyn RouteProvider>,
     subnet_key_cache: Arc<Mutex<SubnetCache>>,
     concurrent_requests_semaphore: Arc<Semaphore>,
@@ -180,19 +182,23 @@ impl Agent {
             identity: config.identity,
             ingress_expiry: config.ingress_expiry.unwrap_or(DEFAULT_INGRESS_EXPIRY),
             root_key: Arc::new(RwLock::new(IC_ROOT_KEY.to_vec())),
-            client: config.client.unwrap_or_else(|| {
-                #[cfg(not(target_family = "wasm"))]
-                {
-                    Client::builder()
-                        .use_rustls_tls()
-                        .timeout(Duration::from_secs(360))
-                        .build()
-                        .expect("Could not create HTTP client.")
-                }
-                #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
-                {
-                    Client::new()
-                }
+            client: config.http_service.unwrap_or_else(|| {
+                Arc::new(Retry429Logic {
+                    client: config.client.unwrap_or_else(|| {
+                        #[cfg(not(target_family = "wasm"))]
+                        {
+                            Client::builder()
+                                .use_rustls_tls()
+                                .timeout(Duration::from_secs(360))
+                                .build()
+                                .expect("Could not create HTTP client.")
+                        }
+                        #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
+                        {
+                            Client::new()
+                        }
+                    }),
+                })
             }),
             route_provider: config
                 .route_provider
@@ -1110,40 +1116,13 @@ impl Agent {
             Ok(http_request)
         };
 
-        // Dispatch request with a retry logic only for non-wasm builds.
-        let response = {
-            #[cfg(target_family = "wasm")]
-            {
-                let http_request = create_request_with_generated_url()?;
-                self.client.execute(http_request).await?
-            }
-            #[cfg(not(target_family = "wasm"))]
-            {
-                // RouteProvider generates urls dynamically. Some of these urls can be potentially unhealthy.
-                // TCP related errors (host unreachable, connection refused, connection timed out, connection reset) can be safely retried with a newly generated url.
-
-                let mut retry_count = 0;
-
-                loop {
-                    let http_request = create_request_with_generated_url()?;
-
-                    match self.client.execute(http_request).await {
-                        Ok(response) => break response,
-                        Err(err) => {
-                            // Network-related errors can be retried.
-                            if err.is_connect() {
-                                if retry_count >= self.max_tcp_error_retries {
-                                    return Err(AgentError::TransportError(err));
-                                }
-                                retry_count += 1;
-                                continue;
-                            }
-                            return Err(AgentError::TransportError(err));
-                        }
-                    }
-                }
-            }
-        };
+        let response = self
+            .client
+            .call(
+                &create_request_with_generated_url,
+                self.max_tcp_error_retries,
+            )
+            .await?;
 
         let http_status = response.status();
         let response_headers = response.headers().clone();
@@ -1184,15 +1163,10 @@ impl Agent {
         endpoint: &str,
         body: Option<Vec<u8>>,
     ) -> Result<(StatusCode, Vec<u8>), AgentError> {
-        let request_result = loop {
-            let result = self
-                .request(method.clone(), endpoint, body.as_ref().cloned())
-                .await?;
-            if result.0 != StatusCode::TOO_MANY_REQUESTS {
-                break result;
-            }
-            crate::util::sleep(Duration::from_millis(250)).await;
-        };
+        let request_result = self
+            .request(method.clone(), endpoint, body.as_ref().cloned())
+            .await?;
+
         let status = request_result.0;
         let headers = request_result.1;
         let body = request_result.2;
@@ -1865,6 +1839,94 @@ impl<'agent> IntoFuture for UpdateBuilder<'agent> {
     type Output = Result<Vec<u8>, AgentError>;
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(self.call_and_wait())
+    }
+}
+
+/// HTTP client middleware. Implemented automatically for `reqwest`-compatible by-ref `tower::Service`, such as `reqwest_middleware`.
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
+pub trait HttpService: Send + Sync {
+    /// Perform a HTTP request. Any retry logic should call `req` again, instead of `Request::try_clone`.
+    async fn call<'a>(
+        &'a self,
+        req: &'a (dyn Fn() -> Result<Request, AgentError> + Send + Sync),
+        max_retries: usize,
+    ) -> Result<Response, AgentError>;
+}
+#[cfg(not(target_family = "wasm"))]
+#[async_trait]
+impl<T> HttpService for T
+where
+    for<'a> &'a T: Service<Request, Response = Response, Error = reqwest::Error>,
+    for<'a> <&'a Self as Service<Request>>::Future: Send,
+    T: Send + Sync + ?Sized,
+{
+    #[allow(clippy::needless_arbitrary_self_type)]
+    async fn call<'a>(
+        mut self: &'a Self,
+        req: &'a (dyn Fn() -> Result<Request, AgentError> + Send + Sync),
+        max_retries: usize,
+    ) -> Result<Response, AgentError> {
+        let mut retry_count = 0;
+        loop {
+            match Service::call(&mut self, req()?).await {
+                Err(err) => {
+                    // Network-related errors can be retried.
+                    if err.is_connect() {
+                        if retry_count >= max_retries {
+                            return Err(AgentError::TransportError(err));
+                        }
+                        retry_count += 1;
+                    }
+                }
+                Ok(resp) => return Ok(resp),
+            }
+        }
+    }
+}
+
+#[cfg(target_family = "wasm")]
+#[async_trait(?Send)]
+impl<T> HttpService for T
+where
+    for<'a> &'a T: Service<Request, Response = Response, Error = reqwest::Error>,
+    T: Send + Sync + ?Sized,
+{
+    #[allow(clippy::needless_arbitrary_self_type)]
+    async fn call<'a>(
+        mut self: &'a Self,
+        req: &'a (dyn Fn() -> Result<Request, AgentError> + Send + Sync),
+        _: usize,
+    ) -> Result<Response, AgentError> {
+        Ok(Service::call(&mut self, req()?).await?)
+    }
+}
+
+struct Retry429Logic {
+    client: Client,
+}
+
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
+impl HttpService for Retry429Logic {
+    async fn call<'a>(
+        &'a self,
+        req: &'a (dyn Fn() -> Result<Request, AgentError> + Send + Sync),
+        _max_retries: usize,
+    ) -> Result<Response, AgentError> {
+        loop {
+            #[cfg(not(target_family = "wasm"))]
+            let resp = self.client.call(req, _max_retries).await?;
+            // Client inconveniently does not implement Service on wasm
+            #[cfg(target_family = "wasm")]
+            let resp = self.client.execute(req()?).await?;
+            if resp.status() == StatusCode::TOO_MANY_REQUESTS {
+                crate::util::sleep(Duration::from_millis(250)).await;
+                continue;
+            } else {
+                break Ok(resp);
+            }
+        }
     }
 }
 

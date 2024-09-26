@@ -1087,6 +1087,7 @@ dependencies = [
  "thiserror",
  "time",
  "tokio",
+ "tower-service",
  "tracing",
  "tracing-subscriber",
  "url",
