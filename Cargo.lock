@@ -1049,6 +1049,7 @@ name = "ic-agent"
 version = "0.38.1"
 dependencies = [
  "async-lock",
+ "async-trait",
  "backoff",
  "cached",
  "candid",
@@ -1084,6 +1085,7 @@ dependencies = [
  "thiserror",
  "time",
  "tokio",
+ "tower-service",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
