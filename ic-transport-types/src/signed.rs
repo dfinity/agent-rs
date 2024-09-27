@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 
 /// A signed query request message. Produced by
 /// [`QueryBuilder::sign`](https://docs.rs/ic-agent/latest/ic_agent/agent/struct.QueryBuilder.html#method.sign).
+///
+/// To submit this request, pass the `signed_query` field to [`Agent::query_signed`](https://docs.rs/ic-agent/latest/ic_agent/struct.Agent.html#method.query_signed).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SignedQuery {
     /// The Unix timestamp that the request will expire at.
@@ -22,6 +24,7 @@ pub struct SignedQuery {
     /// The [effective canister ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-canister-id) of the destination.
     pub effective_canister_id: Principal,
     /// The CBOR-encoded [authentication envelope](https://internetcomputer.org/docs/current/references/ic-interface-spec#authentication) for the request.
+    /// This field can be passed to [`Agent::query_signed`](https://docs.rs/ic-agent/latest/ic_agent/struct.Agent.html#method.query_signed).
     #[serde(with = "serde_bytes")]
     pub signed_query: Vec<u8>,
     /// A nonce to uniquely identify this query call.
@@ -33,6 +36,8 @@ pub struct SignedQuery {
 
 /// A signed update request message. Produced by
 /// [`UpdateBuilder::sign`](https://docs.rs/ic-agent/latest/ic_agent/agent/struct.UpdateBuilder.html#method.sign).
+///
+/// To submit this request, pass the `signed_update` field to [`Agent::update_signed`](https://docs.rs/ic-agent/latest/ic_agent/struct.Agent.html#method.update_signed).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SignedUpdate {
     /// A nonce to uniquely identify this update call.
@@ -55,6 +60,7 @@ pub struct SignedUpdate {
     pub effective_canister_id: Principal,
     #[serde(with = "serde_bytes")]
     /// The CBOR-encoded [authentication envelope](https://internetcomputer.org/docs/current/references/ic-interface-spec#authentication) for the request.
+    /// This field can be passed to [`Agent::update_signed`](https://docs.rs/ic-agent/latest/ic_agent/struct.Agent.html#method.update_signed).
     pub signed_update: Vec<u8>,
     /// The request ID.
     pub request_id: RequestId,
@@ -62,6 +68,8 @@ pub struct SignedUpdate {
 
 /// A signed request-status request message. Produced by
 /// [`Agent::sign_request_status`](https://docs.rs/ic-agent/latest/ic_agent/agent/struct.Agent.html#method.sign_request_status).
+///
+/// To submit this request, pass the `signed_request_status` field to [`Agent::request_status_signed`](https://docs.rs/ic-agent/latest/ic_agent/struct.Agent.html#method.request_status_signed).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SignedRequestStatus {
     /// The Unix timestamp that the request will expire at.
@@ -73,6 +81,7 @@ pub struct SignedRequestStatus {
     /// The request ID.
     pub request_id: RequestId,
     /// The CBOR-encoded [authentication envelope](https://internetcomputer.org/docs/current/references/ic-interface-spec#authentication) for the request.
+    /// This field can be passed to [`Agent::request_status_signed`](https://docs.rs/ic-agent/latest/ic_agent/struct.Agent.html#method.request_status_signed).
     #[serde(with = "serde_bytes")]
     pub signed_request_status: Vec<u8>,
 }

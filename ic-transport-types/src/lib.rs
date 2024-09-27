@@ -16,7 +16,8 @@ use thiserror::Error;
 mod request_id;
 pub mod signed;
 
-/// The authentication envelope, containing the contents and their signature.
+/// The authentication envelope, containing the contents and their signature. This struct can be passed to `Agent`'s
+/// `*_signed` methods via [`to_bytes`](Envelope::to_bytes).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct Envelope<'a> {
@@ -32,6 +33,17 @@ pub struct Envelope<'a> {
     /// The chain of delegations connecting `sender_pubkey` to `sender_sig`, and in that order.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sender_delegation: Option<Vec<SignedDelegation>>,
+}
+
+impl Envelope<'_> {
+    /// Convert the authentication envelope to the format expected by the IC HTTP interface. The result can be passed to `Agent`'s `*_signed` methods.
+    pub fn encode_bytes(&self) -> Vec<u8> {
+        let mut serializer = serde_cbor::Serializer::new(Vec::new());
+        serializer.self_describe().unwrap();
+        self.serialize(&mut serializer)
+            .expect("infallible Envelope::serialize");
+        serializer.into_inner()
+    }
 }
 
 /// The content of an IC ingress message, not including any signature information.

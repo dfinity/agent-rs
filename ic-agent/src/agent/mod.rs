@@ -1509,7 +1509,7 @@ pub struct ApiBoundaryNode {
     pub ipv4_address: Option<String>,
 }
 
-/// A Query Request Builder.
+/// A query request builder.
 ///
 /// This makes it easier to do query calls without actually passing all arguments.
 #[derive(Debug, Clone)]
@@ -1633,14 +1633,10 @@ impl<'agent> QueryBuilder<'agent> {
     /// Sign a query call. This will return a [`signed::SignedQuery`]
     /// which contains all fields of the query and the signed query in CBOR encoding
     pub fn sign(self) -> Result<SignedQuery, AgentError> {
-        let content = self.agent.query_content(
-            self.canister_id,
-            self.method_name,
-            self.arg,
-            self.ingress_expiry_datetime,
-            self.use_nonce,
-        )?;
-        let signed_query = sign_envelope(&content, self.agent.identity.clone())?;
+        let effective_canister_id = self.effective_canister_id;
+        let identity = self.agent.identity.clone();
+        let content = self.into_envelope()?;
+        let signed_query = sign_envelope(&content, identity)?;
         let EnvelopeContent::Query {
             ingress_expiry,
             sender,
@@ -1658,10 +1654,21 @@ impl<'agent> QueryBuilder<'agent> {
             canister_id,
             method_name,
             arg,
-            effective_canister_id: self.effective_canister_id,
+            effective_canister_id,
             signed_query,
             nonce,
         })
+    }
+
+    /// Converts the query builder into [`EnvelopeContent`] for external signing or storage.
+    pub fn into_envelope(self) -> Result<EnvelopeContent, AgentError> {
+        self.agent.query_content(
+            self.canister_id,
+            self.method_name,
+            self.arg,
+            self.ingress_expiry_datetime,
+            self.use_nonce,
+        )
     }
 }
 
@@ -1709,7 +1716,7 @@ impl<'a> UpdateCall<'a> {
         }
     }
 }
-/// An Update Request Builder.
+/// An update request Builder.
 ///
 /// This makes it easier to do update calls without actually passing all arguments or specifying
 /// if you want to wait or not.
@@ -1799,15 +1806,10 @@ impl<'agent> UpdateBuilder<'agent> {
     /// Sign a update call. This will return a [`signed::SignedUpdate`]
     /// which contains all fields of the update and the signed update in CBOR encoding
     pub fn sign(self) -> Result<SignedUpdate, AgentError> {
-        let nonce = self.agent.nonce_factory.generate();
-        let content = self.agent.update_content(
-            self.canister_id,
-            self.method_name,
-            self.arg,
-            self.ingress_expiry_datetime,
-            nonce,
-        )?;
-        let signed_update = sign_envelope(&content, self.agent.identity.clone())?;
+        let identity = self.agent.identity.clone();
+        let effective_canister_id = self.effective_canister_id;
+        let content = self.into_envelope()?;
+        let signed_update = sign_envelope(&content, identity)?;
         let request_id = to_request_id(&content)?;
         let EnvelopeContent::Call {
             nonce,
@@ -1827,10 +1829,22 @@ impl<'agent> UpdateBuilder<'agent> {
             canister_id,
             method_name,
             arg,
-            effective_canister_id: self.effective_canister_id,
+            effective_canister_id,
             signed_update,
             request_id,
         })
+    }
+
+    /// Converts the update builder into an [`EnvelopeContent`] for external signing or storage.
+    pub fn into_envelope(self) -> Result<EnvelopeContent, AgentError> {
+        let nonce = self.agent.nonce_factory.generate();
+        self.agent.update_content(
+            self.canister_id,
+            self.method_name,
+            self.arg,
+            self.ingress_expiry_datetime,
+            nonce,
+        )
     }
 }
 
