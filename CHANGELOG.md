@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Limited the number of HTTP 429 retries. Users receiving this error should configure `with_max_concurrent_requests`.
 * Added `Envelope::encode_bytes` and `Query/UpdateBuilder::into_envelope` for external signing workflows.
 * Added `AgentBuilder::with_arc_http_middleware` for `Transport`-like functionality at the level of HTTP requests.
 * Add support for dynamic routing based on boundary node discovery. This is an internal feature for now, with a feature flag `_internal_dynamic-routing`.

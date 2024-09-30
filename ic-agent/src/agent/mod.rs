@@ -1926,17 +1926,23 @@ impl HttpService for Retry429Logic {
     async fn call<'a>(
         &'a self,
         req: &'a (dyn Fn() -> Result<Request, AgentError> + Send + Sync),
-        _max_retries: usize,
+        _max_tcp_retries: usize,
     ) -> Result<Response, AgentError> {
+        let mut retries = 0;
         loop {
             #[cfg(not(target_family = "wasm"))]
-            let resp = self.client.call(req, _max_retries).await?;
+            let resp = self.client.call(req, _max_tcp_retries).await?;
             // Client inconveniently does not implement Service on wasm
             #[cfg(target_family = "wasm")]
             let resp = self.client.execute(req()?).await?;
             if resp.status() == StatusCode::TOO_MANY_REQUESTS {
-                crate::util::sleep(Duration::from_millis(250)).await;
-                continue;
+                if retries == 6 {
+                    break Ok(resp);
+                } else {
+                    retries += 1;
+                    crate::util::sleep(Duration::from_millis(250)).await;
+                    continue;
+                }
             } else {
                 break Ok(resp);
             }
