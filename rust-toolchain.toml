@@ -2,6 +2,6 @@
 # MSRV
 # Avoid updating this field unless we use new Rust features
 # Sync rust-version in workspace Cargo.toml
-channel = "1.70.0"
+channel = "1.75.0"
 components = ["rustfmt", "clippy"]
 targets = ["wasm32-unknown-unknown"]

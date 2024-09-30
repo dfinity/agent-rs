@@ -4,24 +4,27 @@
 pub use super::attributes::{
     ComputeAllocation, FreezingThreshold, MemoryAllocation, ReservedCyclesLimit, WasmMemoryLimit,
 };
-use super::{ChunkHash, ManagementCanister};
+use super::{ChunkHash, LogVisibility, ManagementCanister};
+use crate::call::CallFuture;
 use crate::{
     call::AsyncCall, canister::Argument, interfaces::management_canister::MgmtMethod, Canister,
 };
 use async_trait::async_trait;
-use candid::utils::ArgumentEncoder;
-use candid::{CandidType, Deserialize, Nat};
+use candid::{utils::ArgumentEncoder, CandidType, Deserialize, Nat};
 use futures_util::{
     future::ready,
     stream::{self, FuturesUnordered},
     FutureExt, Stream, StreamExt, TryStreamExt,
 };
-use ic_agent::{export::Principal, AgentError, RequestId};
+use ic_agent::{agent::CallResponse, export::Principal, AgentError};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeSet;
-use std::convert::{From, TryInto};
-use std::pin::Pin;
-use std::str::FromStr;
+use std::{
+    collections::BTreeSet,
+    convert::{From, TryInto},
+    future::IntoFuture,
+    pin::Pin,
+    str::FromStr,
+};
 
 /// The set of possible canister settings. Similar to [`DefiniteCanisterSettings`](super::DefiniteCanisterSettings),
 /// but all the fields are optional.
@@ -72,6 +75,11 @@ pub struct CanisterSettings {
     ///
     /// Must be a number between 0 and 2^48^ (i.e 256TB), inclusively.
     pub wasm_memory_limit: Option<Nat>,
+
+    /// The canister log visibility of the canister.
+    ///
+    /// If unspecified and a canister is being created with these settings, defaults to `Controllers`, i.e. private by default.
+    pub log_visibility: Option<LogVisibility>,
 }
 
 /// A builder for a `create_canister` call.
@@ -85,6 +93,7 @@ pub struct CreateCanisterBuilder<'agent, 'canister: 'agent> {
     freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
     reserved_cycles_limit: Option<Result<ReservedCyclesLimit, AgentError>>,
     wasm_memory_limit: Option<Result<WasmMemoryLimit, AgentError>>,
+    log_visibility: Option<Result<LogVisibility, AgentError>>,
     is_provisional_create: bool,
     amount: Option<u128>,
     specified_id: Option<Principal>,
@@ -102,6 +111,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             freezing_threshold: None,
             reserved_cycles_limit: None,
             wasm_memory_limit: None,
+            log_visibility: None,
             is_provisional_create: false,
             amount: None,
             specified_id: None,
@@ -316,9 +326,35 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         }
     }
 
+    /// Pass in a log visibility setting for the canister.
+    pub fn with_log_visibility<C, E>(self, log_visibility: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<LogVisibility, Error = E>,
+    {
+        self.with_optional_log_visibility(Some(log_visibility))
+    }
+
+    /// Pass in a log visibility optional setting for the canister. If this is [None],
+    /// it will revert the log visibility to default.
+    pub fn with_optional_log_visibility<E, C>(self, log_visibility: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<LogVisibility, Error = E>,
+    {
+        Self {
+            log_visibility: log_visibility.map(|visibility| {
+                visibility
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+            }),
+            ..self
+        }
+    }
+
     /// Create an [AsyncCall] implementation that, when called, will create a
     /// canister.
-    pub fn build(self) -> Result<impl 'agent + AsyncCall<(Principal,)>, AgentError> {
+    pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = (Principal,)>, AgentError> {
         let controllers = match self.controllers {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
             Some(Ok(x)) => Some(x),
@@ -349,6 +385,11 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
+        let log_visibility = match self.log_visibility {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Ok(x)) => Some(x),
+            None => None,
+        };
 
         #[derive(Deserialize, CandidType)]
         struct Out {
@@ -371,6 +412,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     freezing_threshold,
                     reserved_cycles_limit,
                     wasm_memory_limit,
+                    log_visibility,
                 },
                 specified_id: self.specified_id,
             };
@@ -388,6 +430,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     freezing_threshold,
                     reserved_cycles_limit,
                     wasm_memory_limit,
+                    log_visibility,
                 })
                 .with_effective_canister_id(self.effective_canister_id)
         };
@@ -398,7 +441,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
     }
 
     /// Make a call. This is equivalent to the [AsyncCall::call].
-    pub async fn call(self) -> Result<RequestId, AgentError> {
+    pub async fn call(self) -> Result<CallResponse<(Principal,)>, AgentError> {
         self.build()?.call().await
     }
 
@@ -410,16 +453,46 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<'agent, 'canister: 'agent> AsyncCall<(Principal,)>
-    for CreateCanisterBuilder<'agent, 'canister>
-{
-    async fn call(self) -> Result<RequestId, AgentError> {
+impl<'agent, 'canister: 'agent> AsyncCall for CreateCanisterBuilder<'agent, 'canister> {
+    type Value = (Principal,);
+
+    async fn call(self) -> Result<CallResponse<(Principal,)>, AgentError> {
         self.build()?.call().await
     }
 
     async fn call_and_wait(self) -> Result<(Principal,), AgentError> {
         self.build()?.call_and_wait().await
     }
+}
+
+impl<'agent, 'canister: 'agent> IntoFuture for CreateCanisterBuilder<'agent, 'canister> {
+    type IntoFuture = CallFuture<'agent, (Principal,)>;
+    type Output = Result<(Principal,), AgentError>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        AsyncCall::call_and_wait(self)
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Hash, CandidType, Copy)]
+/// Wasm main memory retention on upgrades.
+/// Currently used to specify the persistence of Wasm main memory.
+pub enum WasmMemoryPersistence {
+    /// Retain the main memory across upgrades.
+    /// Used for enhanced orthogonal persistence, as implemented in Motoko
+    Keep,
+    /// Reinitialize the main memory on upgrade.
+    /// Default behavior without enhanced orthogonal persistence.
+    Replace,
+}
+
+#[derive(Debug, Copy, Clone, CandidType, Deserialize, Eq, PartialEq)]
+/// Upgrade options.
+pub struct CanisterUpgradeOptions {
+    /// Skip pre-upgrade hook. Only for exceptional cases, see the IC documentation. Not useful for Motoko.
+    pub skip_pre_upgrade: Option<bool>,
+    /// Support for enhanced orthogonal persistence: Retain the main memory on upgrade.
+    pub wasm_memory_persistence: Option<WasmMemoryPersistence>,
 }
 
 /// The install mode of the canister to install. If a canister is already installed,
@@ -433,12 +506,9 @@ pub enum InstallMode {
     /// Overwrite the canister with this module.
     #[serde(rename = "reinstall")]
     Reinstall,
-    /// Upgrade the canister with this module.
+    /// Upgrade the canister with this module and some options.
     #[serde(rename = "upgrade")]
-    Upgrade {
-        /// If true, skip a canister's `#[pre_upgrade]` function.
-        skip_pre_upgrade: Option<bool>,
-    },
+    Upgrade(Option<CanisterUpgradeOptions>),
 }
 
 /// A prepared call to `install_code`.
@@ -463,9 +533,7 @@ impl FromStr for InstallMode {
         match s {
             "install" => Ok(InstallMode::Install),
             "reinstall" => Ok(InstallMode::Reinstall),
-            "upgrade" => Ok(InstallMode::Upgrade {
-                skip_pre_upgrade: Some(false),
-            }),
+            "upgrade" => Ok(InstallMode::Upgrade(None)),
             &_ => Err(format!("Invalid install mode: {}", s)),
         }
     }
@@ -529,7 +597,7 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
 
     /// Create an [AsyncCall] implementation that, when called, will install the
     /// canister.
-    pub fn build(self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
+    pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = ()>, AgentError> {
         Ok(self
             .canister
             .update(MgmtMethod::InstallCode.as_ref())
@@ -544,7 +612,7 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
     }
 
     /// Make a call. This is equivalent to the [AsyncCall::call].
-    pub async fn call(self) -> Result<RequestId, AgentError> {
+    pub async fn call(self) -> Result<CallResponse<()>, AgentError> {
         self.build()?.call().await
     }
 
@@ -556,13 +624,24 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<'agent, 'canister: 'agent> AsyncCall<()> for InstallCodeBuilder<'agent, 'canister> {
-    async fn call(self) -> Result<RequestId, AgentError> {
+impl<'agent, 'canister: 'agent> AsyncCall for InstallCodeBuilder<'agent, 'canister> {
+    type Value = ();
+
+    async fn call(self) -> Result<CallResponse<()>, AgentError> {
         self.build()?.call().await
     }
 
     async fn call_and_wait(self) -> Result<(), AgentError> {
         self.build()?.call_and_wait().await
+    }
+}
+
+impl<'agent, 'canister: 'agent> IntoFuture for InstallCodeBuilder<'agent, 'canister> {
+    type IntoFuture = CallFuture<'agent, ()>;
+    type Output = Result<(), AgentError>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        AsyncCall::call_and_wait(self)
     }
 }
 
@@ -636,7 +715,7 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
     }
 
     /// Create an [`AsyncCall`] implementation that, when called, will install the canister.
-    pub fn build(self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
+    pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = ()>, AgentError> {
         #[derive(CandidType)]
         struct In {
             mode: InstallMode,
@@ -673,7 +752,7 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
     }
 
     /// Make the call. This is equivalent to [`AsyncCall::call`].
-    pub async fn call(self) -> Result<RequestId, AgentError> {
+    pub async fn call(self) -> Result<CallResponse<()>, AgentError> {
         self.build()?.call().await
     }
 
@@ -685,12 +764,24 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<'agent, 'canister: 'agent> AsyncCall<()> for InstallChunkedCodeBuilder<'agent, 'canister> {
-    async fn call(self) -> Result<RequestId, AgentError> {
+impl<'agent, 'canister: 'agent> AsyncCall for InstallChunkedCodeBuilder<'agent, 'canister> {
+    type Value = ();
+
+    async fn call(self) -> Result<CallResponse<()>, AgentError> {
         self.call().await
     }
+
     async fn call_and_wait(self) -> Result<(), AgentError> {
         self.call_and_wait().await
+    }
+}
+
+impl<'agent, 'canister: 'agent> IntoFuture for InstallChunkedCodeBuilder<'agent, 'canister> {
+    type IntoFuture = CallFuture<'agent, ()>;
+    type Output = Result<(), AgentError>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        AsyncCall::call_and_wait(self)
     }
 }
 
@@ -843,6 +934,17 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
     }
 }
 
+impl<'agent: 'canister, 'canister: 'builder, 'builder> IntoFuture
+    for InstallBuilder<'agent, 'canister, 'builder>
+{
+    type IntoFuture = CallFuture<'builder, ()>;
+    type Output = Result<(), AgentError>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(self.call_and_wait())
+    }
+}
+
 /// A builder for an `update_settings` call.
 #[derive(Debug)]
 pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent> {
@@ -854,6 +956,7 @@ pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent> {
     freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
     reserved_cycles_limit: Option<Result<ReservedCyclesLimit, AgentError>>,
     wasm_memory_limit: Option<Result<WasmMemoryLimit, AgentError>>,
+    log_visibility: Option<Result<LogVisibility, AgentError>>,
 }
 
 impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
@@ -868,6 +971,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             freezing_threshold: None,
             reserved_cycles_limit: None,
             wasm_memory_limit: None,
+            log_visibility: None,
         }
     }
 
@@ -1036,9 +1140,35 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         }
     }
 
+    /// Pass in a log visibility setting for the canister.
+    pub fn with_log_visibility<C, E>(self, log_visibility: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<LogVisibility, Error = E>,
+    {
+        self.with_optional_log_visibility(Some(log_visibility))
+    }
+
+    /// Pass in a log visibility optional setting for the canister. If this is [None],
+    /// leaves the log visibility unchanged.
+    pub fn with_optional_log_visibility<E, C>(self, log_visibility: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<LogVisibility, Error = E>,
+    {
+        Self {
+            log_visibility: log_visibility.map(|limit| {
+                limit
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+            }),
+            ..self
+        }
+    }
+
     /// Create an [AsyncCall] implementation that, when called, will update a
     /// canisters settings.
-    pub fn build(self) -> Result<impl 'agent + AsyncCall<()>, AgentError> {
+    pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = ()>, AgentError> {
         #[derive(CandidType)]
         struct In {
             canister_id: Principal,
@@ -1075,6 +1205,11 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
+        let log_visibility = match self.log_visibility {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Ok(x)) => Some(x),
+            None => None,
+        };
 
         Ok(self
             .canister
@@ -1088,6 +1223,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
                     freezing_threshold,
                     reserved_cycles_limit,
                     wasm_memory_limit,
+                    log_visibility,
                 },
             })
             .with_effective_canister_id(self.canister_id)
@@ -1095,7 +1231,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
     }
 
     /// Make a call. This is equivalent to the [AsyncCall::call].
-    pub async fn call(self) -> Result<RequestId, AgentError> {
+    pub async fn call(self) -> Result<CallResponse<()>, AgentError> {
         self.build()?.call().await
     }
 
@@ -1107,13 +1243,22 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<'agent, 'canister: 'agent> AsyncCall<()> for UpdateCanisterBuilder<'agent, 'canister> {
-    async fn call(self) -> Result<RequestId, AgentError> {
+impl<'agent, 'canister: 'agent> AsyncCall for UpdateCanisterBuilder<'agent, 'canister> {
+    type Value = ();
+    async fn call(self) -> Result<CallResponse<()>, AgentError> {
         self.build()?.call().await
     }
 
     async fn call_and_wait(self) -> Result<(), AgentError> {
         self.build()?.call_and_wait().await
+    }
+}
+
+impl<'agent, 'canister: 'agent> IntoFuture for UpdateCanisterBuilder<'agent, 'canister> {
+    type IntoFuture = CallFuture<'agent, ()>;
+    type Output = Result<(), AgentError>;
+    fn into_future(self) -> Self::IntoFuture {
+        AsyncCall::call_and_wait(self)
     }
 }
 

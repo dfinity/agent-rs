@@ -69,21 +69,25 @@ pub enum MgmtMethod {
     InstallChunkedCode,
     /// See [`ManagementCanister::fetch_canister_logs`].
     FetchCanisterLogs,
+    /// See [`ManagementCanister::take_canister_snapshot`].
+    TakeCanisterSnapshot,
+    /// See [`ManagementCanister::load_canister_snapshot`].
+    LoadCanisterSnapshot,
+    /// See [`ManagementCanister::list_canister_snapshots`].
+    ListCanisterSnapshots,
+    /// See [`ManagementCanister::delete_canister_snapshot`].
+    DeleteCanisterSnapshot,
     /// There is no corresponding agent function as only canisters can call it.
     EcdsaPublicKey,
     /// There is no corresponding agent function as only canisters can call it.
     SignWithEcdsa,
-    /// There is no corresponding agent function as only canisters can call it.
+    /// There is no corresponding agent function as only canisters can call it. Use [`BitcoinCanister`](super::BitcoinCanister) instead.
     BitcoinGetBalance,
-    /// See [`ManagementCanister::bitcoin_get_balance_query`].
-    BitcoinGetBalanceQuery,
-    /// There is no corresponding agent function as only canisters can call it.
+    /// There is no corresponding agent function as only canisters can call it. Use [`BitcoinCanister`](super::BitcoinCanister) instead.
     BitcoinGetUtxos,
-    /// See [`ManagementCanister::bitcoin_get_utxos_query`].
-    BitcoinGetUtxosQuery,
-    /// There is no corresponding agent function as only canisters can call it.
+    /// There is no corresponding agent function as only canisters can call it. Use [`BitcoinCanister`](super::BitcoinCanister) instead.
     BitcoinSendTransaction,
-    /// There is no corresponding agent function as only canisters can call it.
+    /// There is no corresponding agent function as only canisters can call it. Use [`BitcoinCanister`](super::BitcoinCanister) instead.
     BitcoinGetCurrentFeePercentiles,
     /// There is no corresponding agent function as only canisters can call it.
     NodeMetricsHistory,
@@ -144,6 +148,21 @@ pub struct QueryStats {
     pub response_payload_bytes_total: Nat,
 }
 
+/// Log visibility for a canister.
+#[derive(Default, Clone, CandidType, Deserialize, Debug, PartialEq, Eq)]
+pub enum LogVisibility {
+    #[default]
+    #[serde(rename = "controllers")]
+    /// Canister logs are visible to controllers only.
+    Controllers,
+    #[serde(rename = "public")]
+    /// Canister logs are visible to everyone.
+    Public,
+    #[serde(rename = "allowed_viewers")]
+    /// Canister logs are visible to a set of principals.
+    AllowedViewers(Vec<Principal>),
+}
+
 /// The concrete settings of a canister.
 #[derive(Clone, Debug, Deserialize, CandidType)]
 pub struct DefiniteCanisterSettings {
@@ -159,6 +178,8 @@ pub struct DefiniteCanisterSettings {
     pub reserved_cycles_limit: Option<Nat>,
     /// A soft limit on the Wasm memory usage of the canister in bytes (up to 256TiB).
     pub wasm_memory_limit: Option<Nat>,
+    /// The canister log visibility. Defines which principals are allowed to fetch logs.
+    pub log_visibility: LogVisibility,
 }
 
 impl std::fmt::Display for StatusCallResult {
@@ -221,65 +242,16 @@ pub type StoreChunksResult = Vec<ChunkHash>;
 /// Return type of [ManagementCanister::upload_chunk].
 pub type UploadChunkResult = ChunkHash;
 
-/// The Bitcoin network that a Bitcoin transaction is placed on.
-#[derive(Clone, Copy, Debug, CandidType, Deserialize, PartialEq, Eq)]
-pub enum BitcoinNetwork {
-    /// The BTC network.
-    #[serde(rename = "mainnet")]
-    Mainnet,
-    /// The TESTBTC network.
-    #[serde(rename = "testnet")]
-    Testnet,
-    /// The REGTEST network.
-    ///
-    /// This is only available when developing with local replica.
-    #[serde(rename = "regtest")]
-    Regtest,
-}
-
-/// Defines how to filter results from [`bitcoin_get_utxos_query`](ManagementCanister::bitcoin_get_utxos_query).
+/// A recorded snapshot of a canister. Can be restored with [`ManagementCanister::load_canister_snapshot`].
 #[derive(Debug, Clone, CandidType, Deserialize)]
-pub enum UtxosFilter {
-    /// Filter by the minimum number of UTXO confirmations. Most applications should set this to 6.
-    #[serde(rename = "min_confirmations")]
-    MinConfirmations(u32),
-    /// When paginating results, use this page. Provided by [`GetUtxosResponse.next_page`](GetUtxosResponse).
-    #[serde(rename = "page")]
-    Page(#[serde(with = "serde_bytes")] Vec<u8>),
-}
-
-/// Unique output descriptor of a Bitcoin transaction.
-#[derive(Debug, Clone, CandidType, Deserialize)]
-pub struct UtxoOutpoint {
-    /// The ID of the transaction. Not necessarily unique on its own.
-    pub txid: Vec<u8>,
-    /// The index of the outpoint within the transaction.
-    pub vout: u32,
-}
-
-/// A Bitcoin [`UTXO`](https://en.wikipedia.org/wiki/Unspent_transaction_output), produced by a transaction.
-#[derive(Debug, Clone, CandidType, Deserialize)]
-pub struct Utxo {
-    /// The transaction outpoint that produced this UTXO.
-    pub outpoint: UtxoOutpoint,
-    /// The BTC quantity, in satoshis.
-    pub value: u64,
-    /// The block index this transaction was placed at.
-    pub height: u32,
-}
-
-/// Response type for the `bitcoin_get_utxos_query` function.
-#[derive(Debug, Clone, CandidType, Deserialize)]
-pub struct GetUtxosResponse {
-    /// A list of UTXOs available for the specified address.
-    pub utxos: Vec<Utxo>,
-    /// The hash of the tip.
-    pub tip_block_hash: Vec<u8>,
-    /// The block index of the tip of the chain known to the IC.
-    pub tip_height: u32,
-    /// If `Some`, then `utxos` does not contain the entire results of the query.
-    /// Call `bitcoin_get_utxos_query` again using `UtxosFilter::Page` for the next page of results.
-    pub next_page: Option<Vec<u8>>,
+pub struct Snapshot {
+    /// The ID of the snapshot.
+    #[serde(with = "serde_bytes")]
+    pub id: Vec<u8>,
+    /// The Unix nanosecond timestamp the snapshot was taken at.
+    pub taken_at_timestamp: u64,
+    /// The size of the snapshot in bytes.
+    pub total_size: u64,
 }
 
 impl<'agent> ManagementCanister<'agent> {
@@ -287,7 +259,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn canister_status(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<(StatusCallResult,)> {
+    ) -> impl 'agent + AsyncCall<Value = (StatusCallResult,)> {
         #[derive(CandidType)]
         struct In {
             canister_id: Principal,
@@ -309,7 +281,7 @@ impl<'agent> ManagementCanister<'agent> {
 
     /// This method deposits the cycles included in this call into the specified canister.
     /// Only the controller of the canister can deposit cycles.
-    pub fn deposit_cycles(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<()> {
+    pub fn deposit_cycles(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
         #[derive(CandidType)]
         struct Argument {
             canister_id: Principal,
@@ -324,7 +296,7 @@ impl<'agent> ManagementCanister<'agent> {
     }
 
     /// Deletes a canister.
-    pub fn delete_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<()> {
+    pub fn delete_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
         #[derive(CandidType)]
         struct Argument {
             canister_id: Principal,
@@ -346,7 +318,7 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
         amount: u64,
-    ) -> impl 'agent + AsyncCall<()> {
+    ) -> impl 'agent + AsyncCall<Value = ()> {
         #[derive(CandidType)]
         struct Argument {
             canister_id: Principal,
@@ -365,14 +337,14 @@ impl<'agent> ManagementCanister<'agent> {
     /// This method takes no input and returns 32 pseudo-random bytes to the caller.
     /// The return value is unknown to any part of the IC at time of the submission of this call.
     /// A new return value is generated for each call to this method.
-    pub fn raw_rand(&self) -> impl 'agent + AsyncCall<(Vec<u8>,)> {
+    pub fn raw_rand(&self) -> impl 'agent + AsyncCall<Value = (Vec<u8>,)> {
         self.update(MgmtMethod::RawRand.as_ref())
             .build()
             .map(|result: (Vec<u8>,)| (result.0,))
     }
 
     /// Starts a canister.
-    pub fn start_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<()> {
+    pub fn start_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
         #[derive(CandidType)]
         struct Argument {
             canister_id: Principal,
@@ -387,7 +359,7 @@ impl<'agent> ManagementCanister<'agent> {
     }
 
     /// Stop a canister.
-    pub fn stop_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<()> {
+    pub fn stop_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
         #[derive(CandidType)]
         struct Argument {
             canister_id: Principal,
@@ -408,7 +380,7 @@ impl<'agent> ManagementCanister<'agent> {
     /// Outstanding responses to the canister will not be processed, even if they arrive after code has been installed again.
     /// The canister is now empty. In particular, any incoming or queued calls will be rejected.
     //// A canister after uninstalling retains its cycles balance, controller, status, and allocations.
-    pub fn uninstall_code(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<()> {
+    pub fn uninstall_code(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
         #[derive(CandidType)]
         struct Argument {
             canister_id: Principal,
@@ -444,7 +416,7 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
         chunk: &[u8],
-    ) -> impl 'agent + AsyncCall<(UploadChunkResult,)> {
+    ) -> impl 'agent + AsyncCall<Value = (UploadChunkResult,)> {
         #[derive(CandidType, Deserialize)]
         struct Argument<'a> {
             canister_id: Principal,
@@ -462,7 +434,10 @@ impl<'agent> ManagementCanister<'agent> {
     }
 
     /// Clear a canister's chunked WASM storage.
-    pub fn clear_chunk_store(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<()> {
+    pub fn clear_chunk_store(
+        &self,
+        canister_id: &Principal,
+    ) -> impl 'agent + AsyncCall<Value = ()> {
         #[derive(CandidType)]
         struct Argument<'a> {
             canister_id: &'a Principal,
@@ -477,7 +452,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn stored_chunks(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<(StoreChunksResult,)> {
+    ) -> impl 'agent + AsyncCall<Value = (StoreChunksResult,)> {
         #[derive(CandidType)]
         struct Argument<'a> {
             canister_id: &'a Principal,
@@ -514,7 +489,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn fetch_canister_logs(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + SyncCall<(FetchCanisterLogsResponse,)> {
+    ) -> impl 'agent + SyncCall<Value = (FetchCanisterLogsResponse,)> {
         #[derive(CandidType)]
         struct In {
             canister_id: Principal,
@@ -529,54 +504,85 @@ impl<'agent> ManagementCanister<'agent> {
             .build()
     }
 
-    /// Gets the BTC balance (in satoshis) of a particular Bitcoin address, filtering by number of confirmations.
-    /// Most applications should require 6 confirmations.
-    pub fn bitcoin_get_balance_query(
+    /// Creates a canister snapshot, optionally replacing an existing snapshot.
+    ///  
+    /// <div class="warning">Canisters should be stopped before running this method!</div>
+    pub fn take_canister_snapshot(
         &self,
-        address: &str,
-        network: BitcoinNetwork,
-        min_confirmations: Option<u32>,
-    ) -> impl 'agent + SyncCall<(u64,)> {
+        canister_id: &Principal,
+        replace_snapshot: Option<&[u8]>,
+    ) -> impl 'agent + AsyncCall<Value = (Snapshot,)> {
         #[derive(CandidType)]
         struct In<'a> {
-            address: &'a str,
-            network: BitcoinNetwork,
-            min_confirmations: Option<u32>,
+            canister_id: Principal,
+            replace_snapshot: Option<&'a [u8]>,
         }
-        self.query(MgmtMethod::BitcoinGetBalanceQuery.as_ref())
+        self.update(MgmtMethod::TakeCanisterSnapshot.as_ref())
             .with_arg(In {
-                address,
-                network,
-                min_confirmations,
+                canister_id: *canister_id,
+                replace_snapshot,
             })
-            .with_effective_canister_id(Principal::management_canister())
+            .with_effective_canister_id(*canister_id)
             .build()
     }
 
-    /// Fetch the list of [UTXOs](https://en.wikipedia.org/wiki/Unspent_transaction_output) for a Bitcoin address,
-    /// filtering by number of confirmations. Most applications should require 6 confirmations.
+    /// Loads a canister snapshot by ID, replacing the canister's state with its state at the time the snapshot was taken.
     ///
-    /// This method is paginated. If not all the results can be returned, then `next_page` will be set to `Some`,
-    /// and its value can be passed to this method to get the next page.
-    pub fn bitcoin_get_utxos_query(
+    /// <div class="warning">Canisters should be stopped before running this method!</div>
+    pub fn load_canister_snapshot(
         &self,
-        address: &str,
-        network: BitcoinNetwork,
-        filter: Option<UtxosFilter>,
-    ) -> impl 'agent + SyncCall<(GetUtxosResponse,)> {
+        canister_id: &Principal,
+        snapshot_id: &[u8],
+    ) -> impl 'agent + AsyncCall<Value = ()> {
         #[derive(CandidType)]
         struct In<'a> {
-            address: &'a str,
-            network: BitcoinNetwork,
-            filter: Option<UtxosFilter>,
+            canister_id: Principal,
+            snapshot_id: &'a [u8],
+            sender_canister_version: Option<u64>,
         }
-        self.query(MgmtMethod::BitcoinGetUtxosQuery.as_ref())
+        self.update(MgmtMethod::LoadCanisterSnapshot.as_ref())
             .with_arg(In {
-                address,
-                network,
-                filter,
+                canister_id: *canister_id,
+                snapshot_id,
+                sender_canister_version: None,
             })
-            .with_effective_canister_id(Principal::management_canister())
+            .with_effective_canister_id(*canister_id)
+            .build()
+    }
+
+    /// List a canister's recorded snapshots.
+    pub fn list_canister_snapshots(
+        &self,
+        canister_id: &Principal,
+    ) -> impl 'agent + AsyncCall<Value = (Vec<Snapshot>,)> {
+        #[derive(CandidType)]
+        struct In {
+            canister_id: Principal,
+        }
+        self.update(MgmtMethod::ListCanisterSnapshots.as_ref())
+            .with_arg(In {
+                canister_id: *canister_id,
+            })
+            .with_effective_canister_id(*canister_id)
+            .build()
+    }
+
+    /// Deletes a recorded canister snapshot by ID.
+    pub fn delete_canister_snapshot(
+        &self,
+        canister_id: &Principal,
+        snapshot_id: &[u8],
+    ) -> impl 'agent + AsyncCall<Value = ()> {
+        #[derive(CandidType)]
+        struct In<'a> {
+            canister_id: Principal,
+            snapshot_id: &'a [u8],
+        }
+        self.update(MgmtMethod::DeleteCanisterSnapshot.as_ref())
+            .with_arg(In {
+                canister_id: *canister_id,
+                snapshot_id,
+            })
             .build()
     }
 }

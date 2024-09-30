@@ -16,7 +16,8 @@ use thiserror::Error;
 mod request_id;
 pub mod signed;
 
-/// The authentication envelope, containing the contents and their signature.
+/// The authentication envelope, containing the contents and their signature. This struct can be passed to `Agent`'s
+/// `*_signed` methods via [`to_bytes`](Envelope::to_bytes).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct Envelope<'a> {
@@ -32,6 +33,17 @@ pub struct Envelope<'a> {
     /// The chain of delegations connecting `sender_pubkey` to `sender_sig`, and in that order.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sender_delegation: Option<Vec<SignedDelegation>>,
+}
+
+impl Envelope<'_> {
+    /// Convert the authentication envelope to the format expected by the IC HTTP interface. The result can be passed to `Agent`'s `*_signed` methods.
+    pub fn encode_bytes(&self) -> Vec<u8> {
+        let mut serializer = serde_cbor::Serializer::new(Vec::new());
+        serializer.self_describe().unwrap();
+        self.serialize(&mut serializer)
+            .expect("infallible Envelope::serialize");
+        serializer.into_inner()
+    }
 }
 
 /// The content of an IC ingress message, not including any signature information.
@@ -115,6 +127,80 @@ pub struct ReadStateResponse {
     /// Use the [`ic-certification`](https://docs.rs/ic-certification) crate to process it.
     #[serde(with = "serde_bytes")]
     pub certificate: Vec<u8>,
+}
+
+/// The parsed response from a request to the v3 `call` endpoint. A request to the `call` endpoint.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum TransportCallResponse {
+    /// The IC responded with a certified response.
+    Replied {
+        /// The CBOR serialized certificate for the call response.
+        #[serde(with = "serde_bytes")]
+        certificate: Vec<u8>,
+    },
+
+    /// The replica responded with a non replicated rejection.
+    NonReplicatedRejection(RejectResponse),
+
+    /// The replica timed out the sync request, but forwarded the ingress message
+    /// to the canister. The request id should be used to poll for the response
+    /// The status of the request must be polled.
+    Accepted,
+}
+
+/// The response from a request to the `call` endpoint.
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub enum CallResponse<Out> {
+    /// The call completed, and the response is available.
+    Response(Out),
+    /// The replica timed out the update call, and the request id should be used to poll for the response
+    /// using the `Agent::wait` method.
+    Poll(RequestId),
+}
+
+impl<Out> CallResponse<Out> {
+    /// Maps the inner value, if this is `Response`.
+    #[inline]
+    pub fn map<Out2>(self, f: impl FnOnce(Out) -> Out2) -> CallResponse<Out2> {
+        match self {
+            Self::Poll(p) => CallResponse::Poll(p),
+            Self::Response(r) => CallResponse::Response(f(r)),
+        }
+    }
+}
+
+impl<T, E> CallResponse<Result<T, E>> {
+    /// Extracts an inner `Result`, if this is `Response`.
+    #[inline]
+    pub fn transpose(self) -> Result<CallResponse<T>, E> {
+        match self {
+            Self::Poll(p) => Ok(CallResponse::Poll(p)),
+            Self::Response(r) => r.map(CallResponse::Response),
+        }
+    }
+}
+
+impl<T> CallResponse<Option<T>> {
+    /// Extracts an inner `Option`, if this is `Response`.
+    #[inline]
+    pub fn transpose(self) -> Option<CallResponse<T>> {
+        match self {
+            Self::Poll(p) => Some(CallResponse::Poll(p)),
+            Self::Response(r) => r.map(CallResponse::Response),
+        }
+    }
+}
+
+impl<T> CallResponse<(T,)> {
+    /// Extracts the inner value of a 1-tuple, if this is `Response`.`
+    #[inline]
+    pub fn detuple(self) -> CallResponse<T> {
+        match self {
+            Self::Poll(p) => CallResponse::Poll(p),
+            Self::Response(r) => CallResponse::Response(r.0),
+        }
+    }
 }
 
 /// Possible responses to a query call.

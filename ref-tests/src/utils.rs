@@ -1,4 +1,3 @@
-use ic_agent::agent::http_transport::ReqwestTransport;
 use ic_agent::identity::{Prime256v1Identity, Secp256k1Identity};
 use ic_agent::{export::Principal, identity::BasicIdentity, Agent, Identity};
 use ic_identity_hsm::HardwareIdentity;
@@ -98,9 +97,8 @@ pub async fn create_agent(identity: impl Identity + 'static) -> Result<Agent, St
     let port = port_env
         .parse::<u32>()
         .expect("Could not parse the IC_REF_PORT environment variable as an integer.");
-
-    Agent::builder()
-        .with_transport(ReqwestTransport::create(format!("http://127.0.0.1:{}", port)).unwrap())
+    let builder = Agent::builder().with_url(format!("http://127.0.0.1:{port}"));
+    builder
         .with_identity(identity)
         .build()
         .map_err(|e| format!("{:?}", e))

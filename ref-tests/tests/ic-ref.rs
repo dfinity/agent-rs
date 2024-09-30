@@ -33,7 +33,9 @@ mod management_canister {
         call::AsyncCall,
         interfaces::{
             management_canister::{
-                builders::{CanisterSettings, InstallMode},
+                builders::{
+                    CanisterSettings, CanisterUpgradeOptions, InstallMode, WasmMemoryPersistence,
+                },
                 CanisterStatus, StatusCallResult,
             },
             wallet::CreateResult,
@@ -161,18 +163,20 @@ mod management_canister {
 
             // Upgrade should succeed.
             ic00.install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Upgrade {
-                    skip_pre_upgrade: None,
-                })
+                .with_mode(InstallMode::Upgrade(Some(CanisterUpgradeOptions {
+                    skip_pre_upgrade: Some(true),
+                    wasm_memory_persistence: None,
+                })))
                 .call_and_wait()
                 .await?;
 
             // Upgrade with another agent should fail.
             let result = other_ic00
                 .install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Upgrade {
+                .with_mode(InstallMode::Upgrade(Some(CanisterUpgradeOptions {
                     skip_pre_upgrade: None,
-                })
+                    wasm_memory_persistence: Some(WasmMemoryPersistence::Keep),
+                })))
                 .call_and_wait()
                 .await;
             assert!(matches!(result, Err(AgentError::UncertifiedReject(..))));
@@ -302,7 +306,7 @@ mod management_canister {
                 .iter()
                 .cloned()
                 .collect::<HashSet<_>>();
-            let expected = vec![agent_principal, other_agent_principal]
+            let expected = [agent_principal, other_agent_principal]
                 .iter()
                 .cloned()
                 .collect::<HashSet<_>>();
@@ -320,7 +324,7 @@ mod management_canister {
                 .iter()
                 .cloned()
                 .collect::<HashSet<_>>();
-            let expected = vec![agent_principal, other_agent_principal]
+            let expected = [agent_principal, other_agent_principal]
                 .iter()
                 .cloned()
                 .collect::<HashSet<_>>();
@@ -485,9 +489,10 @@ mod management_canister {
 
             // Upgrade should succeed
             ic00.install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Upgrade {
+                .with_mode(InstallMode::Upgrade(Some(CanisterUpgradeOptions {
                     skip_pre_upgrade: None,
-                })
+                    wasm_memory_persistence: Some(WasmMemoryPersistence::Replace),
+                })))
                 .call_and_wait()
                 .await?;
 
@@ -507,7 +512,7 @@ mod management_canister {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: None,
-                    })) if *reject_message == format!("Canister {canister_id} has no update method 'update'")
+                    })) if reject_message.contains(&format!("Canister {canister_id}: Canister has no update method 'update'"))
                 ),
                 "wrong error: {result:?}"
             );
@@ -521,7 +526,7 @@ mod management_canister {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
-                    })) if *reject_message == format!("IC0536: Canister {} has no query method 'query'", canister_id)
+                    })) if reject_message.contains(&format!("Canister {}: Canister has no query method 'query'", canister_id))
                         && error_code == "IC0536",
                 ),
                 "wrong error: {result:?}"
@@ -724,6 +729,7 @@ mod management_canister {
                     freezing_threshold: None,
                     reserved_cycles_limit: None,
                     wasm_memory_limit: None,
+                    log_visibility: None,
                 },
             };
 
@@ -1006,10 +1012,12 @@ mod extras {
     };
     use ic_utils::{
         call::AsyncCall,
-        interfaces::{management_canister::builders::ComputeAllocation, ManagementCanister},
+        interfaces::{
+            management_canister::{builders::ComputeAllocation, LogVisibility},
+            ManagementCanister,
+        },
     };
-    use ref_tests::get_effective_canister_id;
-    use ref_tests::with_agent;
+    use ref_tests::{get_effective_canister_id, with_agent};
 
     #[ignore]
     #[test]
@@ -1223,7 +1231,7 @@ mod extras {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: None,
-                    })) if reject_message == "Canister iimsn-6yaaa-aaaaa-afiaa-cai is already installed"
+                    })) if reject_message.contains("Canister iimsn-6yaaa-aaaaa-afiaa-cai is already installed")
                 ),
                 "wrong error: {result:?}"
             );
@@ -1308,6 +1316,69 @@ mod extras {
                 result.0.settings.wasm_memory_limit,
                 Some(Nat::from(3_000_000_000_u64))
             );
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn create_with_log_visibility() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id())
+                .with_log_visibility(LogVisibility::Public)
+                .call_and_wait()
+                .await
+                .unwrap();
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(result.0.settings.log_visibility, LogVisibility::Public);
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn update_log_visibility() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            // Create with Controllers.
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
+                .with_effective_canister_id(get_effective_canister_id())
+                .with_log_visibility(LogVisibility::Controllers)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(result.0.settings.log_visibility, LogVisibility::Controllers);
+
+            // Update to Public.
+            ic00.update_settings(&canister_id)
+                .with_log_visibility(LogVisibility::Public)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(result.0.settings.log_visibility, LogVisibility::Public);
+
+            // Update with no change.
+            let no_change: Option<LogVisibility> = None;
+            ic00.update_settings(&canister_id)
+                .with_optional_log_visibility(no_change)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(result.0.settings.log_visibility, LogVisibility::Public);
 
             Ok(())
         })

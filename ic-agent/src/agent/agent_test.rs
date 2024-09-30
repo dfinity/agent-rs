@@ -1,28 +1,33 @@
-// Disable these tests without the reqwest feature.
-#![cfg(feature = "reqwest")]
-
 use self::mock::{
     assert_mock, assert_single_mock, assert_single_mock_count, mock, mock_additional,
 };
-use crate::{
-    agent::{http_transport::ReqwestTransport, Status},
-    export::Principal,
-    Agent, AgentError, Certificate,
-};
+use crate::{agent::Status, export::Principal, Agent, AgentError, Certificate};
 use candid::{Encode, Nat};
 use futures_util::FutureExt;
 use ic_certification::{Delegation, Label};
-use ic_transport_types::{NodeSignature, QueryResponse, RejectCode, RejectResponse, ReplyResponse};
-use std::{collections::BTreeMap, time::Duration};
+use ic_transport_types::{
+    NodeSignature, QueryResponse, RejectCode, RejectResponse, ReplyResponse, TransportCallResponse,
+};
+use std::{collections::BTreeMap, str::FromStr, sync::Arc, time::Duration};
 #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
 use wasm_bindgen_test::wasm_bindgen_test;
 
+use crate::agent::route_provider::{RoundRobinRouteProvider, RouteProvider};
 #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
 fn make_agent(url: &str) -> Agent {
+    let builder = Agent::builder().with_url(url);
+    builder.with_verify_query_signatures(false).build().unwrap()
+}
+
+fn make_agent_with_route_provider(
+    route_provider: Arc<dyn RouteProvider>,
+    tcp_retries: usize,
+) -> Agent {
     Agent::builder()
-        .with_transport(ReqwestTransport::create(url).unwrap())
+        .with_arc_route_provider(route_provider)
+        .with_max_tcp_error_retries(tcp_retries)
         .with_verify_query_signatures(false)
         .build()
         .unwrap()
@@ -30,7 +35,7 @@ fn make_agent(url: &str) -> Agent {
 
 fn make_untimed_agent(url: &str) -> Agent {
     Agent::builder()
-        .with_transport(ReqwestTransport::create(url).unwrap())
+        .with_url(url)
         .with_verify_query_signatures(false)
         .with_ingress_expiry(Some(Duration::from_secs(u32::MAX as _)))
         .build()
@@ -39,7 +44,7 @@ fn make_untimed_agent(url: &str) -> Agent {
 
 fn make_certifying_agent(url: &str) -> Agent {
     Agent::builder()
-        .with_transport(ReqwestTransport::create(url).unwrap())
+        .with_url(url)
         .with_ingress_expiry(Some(Duration::from_secs(u32::MAX as _)))
         .build()
         .unwrap()
@@ -161,7 +166,7 @@ async fn query_rejected() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn call_error() -> Result<(), AgentError> {
-    let (call_mock, url) = mock("POST", "/api/v2/canister/aaaaa-aa/call", 500, vec![], None).await;
+    let (call_mock, url) = mock("POST", "/api/v3/canister/aaaaa-aa/call", 500, vec![], None).await;
 
     let agent = make_agent(&url);
 
@@ -181,17 +186,19 @@ async fn call_error() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn call_rejected() -> Result<(), AgentError> {
-    let reject_body = RejectResponse {
+    let reject_response = RejectResponse {
         reject_code: RejectCode::SysTransient,
         reject_message: "Test reject message".to_string(),
         error_code: Some("Test error code".to_string()),
     };
 
+    let reject_body = TransportCallResponse::NonReplicatedRejection(reject_response.clone());
+
     let body = serde_cbor::to_vec(&reject_body).unwrap();
 
     let (call_mock, url) = mock(
         "POST",
-        "/api/v2/canister/aaaaa-aa/call",
+        "/api/v3/canister/aaaaa-aa/call",
         200,
         body,
         Some("application/cbor"),
@@ -208,7 +215,7 @@ async fn call_rejected() -> Result<(), AgentError> {
 
     assert_mock(call_mock).await;
 
-    let expected_response = Err(AgentError::UncertifiedReject(reject_body));
+    let expected_response = Err(AgentError::UncertifiedReject(reject_response));
     assert_eq!(expected_response, result);
 
     Ok(())
@@ -217,17 +224,21 @@ async fn call_rejected() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn call_rejected_without_error_code() -> Result<(), AgentError> {
-    let reject_body = RejectResponse {
+    let non_replicated_reject = RejectResponse {
         reject_code: RejectCode::SysTransient,
         reject_message: "Test reject message".to_string(),
         error_code: None,
     };
 
+    let reject_body = TransportCallResponse::NonReplicatedRejection(non_replicated_reject.clone());
+
+    let canister_id_str = "aaaaa-aa";
+
     let body = serde_cbor::to_vec(&reject_body).unwrap();
 
     let (call_mock, url) = mock(
         "POST",
-        "/api/v2/canister/aaaaa-aa/call",
+        format!("/api/v3/canister/{}/call", canister_id_str).as_str(),
         200,
         body,
         Some("application/cbor"),
@@ -237,14 +248,14 @@ async fn call_rejected_without_error_code() -> Result<(), AgentError> {
     let agent = make_agent(&url);
 
     let result = agent
-        .update(&Principal::management_canister(), "greet")
+        .update(&Principal::from_str(canister_id_str).unwrap(), "greet")
         .with_arg([])
         .call()
         .await;
 
     assert_mock(call_mock).await;
 
-    let expected_response = Err(AgentError::UncertifiedReject(reject_body));
+    let expected_response = Err(AgentError::UncertifiedReject(non_replicated_reject));
     assert_eq!(expected_response, result);
 
     Ok(())
@@ -294,6 +305,38 @@ async fn status_okay() -> Result<(), AgentError> {
 
     assert!(result.is_ok());
 
+    Ok(())
+}
+
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+async fn reqwest_client_status_okay_when_request_retried() -> Result<(), AgentError> {
+    let map = BTreeMap::new();
+    let response = serde_cbor::Value::Map(map);
+    let (read_mock, url) = mock(
+        "GET",
+        "/api/v2/status",
+        200,
+        serde_cbor::to_vec(&response)?,
+        Some("application/cbor"),
+    )
+    .await;
+    // Without retry request should fail.
+    let non_working_url = "http://127.0.0.1:4444";
+    let tcp_retries = 0;
+    let route_provider = RoundRobinRouteProvider::new(vec![non_working_url, &url]).unwrap();
+    let agent = make_agent_with_route_provider(Arc::new(route_provider), tcp_retries);
+    let result = agent.status().await;
+    assert!(result.is_err());
+
+    // With retry request should succeed.
+    let tcp_retries = 1;
+    let route_provider = RoundRobinRouteProvider::new(vec![non_working_url, &url]).unwrap();
+    let agent = make_agent_with_route_provider(Arc::new(route_provider), tcp_retries);
+    let result = agent.status().await;
+
+    assert_mock(read_mock).await;
+
+    assert!(result.is_ok());
     Ok(())
 }
 

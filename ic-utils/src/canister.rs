@@ -98,6 +98,7 @@ impl<'agent> Canister<'agent> {
     }
 
     /// Create an AsyncCallBuilder to do an update call.
+    /// Prefer using [`update`](Canister::update) instead.
     pub fn update_<'canister>(
         &'canister self,
         method_name: &str,
@@ -106,7 +107,6 @@ impl<'agent> Canister<'agent> {
     }
 
     /// Create an AsyncCallBuilder to do an update call.
-    /// Prefer using [`update`](Canister::update) instead.
     pub fn update<'canister>(
         &'canister self,
         method_name: &str,
@@ -134,7 +134,7 @@ impl<'agent> Canister<'agent> {
     /// Call request_status on the RequestId in a loop and return the response as a byte vector.
     pub async fn wait<'canister>(
         &'canister self,
-        request_id: RequestId,
+        request_id: &RequestId,
     ) -> Result<Vec<u8>, AgentError> {
         self.agent.wait(request_id, self.canister_id).await
     }
@@ -389,7 +389,6 @@ mod tests {
     use super::super::interfaces::ManagementCanister;
     use crate::call::AsyncCall;
     use candid::Principal;
-    use ic_agent::agent::http_transport::ReqwestTransport;
     use ic_agent::identity::BasicIdentity;
 
     fn get_effective_canister_id() -> Principal {
@@ -413,7 +412,7 @@ mod tests {
         let port = std::env::var("IC_REF_PORT").unwrap_or_else(|_| "4943".into());
 
         let agent = ic_agent::Agent::builder()
-            .with_transport(ReqwestTransport::create(format!("http://localhost:{port}")).unwrap())
+            .with_url(format!("http://localhost:{port}"))
             .with_identity(identity)
             .build()
             .unwrap();

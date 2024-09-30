@@ -73,7 +73,6 @@
 //!   let response = agent.update(&management_canister_id, "provisional_create_canister_with_cycles")
 //!     .with_effective_canister_id(effective_canister_id)
 //!     .with_arg(Encode!(&Argument { amount: None})?)
-//!     .call_and_wait()
 //!     .await?;
 //!
 //!   let result = Decode!(response.as_slice(), CreateCanisterResult)?;
@@ -109,10 +108,6 @@
 )]
 #![cfg_attr(not(target_family = "wasm"), warn(clippy::future_not_send))]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
-
-#[cfg(all(feature = "hyper", target_family = "wasm"))]
-compile_error!("Feature `hyper` cannot be used from WASM.");
-
 pub mod agent;
 pub mod export;
 pub mod identity;
@@ -122,7 +117,7 @@ use agent::response_authentication::LookupPath;
 #[doc(inline)]
 pub use agent::{agent_error, agent_error::AgentError, Agent, NonceFactory, NonceGenerator};
 #[doc(inline)]
-pub use ic_transport_types::{to_request_id, RequestId, RequestIdError};
+pub use ic_transport_types::{to_request_id, RequestId, RequestIdError, TransportCallResponse};
 #[doc(inline)]
 pub use identity::{Identity, Signature};
 

@@ -2,10 +2,13 @@
 //!
 //! [cycles wallet]: https://github.com/dfinity/cycles-wallet
 
-use std::ops::Deref;
+use std::{
+    future::{Future, IntoFuture},
+    ops::Deref,
+};
 
 use crate::{
-    call::{AsyncCall, SyncCall},
+    call::{AsyncCall, CallFuture, SyncCall},
     canister::Argument,
     interfaces::management_canister::{
         attributes::{ComputeAllocation, FreezingThreshold, MemoryAllocation},
@@ -15,7 +18,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use candid::{decode_args, utils::ArgumentDecoder, CandidType, Deserialize, Nat};
-use ic_agent::{export::Principal, Agent, AgentError, RequestId};
+use ic_agent::{agent::CallResponse, export::Principal, Agent, AgentError};
 use once_cell::sync::Lazy;
 use semver::{Version, VersionReq};
 
@@ -53,7 +56,7 @@ pub struct CanisterSettingsV1 {
 
 impl<'agent: 'canister, 'canister, Out> CallForwarder<'agent, 'canister, Out>
 where
-    Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
+    Out: for<'de> ArgumentDecoder<'de> + Send + Sync + 'agent,
 {
     /// Set the argument with candid argument. Can be called at most once.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> Self
@@ -79,11 +82,7 @@ where
     }
 
     /// Creates an [`AsyncCall`] implementation that, when called, will forward the specified canister call.
-    pub fn build<'out>(self) -> Result<impl 'out + AsyncCall<Out>, AgentError>
-    where
-        Out: 'out,
-        'agent: 'out,
-    {
+    pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = Out>, AgentError> {
         #[derive(CandidType, Deserialize)]
         struct In<TCycles> {
             canister: Principal,
@@ -120,28 +119,43 @@ where
     }
 
     /// Calls the forwarded canister call on the wallet canister. Equivalent to `.build().call()`.
-    pub async fn call(self) -> Result<RequestId, AgentError> {
-        self.build()?.call().await
+    pub fn call(self) -> impl Future<Output = Result<CallResponse<Out>, AgentError>> + 'agent {
+        let call = self.build();
+        async { call?.call().await }
     }
 
     /// Calls the forwarded canister call on the wallet canister, and waits for the result. Equivalent to `.build().call_and_wait()`.
-    pub async fn call_and_wait(self) -> Result<Out, AgentError> {
-        self.build()?.call_and_wait().await
+    pub fn call_and_wait(self) -> impl Future<Output = Result<Out, AgentError>> + 'agent {
+        let call = self.build();
+        async { call?.call_and_wait().await }
     }
 }
 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<'agent: 'canister, 'canister, Out> AsyncCall<Out> for CallForwarder<'agent, 'canister, Out>
+impl<'agent: 'canister, 'canister, Out> AsyncCall for CallForwarder<'agent, 'canister, Out>
 where
-    Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
+    Out: for<'de> ArgumentDecoder<'de> + Send + Sync + 'agent,
 {
-    async fn call(self) -> Result<RequestId, AgentError> {
+    type Value = Out;
+
+    async fn call(self) -> Result<CallResponse<Out>, AgentError> {
         self.call().await
     }
 
     async fn call_and_wait(self) -> Result<Out, AgentError> {
         self.call_and_wait().await
+    }
+}
+
+impl<'agent: 'canister, 'canister, Out> IntoFuture for CallForwarder<'agent, 'canister, Out>
+where
+    Out: for<'de> ArgumentDecoder<'de> + Send + Sync + 'agent,
+{
+    type IntoFuture = CallFuture<'agent, Out>;
+    type Output = Result<Out, AgentError>;
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(self.call_and_wait())
     }
 }
 
@@ -461,7 +475,7 @@ impl<'agent> WalletCanister<'agent> {
 
 impl<'agent> WalletCanister<'agent> {
     /// Re-fetch the API version string of the wallet.
-    pub fn fetch_wallet_api_version(&self) -> impl 'agent + SyncCall<(Option<String>,)> {
+    pub fn fetch_wallet_api_version(&self) -> impl 'agent + SyncCall<Value = (Option<String>,)> {
         self.query("wallet_api_version").build()
     }
 
@@ -471,52 +485,52 @@ impl<'agent> WalletCanister<'agent> {
     }
 
     /// Get the friendly name of the wallet (if one exists).
-    pub fn name(&self) -> impl 'agent + SyncCall<(Option<String>,)> {
+    pub fn name(&self) -> impl 'agent + SyncCall<Value = (Option<String>,)> {
         self.query("name").build()
     }
 
     /// Set the friendly name of the wallet.
-    pub fn set_name(&self, name: String) -> impl 'agent + AsyncCall<()> {
+    pub fn set_name(&self, name: String) -> impl 'agent + AsyncCall<Value = ()> {
         self.update("set_name").with_arg(name).build()
     }
 
     /// Get the current controller's principal ID.
-    pub fn get_controllers(&self) -> impl 'agent + SyncCall<(Vec<Principal>,)> {
+    pub fn get_controllers(&self) -> impl 'agent + SyncCall<Value = (Vec<Principal>,)> {
         self.query("get_controllers").build()
     }
 
     /// Transfer controller to another principal ID.
-    pub fn add_controller(&self, principal: Principal) -> impl 'agent + AsyncCall<()> {
+    pub fn add_controller(&self, principal: Principal) -> impl 'agent + AsyncCall<Value = ()> {
         self.update("add_controller").with_arg(principal).build()
     }
 
     /// Remove a user as a wallet controller.
-    pub fn remove_controller(&self, principal: Principal) -> impl 'agent + AsyncCall<()> {
+    pub fn remove_controller(&self, principal: Principal) -> impl 'agent + AsyncCall<Value = ()> {
         self.update("remove_controller").with_arg(principal).build()
     }
 
     /// Get the list of custodians.
-    pub fn get_custodians(&self) -> impl 'agent + SyncCall<(Vec<Principal>,)> {
+    pub fn get_custodians(&self) -> impl 'agent + SyncCall<Value = (Vec<Principal>,)> {
         self.query("get_custodians").build()
     }
 
     /// Authorize a new custodian.
-    pub fn authorize(&self, custodian: Principal) -> impl 'agent + AsyncCall<()> {
+    pub fn authorize(&self, custodian: Principal) -> impl 'agent + AsyncCall<Value = ()> {
         self.update("authorize").with_arg(custodian).build()
     }
 
     /// Deauthorize a custodian.
-    pub fn deauthorize(&self, custodian: Principal) -> impl 'agent + AsyncCall<()> {
+    pub fn deauthorize(&self, custodian: Principal) -> impl 'agent + AsyncCall<Value = ()> {
         self.update("deauthorize").with_arg(custodian).build()
     }
 
     /// Get the balance with the 64-bit API.
-    pub fn wallet_balance64(&self) -> impl 'agent + SyncCall<(BalanceResult<u64>,)> {
+    pub fn wallet_balance64(&self) -> impl 'agent + SyncCall<Value = (BalanceResult<u64>,)> {
         self.query("wallet_balance").build()
     }
 
     /// Get the balance with the 128-bit API.
-    pub fn wallet_balance128(&self) -> impl 'agent + SyncCall<(BalanceResult,)> {
+    pub fn wallet_balance128(&self) -> impl 'agent + SyncCall<Value = (BalanceResult,)> {
         self.query("wallet_balance128").build()
     }
 
@@ -539,7 +553,7 @@ impl<'agent> WalletCanister<'agent> {
         &self,
         destination: Principal,
         amount: u64,
-    ) -> impl 'agent + AsyncCall<(Result<(), String>,)> {
+    ) -> impl 'agent + AsyncCall<Value = (Result<(), String>,)> {
         #[derive(CandidType)]
         struct In {
             canister: Principal,
@@ -559,7 +573,7 @@ impl<'agent> WalletCanister<'agent> {
         &'canister self,
         destination: Principal,
         amount: u128,
-    ) -> impl 'agent + AsyncCall<(Result<(), String>,)> {
+    ) -> impl 'agent + AsyncCall<Value = (Result<(), String>,)> {
         #[derive(CandidType)]
         struct In {
             canister: Principal,
@@ -599,7 +613,7 @@ impl<'agent> WalletCanister<'agent> {
     }
 
     /// A function for sending cycles to, so that a memo can be passed along with them.
-    pub fn wallet_receive(&self, memo: Option<String>) -> impl 'agent + AsyncCall<((),)> {
+    pub fn wallet_receive(&self, memo: Option<String>) -> impl 'agent + AsyncCall<Value = ((),)> {
         #[derive(CandidType)]
         struct In {
             memo: Option<String>,
@@ -617,7 +631,7 @@ impl<'agent> WalletCanister<'agent> {
         compute_allocation: Option<ComputeAllocation>,
         memory_allocation: Option<MemoryAllocation>,
         freezing_threshold: Option<FreezingThreshold>,
-    ) -> impl 'agent + AsyncCall<(Result<CreateResult, String>,)> {
+    ) -> impl 'agent + AsyncCall<Value = (Result<CreateResult, String>,)> {
         #[derive(CandidType)]
         struct In {
             cycles: u64,
@@ -645,7 +659,7 @@ impl<'agent> WalletCanister<'agent> {
         compute_allocation: Option<ComputeAllocation>,
         memory_allocation: Option<MemoryAllocation>,
         freezing_threshold: Option<FreezingThreshold>,
-    ) -> impl 'agent + AsyncCall<(Result<CreateResult, String>,)> {
+    ) -> impl 'agent + AsyncCall<Value = (Result<CreateResult, String>,)> {
         #[derive(CandidType)]
         struct In {
             cycles: u64,
@@ -659,6 +673,7 @@ impl<'agent> WalletCanister<'agent> {
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
             wasm_memory_limit: None,
+            log_visibility: None,
         };
 
         self.update("wallet_create_canister")
@@ -675,7 +690,7 @@ impl<'agent> WalletCanister<'agent> {
         compute_allocation: Option<ComputeAllocation>,
         memory_allocation: Option<MemoryAllocation>,
         freezing_threshold: Option<FreezingThreshold>,
-    ) -> impl 'agent + AsyncCall<(Result<CreateResult, String>,)> {
+    ) -> impl 'agent + AsyncCall<Value = (Result<CreateResult, String>,)> {
         #[derive(CandidType)]
         struct In {
             cycles: u128,
@@ -689,6 +704,7 @@ impl<'agent> WalletCanister<'agent> {
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
             wasm_memory_limit: None,
+            log_visibility: None,
         };
 
         self.update("wallet_create_canister128")
@@ -703,9 +719,9 @@ impl<'agent> WalletCanister<'agent> {
     /// as the wallet does not support the setting.  If you need to create a canister
     /// with a `reserved_cycles_limit` set, use the management canister.
     ///
-    /// This method does not have a `wasm_memory_limit` parameter,
+    /// This method does not have a `wasm_memory_limit` or `log_visibility` parameter,
     /// as the wallet does not support the setting.  If you need to create a canister
-    /// with a `wasm_memory_limit` set, use the management canister.
+    /// with a `wasm_memory_limit` or `log_visibility` set, use the management canister.
     pub async fn wallet_create_canister(
         &self,
         cycles: u128,
@@ -775,7 +791,7 @@ impl<'agent> WalletCanister<'agent> {
         compute_allocation: Option<ComputeAllocation>,
         memory_allocation: Option<MemoryAllocation>,
         freezing_threshold: Option<FreezingThreshold>,
-    ) -> impl 'agent + AsyncCall<(Result<CreateResult, String>,)> {
+    ) -> impl 'agent + AsyncCall<Value = (Result<CreateResult, String>,)> {
         #[derive(CandidType)]
         struct In {
             cycles: u64,
@@ -803,7 +819,7 @@ impl<'agent> WalletCanister<'agent> {
         compute_allocation: Option<ComputeAllocation>,
         memory_allocation: Option<MemoryAllocation>,
         freezing_threshold: Option<FreezingThreshold>,
-    ) -> impl 'agent + AsyncCall<(Result<CreateResult, String>,)> {
+    ) -> impl 'agent + AsyncCall<Value = (Result<CreateResult, String>,)> {
         #[derive(CandidType)]
         struct In {
             cycles: u64,
@@ -817,6 +833,7 @@ impl<'agent> WalletCanister<'agent> {
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
             wasm_memory_limit: None,
+            log_visibility: None,
         };
 
         self.update("wallet_create_wallet")
@@ -833,7 +850,7 @@ impl<'agent> WalletCanister<'agent> {
         compute_allocation: Option<ComputeAllocation>,
         memory_allocation: Option<MemoryAllocation>,
         freezing_threshold: Option<FreezingThreshold>,
-    ) -> impl 'agent + AsyncCall<(Result<CreateResult, String>,)> {
+    ) -> impl 'agent + AsyncCall<Value = (Result<CreateResult, String>,)> {
         #[derive(CandidType)]
         struct In {
             cycles: u128,
@@ -847,6 +864,7 @@ impl<'agent> WalletCanister<'agent> {
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
             wasm_memory_limit: None,
+            log_visibility: None,
         };
 
         self.update("wallet_create_wallet128")
@@ -915,7 +933,10 @@ impl<'agent> WalletCanister<'agent> {
 
     /// Store the wallet WASM inside the wallet canister.
     /// This is needed to enable wallet_create_wallet
-    pub fn wallet_store_wallet_wasm(&self, wasm_module: Vec<u8>) -> impl 'agent + AsyncCall<()> {
+    pub fn wallet_store_wallet_wasm(
+        &self,
+        wasm_module: Vec<u8>,
+    ) -> impl 'agent + AsyncCall<Value = ()> {
         #[derive(CandidType, Deserialize)]
         struct In {
             #[serde(with = "serde_bytes")]
@@ -927,17 +948,17 @@ impl<'agent> WalletCanister<'agent> {
     }
 
     /// Add a principal to the address book.
-    pub fn add_address(&self, address: AddressEntry) -> impl 'agent + AsyncCall<()> {
+    pub fn add_address(&self, address: AddressEntry) -> impl 'agent + AsyncCall<Value = ()> {
         self.update("add_address").with_arg(address).build()
     }
 
     /// List the entries in the address book.
-    pub fn list_addresses(&self) -> impl 'agent + SyncCall<(Vec<AddressEntry>,)> {
+    pub fn list_addresses(&self) -> impl 'agent + SyncCall<Value = (Vec<AddressEntry>,)> {
         self.query("list_addresses").build()
     }
 
     /// Remove a principal from the address book.
-    pub fn remove_address(&self, principal: Principal) -> impl 'agent + AsyncCall<()> {
+    pub fn remove_address(&self, principal: Principal) -> impl 'agent + AsyncCall<Value = ()> {
         self.update("remove_address").with_arg(principal).build()
     }
 
@@ -946,7 +967,7 @@ impl<'agent> WalletCanister<'agent> {
         &self,
         from: Option<u32>,
         to: Option<u32>,
-    ) -> impl 'agent + SyncCall<(Vec<Event<u64>>,)> {
+    ) -> impl 'agent + SyncCall<Value = (Vec<Event<u64>>,)> {
         #[derive(CandidType)]
         struct In {
             from: Option<u32>,
@@ -967,7 +988,7 @@ impl<'agent> WalletCanister<'agent> {
         &self,
         from: Option<u32>,
         to: Option<u32>,
-    ) -> impl 'agent + SyncCall<(Vec<Event>,)> {
+    ) -> impl 'agent + SyncCall<Value = (Vec<Event>,)> {
         #[derive(CandidType)]
         struct In {
             from: Option<u32>,
@@ -1074,7 +1095,7 @@ impl<'agent> WalletCanister<'agent> {
         &self,
         from: Option<u32>,
         to: Option<u32>,
-    ) -> impl 'agent + SyncCall<(Vec<ManagedCanisterInfo>, u32)> {
+    ) -> impl 'agent + SyncCall<Value = (Vec<ManagedCanisterInfo>, u32)> {
         #[derive(CandidType)]
         struct In {
             from: Option<u32>,
@@ -1091,7 +1112,7 @@ impl<'agent> WalletCanister<'agent> {
         canister: Principal,
         from: Option<u32>,
         to: Option<u32>,
-    ) -> impl 'agent + SyncCall<(Option<Vec<ManagedCanisterEvent<u64>>>,)> {
+    ) -> impl 'agent + SyncCall<Value = (Option<Vec<ManagedCanisterEvent<u64>>>,)> {
         #[derive(CandidType)]
         struct In {
             canister: Principal,
@@ -1109,7 +1130,7 @@ impl<'agent> WalletCanister<'agent> {
         canister: Principal,
         from: Option<u32>,
         to: Option<u32>,
-    ) -> impl 'agent + SyncCall<(Option<Vec<ManagedCanisterEvent>>,)> {
+    ) -> impl 'agent + SyncCall<Value = (Option<Vec<ManagedCanisterEvent>>,)> {
         #[derive(CandidType)]
         struct In {
             canister: Principal,

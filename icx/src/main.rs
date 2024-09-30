@@ -7,10 +7,11 @@ use candid::{
 use candid_parser::{check_prog, parse_idl_args, parse_idl_value, IDLProg};
 use clap::{crate_authors, crate_version, Parser, ValueEnum};
 use ic_agent::{
-    agent::{self, signed::SignedUpdate},
     agent::{
+        self,
         agent_error::HttpErrorPayload,
-        signed::{SignedQuery, SignedRequestStatus},
+        signed::{SignedQuery, SignedRequestStatus, SignedUpdate},
+        CallResponse,
     },
     export::Principal,
     identity::BasicIdentity,
@@ -294,7 +295,11 @@ pub fn get_effective_canister_id(
             | MgmtMethod::UploadChunk
             | MgmtMethod::ClearChunkStore
             | MgmtMethod::StoredChunks
-            | MgmtMethod::FetchCanisterLogs => {
+            | MgmtMethod::FetchCanisterLogs
+            | MgmtMethod::TakeCanisterSnapshot
+            | MgmtMethod::ListCanisterSnapshots
+            | MgmtMethod::DeleteCanisterSnapshot
+            | MgmtMethod::LoadCanisterSnapshot => {
                 #[derive(CandidType, Deserialize)]
                 struct In {
                     canister_id: Principal,
@@ -322,9 +327,6 @@ pub fn get_effective_canister_id(
                 let in_args = Decode!(arg_value, In)
                     .context("Argument is not valid for InstallChunkedCode")?;
                 Ok(in_args.target_canister)
-            }
-            MgmtMethod::BitcoinGetBalanceQuery | MgmtMethod::BitcoinGetUtxosQuery => {
-                Ok(Principal::management_canister())
             }
             MgmtMethod::BitcoinGetBalance
             | MgmtMethod::BitcoinGetUtxos
@@ -362,10 +364,7 @@ async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
 
     let agent = Agent::builder()
-        .with_transport(
-            agent::http_transport::ReqwestTransport::create(opts.replica.clone())
-                .context("Failed to create Transport for Agent")?,
-        )
+        .with_url(&opts.replica)
         .with_boxed_identity(Box::new(create_identity(opts.pem)))
         .build()
         .context("Failed to build the Agent")?;
@@ -553,14 +552,23 @@ async fn main() -> Result<()> {
 
             if let Ok(signed_update) = serde_json::from_str::<SignedUpdate>(&buffer) {
                 fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
-                let request_id = agent
+                let call_response = agent
                     .update_signed(
                         signed_update.effective_canister_id,
                         signed_update.signed_update,
                     )
                     .await
                     .context("Got an AgentError when send the signed update call")?;
-                eprintln!("RequestID: 0x{}", String::from(request_id));
+
+                match call_response {
+                    CallResponse::Response(blob) => {
+                        print_idl_blob(&blob, &ArgType::Idl, &None)
+                            .context("Failed to print update result")?;
+                    }
+                    CallResponse::Poll(request_id) => {
+                        eprintln!("RequestID: 0x{}", String::from(request_id));
+                    }
+                };
             } else if let Ok(signed_query) = serde_json::from_str::<SignedQuery>(&buffer) {
                 let blob = agent
                     .query_signed(

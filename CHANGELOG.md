@@ -8,6 +8,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.38.2] - 2024-09-30
+
+* Limited the number of HTTP 429 retries. Users receiving this error should configure `with_max_concurrent_requests`.
+* Added `Envelope::encode_bytes` and `Query/UpdateBuilder::into_envelope` for external signing workflows.
+* Added `AgentBuilder::with_arc_http_middleware` for `Transport`-like functionality at the level of HTTP requests.
+* Add support for dynamic routing based on boundary node discovery. This is an internal feature for now, with a feature flag `_internal_dynamic-routing`.
+
+## [0.38.1] - 2024-09-23
+
+* Fix `ic-agent` manifest so that documentation can be built for docs.rs.
+
+## [0.38.0] - 2024-09-20
+
+* Breaking: Removed `Transport` and the `hyper` and `reqwest` features. `ReqwestTransport` is now the default and `HyperTransport` has been removed. Existing `ReqwestTransport` functions have been moved to `AgentBuilder`.
+* `Url` now implements `RouteProvider`.
+* Add canister snapshot methods to `ManagementCanister`.
+* Add `AllowedViewers` to `LogVisibility` enum.
+* Remove the cargo feature, `experimental_sync_call`, and enable synchronous update calls by default. 
+
+## [0.37.1] - 2024-07-25
+
+* Bug fix: Add `api/v2` prefix to read_state requests for hyper transport
+
+## [0.37.0] - 2024-07-23
+
+* Removed the Bitcoin query methods from `ManagementCanister`. Users should use `BitcoinCanister` for that.
+* Added `BitcoinCanister` to `ic-utils`.
+* Upgraded MSRV to 1.75.0.
+* Changed `ic_utils::interfaces::management_canister::builders::InstallMode::Upgrade` variant to be `Option<CanisterUpgradeOptions>`:
+  * `CanisterUpgradeOptions` is a new struct which covers the new upgrade option: `wasm_memory_persistence: Option<WasmMemoryPersistence>`.
+  * `WasmMemoryPersistence` is a new enum which controls Wasm main memory retention on upgrades which has two variants: `Keep` and `Replace`.
+* Added an experimental feature, `experimental_sync_call`, to enable synchronous update calls. The feature adds a toggle to the `ReqwestTransport` and `HyperTransport` to enable synchronous update calls.
+
+## [0.36.0] - 2024-06-04
+
+* Added a default request timeout to `ReqwestTransport`.
+* Introduced transparent http request retry logic for network-related failures. `ReqwestTransport::with_max_tcp_errors_retries()`, `HyperTransport::with_max_tcp_errors_retries()`.
+* Changed the SyncCall and AsyncCall traits to use an associated type for their output instead of a generic parameter.
+* Call builders now generally implement `IntoFuture`, allowing `.call_and_wait().await` to be shortened to `.await`.
+* Added `log_visibility` to canister creation and canister setting update options.
+
 ## [0.35.0] - 2024-05-10
 
 * Added a limit to the concurrent requests an agent will make at once. This should make server-side ratelimiting much rarer to encounter, even when sending a high volume of requests (for example, a large `ic_utils::ManagementCanister::install` call).
