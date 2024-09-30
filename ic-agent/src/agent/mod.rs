@@ -675,7 +675,7 @@ impl Agent {
             .with_initial_interval(Duration::from_millis(500))
             .with_max_interval(Duration::from_secs(1))
             .with_multiplier(1.4)
-            .with_max_elapsed_time(Some(Duration::from_secs(60 * 5)))
+            .with_max_elapsed_time(Some(Duration::from_secs(60 * 10)))
             .build()
     }
 
