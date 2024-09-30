@@ -1191,7 +1191,7 @@ impl Agent {
     }
 }
 
-const DEFAULT_INGRESS_EXPIRY: Duration = Duration::from_secs(240);
+const DEFAULT_INGRESS_EXPIRY: Duration = Duration::from_secs(180);
 
 // Checks if a principal is contained within a list of principal ranges
 // A range is a tuple: (low: Principal, high: Principal), as described here: https://internetcomputer.org/docs/current/references/ic-interface-spec#state-tree-subnet
