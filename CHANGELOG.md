@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.38.2] - 2024-09-30
+
 * Limited the number of HTTP 429 retries. Users receiving this error should configure `with_max_concurrent_requests`.
 * Added `Envelope::encode_bytes` and `Query/UpdateBuilder::into_envelope` for external signing workflows.
 * Added `AgentBuilder::with_arc_http_middleware` for `Transport`-like functionality at the level of HTTP requests.
