@@ -164,4 +164,9 @@ impl AgentBuilder {
         self.config.max_response_body_size = Some(max_size);
         self
     }
+    /// Set the maximum time to wait for a response from the replica.
+    pub fn with_max_polling_time(mut self, max_polling_time: std::time::Duration) -> Self {
+        self.config.max_polling_time = max_polling_time;
+        self
+    }
 }
