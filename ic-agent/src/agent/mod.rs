@@ -156,6 +156,7 @@ pub struct Agent {
     concurrent_requests_semaphore: Arc<Semaphore>,
     verify_query_signatures: bool,
     max_response_body_size: Option<usize>,
+    max_polling_time: Duration,
     #[allow(dead_code)]
     max_tcp_error_retries: usize,
 }
@@ -208,6 +209,7 @@ impl Agent {
             concurrent_requests_semaphore: Arc::new(Semaphore::new(config.max_concurrent_requests)),
             max_response_body_size: config.max_response_body_size,
             max_tcp_error_retries: config.max_tcp_error_retries,
+            max_polling_time: config.max_polling_time,
         })
     }
 
@@ -615,12 +617,12 @@ impl Agent {
         })
     }
 
-    fn get_retry_policy() -> ExponentialBackoff<SystemClock> {
+    fn get_retry_policy(&self) -> ExponentialBackoff<SystemClock> {
         ExponentialBackoffBuilder::new()
             .with_initial_interval(Duration::from_millis(500))
             .with_max_interval(Duration::from_secs(1))
             .with_multiplier(1.4)
-            .with_max_elapsed_time(Some(Duration::from_secs(60 * 5)))
+            .with_max_elapsed_time(Some(self.max_polling_time))
             .build()
     }
 
@@ -631,7 +633,7 @@ impl Agent {
         effective_canister_id: Principal,
         signed_request_status: Vec<u8>,
     ) -> Result<Vec<u8>, AgentError> {
-        let mut retry_policy = Self::get_retry_policy();
+        let mut retry_policy = self.get_retry_policy();
 
         let mut request_accepted = false;
         loop {
@@ -679,7 +681,7 @@ impl Agent {
         request_id: &RequestId,
         effective_canister_id: Principal,
     ) -> Result<Vec<u8>, AgentError> {
-        let mut retry_policy = Self::get_retry_policy();
+        let mut retry_policy = self.get_retry_policy();
 
         let mut request_accepted = false;
         loop {
