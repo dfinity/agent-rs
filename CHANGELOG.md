@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 * Added `AgentBuilder::with_max_polling_time` to config the maximum time to wait for a response from the replica.
+* `DelegatedIdentity::new` now checks the delegation chain. The old behavior is available under `new_unchecked`.
 
 ## [0.38.2] - 2024-09-30
 
