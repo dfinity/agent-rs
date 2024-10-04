@@ -6,11 +6,9 @@ use crate::{agent::EnvelopeContent, export::Principal};
 pub(crate) mod anonymous;
 pub(crate) mod basic;
 pub(crate) mod delegated;
+pub(crate) mod error;
 pub(crate) mod prime256v1;
 pub(crate) mod secp256k1;
-
-#[cfg(feature = "pem")]
-pub(crate) mod error;
 
 #[doc(inline)]
 pub use anonymous::AnonymousIdentity;
@@ -19,6 +17,8 @@ pub use basic::BasicIdentity;
 #[doc(inline)]
 pub use delegated::DelegatedIdentity;
 #[doc(inline)]
+pub use error::DelegationError;
+#[doc(inline)]
 pub use ic_transport_types::{Delegation, SignedDelegation};
 #[doc(inline)]
 pub use prime256v1::Prime256v1Identity;
@@ -26,6 +26,7 @@ pub use prime256v1::Prime256v1Identity;
 pub use secp256k1::Secp256k1Identity;
 
 #[cfg(feature = "pem")]
+#[doc(inline)]
 pub use error::PemError;
 
 /// A cryptographic signature, signed by an [Identity].
