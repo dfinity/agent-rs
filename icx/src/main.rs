@@ -6,6 +6,7 @@ use candid::{
 };
 use candid_parser::{check_prog, parse_idl_args, parse_idl_value, IDLProg};
 use clap::{crate_authors, crate_version, Parser, ValueEnum};
+use ed25519_consensus::SigningKey;
 use ic_agent::{
     agent::{
         self,
@@ -21,7 +22,7 @@ use ic_utils::interfaces::management_canister::{
     builders::{CanisterInstall, CanisterSettings},
     MgmtMethod,
 };
-use ring::signature::Ed25519KeyPair;
+use rand::thread_rng;
 use std::{
     collections::VecDeque, convert::TryFrom, io::BufRead, path::PathBuf, str::FromStr,
     time::Duration,
@@ -36,7 +37,7 @@ const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
     propagate_version(true),
 )]
 struct Opts {
-    /// Some input. Because this isn't an Option<T> it's required to be used
+    /// The URL of the replica.
     #[clap(default_value = "http://localhost:8000/")]
     replica: String,
 
@@ -347,15 +348,7 @@ fn create_identity(maybe_pem: Option<PathBuf>) -> impl Identity {
     if let Some(pem_path) = maybe_pem {
         BasicIdentity::from_pem_file(pem_path).expect("Could not read the key pair.")
     } else {
-        let rng = ring::rand::SystemRandom::new();
-        let pkcs8_bytes = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
-            .expect("Could not generate a key pair.")
-            .as_ref()
-            .to_vec();
-
-        BasicIdentity::from_key_pair(
-            Ed25519KeyPair::from_pkcs8(&pkcs8_bytes).expect("Could not generate the key pair."),
-        )
+        BasicIdentity::from_signing_key(SigningKey::new(thread_rng()))
     }
 }
 

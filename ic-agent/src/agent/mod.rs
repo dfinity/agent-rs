@@ -98,13 +98,9 @@ type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + '
 /// }
 ///
 /// # fn create_identity() -> impl ic_agent::Identity {
-/// #     let rng = ring::rand::SystemRandom::new();
-/// #     let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
-/// #         .expect("Could not generate a key pair.");
 /// #
-/// #     ic_agent::identity::BasicIdentity::from_key_pair(
-/// #         ring::signature::Ed25519KeyPair::from_pkcs8(key_pair.as_ref())
-/// #           .expect("Could not read the key pair."),
+/// #     ic_agent::identity::BasicIdentity::from_signing_key(
+/// #         ed25519_consensus::SigningKey::new(rand::thread_rng())
 /// #     )
 /// # }
 /// #

@@ -18,9 +18,14 @@ pub enum PemError {
     #[error("An error occurred while reading the file: {0}")]
     PemError(#[from] pem::PemError),
 
-    /// The key was rejected by Ring.
-    #[error("A key was rejected by Ring: {0}")]
-    KeyRejected(#[from] ring::error::KeyRejected),
+    /// An error occurred while reading the file in DER format.
+    #[cfg(feature = "pem")]
+    #[error("An error occurred while reading the file: {0}")]
+    DerError(#[from] der::Error),
+
+    /// The key was rejected by ed25519-consensus.
+    #[error("A key was rejected by ed25519-consensus: {0}")]
+    KeyRejected(#[from] ed25519_consensus::Error),
 
     /// The key was rejected by k256.
     #[error("A key was rejected by k256: {0}")]
