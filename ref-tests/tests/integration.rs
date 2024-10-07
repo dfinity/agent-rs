@@ -673,6 +673,7 @@ mod sign_send {
 
 mod identity {
     use candid::Principal;
+    use ed25519_consensus::SigningKey;
     use ic_agent::{
         identity::{
             BasicIdentity, DelegatedIdentity, Delegation, Prime256v1Identity, Secp256k1Identity,
@@ -680,23 +681,15 @@ mod identity {
         },
         Identity,
     };
+    use rand::thread_rng;
     use ref_tests::{universal_canister::payload, with_universal_canister_as};
-    use ring::{
-        rand::{SecureRandom, SystemRandom},
-        signature::Ed25519KeyPair,
-    };
 
     #[ignore]
     #[test]
     fn delegated_eddsa_identity() {
-        let random = SystemRandom::new();
-        let mut seed = [0; 32];
-        random.fill(&mut seed).unwrap();
-        let sending_identity =
-            BasicIdentity::from_key_pair(Ed25519KeyPair::from_seed_unchecked(&seed).unwrap());
-        random.fill(&mut seed).unwrap();
-        let signing_identity =
-            BasicIdentity::from_key_pair(Ed25519KeyPair::from_seed_unchecked(&seed).unwrap());
+        let mut random = thread_rng();
+        let sending_identity = BasicIdentity::from_signing_key(SigningKey::new(&mut random));
+        let signing_identity = BasicIdentity::from_signing_key(SigningKey::new(&mut random));
         let delegation = Delegation {
             expiration: i64::MAX as u64,
             pubkey: signing_identity.public_key().unwrap(),
@@ -729,15 +722,11 @@ mod identity {
     #[ignore]
     #[test]
     fn delegated_ecdsa_identity() {
-        let random = SystemRandom::new();
-        let mut seed = [0; 32];
-        random.fill(&mut seed).unwrap();
+        let mut random = thread_rng();
         let sending_identity =
-            Secp256k1Identity::from_private_key(k256::SecretKey::from_bytes(&seed.into()).unwrap());
-        random.fill(&mut seed).unwrap();
-        let signing_identity = Prime256v1Identity::from_private_key(
-            p256::SecretKey::from_bytes(&seed.into()).unwrap(),
-        );
+            Secp256k1Identity::from_private_key(k256::SecretKey::random(&mut random));
+        let signing_identity =
+            Prime256v1Identity::from_private_key(p256::SecretKey::random(&mut random));
         let delegation = Delegation {
             expiration: i64::MAX as u64,
             pubkey: signing_identity.public_key().unwrap(),

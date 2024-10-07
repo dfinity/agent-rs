@@ -8,12 +8,13 @@ publish = false
 
 [dependencies]
 candid = { workspace = true }
+ed25519-consensus = { workspace = true }
 ic-agent = { path = "../ic-agent" }
 ic-identity-hsm = { path = "../ic-identity-hsm" }
 ic-utils = { path = "../ic-utils", features = ["raw"] }
 k256 = { workspace = true }
 p256 = { workspace = true }
-ring = { workspace = true }
+rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 sha2 = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
