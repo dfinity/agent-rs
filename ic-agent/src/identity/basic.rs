@@ -61,7 +61,7 @@ impl BasicIdentity {
         }
     }
 
-    /// Create a BasicIdentity from a KeyPair from the ring crate.
+    /// Create a `BasicIdentity` from an `Ed25519KeyPair` from `ring`.
     #[cfg(feature = "ring")]
     pub fn from_key_pair(key_pair: ring::signature::Ed25519KeyPair) -> Self {
         use ring::signature::KeyPair;
