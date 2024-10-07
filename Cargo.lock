@@ -1006,9 +1006,9 @@ dependencies = [
 
 [[package]]
 name = "hyper-rustls"
-version = "0.27.2"
+version = "0.27.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ee4be2c948921a1a5320b629c4193916ed787a7f7f293fd3f7f5a6c9de74155"
+checksum = "08afdbb5c31130e3034af566421053ab03787c640246a446327f550d11bcb333"
 dependencies = [
  "futures-util",
  "http",
@@ -1054,6 +1054,7 @@ dependencies = [
  "backoff",
  "cached",
  "candid",
+ "der",
  "ecdsa",
  "ed25519-consensus",
  "elliptic-curve",
@@ -1076,7 +1077,6 @@ dependencies = [
  "rangemap",
  "reqwest",
  "ring",
- "rustls-webpki",
  "sec1",
  "serde",
  "serde_bytes",
@@ -1146,10 +1146,11 @@ version = "0.38.2"
 dependencies = [
  "async-trait",
  "candid",
+ "ed25519-consensus",
  "futures-util",
  "ic-agent",
  "once_cell",
- "ring",
+ "rand",
  "semver",
  "serde",
  "serde_bytes",
@@ -1211,11 +1212,12 @@ dependencies = [
  "candid",
  "candid_parser",
  "clap",
+ "ed25519-consensus",
  "hex",
  "humantime",
  "ic-agent",
  "ic-utils",
- "ring",
+ "rand",
  "serde",
  "serde_json",
  "tokio",
@@ -1929,13 +1931,14 @@ name = "ref-tests"
 version = "0.0.0"
 dependencies = [
  "candid",
+ "ed25519-consensus",
  "ic-agent",
  "ic-certification",
  "ic-identity-hsm",
  "ic-utils",
  "k256",
  "p256",
- "ring",
+ "rand",
  "serde",
  "serde_cbor",
  "sha2 0.10.8",
@@ -2061,9 +2064,9 @@ checksum = "583034fd73374156e66797ed8e5b0d5690409c9226b22d87cb7f19821c05d152"
 
 [[package]]
 name = "rustls"
-version = "0.23.12"
+version = "0.23.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c58f8c84392efc0a126acce10fa59ff7b3d2ac06ab451a33f2741989b806b044"
+checksum = "415d9944693cb90382053259f89fbb077ea730ad7273047ec63b19bc9b160ba8"
 dependencies = [
  "once_cell",
  "ring",
@@ -2085,15 +2088,15 @@ dependencies = [
 
 [[package]]
 name = "rustls-pki-types"
-version = "1.8.0"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc0a2ce646f8655401bb81e7927b812614bd5d91dbc968696be50603510fcaf0"
+checksum = "0e696e35370c65c9c541198af4543ccd580cf17fc25d8e05c5a242b202488c55"
 
 [[package]]
 name = "rustls-webpki"
-version = "0.102.6"
+version = "0.102.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e6b52d4fda176fd835fdc55a835d4a89b8499cad995885a21149d5ad62f852e"
+checksum = "64ca1bc8749bd4cf37b5ce386cc146580777b4e8572c7b97baf22c83f444bee9"
 dependencies = [
  "ring",
  "rustls-pki-types",

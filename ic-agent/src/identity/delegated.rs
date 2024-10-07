@@ -1,12 +1,10 @@
 use candid::Principal;
+use der::{Decode, SliceReader};
 use ecdsa::signature::Verifier;
 use k256::Secp256k1;
 use p256::NistP256;
 use pkcs8::{spki::SubjectPublicKeyInfoRef, AssociatedOid, ObjectIdentifier};
-use sec1::{
-    der::{Decode, SliceReader},
-    EcParameters, EncodedPoint,
-};
+use sec1::{EcParameters, EncodedPoint};
 
 use crate::{agent::EnvelopeContent, Signature};
 
