@@ -17,7 +17,7 @@ use super::Delegation;
 ///
 /// The caller will be represented via [`Principal::self_authenticating`], which contains the SHA-224 hash of the public key.
 pub struct BasicIdentity {
-    private_key: SigningKey,
+    private_key: KeyCompat,
     der_encoded_public_key: Vec<u8>,
 }
 
@@ -56,8 +56,35 @@ impl BasicIdentity {
         let der_encoded_public_key = der_encode_public_key(public_key.as_bytes().to_vec());
 
         Self {
-            private_key: key,
+            private_key: KeyCompat::Standard(key),
             der_encoded_public_key,
+        }
+    }
+
+    /// Create a BasicIdentity from a KeyPair from the ring crate.
+    #[cfg(feature = "ring")]
+    pub fn from_key_pair(key_pair: ring::signature::Ed25519KeyPair) -> Self {
+        use ring::signature::KeyPair;
+        let der_encoded_public_key = der_encode_public_key(key_pair.public_key().as_ref().to_vec());
+        Self {
+            private_key: KeyCompat::Ring(key_pair),
+            der_encoded_public_key,
+        }
+    }
+}
+
+enum KeyCompat {
+    Standard(SigningKey),
+    #[cfg(feature = "ring")]
+    Ring(ring::signature::Ed25519KeyPair),
+}
+
+impl KeyCompat {
+    fn sign(&self, payload: &[u8]) -> Vec<u8> {
+        match self {
+            Self::Standard(k) => k.sign(payload).to_bytes().to_vec(),
+            #[cfg(feature = "ring")]
+            Self::Ring(k) => k.sign(payload).as_ref().to_vec(),
         }
     }
 }
@@ -82,7 +109,7 @@ impl Identity for BasicIdentity {
     fn sign_arbitrary(&self, content: &[u8]) -> Result<Signature, String> {
         let signature = self.private_key.sign(content);
         Ok(Signature {
-            signature: Some(signature.to_bytes().to_vec()),
+            signature: Some(signature),
             public_key: self.public_key(),
             delegations: None,
         })

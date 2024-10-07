@@ -41,6 +41,7 @@ pkcs8 = { version = "0.10.2", features = ["std"] }
 sec1 = { version = "0.7.2", features = ["pem"] }
 rand = { workspace = true }
 rangemap = "1.4"
+ring = { version = "0.17", optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
 serde_cbor = { workspace = true }
@@ -94,6 +95,7 @@ web-sys = { version = "0.3", features = [
 [features]
 default = ["pem"]
 pem = ["dep:pem"]
+ring = ["dep:ring"]
 ic_ref_tests = [
     "default",
 ] # Used to separate integration tests for ic-ref which need a server running.
