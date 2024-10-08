@@ -37,7 +37,7 @@ fn make_untimed_agent(url: &str) -> Agent {
     Agent::builder()
         .with_url(url)
         .with_verify_query_signatures(false)
-        .with_ingress_expiry(Some(Duration::from_secs(u32::MAX as _)))
+        .with_ingress_expiry(Duration::from_secs(u32::MAX as _))
         .build()
         .unwrap()
 }
@@ -45,7 +45,7 @@ fn make_untimed_agent(url: &str) -> Agent {
 fn make_certifying_agent(url: &str) -> Agent {
     Agent::builder()
         .with_url(url)
-        .with_ingress_expiry(Some(Duration::from_secs(u32::MAX as _)))
+        .with_ingress_expiry(Duration::from_secs(u32::MAX as _))
         .build()
         .unwrap()
 }

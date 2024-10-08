@@ -16,7 +16,7 @@ pub struct AgentConfig {
     /// See [`with_identity`](super::AgentBuilder::with_identity).
     pub identity: Arc<dyn Identity>,
     /// See [`with_ingress_expiry`](super::AgentBuilder::with_ingress_expiry).
-    pub ingress_expiry: Option<Duration>,
+    pub ingress_expiry: Duration,
     /// See [`with_http_client`](super::AgentBuilder::with_http_client).
     pub client: Option<Client>,
     /// See [`with_route_provider`](super::AgentBuilder::with_route_provider).
@@ -40,7 +40,7 @@ impl Default for AgentConfig {
         Self {
             nonce_factory: Arc::new(NonceFactory::random()),
             identity: Arc::new(AnonymousIdentity {}),
-            ingress_expiry: None,
+            ingress_expiry: Duration::from_secs(3 * 60),
             client: None,
             http_service: None,
             verify_query_signatures: true,
