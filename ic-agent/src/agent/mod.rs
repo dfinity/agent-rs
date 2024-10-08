@@ -177,7 +177,7 @@ impl Agent {
         Ok(Agent {
             nonce_factory: config.nonce_factory,
             identity: config.identity,
-            ingress_expiry: config.ingress_expiry.unwrap_or(DEFAULT_INGRESS_EXPIRY),
+            ingress_expiry: config.ingress_expiry,
             root_key: Arc::new(RwLock::new(IC_ROOT_KEY.to_vec())),
             client: config.http_service.unwrap_or_else(|| {
                 Arc::new(Retry429Logic {
@@ -1188,8 +1188,6 @@ impl Agent {
         }
     }
 }
-
-const DEFAULT_INGRESS_EXPIRY: Duration = Duration::from_secs(180);
 
 // Checks if a principal is contained within a list of principal ranges
 // A range is a tuple: (low: Principal, high: Principal), as described here: https://internetcomputer.org/docs/current/references/ic-interface-spec#state-tree-subnet
