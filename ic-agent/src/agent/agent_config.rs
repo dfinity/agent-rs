@@ -31,6 +31,8 @@ pub struct AgentConfig {
     pub max_tcp_error_retries: usize,
     /// See [`with_arc_http_middleware`](super::AgentBuilder::with_arc_http_middleware).
     pub http_service: Option<Arc<dyn HttpService>>,
+    /// See [`with_max_polling_time`](super::AgentBuilder::with_max_polling_time).
+    pub max_polling_time: Duration,
 }
 
 impl Default for AgentConfig {
@@ -38,7 +40,7 @@ impl Default for AgentConfig {
         Self {
             nonce_factory: Arc::new(NonceFactory::random()),
             identity: Arc::new(AnonymousIdentity {}),
-            ingress_expiry: None,
+            ingress_expiry: Some(Duration::from_secs(3 * 60)),
             client: None,
             http_service: None,
             verify_query_signatures: true,
@@ -46,6 +48,7 @@ impl Default for AgentConfig {
             route_provider: None,
             max_response_body_size: None,
             max_tcp_error_retries: 0,
+            max_polling_time: Duration::from_secs(60 * 5),
         }
     }
 }
