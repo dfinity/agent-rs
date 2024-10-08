@@ -98,7 +98,7 @@ impl AgentBuilder {
     /// The timestamp corresponding to this duration may be rounded in order to reduce
     /// cache misses. The current implementation rounds to the nearest minute if the
     /// expiry is more than a minute, but this is not guaranteed.
-    pub fn with_ingress_expiry(mut self, ingress_expiry: Option<std::time::Duration>) -> Self {
+    pub fn with_ingress_expiry(mut self, ingress_expiry: std::time::Duration) -> Self {
         self.config.ingress_expiry = ingress_expiry;
         self
     }
