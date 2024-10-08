@@ -17,7 +17,7 @@ mod request_id;
 pub mod signed;
 
 /// The authentication envelope, containing the contents and their signature. This struct can be passed to `Agent`'s
-/// `*_signed` methods via [`to_bytes`](Envelope::to_bytes).
+/// `*_signed` methods via [`encode_bytes`](Envelope::encode_bytes).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct Envelope<'a> {

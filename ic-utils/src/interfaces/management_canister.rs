@@ -51,7 +51,7 @@ pub enum MgmtMethod {
     DepositCycles,
     /// See [`ManagementCanister::raw_rand`].
     RawRand,
-    /// See [`ManagementCanister::provisional_create_canister_with_cycles`].
+    /// See [`CreateCanisterBuilder::as_provisional_create_with_amount`].
     ProvisionalCreateCanisterWithCycles,
     /// See [`ManagementCanister::provisional_top_up_canister`].
     ProvisionalTopUpCanister,

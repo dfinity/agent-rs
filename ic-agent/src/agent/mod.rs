@@ -98,13 +98,9 @@ type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + '
 /// }
 ///
 /// # fn create_identity() -> impl ic_agent::Identity {
-/// #     let rng = ring::rand::SystemRandom::new();
-/// #     let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
-/// #         .expect("Could not generate a key pair.");
 /// #
-/// #     ic_agent::identity::BasicIdentity::from_key_pair(
-/// #         ring::signature::Ed25519KeyPair::from_pkcs8(key_pair.as_ref())
-/// #           .expect("Could not read the key pair."),
+/// #     ic_agent::identity::BasicIdentity::from_signing_key(
+/// #         ed25519_consensus::SigningKey::new(rand::thread_rng())
 /// #     )
 /// # }
 /// #
@@ -156,6 +152,7 @@ pub struct Agent {
     concurrent_requests_semaphore: Arc<Semaphore>,
     verify_query_signatures: bool,
     max_response_body_size: Option<usize>,
+    max_polling_time: Duration,
     #[allow(dead_code)]
     max_tcp_error_retries: usize,
 }
@@ -208,6 +205,7 @@ impl Agent {
             concurrent_requests_semaphore: Arc::new(Semaphore::new(config.max_concurrent_requests)),
             max_response_body_size: config.max_response_body_size,
             max_tcp_error_retries: config.max_tcp_error_retries,
+            max_polling_time: config.max_polling_time,
         })
     }
 
@@ -615,12 +613,12 @@ impl Agent {
         })
     }
 
-    fn get_retry_policy() -> ExponentialBackoff<SystemClock> {
+    fn get_retry_policy(&self) -> ExponentialBackoff<SystemClock> {
         ExponentialBackoffBuilder::new()
             .with_initial_interval(Duration::from_millis(500))
             .with_max_interval(Duration::from_secs(1))
             .with_multiplier(1.4)
-            .with_max_elapsed_time(Some(Duration::from_secs(60 * 5)))
+            .with_max_elapsed_time(Some(self.max_polling_time))
             .build()
     }
 
@@ -631,7 +629,7 @@ impl Agent {
         effective_canister_id: Principal,
         signed_request_status: Vec<u8>,
     ) -> Result<Vec<u8>, AgentError> {
-        let mut retry_policy = Self::get_retry_policy();
+        let mut retry_policy = self.get_retry_policy();
 
         let mut request_accepted = false;
         loop {
@@ -679,7 +677,7 @@ impl Agent {
         request_id: &RequestId,
         effective_canister_id: Principal,
     ) -> Result<Vec<u8>, AgentError> {
-        let mut retry_policy = Self::get_retry_policy();
+        let mut retry_policy = self.get_retry_policy();
 
         let mut request_accepted = false;
         loop {
@@ -1926,17 +1924,23 @@ impl HttpService for Retry429Logic {
     async fn call<'a>(
         &'a self,
         req: &'a (dyn Fn() -> Result<Request, AgentError> + Send + Sync),
-        _max_retries: usize,
+        _max_tcp_retries: usize,
     ) -> Result<Response, AgentError> {
+        let mut retries = 0;
         loop {
             #[cfg(not(target_family = "wasm"))]
-            let resp = self.client.call(req, _max_retries).await?;
+            let resp = self.client.call(req, _max_tcp_retries).await?;
             // Client inconveniently does not implement Service on wasm
             #[cfg(target_family = "wasm")]
             let resp = self.client.execute(req()?).await?;
             if resp.status() == StatusCode::TOO_MANY_REQUESTS {
-                crate::util::sleep(Duration::from_millis(250)).await;
-                continue;
+                if retries == 6 {
+                    break Ok(resp);
+                } else {
+                    retries += 1;
+                    crate::util::sleep(Duration::from_millis(250)).await;
+                    continue;
+                }
             } else {
                 break Ok(resp);
             }

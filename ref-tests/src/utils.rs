@@ -1,8 +1,9 @@
+use ed25519_consensus::SigningKey;
 use ic_agent::identity::{Prime256v1Identity, Secp256k1Identity};
 use ic_agent::{export::Principal, identity::BasicIdentity, Agent, Identity};
 use ic_identity_hsm::HardwareIdentity;
 use ic_utils::interfaces::{management_canister::builders::MemoryAllocation, ManagementCanister};
-use ring::signature::Ed25519KeyPair;
+use rand::thread_rng;
 use std::{convert::TryFrom, error::Error, future::Future, path::Path};
 
 const HSM_PKCS11_LIBRARY_PATH: &str = "HSM_PKCS11_LIBRARY_PATH";
@@ -49,13 +50,9 @@ fn get_hsm_pin() -> Result<String, String> {
 //
 // A shared container of Ctx objects might be possible instead, but my rust-fu is inadequate.
 pub fn create_basic_identity() -> Result<BasicIdentity, String> {
-    let rng = ring::rand::SystemRandom::new();
-    let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
-        .expect("Could not generate a key pair.");
+    let sk = SigningKey::new(thread_rng());
 
-    Ok(BasicIdentity::from_key_pair(
-        Ed25519KeyPair::from_pkcs8(key_pair.as_ref()).expect("Could not read the key pair."),
-    ))
+    Ok(BasicIdentity::from_signing_key(sk))
 }
 
 /// Create a secp256k1identity, which unfortunately will always be the same one

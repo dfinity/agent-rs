@@ -389,7 +389,9 @@ mod tests {
     use super::super::interfaces::ManagementCanister;
     use crate::call::AsyncCall;
     use candid::Principal;
+    use ed25519_consensus::SigningKey;
     use ic_agent::identity::BasicIdentity;
+    use rand::thread_rng;
 
     fn get_effective_canister_id() -> Principal {
         Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap()
@@ -400,14 +402,7 @@ mod tests {
     async fn simple() {
         use super::Canister;
 
-        let rng = ring::rand::SystemRandom::new();
-        let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
-            .expect("Could not generate a key pair.");
-
-        let identity = BasicIdentity::from_key_pair(
-            ring::signature::Ed25519KeyPair::from_pkcs8(key_pair.as_ref())
-                .expect("Could not read the key pair."),
-        );
+        let identity = BasicIdentity::from_signing_key(SigningKey::new(thread_rng()));
 
         let port = std::env::var("IC_REF_PORT").unwrap_or_else(|_| "4943".into());
 

@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Changed `BasicIdentity`'s implmentation from `ring` to `ed25519-consensus`.
+* Added `AgentBuilder::with_max_polling_time` to config the maximum time to wait for a response from the replica.
+* `DelegatedIdentity::new` now checks the delegation chain. The old behavior is available under `new_unchecked`.
+
+## [0.38.2] - 2024-09-30
+
+* Limited the number of HTTP 429 retries. Users receiving this error should configure `with_max_concurrent_requests`.
 * Added `Envelope::encode_bytes` and `Query/UpdateBuilder::into_envelope` for external signing workflows.
 * Added `AgentBuilder::with_arc_http_middleware` for `Transport`-like functionality at the level of HTTP requests.
 * Add support for dynamic routing based on boundary node discovery. This is an internal feature for now, with a feature flag `_internal_dynamic-routing`.

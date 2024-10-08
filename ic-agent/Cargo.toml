@@ -23,7 +23,10 @@ async-watch = { version = "0.3", optional = true }
 backoff = "0.4.0"
 cached = { version = "0.52", features = ["ahash"], default-features = false }
 candid = { workspace = true }
-ed25519-consensus = { version = "2" }
+der = "0.7"
+ecdsa = "0.16"
+ed25519-consensus = { workspace = true }
+elliptic-curve = "0.13"
 futures-util = { workspace = true }
 hex = { workspace = true }
 http = "1.0.0"
@@ -31,14 +34,14 @@ http-body = "1.0.0"
 ic-certification = { workspace = true }
 ic-transport-types = { workspace = true }
 ic-verify-bls-signature = "0.5"
-k256 = { version = "0.13.1", features = ["pem"] }
-p256 = { version = "0.13.2", features = ["pem"] }
+k256 = { workspace = true, features = ["pem"] }
+p256 = { workspace = true, features = ["pem"] }
 leb128 = { workspace = true }
 pkcs8 = { version = "0.10.2", features = ["std"] }
 sec1 = { version = "0.7.2", features = ["pem"] }
-rand = "0.8.5"
+rand = { workspace = true }
 rangemap = "1.4"
-ring = { workspace = true, features = ["std"] }
+ring = { version = "0.17", optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
 serde_cbor = { workspace = true }
@@ -63,7 +66,6 @@ optional = true
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio = { version = "1.24.2", features = ["time"] }
-rustls-webpki = "0.102"
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 getrandom = { version = "0.2", features = ["js"], optional = true }
@@ -93,6 +95,7 @@ web-sys = { version = "0.3", features = [
 [features]
 default = ["pem"]
 pem = ["dep:pem"]
+ring = ["dep:ring"]
 ic_ref_tests = [
     "default",
 ] # Used to separate integration tests for ic-ref which need a server running.
