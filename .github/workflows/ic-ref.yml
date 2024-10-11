@@ -72,7 +72,7 @@ jobs:
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
           export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
           export POCKET_IC="yes"
-          cargo test --all-features -- --ignored
+          cargo test --all-features -- --ignored --test-threads=1 # TODO: drop --test-threads=1
           dfx stop
         env:
           RUST_BACKTRACE: 1
