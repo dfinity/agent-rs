@@ -28,7 +28,7 @@ jobs:
       - name: Install dfx
         uses: dfinity/setup-dfx@main
         with:
-          dfx-version: "0.22.0-beta.0"
+          dfx-version: "0.24.1-beta.1"
 
       - name: Cargo cache
         uses: actions/cache@v4
@@ -58,6 +58,20 @@ jobs:
           export IC_REF_PORT=$(dfx info replica-port)
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
           export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
+          cargo test --all-features -- --ignored
+          dfx stop
+        env:
+          RUST_BACKTRACE: 1
+
+      - name: Run Integration Tests with PocketIC
+        run: |
+          set -ex
+          dfx start --background --clean --pocketic
+          sleep 1
+          export IC_REF_PORT=$(dfx info webserver-port)
+          export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
+          export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
+          export POCKET_IC="yes"
           cargo test --all-features -- --ignored
           dfx stop
         env:

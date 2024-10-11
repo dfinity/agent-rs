@@ -251,6 +251,18 @@ impl Agent {
         Ok(())
     }
 
+    /// This function fetches the topology of a PocketIC instance.
+    ///
+    /// *Only use this function when you are talking to a PocketIC server in tests.*
+    pub async fn fetch_pocketic_topology(
+        &self,
+    ) -> Result<pocket_ic::common::rest::Topology, AgentError> {
+        let endpoint = "_/topology";
+        let bytes = self.execute(Method::GET, endpoint, None).await?.1;
+        serde_json::from_slice::<pocket_ic::common::rest::Topology>(&bytes)
+            .map_err(AgentError::InvalidJsonData)
+    }
+
     /// By default, the agent is configured to talk to the main Internet Computer, and verifies
     /// responses using a hard-coded public key.
     ///

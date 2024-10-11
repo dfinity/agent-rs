@@ -30,6 +30,10 @@ pub enum AgentError {
     #[error("Invalid CBOR data, could not deserialize: {0}")]
     InvalidCborData(#[from] serde_cbor::Error),
 
+    /// The data fetched was invalid JSON.
+    #[error("Invalid JSON data, could not deserialize: {0}")]
+    InvalidJsonData(#[from] serde_json::Error),
+
     /// There was an error calculating a request ID.
     #[error("Cannot calculate a RequestID: {0}")]
     CannotCalculateRequestId(#[from] RequestIdError),
