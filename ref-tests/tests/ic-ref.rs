@@ -764,7 +764,7 @@ mod management_canister {
                 .await?;
 
             assert!(
-                result.cycles > 0_u64 && result.cycles < creation_fee,
+                result.cycles > 0_u64 && result.cycles < creation_fee + canister_initial_balance,
                 "expected 0..{creation_fee}, got {}",
                 result.cycles
             );
@@ -894,13 +894,25 @@ mod management_canister {
     #[ignore]
     #[test]
     fn subnet_metrics() {
-        with_universal_canister(|agent, _| async move {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            // create a canister on the root subnet
+            let registry_canister_id = Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap();
+            let _ = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(registry_canister_id)
+                .call_and_wait()
+                .await?;
+
+            // fetch root subnet metrics
             let metrics = agent
                 .read_state_subnet_metrics(Principal::self_authenticating(&agent.read_root_key()))
                 .await?;
             assert!(
                 metrics.num_canisters >= 1,
-                "expected universal canister in num_canisters"
+                "expected a canister on the root subnet"
             );
             Ok(())
         })

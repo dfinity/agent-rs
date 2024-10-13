@@ -393,8 +393,28 @@ mod tests {
     use ic_agent::identity::BasicIdentity;
     use rand::thread_rng;
 
-    fn get_effective_canister_id() -> Principal {
-        Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap()
+    const POCKET_IC: &str = "POCKET_IC";
+
+    async fn get_effective_canister_id() -> Principal {
+        if let Ok(pocket_ic_url) = std::env::var(POCKET_IC) {
+            let client = reqwest::Client::new();
+            let topology: pocket_ic::common::rest::Topology = client
+                .get(format!("{}{}", pocket_ic_url, "/_/topology"))
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            let app_subnet = topology.get_app_subnets()[0];
+            Principal::from_slice(
+                &topology.0.get(&app_subnet).unwrap().canister_ranges[0]
+                    .start
+                    .canister_id,
+            )
+        } else {
+            Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap()
+        }
     }
 
     #[ignore]
@@ -424,7 +444,7 @@ mod tests {
         let (new_canister_id,) = management_canister
             .create_canister()
             .as_provisional_create_with_amount(None)
-            .with_effective_canister_id(get_effective_canister_id())
+            .with_effective_canister_id(get_effective_canister_id().await)
             .call_and_wait()
             .await
             .unwrap();
