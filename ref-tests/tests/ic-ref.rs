@@ -43,11 +43,11 @@ mod management_canister {
         },
         Argument,
     };
+    use ref_tests::get_effective_canister_id;
     use ref_tests::{
         create_agent, create_basic_identity, create_prime256v1_identity, create_secp256k1_identity,
         with_agent, with_wallet_canister,
     };
-    use ref_tests::{get_effective_canister_id, with_universal_canister};
     use sha2::{Digest, Sha256};
     use std::collections::HashSet;
     use std::convert::TryInto;
