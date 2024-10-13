@@ -112,10 +112,6 @@ jobs:
       - name: Run Integration Tests with SoftHSM against PocketIC
         run: |
           set -ex
-          softhsm2-util --init-token --slot $HSM_SLOT_INDEX --label "agent-rs-token" --so-pin $HSM_SO_PIN --pin $HSM_PIN
-          # create key:
-          pkcs11-tool -k --module $HSM_PKCS11_LIBRARY_PATH --login --slot-index $HSM_SLOT_INDEX -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
-
           dfx start --background --clean --pocketic
           sleep 1
           export IC_REF_PORT=$(dfx info webserver-port)
