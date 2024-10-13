@@ -10,18 +10,27 @@ const HSM_PKCS11_LIBRARY_PATH: &str = "HSM_PKCS11_LIBRARY_PATH";
 const HSM_SLOT_INDEX: &str = "HSM_SLOT_INDEX";
 const HSM_KEY_ID: &str = "HSM_KEY_ID";
 const HSM_PIN: &str = "HSM_PIN";
+const POCKET_IC: &str = "POCKET_IC";
 
-pub async fn get_effective_canister_id(agent: &Agent) -> Principal {
-    match agent.fetch_pocketic_topology().await {
-        Ok(topology) => {
-            let app_subnet = topology.get_app_subnets()[0];
-            Principal::from_slice(
-                &topology.0.get(&app_subnet).unwrap().canister_ranges[0]
-                    .start
-                    .canister_id,
-            )
-        }
-        Err(_) => Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap(),
+pub async fn get_effective_canister_id() -> Principal {
+    if let Ok(pocket_ic_url) = std::env::var(POCKET_IC) {
+        let client = reqwest::Client::new();
+        let topology: pocket_ic::common::rest::Topology = client
+            .get(format!("{}{}", pocket_ic_url, "/_/topology"))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let app_subnet = topology.get_app_subnets()[0];
+        Principal::from_slice(
+            &topology.0.get(&app_subnet).unwrap().canister_ranges[0]
+                .start
+                .canister_id,
+        )
+    } else {
+        Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap()
     }
 }
 
@@ -159,7 +168,7 @@ pub async fn create_universal_canister(agent: &Agent) -> Result<Principal, Box<d
     let (canister_id,) = ic00
         .create_canister()
         .as_provisional_create_with_amount(None)
-        .with_effective_canister_id(get_effective_canister_id(&agent).await)
+        .with_effective_canister_id(get_effective_canister_id().await)
         .call_and_wait()
         .await?;
 
@@ -195,7 +204,7 @@ pub async fn create_wallet_canister(
     let (canister_id,) = ic00
         .create_canister()
         .as_provisional_create_with_amount(cycles)
-        .with_effective_canister_id(get_effective_canister_id(&agent).await)
+        .with_effective_canister_id(get_effective_canister_id().await)
         .with_memory_allocation(
             MemoryAllocation::try_from(8000000000_u64)
                 .expect("Memory allocation must be between 0 and 2^48 (i.e 256TB), inclusively."),

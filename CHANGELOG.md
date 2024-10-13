@@ -8,7 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-* New function `Agent::fetch_pocketic_topology` to fetch the topology of a PocketIC instance.
 * Make ingress_expiry required and set the default value to 3 min.
 * Changed `BasicIdentity`'s implmentation from `ring` to `ed25519-consensus`.
 * Added `AgentBuilder::with_max_polling_time` to config the maximum time to wait for a response from the replica.

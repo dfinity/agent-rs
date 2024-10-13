@@ -74,7 +74,7 @@ mod management_canister {
                 let _ = ic00
                     .create_canister()
                     .as_provisional_create_with_amount(None)
-                    .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                    .with_effective_canister_id(get_effective_canister_id().await)
                     .call_and_wait()
                     .await?;
 
@@ -123,7 +123,7 @@ mod management_canister {
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .call_and_wait()
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
@@ -216,7 +216,7 @@ mod management_canister {
             let (canister_id_2,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .call_and_wait()
                 .await?;
 
@@ -230,7 +230,7 @@ mod management_canister {
             let (canister_id_3,) = other_ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .call_and_wait()
                 .await?;
 
@@ -292,7 +292,7 @@ mod management_canister {
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None) // ok
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 //.with_canister_id("aaaaa-aa")
                 .with_controller(agent_principal)
                 .with_controller(other_agent_principal)
@@ -435,7 +435,7 @@ mod management_canister {
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .call_and_wait()
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
@@ -619,7 +619,7 @@ mod management_canister {
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .call_and_wait()
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
@@ -775,7 +775,7 @@ mod management_canister {
             let (canister_id_1,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .call_and_wait()
                 .await?;
             let result = ic00.canister_status(&canister_id_1).call_and_wait().await?;
@@ -790,7 +790,7 @@ mod management_canister {
             let (canister_id_2,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(Some(amount))
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .call_and_wait()
                 .await?;
             let result = ic00.canister_status(&canister_id_2).call_and_wait().await?;
@@ -860,7 +860,7 @@ mod management_canister {
             let (canister_id,) = mgmt
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .call_and_wait()
                 .await?;
             let (pt1,) = mgmt
@@ -1032,7 +1032,7 @@ mod extras {
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .with_compute_allocation(1_u64)
                 .with_memory_allocation(1024 * 1024_u64)
                 .with_freezing_threshold(1_000_000_u64)
@@ -1068,7 +1068,7 @@ mod extras {
             let result = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .with_memory_allocation(1u64 << 50)
                 .call_and_wait()
                 .await;
@@ -1080,7 +1080,7 @@ mod extras {
             let (_,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .with_memory_allocation(10 * 1024 * 1024u64)
                 .call_and_wait()
                 .await?;
@@ -1101,7 +1101,7 @@ mod extras {
             let (_,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(Some(1_000_000_000_000_000))
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .with_compute_allocation(ca)
                 .call_and_wait()
                 .await?;
@@ -1118,7 +1118,7 @@ mod extras {
             let result = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .with_freezing_threshold(2u128.pow(70))
                 .call_and_wait()
                 .await;
@@ -1140,7 +1140,7 @@ mod extras {
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .with_reserved_cycles_limit(2u128.pow(70))
                 .call_and_wait()
                 .await
@@ -1165,7 +1165,7 @@ mod extras {
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .with_reserved_cycles_limit(2_500_800_000_000u128)
                 .call_and_wait()
                 .await?;
@@ -1262,7 +1262,7 @@ mod extras {
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .with_wasm_memory_limit(1_000_000_000)
                 .call_and_wait()
                 .await
@@ -1287,7 +1287,7 @@ mod extras {
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .with_wasm_memory_limit(1_000_000_000)
                 .call_and_wait()
                 .await?;
@@ -1334,7 +1334,7 @@ mod extras {
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .with_log_visibility(LogVisibility::Public)
                 .call_and_wait()
                 .await
@@ -1357,7 +1357,7 @@ mod extras {
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
-                .with_effective_canister_id(get_effective_canister_id(&agent).await)
+                .with_effective_canister_id(get_effective_canister_id().await)
                 .with_log_visibility(LogVisibility::Controllers)
                 .call_and_wait()
                 .await?;

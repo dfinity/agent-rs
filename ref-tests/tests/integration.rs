@@ -19,7 +19,7 @@ use ic_utils::{
 };
 use ref_tests::{
     create_agent, create_basic_identity, create_universal_canister, create_wallet_canister,
-    get_wallet_wasm_from_env, universal_canister::payload, with_agent, with_universal_canister,
+    get_wallet_wasm_from_env, universal_canister::payload, with_universal_canister,
     with_wallet_canister,
 };
 use serde::Serialize;
@@ -755,17 +755,4 @@ mod identity {
             Ok(())
         })
     }
-}
-
-#[ignore]
-#[test]
-fn topology() {
-    with_agent(|agent| async move {
-        let is_pocketic = std::env::var("POCKET_IC").is_ok();
-        match agent.fetch_pocketic_topology().await {
-            Ok(_) => assert!(is_pocketic),
-            Err(_) => assert!(!is_pocketic),
-        };
-        Ok(())
-    });
 }
