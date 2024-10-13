@@ -63,7 +63,7 @@ jobs:
         env:
           RUST_BACKTRACE: 1
 
-      - name: Run Integration Tests with PocketIC
+      - name: Run Integration Tests against PocketIC
         run: |
           set -ex
           dfx start --background --clean --pocketic
@@ -109,6 +109,30 @@ jobs:
           HSM_SLOT_INDEX: 0
           HSM_KEY_ID: abcdef
 
+      - name: Run Integration Tests with SoftHSM against PocketIC
+        run: |
+          set -ex
+          softhsm2-util --init-token --slot $HSM_SLOT_INDEX --label "agent-rs-token" --so-pin $HSM_SO_PIN --pin $HSM_PIN
+          # create key:
+          pkcs11-tool -k --module $HSM_PKCS11_LIBRARY_PATH --login --slot-index $HSM_SLOT_INDEX -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
+
+          dfx start --background --clean --pocketic
+          sleep 1
+          export IC_REF_PORT=$(dfx info webserver-port)
+          export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
+          export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
+          export POCKET_IC="http://localhost:${IC_REF_PORT}"
+          cd ref-tests
+          cargo test --all-features -- --ignored --nocapture --test-threads=1
+          dfx stop
+        env:
+          RUST_BACKTRACE: 1
+          HSM_PKCS11_LIBRARY_PATH: /usr/lib/softhsm/libsofthsm2.so
+          HSM_SO_PIN: 123456
+          HSM_PIN: 1234
+          HSM_SLOT_INDEX: 0
+          HSM_KEY_ID: abcdef
+
       - name: Run Doc Tests
         run: |
           set -ex
@@ -116,6 +140,18 @@ jobs:
           sleep 1
           export IC_REF_PORT=$(dfx info replica-port)
           cargo test --all-features --doc -- --ignored
+          dfx stop
+        env:
+          RUST_BACKTRACE: 1
+
+      - name: Run Doc Tests against PocketIC
+        run: |
+          set -ex
+          dfx start --background --clean --pocketic
+          sleep 1
+          export IC_REF_PORT=$(dfx info webserver-port)
+          export POCKET_IC="http://localhost:${IC_REF_PORT}"
+          cargo test --all-features --doc -- --ignored --test-threads=1 # TODO: drop --test-threads=1
           dfx stop
         env:
           RUST_BACKTRACE: 1
