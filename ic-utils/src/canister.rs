@@ -393,10 +393,8 @@ mod tests {
     use ic_agent::identity::BasicIdentity;
     use rand::thread_rng;
 
-    #[cfg(unix)]
     const POCKET_IC: &str = "POCKET_IC";
 
-    #[cfg(unix)]
     async fn get_effective_canister_id() -> Principal {
         if let Ok(pocket_ic_url) = std::env::var(POCKET_IC) {
             let client = reqwest::Client::new();
@@ -419,7 +417,6 @@ mod tests {
         }
     }
 
-    #[cfg(unix)]
     #[ignore]
     #[tokio::test]
     async fn simple() {
