@@ -35,14 +35,10 @@ jobs:
         run: |
           # Test all features and no features for each package.
           for p in $(cargo metadata --no-deps --format-version 1 | jq -r .packages[].manifest_path); do
-            # skip unit tests for integration tests on windows
-            # because integration tests cannot be run on windows anyway
-            if [[ ! ( ${{ matrix.os == 'windows-latest' }} && "$(echo ${p} | grep ref-tests)" ) ]]; then
-              pushd $(dirname $p)
-              cargo test --all-targets --all-features
-              cargo test --all-targets --no-default-features
-              popd
-            fi
+            pushd $(dirname $p)
+            cargo test --all-targets --all-features
+            cargo test --all-targets --no-default-features
+            popd
           done
         env:
           RUST_BACKTRACE: 1
