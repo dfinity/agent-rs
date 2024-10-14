@@ -268,7 +268,7 @@ pub fn get_effective_canister_id(
     method_name: &str,
     arg_value: &[u8],
     canister_id: Principal,
-) -> Result<Principal> {
+) -> Result<Option<Principal>> {
     if is_management_canister {
         let method_name = MgmtMethod::from_str(method_name).with_context(|| {
             format!(
@@ -284,7 +284,7 @@ pub fn get_effective_canister_id(
             MgmtMethod::InstallCode => {
                 let install_args = Decode!(arg_value, CanisterInstall)
                     .context("Argument is not valid for CanisterInstall")?;
-                Ok(install_args.canister_id)
+                Ok(Some(install_args.canister_id))
             }
             MgmtMethod::StartCanister
             | MgmtMethod::StopCanister
@@ -307,9 +307,9 @@ pub fn get_effective_canister_id(
                 }
                 let in_args =
                     Decode!(arg_value, In).context("Argument is not a valid Principal")?;
-                Ok(in_args.canister_id)
+                Ok(Some(in_args.canister_id))
             }
-            MgmtMethod::ProvisionalCreateCanisterWithCycles => Ok(Principal::management_canister()),
+            MgmtMethod::ProvisionalCreateCanisterWithCycles => Ok(None),
             MgmtMethod::UpdateSettings => {
                 #[derive(CandidType, Deserialize)]
                 struct In {
@@ -318,7 +318,7 @@ pub fn get_effective_canister_id(
                 }
                 let in_args =
                     Decode!(arg_value, In).context("Argument is not valid for UpdateSettings")?;
-                Ok(in_args.canister_id)
+                Ok(Some(in_args.canister_id))
             }
             MgmtMethod::InstallChunkedCode => {
                 #[derive(CandidType, Deserialize)]
@@ -327,7 +327,7 @@ pub fn get_effective_canister_id(
                 }
                 let in_args = Decode!(arg_value, In)
                     .context("Argument is not valid for InstallChunkedCode")?;
-                Ok(in_args.target_canister)
+                Ok(Some(in_args.target_canister))
             }
             MgmtMethod::BitcoinGetBalance
             | MgmtMethod::BitcoinGetUtxos
@@ -340,7 +340,7 @@ pub fn get_effective_canister_id(
             }
         }
     } else {
-        Ok(canister_id)
+        Ok(Some(canister_id))
     }
 }
 
@@ -361,6 +361,35 @@ async fn main() -> Result<()> {
         .with_boxed_identity(Box::new(create_identity(opts.pem)))
         .build()
         .context("Failed to build the Agent")?;
+
+    let get_default_effective_canister_id = || async {
+        let client = reqwest::Client::new();
+        let topology: pocket_ic::common::rest::Topology = client
+            .get(format!(
+                "{}{}",
+                opts.replica.trim_end_matches('/'),
+                "/_/topology"
+            ))
+            .send()
+            .await?
+            .json()
+            .await?;
+        let subnet = topology.get_app_subnets().into_iter().next().unwrap_or_else(||
+                    topology
+                        .get_verified_app_subnets()
+                        .into_iter()
+                        .next()
+                        .unwrap_or_else(|| topology.get_system_subnets().into_iter().next().unwrap_or_else(|| panic!("PocketIC topology contains no application, verified application, and system subnet."))),
+                );
+        Ok::<_, reqwest::Error>(Principal::from_slice(
+            &topology.0.get(&subnet).unwrap().canister_ranges[0]
+                .start
+                .canister_id,
+        ))
+    };
+    let default_effective_canister_id = get_default_effective_canister_id()
+        .await
+        .unwrap_or(Principal::management_canister());
 
     // You can handle information about subcommands by requesting their matches by name
     // (as below), requesting just the name used, or both at the same time
@@ -384,7 +413,8 @@ async fn main() -> Result<()> {
                 &arg,
                 t.canister_id,
             )
-            .context("Failed to get effective_canister_id for this call")?;
+            .context("Failed to get effective_canister_id for this call")?
+            .unwrap_or(default_effective_canister_id);
 
             if !t.serialize {
                 let result = match &opts.subcommand {

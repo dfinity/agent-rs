@@ -236,11 +236,11 @@ fn wallet_canister_forward() {
 #[ignore]
 #[test]
 fn wallet_canister_create_and_install() {
-    with_wallet_canister(None, |agent, wallet_id| async move {
+    with_wallet_canister(Some(1_000_000_000_000_000), |agent, wallet_id| async move {
         let wallet = WalletCanister::create(&agent, wallet_id).await?;
 
         let create_result = wallet
-            .wallet_create_canister(100_000_000_000, None, None, None, None)
+            .wallet_create_canister(200_000_000_000_000, None, None, None, None)
             .await?;
 
         #[derive(CandidType)]
@@ -460,7 +460,7 @@ fn wallet_create_wallet() {
 #[ignore]
 #[test]
 fn wallet_canister_funds() {
-    let provisional_amount = 1 << 40;
+    let provisional_amount = 1_000_000_000_000_000;
     with_wallet_canister(Some(provisional_amount), |agent, wallet_id| async move {
         let alice = WalletCanister::create(&agent, wallet_id).await?;
         let bob = WalletCanister::create(

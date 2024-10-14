@@ -28,7 +28,7 @@ jobs:
       - name: Install dfx
         uses: dfinity/setup-dfx@main
         with:
-          dfx-version: "0.22.0-beta.0"
+          dfx-version: "0.24.1-beta.1"
 
       - name: Cargo cache
         uses: actions/cache@v4
@@ -59,6 +59,20 @@ jobs:
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
           export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
           cargo test --all-features -- --ignored
+          dfx stop
+        env:
+          RUST_BACKTRACE: 1
+
+      - name: Run Integration Tests against PocketIC
+        run: |
+          set -ex
+          dfx start --background --clean --pocketic
+          sleep 1
+          export IC_REF_PORT=$(dfx info webserver-port)
+          export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
+          export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
+          export POCKET_IC="http://localhost:${IC_REF_PORT}"
+          cargo test --all-features -- --ignored --test-threads=1 # TODO: drop --test-threads=1
           dfx stop
         env:
           RUST_BACKTRACE: 1
@@ -95,6 +109,26 @@ jobs:
           HSM_SLOT_INDEX: 0
           HSM_KEY_ID: abcdef
 
+      - name: Run Integration Tests with SoftHSM against PocketIC
+        run: |
+          set -ex
+          dfx start --background --clean --pocketic
+          sleep 1
+          export IC_REF_PORT=$(dfx info webserver-port)
+          export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
+          export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
+          export POCKET_IC="http://localhost:${IC_REF_PORT}"
+          cd ref-tests
+          cargo test --all-features -- --ignored --nocapture --test-threads=1
+          dfx stop
+        env:
+          RUST_BACKTRACE: 1
+          HSM_PKCS11_LIBRARY_PATH: /usr/lib/softhsm/libsofthsm2.so
+          HSM_SO_PIN: 123456
+          HSM_PIN: 1234
+          HSM_SLOT_INDEX: 0
+          HSM_KEY_ID: abcdef
+
       - name: Run Doc Tests
         run: |
           set -ex
@@ -102,6 +136,18 @@ jobs:
           sleep 1
           export IC_REF_PORT=$(dfx info replica-port)
           cargo test --all-features --doc -- --ignored
+          dfx stop
+        env:
+          RUST_BACKTRACE: 1
+
+      - name: Run Doc Tests against PocketIC
+        run: |
+          set -ex
+          dfx start --background --clean --pocketic
+          sleep 1
+          export IC_REF_PORT=$(dfx info webserver-port)
+          export POCKET_IC="http://localhost:${IC_REF_PORT}"
+          cargo test --all-features --doc -- --ignored --test-threads=1 # TODO: drop --test-threads=1
           dfx stop
         env:
           RUST_BACKTRACE: 1
