@@ -241,7 +241,7 @@ impl<'agent, Out> AsyncCaller<'agent, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send + 'agent,
 {
-    /// Build an UpdateBuilder call that can be used directly with the [Agent]. This is
+    /// Build an `UpdateBuilder` call that can be used directly with the [Agent]. This is
     /// essentially downleveling this type into the lower level [ic-agent] abstraction.
     pub fn build_call(self) -> Result<UpdateBuilder<'agent>, AgentError> {
         let mut builder = self.agent.update(&self.canister_id, &self.method_name);
@@ -320,7 +320,7 @@ where
     }
 }
 
-/// An AsyncCall that applies a transform function to the result of the call. Because of
+/// An `AsyncCall` that applies a transform function to the result of the call. Because of
 /// constraints on the type system in Rust, both the input and output to the function must be
 /// deserializable.
 pub struct AndThenAsyncCaller<

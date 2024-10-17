@@ -14,7 +14,12 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use sha2::{Digest, Sha256};
-use std::{io::Write, ops::Deref, str::FromStr};
+use std::{
+    fmt::{self, Display, Formatter},
+    io::Write,
+    ops::Deref,
+    str::FromStr,
+};
 
 mod error;
 #[doc(inline)]
@@ -96,6 +101,12 @@ impl FromStr for RequestId {
 impl From<RequestId> for String {
     fn from(id: RequestId) -> String {
         hex::encode(id.0)
+    }
+}
+
+impl Display for RequestId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        hex::encode(self.0).fmt(f)
     }
 }
 
@@ -187,20 +198,14 @@ impl Serializer for RequestIdSerializer {
 
     // Newtypes, including Option::Some, are transparent.
 
-    fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: Serialize,
-    {
+    fn serialize_some<T: Serialize + ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error> {
         value.serialize(self)
     }
-    fn serialize_newtype_struct<T: ?Sized>(
+    fn serialize_newtype_struct<T: Serialize + ?Sized>(
         self,
         _name: &'static str,
         value: &T,
-    ) -> Result<Self::Ok, Self::Error>
-    where
-        T: Serialize,
-    {
+    ) -> Result<Self::Ok, Self::Error> {
         value.serialize(self)
     }
 
@@ -252,16 +257,13 @@ impl Serializer for RequestIdSerializer {
     // We apply serde_json's handling of complex variants. That is,
     // the body is placed within a struct with one field, named the same thing as the variant.
 
-    fn serialize_newtype_variant<T: ?Sized>(
+    fn serialize_newtype_variant<T: Serialize + ?Sized>(
         self,
         name: &'static str,
         _variant_index: u32,
         variant: &'static str,
         value: &T,
-    ) -> Result<Self::Ok, Self::Error>
-    where
-        T: Serialize,
-    {
+    ) -> Result<Self::Ok, Self::Error> {
         let mut s = self.serialize_struct(name, 1)?;
         SerializeStruct::serialize_field(&mut s, variant, value)?;
         SerializeStruct::end(s)
@@ -303,10 +305,7 @@ impl Serializer for RequestIdSerializer {
         false
     }
     // Optimized version of serialize_str for types that serialize by rendering themselves to strings.
-    fn collect_str<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: std::fmt::Display,
-    {
+    fn collect_str<T: Display + ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error> {
         let mut hasher = Sha256::new();
         write!(hasher, "{value}").map_err(|e| RequestIdError::CustomSerdeError(format!("{e}")))?;
         Ok(Some(hasher.finalize().into()))
@@ -323,14 +322,11 @@ struct StructSerializer {
 impl SerializeStruct for StructSerializer {
     type Ok = Option<Sha256Hash>;
     type Error = RequestIdError;
-    fn serialize_field<T: ?Sized>(
+    fn serialize_field<T: Serialize + ?Sized>(
         &mut self,
         key: &'static str,
         value: &T,
-    ) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
+    ) -> Result<(), Self::Error> {
         if let Some(hash) = value.serialize(RequestIdSerializer)? {
             self.fields
                 .push((Sha256::digest(key.as_bytes()).into(), hash));
@@ -338,7 +334,7 @@ impl SerializeStruct for StructSerializer {
         Ok(())
     }
     fn end(mut self) -> Result<Self::Ok, Self::Error> {
-        self.fields.sort();
+        self.fields.sort_unstable();
         let mut hasher = Sha256::new();
         for (key, value) in self.fields {
             hasher.update(key);
@@ -353,10 +349,7 @@ impl SerializeMap for StructSerializer {
     type Error = RequestIdError;
     // This implementation naïvely assumes serialize_key is called before serialize_value, with no checks.
     // SerializeMap's documentation states that such a case is 'allowed to panic or produce bogus results.'
-    fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
+    fn serialize_key<T: Serialize + ?Sized>(&mut self, key: &T) -> Result<(), Self::Error> {
         match key.serialize(RequestIdSerializer)? {
             Some(hash) => {
                 self.field_name = hash;
@@ -365,10 +358,7 @@ impl SerializeMap for StructSerializer {
             None => Err(RequestIdError::KeyWasNone),
         }
     }
-    fn serialize_value<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
+    fn serialize_value<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> {
         if let Some(hash) = value.serialize(RequestIdSerializer)? {
             self.fields.push((self.field_name, hash));
         }
@@ -388,10 +378,7 @@ struct SeqSerializer {
 impl SerializeSeq for SeqSerializer {
     type Ok = Option<Sha256Hash>;
     type Error = RequestIdError;
-    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
+    fn serialize_element<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> {
         if let Some(hash) = value.serialize(RequestIdSerializer)? {
             self.elems.push(hash);
         }
@@ -409,10 +396,7 @@ impl SerializeSeq for SeqSerializer {
 impl SerializeTuple for SeqSerializer {
     type Ok = Option<Sha256Hash>;
     type Error = RequestIdError;
-    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
+    fn serialize_element<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> {
         SerializeSeq::serialize_element(self, value)
     }
     fn end(self) -> Result<Self::Ok, Self::Error> {
@@ -423,10 +407,7 @@ impl SerializeTuple for SeqSerializer {
 impl SerializeTupleStruct for SeqSerializer {
     type Ok = Option<Sha256Hash>;
     type Error = RequestIdError;
-    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
+    fn serialize_field<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> {
         SerializeSeq::serialize_element(self, value)
     }
     fn end(self) -> Result<Self::Ok, Self::Error> {
@@ -445,14 +426,11 @@ struct StructVariantSerializer {
 impl SerializeStructVariant for StructVariantSerializer {
     type Ok = Option<Sha256Hash>;
     type Error = RequestIdError;
-    fn serialize_field<T: ?Sized>(
+    fn serialize_field<T: Serialize + ?Sized>(
         &mut self,
         key: &'static str,
         value: &T,
-    ) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
+    ) -> Result<(), Self::Error> {
         SerializeStruct::serialize_field(&mut self.struct_ser, key, value)
     }
     fn end(self) -> Result<Self::Ok, Self::Error> {
@@ -478,10 +456,7 @@ struct TupleVariantSerializer {
 impl SerializeTupleVariant for TupleVariantSerializer {
     type Ok = Option<Sha256Hash>;
     type Error = RequestIdError;
-    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
+    fn serialize_field<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> {
         SerializeSeq::serialize_element(&mut self.seq_ser, value)
     }
     fn end(self) -> Result<Self::Ok, Self::Error> {
@@ -600,7 +575,7 @@ mod tests {
         let current = PublicSpecExampleStruct {
             request_type: "call",
             sender: Some(Principal::anonymous()),
-            ingress_expiry: Some(1685570400000000000),
+            ingress_expiry: Some(1_685_570_400_000_000_000),
             canister_id: Principal::from_slice(b"\x00\x00\x00\x00\x00\x00\x04\xD2"),
             method_name: "hello",
             arg: b"DIDL\x00\xFD*",
@@ -630,7 +605,7 @@ mod tests {
         );
     }
 
-    /// The same example as above, except we use the ApiClient enum newtypes.
+    /// The same example as above, except we use the `ApiClient` enum newtypes.
     #[test]
     fn public_spec_example_api_client() {
         #[derive(Serialize)]
@@ -648,7 +623,7 @@ mod tests {
         }
         let current = PublicSpec::Call {
             sender: Some(Principal::anonymous()),
-            ingress_expiry: Some(1685570400000000000),
+            ingress_expiry: Some(1_685_570_400_000_000_000),
             canister_id: Principal::from_slice(b"\x00\x00\x00\x00\x00\x00\x04\xD2"),
             method_name: "hello".to_owned(),
             arg: Some(b"DIDL\x00\xFD*".to_vec()),

@@ -576,13 +576,13 @@ mod test {
         fn decode<C: CandidType + DeserializeOwned>(bytes: &[u8]) {
             let response = Decode!(bytes, HttpResponse::<_, C>).unwrap();
             assert_eq!(response.status_code, 100);
-            let token = match response.streaming_strategy {
-                Some(StreamingStrategy::Callback(CallbackStrategy { token, .. })) => token,
-                _ => panic!("streaming_strategy was missing"),
+            let Some(StreamingStrategy::Callback(CallbackStrategy { token, .. })) =
+                response.streaming_strategy
+            else {
+                panic!("streaming_strategy was missing");
             };
-            let fields = match token {
-                Token(IDLValue::Record(fields)) => fields,
-                _ => panic!("token type mismatched {:?}", token),
+            let Token(IDLValue::Record(fields)) = token else {
+                panic!("token type mismatched {token:?}");
             };
             assert!(fields.contains(&IDLField {
                 id: Label::Named("key".into()),
@@ -669,9 +669,8 @@ mod test {
 
         let response = Decode!(&bytes, StreamingCallbackHttpResponse).unwrap();
         assert_eq!(response.body, b"this is a body");
-        let fields = match response.token {
-            Some(Token(IDLValue::Record(fields))) => fields,
-            _ => panic!("token type mismatched {:?}", response.token),
+        let Some(Token(IDLValue::Record(fields))) = response.token else {
+            panic!("token type mismatched {:?}", response.token);
         };
         assert!(fields.contains(&IDLField {
             id: Label::Named("key".into()),

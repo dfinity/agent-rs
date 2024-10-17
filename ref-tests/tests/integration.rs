@@ -261,7 +261,7 @@ fn wallet_canister_create_and_install() {
         let args = Argument::from_candid((install_config,));
 
         wallet
-            .call64(Principal::management_canister(), "install_code", args, 0)
+            .call64::<(), _>(Principal::management_canister(), "install_code", args, 0)
             .call_and_wait()
             .await?;
 

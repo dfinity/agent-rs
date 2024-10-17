@@ -157,7 +157,7 @@ pub enum ReservedCyclesLimitError {
 
 /// A reserved cycles limit for a canister. Can be anywhere from 0 to 2^128-1 inclusive.
 ///
-/// This represents the upper limit of reserved_cycles for the canister.
+/// This represents the upper limit of `reserved_cycles` for the canister.
 ///
 /// Reserved cycles are cycles that the system sets aside for future use by the canister.
 /// If a subnet's storage exceeds 450 GiB, then every time a canister allocates new storage bytes,
@@ -337,7 +337,7 @@ fn can_convert_reserved_cycles_limit() {
 
     assert_eq!(
         ReservedCyclesLimit::try_from(2u128.pow(127) + 6).unwrap().0,
-        170141183460469231731687303715884105734u128
+        170_141_183_460_469_231_731_687_303_715_884_105_734_u128
     );
 
     let ft = ReservedCyclesLimit(100);
@@ -368,7 +368,7 @@ fn can_convert_wasm_memory_limit() {
     ));
 
     assert!(matches!(
-        WasmMemoryLimit::try_from(562949953421312_u64).unwrap_err(),
-        WasmMemoryLimitError::InvalidMemoryLimit(562949953421312)
+        WasmMemoryLimit::try_from(562_949_953_421_312_u64).unwrap_err(),
+        WasmMemoryLimitError::InvalidMemoryLimit(562_949_953_421_312)
     ));
 }

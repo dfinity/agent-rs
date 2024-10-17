@@ -81,7 +81,7 @@ impl DelegatedIdentity {
                     .map_err(|_| DelegationError::BrokenChain {
                         from: last_verified.clone(),
                         to: Some(delegation.delegation.clone()),
-                    })?
+                    })?;
             } else {
                 return Err(DelegationError::UnknownAlgorithm);
             }
@@ -109,8 +109,8 @@ impl DelegatedIdentity {
     ) -> Self {
         Self {
             to,
-            from_key,
             chain,
+            from_key,
         }
     }
 
