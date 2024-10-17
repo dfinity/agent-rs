@@ -138,7 +138,7 @@ fn wait_signed() {
 
         let read_envelope_serialized = serialized_bytes(read_state_envelope);
 
-        let result = agent
+        let (result, _) = agent
             .wait_signed(&call_request_id, canister_id, read_envelope_serialized)
             .await
             .unwrap();
@@ -629,7 +629,7 @@ mod sign_send {
             let ten_secs = time::Duration::from_secs(10);
             thread::sleep(ten_secs);
 
-            let response = agent
+            let (response, _) = agent
                 .request_status_signed(
                     &signed_request_status.request_id,
                     signed_request_status.effective_canister_id,
