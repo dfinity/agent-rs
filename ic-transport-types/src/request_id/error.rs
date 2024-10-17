@@ -1,7 +1,7 @@
-//! Error type for the RequestId calculation.
+//! Error type for the `RequestId` calculation.
 use thiserror::Error;
 
-/// Errors from reading a RequestId from a string. This is not the same as
+/// Errors from reading a `RequestId` from a string. This is not the same as
 /// deserialization.
 #[derive(Error, Debug)]
 pub enum RequestIdFromStringError {
@@ -14,7 +14,7 @@ pub enum RequestIdFromStringError {
     FromHexError(hex::FromHexError),
 }
 
-/// An error during the calculation of the RequestId.
+/// An error during the calculation of the `RequestId`.
 ///
 /// Since we use serde for serializing a data type into a hash, this has to support traits that
 /// serde expects, such as Display

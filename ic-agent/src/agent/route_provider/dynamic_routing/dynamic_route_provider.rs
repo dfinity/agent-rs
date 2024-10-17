@@ -29,7 +29,7 @@ use crate::{
     AgentError,
 };
 
-///
+/// The default seed domain for boundary node discovery.
 pub const IC0_SEED_DOMAIN: &str = "ic0.app";
 
 const MAINNET_ROOT_SUBNET_ID: &str =

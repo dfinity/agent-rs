@@ -98,7 +98,7 @@ pub enum AgentError {
     #[error("The request status ({1}) at path {0:?} is invalid.")]
     InvalidRequestStatus(Vec<Label>, String),
 
-    /// The certificate verification for a read_state call failed.
+    /// The certificate verification for a `read_state` call failed.
     #[error("Certificate verification failed.")]
     CertificateVerificationFailed(),
 
@@ -106,7 +106,7 @@ pub enum AgentError {
     #[error("Query signature verification failed.")]
     QuerySignatureVerificationFailed,
 
-    /// The certificate contained a delegation that does not include the effective_canister_id in the canister_ranges field.
+    /// The certificate contained a delegation that does not include the `effective_canister_id` in the `canister_ranges` field.
     #[error("Certificate is not authorized to respond to queries for this canister. While developing: Did you forget to set effective_canister_id?")]
     CertificateNotAuthorized(),
 
@@ -211,7 +211,7 @@ impl PartialEq for AgentError {
     fn eq(&self, other: &Self) -> bool {
         // Verify the debug string is the same. Some of the subtypes of this error
         // don't implement Eq or PartialEq, so we cannot rely on derive.
-        format!("{:?}", self) == format!("{:?}", other)
+        format!("{self:?}") == format!("{other:?}")
     }
 }
 
@@ -239,7 +239,7 @@ impl HttpErrorPayload {
         f.write_fmt(format_args!(
             "Http Error: status {}, content type {:?}, content: {}",
             http::StatusCode::from_u16(self.status)
-                .map_or_else(|_| format!("{}", self.status), |code| format!("{}", code)),
+                .map_or_else(|_| format!("{}", self.status), |code| format!("{code}")),
             self.content_type.clone().unwrap_or_default(),
             String::from_utf8(self.content.clone()).unwrap_or_else(|_| format!(
                 "(unable to decode content as UTF-8: {:?})",

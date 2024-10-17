@@ -99,16 +99,13 @@ pub fn pprint(url: String, accept_encodings: Option<Vec<String>>) -> Result<()> 
         .bytes()
         .with_context(|| "failed to get response body")?;
     let certificate_str = certificate_header.to_str().with_context(|| {
-        format!(
-            "failed to convert certificate header {:?} to string",
-            certificate_header
-        )
+        format!("failed to convert certificate header {certificate_header:?} to string")
     })?;
     let structured_header = parse_structured_cert_header(certificate_str)?;
     let tree: HashTree = parse_base64_cbor(structured_header.tree)?;
     let cert: ReplicaCertificate = parse_base64_cbor(structured_header.certificate)?;
 
-    println!("STATUS: {}", status);
+    println!("STATUS: {status}");
     println!("ROOT HASH: {}", hex::encode(cert.tree.digest()));
     if let Some(content_encoding) = content_encoding {
         println!("CONTENT-ENCODING: {}", content_encoding.to_str().unwrap());
@@ -122,12 +119,12 @@ pub fn pprint(url: String, accept_encodings: Option<Vec<String>>) -> Result<()> 
     if let LookupResult::Found(mut date_bytes) = cert.tree.lookup_path(&["time"]) {
         let timestamp_nanos = leb128::read::unsigned(&mut date_bytes)
             .with_context(|| "failed to decode certificate time as LEB128")?;
-        let dt = OffsetDateTime::from_unix_timestamp_nanos(timestamp_nanos as i128)
+        let dt = OffsetDateTime::from_unix_timestamp_nanos(timestamp_nanos.into())
             .context("timestamp out of range")?;
         println!("CERTIFICATE TIME: {}", dt.format(&Rfc3339)?);
     }
     println!("CERTIFICATE TREE: {:#?}", cert.tree);
-    println!("TREE:             {:#?}", tree);
+    println!("TREE:             {tree:#?}");
     Ok(())
 }
 
