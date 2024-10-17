@@ -97,7 +97,7 @@ impl<'agent> Canister<'agent> {
         &self.canister_id
     }
 
-    /// Create an AsyncCallBuilder to do an update call.
+    /// Create an `AsyncCallBuilder` to do an update call.
     /// Prefer using [`update`](Canister::update) instead.
     pub fn update_<'canister>(
         &'canister self,
@@ -106,7 +106,7 @@ impl<'agent> Canister<'agent> {
         AsyncCallBuilder::new(self, method_name)
     }
 
-    /// Create an AsyncCallBuilder to do an update call.
+    /// Create an `AsyncCallBuilder` to do an update call.
     pub fn update<'canister>(
         &'canister self,
         method_name: &str,
@@ -114,7 +114,7 @@ impl<'agent> Canister<'agent> {
         AsyncCallBuilder::new(self, method_name)
     }
 
-    /// Create a SyncCallBuilder to do a query call.
+    /// Create a `SyncCallBuilder` to do a query call.
     /// Prefer using [`query`](Canister::query) instead.
     pub fn query_<'canister>(
         &'canister self,
@@ -123,7 +123,7 @@ impl<'agent> Canister<'agent> {
         SyncCallBuilder::new(self, method_name)
     }
 
-    /// Create a SyncCallBuilder to do a query call.
+    /// Create a `SyncCallBuilder` to do a query call.
     pub fn query<'canister>(
         &'canister self,
         method_name: &str,
@@ -131,7 +131,7 @@ impl<'agent> Canister<'agent> {
         SyncCallBuilder::new(self, method_name)
     }
 
-    /// Call request_status on the RequestId in a loop and return the response as a byte vector.
+    /// Call `request_status` on the `RequestId` in a loop and return the response as a byte vector.
     pub async fn wait<'canister>(
         &'canister self,
         request_id: &RequestId,
@@ -155,7 +155,7 @@ impl<'agent> Canister<'agent> {
         }
     }
 
-    /// Create a CanisterBuilder instance to build a canister abstraction.
+    /// Create a `CanisterBuilder` instance to build a canister abstraction.
     pub fn builder() -> CanisterBuilder<'agent> {
         Default::default()
     }
@@ -174,7 +174,7 @@ impl Argument {
         }
     }
 
-    /// Set an IDLValue Argument. Can only be called at most once.
+    /// Set an `IDLValue` Argument. Can only be called at most once.
     pub fn set_value_arg(&mut self, arg: IDLValue) {
         match self.0 {
             None => {
@@ -182,7 +182,7 @@ impl Argument {
                 let result = builder
                     .value_arg(&arg)
                     .and_then(|builder| builder.serialize_to_vec())
-                    .map_err(|e| e.into());
+                    .map_err(Into::into);
                 self.0 = Some(result);
             }
             Some(_) => panic!("argument is being set more than once"),
@@ -217,20 +217,20 @@ impl Argument {
         Self(Some(Ok(raw)))
     }
 
-    /// Creates an argument from an existing Candid ArgumentEncoder.
+    /// Creates an argument from an existing Candid `ArgumentEncoder`.
     pub fn from_candid(tuple: impl ArgumentEncoder) -> Self {
         let mut builder = IDLBuilder::new();
         let result = tuple
             .encode(&mut builder)
             .and_then(|_| builder.serialize_to_vec())
-            .map_err(|e| e.into());
+            .map_err(Into::into);
         Self(Some(result))
     }
 }
 
 /// A builder for a synchronous call (ie. query) to the Internet Computer.
 ///
-/// See [SyncCaller] for a description of this structure once built.
+/// See [`SyncCaller`] for a description of this structure once built.
 #[derive(Debug)]
 pub struct SyncCallBuilder<'agent, 'canister> {
     canister: &'canister Canister<'agent>,
@@ -240,7 +240,7 @@ pub struct SyncCallBuilder<'agent, 'canister> {
 }
 
 impl<'agent: 'canister, 'canister> SyncCallBuilder<'agent, 'canister> {
-    /// Create a new instance of an AsyncCallBuilder.
+    /// Create a new instance of an `AsyncCallBuilder`.
     pub(super) fn new<M: Into<String>>(
         canister: &'canister Canister<'agent>,
         method_name: M,
@@ -265,14 +265,12 @@ impl<'agent: 'canister, 'canister> SyncCallBuilder<'agent, 'canister> {
     }
     /// Set the argument with multiple arguments as tuple. Can be called at most once.
     pub fn with_args(mut self, tuple: impl ArgumentEncoder) -> Self {
-        if self.arg.0.is_some() {
-            panic!("argument is being set more than once");
-        }
+        assert!(self.arg.0.is_none(), "argument is being set more than once");
         self.arg = Argument::from_candid(tuple);
         self
     }
 
-    /// Set the argument with IDLValue argument. Can be called at most once.
+    /// Set the argument with `IDLValue` argument. Can be called at most once.
     ///
     /// TODO: make this method unnecessary ([#132](https://github.com/dfinity/agent-rs/issues/132))
     pub fn with_value_arg(mut self, arg: IDLValue) -> Self {
@@ -292,7 +290,7 @@ impl<'agent: 'canister, 'canister> SyncCallBuilder<'agent, 'canister> {
         self
     }
 
-    /// Builds a [SyncCaller] from this builder's state.
+    /// Builds a [`SyncCaller`] from this builder's state.
     pub fn build<Output>(self) -> SyncCaller<'agent, Output>
     where
         Output: for<'de> ArgumentDecoder<'de> + Send + Sync,
@@ -312,7 +310,7 @@ impl<'agent: 'canister, 'canister> SyncCallBuilder<'agent, 'canister> {
 
 /// A builder for an asynchronous call (ie. update) to the Internet Computer.
 ///
-/// See [AsyncCaller] for a description of this structure.
+/// See [`AsyncCaller`] for a description of this structure.
 #[derive(Debug)]
 pub struct AsyncCallBuilder<'agent, 'canister> {
     canister: &'canister Canister<'agent>,
@@ -322,7 +320,7 @@ pub struct AsyncCallBuilder<'agent, 'canister> {
 }
 
 impl<'agent: 'canister, 'canister> AsyncCallBuilder<'agent, 'canister> {
-    /// Create a new instance of an AsyncCallBuilder.
+    /// Create a new instance of an `AsyncCallBuilder`.
     pub(super) fn new(
         canister: &'canister Canister<'agent>,
         method_name: &str,
@@ -347,9 +345,7 @@ impl<'agent: 'canister, 'canister> AsyncCallBuilder<'agent, 'canister> {
     }
     /// Set the argument with multiple arguments as tuple. Can be called at most once.
     pub fn with_args(mut self, tuple: impl ArgumentEncoder) -> Self {
-        if self.arg.0.is_some() {
-            panic!("argument is being set more than once");
-        }
+        assert!(self.arg.0.is_none(), "argument is being set more than once");
         self.arg = Argument::from_candid(tuple);
         self
     }
@@ -366,7 +362,7 @@ impl<'agent: 'canister, 'canister> AsyncCallBuilder<'agent, 'canister> {
         self
     }
 
-    /// Builds an [AsyncCaller] from this builder's state.
+    /// Builds an [`AsyncCaller`] from this builder's state.
     pub fn build<Output>(self) -> AsyncCaller<'agent, Output>
     where
         Output: for<'de> ArgumentDecoder<'de> + Send + Sync,

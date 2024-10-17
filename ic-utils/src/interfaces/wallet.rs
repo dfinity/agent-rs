@@ -95,14 +95,14 @@ where
             self.wallet.update("wallet_call128").with_arg(In {
                 canister: self.destination,
                 method_name: self.method_name,
-                args: self.arg.serialize()?.to_vec(),
+                args: self.arg.serialize()?,
                 cycles: self.amount,
             })
         } else {
             self.wallet.update("wallet_call").with_arg(In {
                 canister: self.destination,
                 method_name: self.method_name,
-                args: self.arg.serialize()?.to_vec(),
+                args: self.arg.serialize()?,
                 cycles: u64::try_from(self.amount).map_err(|_| {
                     AgentError::WalletUpgradeRequired(
                         "The installed wallet does not support cycle counts >2^64-1".to_string(),
@@ -239,21 +239,21 @@ impl From<EventKind<u64>> for EventKind {
                 method_name,
             } => CanisterCalled {
                 canister,
-                cycles: cycles as u128,
+                cycles: cycles.into(),
                 method_name,
             },
             CanisterCreated { canister, cycles } => CanisterCreated {
                 canister,
-                cycles: cycles as u128,
+                cycles: cycles.into(),
             },
             CyclesReceived { amount, from, memo } => CyclesReceived {
-                amount: amount as u128,
+                amount: amount.into(),
                 from,
                 memo,
             },
             CyclesSent { amount, refund, to } => CyclesSent {
-                amount: amount as u128,
-                refund: refund as u128,
+                amount: amount.into(),
+                refund: refund.into(),
                 to,
             },
         }
@@ -365,15 +365,15 @@ impl From<ManagedCanisterEventKind<u64>> for ManagedCanisterEventKind {
                 cycles,
                 method_name,
             } => Called {
-                cycles: cycles as u128,
+                cycles: cycles.into(),
                 method_name,
             },
             Created { cycles } => Created {
-                cycles: cycles as u128,
+                cycles: cycles.into(),
             },
             CyclesSent { amount, refund } => CyclesSent {
-                amount: amount as u128,
-                refund: refund as u128,
+                amount: amount.into(),
+                refund: refund.into(),
             },
         }
     }
@@ -543,7 +543,7 @@ impl<'agent> WalletCanister<'agent> {
                 .call()
                 .await
                 .map(|(r,)| BalanceResult {
-                    amount: r.amount as u128,
+                    amount: r.amount.into(),
                 })
         }
     }
@@ -932,7 +932,7 @@ impl<'agent> WalletCanister<'agent> {
     }
 
     /// Store the wallet WASM inside the wallet canister.
-    /// This is needed to enable wallet_create_wallet
+    /// This is needed to enable `wallet_create_wallet`
     pub fn wallet_store_wallet_wasm(
         &self,
         wasm_module: Vec<u8>,
@@ -1017,7 +1017,7 @@ impl<'agent> WalletCanister<'agent> {
             self.get_events64(from, to)
                 .call()
                 .await
-                .map(|(events,)| events.into_iter().map(|event| event.into()).collect())
+                .map(|(events,)| events.into_iter().map(Event::into).collect())
         }
     }
 
@@ -1037,7 +1037,7 @@ impl<'agent> WalletCanister<'agent> {
             wallet: self,
             destination,
             method_name: method_name.into(),
-            amount: amount as u128,
+            amount: amount.into(),
             arg,
             phantom_out: std::marker::PhantomData,
             u128: false,
@@ -1159,7 +1159,8 @@ impl<'agent> WalletCanister<'agent> {
                 .call()
                 .await
                 .map(|(events,)| {
-                    events.map(|events| events.into_iter().map(|event| event.into()).collect())
+                    events
+                        .map(|events| events.into_iter().map(ManagedCanisterEvent::into).collect())
                 })
         }
     }

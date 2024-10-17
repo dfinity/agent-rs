@@ -892,7 +892,7 @@ mod management_canister {
     fn subnet_metrics() {
         with_universal_canister(|agent, _| async move {
             let metrics = agent
-                .read_state_subnet_metrics(Principal::self_authenticating(&agent.read_root_key()))
+                .read_state_subnet_metrics(Principal::self_authenticating(agent.read_root_key()))
                 .await?;
             assert!(
                 metrics.num_canisters >= 1,
