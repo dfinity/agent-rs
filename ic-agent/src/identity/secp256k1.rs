@@ -95,7 +95,7 @@ impl Identity for Secp256k1Identity {
         let ecdsa_sig: ecdsa::Signature = self
             .private_key
             .try_sign(content)
-            .map_err(|err| format!("Cannot create secp256k1 signature: {}", err))?;
+            .map_err(|err| format!("Cannot create secp256k1 signature: {err}"))?;
         let r = ecdsa_sig.r().as_ref().to_bytes();
         let s = ecdsa_sig.s().as_ref().to_bytes();
         let mut bytes = [0u8; 64];

@@ -193,7 +193,7 @@ impl<T> CallResponse<Option<T>> {
 }
 
 impl<T> CallResponse<(T,)> {
-    /// Extracts the inner value of a 1-tuple, if this is `Response`.`
+    /// Extracts the inner value of a 1-tuple, if this is `Response`.
     #[inline]
     pub fn detuple(self) -> CallResponse<T> {
         match self {
@@ -272,10 +272,8 @@ impl QueryResponse {
 
     /// Helper function to get the signatures field present in both variants.
     pub fn signatures(&self) -> &[NodeSignature] {
-        match self {
-            Self::Rejected { signatures, .. } => signatures,
-            Self::Replied { signatures, .. } => signatures,
-        }
+        let (Self::Rejected { signatures, .. } | Self::Replied { signatures, .. }) = self;
+        signatures
     }
 }
 

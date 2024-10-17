@@ -52,7 +52,7 @@ pub struct CanisterSettings {
     /// If unspecified and a canister is being created with these settings, defaults to 2592000, i.e. ~30 days.
     pub freezing_threshold: Option<Nat>,
 
-    /// The upper limit of reserved_cycles for the canister.
+    /// The upper limit of `reserved_cycles` for the canister.
     ///
     /// Reserved cycles are cycles that the system sets aside for future use by the canister.
     /// If a subnet's storage exceeds 450 GiB, then every time a canister allocates new storage bytes,
@@ -100,7 +100,7 @@ pub struct CreateCanisterBuilder<'agent, 'canister: 'agent> {
 }
 
 impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
-    /// Create an CreateCanister builder, which is also an AsyncCall implementation.
+    /// Create an `CreateCanister` builder, which is also an `AsyncCall` implementation.
     pub fn builder(canister: &'canister Canister<'agent>) -> Self {
         Self {
             canister,
@@ -119,10 +119,10 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
     }
 
     /// Until developers can convert real ICP tokens to provision a new canister with cycles,
-    /// the system provides the provisional_create_canister_with_cycles method.
-    /// It behaves as create_canister, but initializes the canister’s balance with amount fresh cycles
-    /// (using MAX_CANISTER_BALANCE if amount = null, else capping the balance at MAX_CANISTER_BALANCE).
-    /// Cycles added to this call via ic0.call_cycles_add are returned to the caller.
+    /// the system provides the `provisional_create_canister_with_cycles` method.
+    /// It behaves as `create_canister`, but initializes the canister’s balance with amount fresh cycles
+    /// (using `MAX_CANISTER_BALANCE` if amount = null, else capping the balance at `MAX_CANISTER_BALANCE`).
+    /// Cycles added to this call via `ic0.call_cycles_add` are returned to the caller.
     /// This method is only available in local development instances, and will be removed in the future.
     #[allow(clippy::wrong_self_convention)]
     pub fn as_provisional_create_with_amount(self, amount: Option<u128>) -> Self {
@@ -135,7 +135,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
 
     /// Specify the canister id.
     ///
-    /// The effective_canister_id will also be set with the same value so that ic-ref can determine
+    /// The `effective_canister_id` will also be set with the same value so that ic-ref can determine
     /// the target subnet of this request. The replica implementation ignores it.
     pub fn as_provisional_create_with_specified_id(self, specified_id: Principal) -> Self {
         Self {
@@ -170,7 +170,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
     {
         let controller_to_add: Option<Result<Principal, _>> = controller.map(|ca| {
             ca.try_into()
-                .map_err(|e| AgentError::MessageError(format!("{}", e)))
+                .map_err(|e| AgentError::MessageError(format!("{e}")))
         });
         let controllers: Option<Result<Vec<Principal>, _>> =
             match (controller_to_add, self.controllers) {
@@ -209,7 +209,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         Self {
             compute_allocation: compute_allocation.map(|ca| {
                 ca.try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+                    .map_err(|e| AgentError::MessageError(format!("{e}")))
             }),
             ..self
         }
@@ -234,7 +234,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         Self {
             memory_allocation: memory_allocation.map(|ma| {
                 ma.try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+                    .map_err(|e| AgentError::MessageError(format!("{e}")))
             }),
             ..self
         }
@@ -259,7 +259,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         Self {
             freezing_threshold: freezing_threshold.map(|ma| {
                 ma.try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+                    .map_err(|e| AgentError::MessageError(format!("{e}")))
             }),
             ..self
         }
@@ -294,7 +294,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             reserved_cycles_limit: limit.map(|limit| {
                 limit
                     .try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+                    .map_err(|e| AgentError::MessageError(format!("{e}")))
             }),
             ..self
         }
@@ -320,7 +320,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             wasm_memory_limit: wasm_memory_limit.map(|limit| {
                 limit
                     .try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+                    .map_err(|e| AgentError::MessageError(format!("{e}")))
             }),
             ..self
         }
@@ -346,47 +346,47 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             log_visibility: log_visibility.map(|visibility| {
                 visibility
                     .try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+                    .map_err(|e| AgentError::MessageError(format!("{e}")))
             }),
             ..self
         }
     }
 
-    /// Create an [AsyncCall] implementation that, when called, will create a
+    /// Create an [`AsyncCall`] implementation that, when called, will create a
     /// canister.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = (Principal,)>, AgentError> {
         let controllers = match self.controllers {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(x),
             None => None,
         };
         let compute_allocation = match self.compute_allocation {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(Nat::from(u8::from(x))),
             None => None,
         };
         let memory_allocation = match self.memory_allocation {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
         let freezing_threshold = match self.freezing_threshold {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
         let reserved_cycles_limit = match self.reserved_cycles_limit {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(Nat::from(u128::from(x))),
             None => None,
         };
         let wasm_memory_limit = match self.wasm_memory_limit {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
         let log_visibility = match self.log_visibility {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(x),
             None => None,
         };
@@ -440,12 +440,12 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             .map(|result: (Out,)| (result.0.canister_id,)))
     }
 
-    /// Make a call. This is equivalent to the [AsyncCall::call].
+    /// Make a call. This is equivalent to the [`AsyncCall::call`].
     pub async fn call(self) -> Result<CallResponse<(Principal,)>, AgentError> {
         self.build()?.call().await
     }
 
-    /// Make a call. This is equivalent to the [AsyncCall::call_and_wait].
+    /// Make a call. This is equivalent to the [`AsyncCall::call_and_wait`].
     pub async fn call_and_wait(self) -> Result<(Principal,), AgentError> {
         self.build()?.call_and_wait().await
     }
@@ -496,8 +496,8 @@ pub struct CanisterUpgradeOptions {
 }
 
 /// The install mode of the canister to install. If a canister is already installed,
-/// using [InstallMode::Install] will be an error. [InstallMode::Reinstall] overwrites
-/// the module, and [InstallMode::Upgrade] performs an Upgrade step.
+/// using [`InstallMode::Install`] will be an error. [`InstallMode::Reinstall`] overwrites
+/// the module, and [`InstallMode::Upgrade`] performs an Upgrade step.
 #[derive(Debug, Copy, Clone, CandidType, Deserialize, Eq, PartialEq)]
 pub enum InstallMode {
     /// Install the module into the empty canister.
@@ -534,7 +534,7 @@ impl FromStr for InstallMode {
             "install" => Ok(InstallMode::Install),
             "reinstall" => Ok(InstallMode::Reinstall),
             "upgrade" => Ok(InstallMode::Upgrade(None)),
-            &_ => Err(format!("Invalid install mode: {}", s)),
+            &_ => Err(format!("Invalid install mode: {s}")),
         }
     }
 }
@@ -550,7 +550,7 @@ pub struct InstallCodeBuilder<'agent, 'canister: 'agent> {
 }
 
 impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
-    /// Create an InstallCode builder, which is also an AsyncCall implementation.
+    /// Create an `InstallCode` builder, which is also an `AsyncCall` implementation.
     pub fn builder(
         canister: &'canister Canister<'agent>,
         canister_id: &Principal,
@@ -587,7 +587,7 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
         self
     }
 
-    /// Pass in the [InstallMode].
+    /// Pass in the [`InstallMode`].
     pub fn with_mode(self, mode: InstallMode) -> Self {
         Self {
             mode: Some(mode),
@@ -595,7 +595,7 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
         }
     }
 
-    /// Create an [AsyncCall] implementation that, when called, will install the
+    /// Create an [`AsyncCall`] implementation that, when called, will install the
     /// canister.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = ()>, AgentError> {
         Ok(self
@@ -611,12 +611,12 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
             .build())
     }
 
-    /// Make a call. This is equivalent to the [AsyncCall::call].
+    /// Make a call. This is equivalent to the [`AsyncCall::call`].
     pub async fn call(self) -> Result<CallResponse<()>, AgentError> {
         self.build()?.call().await
     }
 
-    /// Make a call. This is equivalent to the [AsyncCall::call_and_wait].
+    /// Make a call. This is equivalent to the [`AsyncCall::call_and_wait`].
     pub async fn call_and_wait(self) -> Result<(), AgentError> {
         self.build()?.call_and_wait().await
     }
@@ -840,7 +840,7 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
         self
     }
 
-    /// Pass in the [InstallMode].
+    /// Pass in the [`InstallMode`].
     pub fn with_mode(self, mode: InstallMode) -> Self {
         Self { mode, ..self }
     }
@@ -895,7 +895,7 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
                                 .call_and_wait()
                                 .await?;
                             Ok(())
-                        })
+                        });
                     }
                     let install_chunked_code_stream = async move {
                         let results = all_chunks.iter().map(|(hash,_)| ChunkHash{ hash: hash.clone() }).collect();
@@ -960,7 +960,7 @@ pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent> {
 }
 
 impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
-    /// Create an UpdateCanister builder, which is also an AsyncCall implementation.
+    /// Create an `UpdateCanister` builder, which is also an `AsyncCall` implementation.
     pub fn builder(canister: &'canister Canister<'agent>, canister_id: &Principal) -> Self {
         Self {
             canister,
@@ -984,7 +984,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
     {
         let controller_to_add: Option<Result<Principal, _>> = controller.map(|ca| {
             ca.try_into()
-                .map_err(|e| AgentError::MessageError(format!("{}", e)))
+                .map_err(|e| AgentError::MessageError(format!("{e}")))
         });
         let controllers: Option<Result<Vec<Principal>, _>> =
             match (controller_to_add, self.controllers) {
@@ -1024,7 +1024,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         Self {
             compute_allocation: compute_allocation.map(|ca| {
                 ca.try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+                    .map_err(|e| AgentError::MessageError(format!("{e}")))
             }),
             ..self
         }
@@ -1049,7 +1049,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         Self {
             memory_allocation: memory_allocation.map(|ma| {
                 ma.try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+                    .map_err(|e| AgentError::MessageError(format!("{e}")))
             }),
             ..self
         }
@@ -1074,7 +1074,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         Self {
             freezing_threshold: freezing_threshold.map(|ma| {
                 ma.try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+                    .map_err(|e| AgentError::MessageError(format!("{e}")))
             }),
             ..self
         }
@@ -1108,7 +1108,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         Self {
             reserved_cycles_limit: limit.map(|ma| {
                 ma.try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+                    .map_err(|e| AgentError::MessageError(format!("{e}")))
             }),
             ..self
         }
@@ -1134,7 +1134,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             wasm_memory_limit: wasm_memory_limit.map(|limit| {
                 limit
                     .try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+                    .map_err(|e| AgentError::MessageError(format!("{e}")))
             }),
             ..self
         }
@@ -1160,13 +1160,13 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             log_visibility: log_visibility.map(|limit| {
                 limit
                     .try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{}", e)))
+                    .map_err(|e| AgentError::MessageError(format!("{e}")))
             }),
             ..self
         }
     }
 
-    /// Create an [AsyncCall] implementation that, when called, will update a
+    /// Create an [`AsyncCall`] implementation that, when called, will update a
     /// canisters settings.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = ()>, AgentError> {
         #[derive(CandidType)]
@@ -1176,37 +1176,37 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         }
 
         let controllers = match self.controllers {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(x),
             None => None,
         };
         let compute_allocation = match self.compute_allocation {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(Nat::from(u8::from(x))),
             None => None,
         };
         let memory_allocation = match self.memory_allocation {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
         let freezing_threshold = match self.freezing_threshold {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
         let reserved_cycles_limit = match self.reserved_cycles_limit {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(Nat::from(u128::from(x))),
             None => None,
         };
         let wasm_memory_limit = match self.wasm_memory_limit {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
         let log_visibility = match self.log_visibility {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{}", x))),
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(x),
             None => None,
         };
@@ -1230,12 +1230,12 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             .build())
     }
 
-    /// Make a call. This is equivalent to the [AsyncCall::call].
+    /// Make a call. This is equivalent to the [`AsyncCall::call`].
     pub async fn call(self) -> Result<CallResponse<()>, AgentError> {
         self.build()?.call().await
     }
 
-    /// Make a call. This is equivalent to the [AsyncCall::call_and_wait].
+    /// Make a call. This is equivalent to the [`AsyncCall::call_and_wait`].
     pub async fn call_and_wait(self) -> Result<(), AgentError> {
         self.build()?.call_and_wait().await
     }

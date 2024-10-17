@@ -37,7 +37,7 @@ fn make_untimed_agent(url: &str) -> Agent {
     Agent::builder()
         .with_url(url)
         .with_verify_query_signatures(false)
-        .with_ingress_expiry(Duration::from_secs(u32::MAX as _))
+        .with_ingress_expiry(Duration::from_secs(u32::MAX.into()))
         .build()
         .unwrap()
 }
@@ -45,7 +45,7 @@ fn make_untimed_agent(url: &str) -> Agent {
 fn make_certifying_agent(url: &str) -> Agent {
     Agent::builder()
         .with_url(url)
-        .with_ingress_expiry(Duration::from_secs(u32::MAX as _))
+        .with_ingress_expiry(Duration::from_secs(u32::MAX.into()))
         .build()
         .unwrap()
 }
@@ -238,7 +238,7 @@ async fn call_rejected_without_error_code() -> Result<(), AgentError> {
 
     let (call_mock, url) = mock(
         "POST",
-        format!("/api/v3/canister/{}/call", canister_id_str).as_str(),
+        format!("/api/v3/canister/{canister_id_str}/call").as_str(),
         200,
         body,
         Some("application/cbor"),
@@ -475,7 +475,7 @@ async fn wrong_subnet_query_certificate() {
     let response = QueryResponse::Replied {
         reply: ReplyResponse { arg: blob.clone() },
         signatures: vec![NodeSignature {
-            timestamp: 1697831349698624964,
+            timestamp: 1_697_831_349_698_624_964,
             signature: hex::decode("4bb6ba316623395d56d8e2834ece39d2c81d47e76a9fd122e1457963be6a83a5589e2c98c7b4d8b3c6c7b11c74b8ce9dcb345b5d1bd91706a643f33c7b509b0b").unwrap(),
             identity: "oo4np-rrvnz-5vram-kglex-enhkp-uew6q-vdf6z-whj4x-v44jd-tebaw-nqe".parse().unwrap()
         }],
@@ -543,14 +543,14 @@ const RESP_WITH_SUBNET_KEY: &[u8] = include_bytes!("agent_test/with_subnet_key.b
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn too_many_delegations() {
     // Use the certificate as its own delegation, and repeat the process the specified number of times
-    fn self_delegate_cert(subnet_id: Vec<u8>, cert: &Certificate, depth: u32) -> Certificate {
+    fn self_delegate_cert(subnet_id: &[u8], cert: &Certificate, depth: u32) -> Certificate {
         let mut current = cert.clone();
         for _ in 0..depth {
             current = Certificate {
                 tree: current.tree.clone(),
                 signature: current.signature.clone(),
                 delegation: Some(Delegation {
-                    subnet_id: subnet_id.clone(),
+                    subnet_id: subnet_id.to_vec(),
                     certificate: serde_cbor::to_vec(&current).unwrap(),
                 }),
             }
@@ -568,7 +568,7 @@ async fn too_many_delegations() {
 
     let (_read_mock, url) = mock(
         "POST",
-        format!("/api/v2/canister/{}/read_state", canister_id_str).as_str(),
+        format!("/api/v2/canister/{canister_id_str}/read_state").as_str(),
         200,
         RESP_WITH_SUBNET_KEY.into(),
         Some("application/cbor"),
@@ -580,7 +580,7 @@ async fn too_many_delegations() {
         .read_state_raw(vec![vec![path_label]], canister_id)
         .await
         .expect("read state failed");
-    let new_cert = self_delegate_cert(subnet_id, &cert, 1);
+    let new_cert = self_delegate_cert(&subnet_id, &cert, 1);
     assert!(matches!(
         agent.verify(&new_cert, canister_id).unwrap_err(),
         AgentError::CertificateHasTooManyDelegations
