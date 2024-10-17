@@ -255,7 +255,7 @@ where
     /// See [`AsyncCall::call`].
     pub async fn call(self) -> Result<CallResponse<Out>, AgentError> {
         let response_bytes = match self.build_call()?.call().await? {
-            CallResponse::Response(response_bytes) => response_bytes,
+            CallResponse::Response((response_bytes, _)) => response_bytes,
             CallResponse::Poll(request_id) => return Ok(CallResponse::Poll(request_id)),
         };
 

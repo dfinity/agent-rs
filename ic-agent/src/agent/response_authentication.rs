@@ -78,7 +78,7 @@ pub(crate) fn lookup_subnet_metrics<Storage: AsRef<[u8]>>(
 }
 
 pub(crate) fn lookup_request_status<Storage: AsRef<[u8]>>(
-    certificate: Certificate<Storage>,
+    certificate: &Certificate<Storage>,
     request_id: &RequestId,
 ) -> Result<RequestStatusResponse, AgentError> {
     use AgentError::*;
@@ -94,8 +94,8 @@ pub(crate) fn lookup_request_status<Storage: AsRef<[u8]>>(
             "done" => Ok(RequestStatusResponse::Done),
             "processing" => Ok(RequestStatusResponse::Processing),
             "received" => Ok(RequestStatusResponse::Received),
-            "rejected" => lookup_rejection(&certificate, request_id),
-            "replied" => lookup_reply(&certificate, request_id),
+            "rejected" => lookup_rejection(certificate, request_id),
+            "replied" => lookup_reply(certificate, request_id),
             other => Err(InvalidRequestStatus(path_status.into(), other.to_string())),
         },
         LookupResult::Error => Err(LookupPathError(path_status.into())),

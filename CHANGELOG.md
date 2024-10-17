@@ -8,8 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* The lower-level update call functions now return the certificate in addition to the parsed response data.
 * Make ingress_expiry required and set the default value to 3 min.
-* Changed `BasicIdentity`'s implmentation from `ring` to `ed25519-consensus`.
+* Changed `BasicIdentity`'s implementation from `ring` to `ed25519-consensus`.
 * Added `AgentBuilder::with_max_polling_time` to config the maximum time to wait for a response from the replica.
 * `DelegatedIdentity::new` now checks the delegation chain. The old behavior is available under `new_unchecked`.
 
