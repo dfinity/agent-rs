@@ -136,7 +136,10 @@ impl<'agent> Canister<'agent> {
         &'canister self,
         request_id: &RequestId,
     ) -> Result<Vec<u8>, AgentError> {
-        self.agent.wait(request_id, self.canister_id).await
+        self.agent
+            .wait(request_id, self.canister_id)
+            .await
+            .map(|x| x.0)
     }
 
     /// Creates a copy of this canister, changing the canister ID to the provided principal.

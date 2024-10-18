@@ -140,6 +140,9 @@ type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + '
 /// ```
 ///
 /// This agent does not understand Candid, and only acts on byte buffers.
+///
+/// Some methods return certificates. While there is a `verify_certificate` method, any certificate
+/// you receive from a method has already been verified and you do not need to manually verify it.
 #[derive(Clone)]
 pub struct Agent {
     nonce_factory: Arc<dyn NonceGenerator>,
@@ -516,7 +519,7 @@ impl Agent {
         method_name: String,
         arg: Vec<u8>,
         ingress_expiry_datetime: Option<u64>,
-    ) -> Result<CallResponse<Vec<u8>>, AgentError> {
+    ) -> Result<CallResponse<(Vec<u8>, Certificate)>, AgentError> {
         let nonce = self.nonce_factory.generate();
         let content = self.update_content(
             canister_id,
@@ -538,10 +541,12 @@ impl Agent {
                     serde_cbor::from_slice(&certificate).map_err(AgentError::InvalidCborData)?;
 
                 self.verify(&certificate, effective_canister_id)?;
-                let status = lookup_request_status(certificate, &request_id)?;
+                let status = lookup_request_status(&certificate, &request_id)?;
 
                 match status {
-                    RequestStatusResponse::Replied(reply) => Ok(CallResponse::Response(reply.arg)),
+                    RequestStatusResponse::Replied(reply) => {
+                        Ok(CallResponse::Response((reply.arg, certificate)))
+                    }
                     RequestStatusResponse::Rejected(reject_response) => {
                         Err(AgentError::CertifiedReject(reject_response))?
                     }
@@ -577,7 +582,7 @@ impl Agent {
                     serde_cbor::from_slice(&certificate).map_err(AgentError::InvalidCborData)?;
 
                 self.verify(&certificate, effective_canister_id)?;
-                let status = lookup_request_status(certificate, &request_id)?;
+                let status = lookup_request_status(&certificate, &request_id)?;
 
                 match status {
                     RequestStatusResponse::Replied(reply) => Ok(CallResponse::Response(reply.arg)),
@@ -627,19 +632,19 @@ impl Agent {
         request_id: &RequestId,
         effective_canister_id: Principal,
         signed_request_status: Vec<u8>,
-    ) -> Result<Vec<u8>, AgentError> {
+    ) -> Result<(Vec<u8>, Certificate), AgentError> {
         let mut retry_policy = self.get_retry_policy();
 
         let mut request_accepted = false;
+        let (resp, cert) = self
+            .request_status_signed(
+                request_id,
+                effective_canister_id,
+                signed_request_status.clone(),
+            )
+            .await?;
         loop {
-            match self
-                .request_status_signed(
-                    request_id,
-                    effective_canister_id,
-                    signed_request_status.clone(),
-                )
-                .await?
-            {
+            match resp {
                 RequestStatusResponse::Unknown => {}
 
                 RequestStatusResponse::Received | RequestStatusResponse::Processing => {
@@ -649,7 +654,9 @@ impl Agent {
                     }
                 }
 
-                RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => return Ok(arg),
+                RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => {
+                    return Ok((arg, cert))
+                }
 
                 RequestStatusResponse::Rejected(response) => {
                     return Err(AgentError::CertifiedReject(response))
@@ -675,15 +682,15 @@ impl Agent {
         &self,
         request_id: &RequestId,
         effective_canister_id: Principal,
-    ) -> Result<Vec<u8>, AgentError> {
+    ) -> Result<(Vec<u8>, Certificate), AgentError> {
         let mut retry_policy = self.get_retry_policy();
 
         let mut request_accepted = false;
         loop {
-            match self
+            let (resp, cert) = self
                 .request_status_raw(request_id, effective_canister_id)
-                .await?
-            {
+                .await?;
+            match resp {
                 RequestStatusResponse::Unknown => {}
 
                 RequestStatusResponse::Received | RequestStatusResponse::Processing => {
@@ -700,7 +707,9 @@ impl Agent {
                     }
                 }
 
-                RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => return Ok(arg),
+                RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => {
+                    return Ok((arg, cert))
+                }
 
                 RequestStatusResponse::Rejected(response) => {
                     return Err(AgentError::CertifiedReject(response))
@@ -963,13 +972,13 @@ impl Agent {
         &self,
         request_id: &RequestId,
         effective_canister_id: Principal,
-    ) -> Result<RequestStatusResponse, AgentError> {
+    ) -> Result<(RequestStatusResponse, Certificate), AgentError> {
         let paths: Vec<Vec<Label>> =
             vec![vec!["request_status".into(), request_id.to_vec().into()]];
 
         let cert = self.read_state_raw(paths, effective_canister_id).await?;
 
-        lookup_request_status(cert, request_id)
+        Ok((lookup_request_status(&cert, request_id)?, cert))
     }
 
     /// Send the signed `request_status` to the network. Will return [`RequestStatusResponse`].
@@ -980,7 +989,7 @@ impl Agent {
         request_id: &RequestId,
         effective_canister_id: Principal,
         signed_request_status: Vec<u8>,
-    ) -> Result<RequestStatusResponse, AgentError> {
+    ) -> Result<(RequestStatusResponse, Certificate), AgentError> {
         let _envelope: Envelope =
             serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
         let read_state_response: ReadStateResponse = self
@@ -990,7 +999,7 @@ impl Agent {
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
         self.verify(&cert, effective_canister_id)?;
-        lookup_request_status(cert, request_id)
+        Ok((lookup_request_status(&cert, request_id)?, cert))
     }
 
     /// Returns an `UpdateBuilder` enabling the construction of an update call without
@@ -1675,7 +1684,7 @@ impl<'agent> IntoFuture for QueryBuilder<'agent> {
 /// An in-flight canister update call. Useful primarily as a `Future`.
 pub struct UpdateCall<'agent> {
     agent: &'agent Agent,
-    response_future: AgentFuture<'agent, CallResponse<Vec<u8>>>,
+    response_future: AgentFuture<'agent, CallResponse<(Vec<u8>, Certificate)>>,
     effective_canister_id: Principal,
 }
 
@@ -1689,13 +1698,15 @@ impl fmt::Debug for UpdateCall<'_> {
 }
 
 impl Future for UpdateCall<'_> {
-    type Output = Result<CallResponse<Vec<u8>>, AgentError>;
+    type Output = Result<CallResponse<(Vec<u8>, Certificate)>, AgentError>;
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.response_future.as_mut().poll(cx)
     }
 }
+
 impl<'a> UpdateCall<'a> {
-    async fn and_wait(self) -> Result<Vec<u8>, AgentError> {
+    /// Waits for the update call to be completed, polling if necessary.
+    pub async fn and_wait(self) -> Result<(Vec<u8>, Certificate), AgentError> {
         let response = self.response_future.await?;
 
         match response {
@@ -1771,7 +1782,7 @@ impl<'agent> UpdateBuilder<'agent> {
     /// Make an update call. This will call `request_status` on the `RequestId` in a loop and return
     /// the response as a byte vector.
     pub async fn call_and_wait(self) -> Result<Vec<u8>, AgentError> {
-        self.call().and_wait().await
+        self.call().and_wait().await.map(|x| x.0)
     }
 
     /// Make an update call. This will return a `RequestId`.
