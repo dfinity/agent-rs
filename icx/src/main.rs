@@ -566,7 +566,7 @@ async fn main() -> Result<()> {
                 serde_json::from_str::<SignedRequestStatus>(&buffer)
             {
                 fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
-                let response = agent
+                let (response, _) = agent
                     .request_status_signed(
                         &signed_request_status.request_id,
                         signed_request_status.effective_canister_id,
