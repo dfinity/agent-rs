@@ -39,14 +39,14 @@ impl BasicIdentity {
     /// Create a `BasicIdentity` from reading a PEM File from a Reader.
     #[cfg(feature = "pem")]
     pub fn from_pem<R: std::io::Read>(pem_reader: R) -> Result<Self, PemError> {
-        use der::{Decode, PemReader};
+        use der::{asn1::OctetString, Decode, SliceReader};
         use pkcs8::PrivateKeyInfo;
 
-        let bytes: Vec<u8> = pem_reader
-            .bytes()
-            .collect::<Result<Vec<u8>, std::io::Error>>()?;
-        let pki = PrivateKeyInfo::decode(&mut PemReader::new(&bytes)?)?;
-        let private_key = SigningKey::try_from(pki.private_key)?;
+        let bytes: Vec<u8> = pem_reader.bytes().collect::<Result<_, _>>()?;
+        let pem = pem::parse(&bytes)?;
+        let pki = PrivateKeyInfo::decode(&mut SliceReader::new(pem.contents())?)?;
+        let decoded_key = OctetString::from_der(pki.private_key)?; // ed25519 uses an octet string within another octet string
+        let private_key = SigningKey::try_from(decoded_key.as_bytes())?;
         Ok(BasicIdentity::from_signing_key(private_key))
     }
 
