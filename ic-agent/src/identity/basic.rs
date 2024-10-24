@@ -39,12 +39,39 @@ impl BasicIdentity {
     /// Create a `BasicIdentity` from reading a PEM File from a Reader.
     #[cfg(feature = "pem")]
     pub fn from_pem<R: std::io::Read>(pem_reader: R) -> Result<Self, PemError> {
-        use der::{asn1::OctetString, Decode, SliceReader};
+        use der::{asn1::OctetString, Decode, ErrorKind, SliceReader, Tag, TagNumber};
         use pkcs8::PrivateKeyInfo;
 
         let bytes: Vec<u8> = pem_reader.bytes().collect::<Result<_, _>>()?;
         let pem = pem::parse(&bytes)?;
-        let pki = PrivateKeyInfo::decode(&mut SliceReader::new(pem.contents())?)?;
+        let pki_res = PrivateKeyInfo::decode(&mut SliceReader::new(pem.contents())?);
+        let mut truncated;
+        let pki = match pki_res {
+            Ok(pki) => pki,
+            Err(e) => {
+                if e.kind()
+                    == (ErrorKind::Noncanonical {
+                        tag: Tag::ContextSpecific {
+                            constructed: true,
+                            number: TagNumber::new(1),
+                        },
+                    })
+                {
+                    // Very old versions of dfx generated nonconforming containers. They can only be imported if the extra data is removed.
+                    truncated = pem.into_contents();
+                    if truncated[48..52] != *b"\xA1\x23\x03\x21" {
+                        return Err(e.into());
+                    }
+                    // hatchet surgery
+                    truncated.truncate(48);
+                    truncated[1] = 46;
+                    truncated[4] = 0;
+                    PrivateKeyInfo::decode(&mut SliceReader::new(&truncated)?).map_err(|_| e)?
+                } else {
+                    return Err(e.into());
+                }
+            }
+        };
         let decoded_key = OctetString::from_der(pki.private_key)?; // ed25519 uses an octet string within another octet string
         let private_key = SigningKey::try_from(decoded_key.as_bytes())?;
         Ok(BasicIdentity::from_signing_key(private_key))
