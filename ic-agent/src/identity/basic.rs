@@ -43,7 +43,7 @@ impl BasicIdentity {
         use pkcs8::PrivateKeyInfo;
 
         let bytes: Vec<u8> = pem_reader.bytes().collect::<Result<_, _>>()?;
-        let pem = pem::parse(&bytes)?;
+        let pem = pem::parse(bytes)?;
         let pki_res = PrivateKeyInfo::decode(&mut SliceReader::new(pem.contents())?);
         let mut truncated;
         let pki = match pki_res {
