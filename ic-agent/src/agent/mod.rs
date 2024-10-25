@@ -140,6 +140,9 @@ type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + '
 /// ```
 ///
 /// This agent does not understand Candid, and only acts on byte buffers.
+///
+/// Some methods return certificates. While there is a `verify_certificate` method, any certificate
+/// you receive from a method has already been verified and you do not need to manually verify it.
 #[derive(Clone)]
 pub struct Agent {
     nonce_factory: Arc<dyn NonceGenerator>,
@@ -243,9 +246,8 @@ impl Agent {
             return Ok(());
         }
         let status = self.status().await?;
-        let root_key = match status.root_key {
-            Some(key) => key,
-            None => return Err(AgentError::NoRootKeyInStatus(status)),
+        let Some(root_key) = status.root_key else {
+            return Err(AgentError::NoRootKeyInStatus(status));
         };
         self.set_root_key(root_key);
         Ok(())
@@ -270,7 +272,7 @@ impl Agent {
         if self.ingress_expiry.as_secs() > 90 {
             rounded = rounded.replace_second(0).unwrap();
         }
-        rounded.unix_timestamp_nanos() as u64
+        rounded.unix_timestamp_nanos().try_into().unwrap()
     }
 
     /// Return the principal of the identity.
@@ -402,7 +404,7 @@ impl Agent {
         .await
     }
 
-    /// Helper function for performing both the query call and possibly a read_state to check the subnet node keys.
+    /// Helper function for performing both the query call and possibly a `read_state` to check the subnet node keys.
     ///
     /// This should be used instead of `query_endpoint`. No validation is performed on `signed_query`.
     async fn query_inner(
@@ -427,7 +429,7 @@ impl Agent {
             }
             for signature in response.signatures() {
                 if OffsetDateTime::now_utc()
-                    - OffsetDateTime::from_unix_timestamp_nanos(signature.timestamp as _).unwrap()
+                    - OffsetDateTime::from_unix_timestamp_nanos(signature.timestamp.into()).unwrap()
                     > self.ingress_expiry
                 {
                     return Err(AgentError::CertificateOutdated(self.ingress_expiry));
@@ -517,7 +519,7 @@ impl Agent {
         method_name: String,
         arg: Vec<u8>,
         ingress_expiry_datetime: Option<u64>,
-    ) -> Result<CallResponse<Vec<u8>>, AgentError> {
+    ) -> Result<CallResponse<(Vec<u8>, Certificate)>, AgentError> {
         let nonce = self.nonce_factory.generate();
         let content = self.update_content(
             canister_id,
@@ -539,10 +541,12 @@ impl Agent {
                     serde_cbor::from_slice(&certificate).map_err(AgentError::InvalidCborData)?;
 
                 self.verify(&certificate, effective_canister_id)?;
-                let status = lookup_request_status(certificate, &request_id)?;
+                let status = lookup_request_status(&certificate, &request_id)?;
 
                 match status {
-                    RequestStatusResponse::Replied(reply) => Ok(CallResponse::Response(reply.arg)),
+                    RequestStatusResponse::Replied(reply) => {
+                        Ok(CallResponse::Response((reply.arg, certificate)))
+                    }
                     RequestStatusResponse::Rejected(reject_response) => {
                         Err(AgentError::CertifiedReject(reject_response))?
                     }
@@ -578,7 +582,7 @@ impl Agent {
                     serde_cbor::from_slice(&certificate).map_err(AgentError::InvalidCborData)?;
 
                 self.verify(&certificate, effective_canister_id)?;
-                let status = lookup_request_status(certificate, &request_id)?;
+                let status = lookup_request_status(&certificate, &request_id)?;
 
                 match status {
                     RequestStatusResponse::Replied(reply) => Ok(CallResponse::Response(reply.arg)),
@@ -622,25 +626,25 @@ impl Agent {
             .build()
     }
 
-    /// Wait for request_status to return a Replied response and return the arg.
+    /// Wait for `request_status` to return a Replied response and return the arg.
     pub async fn wait_signed(
         &self,
         request_id: &RequestId,
         effective_canister_id: Principal,
         signed_request_status: Vec<u8>,
-    ) -> Result<Vec<u8>, AgentError> {
+    ) -> Result<(Vec<u8>, Certificate), AgentError> {
         let mut retry_policy = self.get_retry_policy();
 
         let mut request_accepted = false;
+        let (resp, cert) = self
+            .request_status_signed(
+                request_id,
+                effective_canister_id,
+                signed_request_status.clone(),
+            )
+            .await?;
         loop {
-            match self
-                .request_status_signed(
-                    request_id,
-                    effective_canister_id,
-                    signed_request_status.clone(),
-                )
-                .await?
-            {
+            match resp {
                 RequestStatusResponse::Unknown => {}
 
                 RequestStatusResponse::Received | RequestStatusResponse::Processing => {
@@ -650,7 +654,9 @@ impl Agent {
                     }
                 }
 
-                RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => return Ok(arg),
+                RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => {
+                    return Ok((arg, cert))
+                }
 
                 RequestStatusResponse::Rejected(response) => {
                     return Err(AgentError::CertifiedReject(response))
@@ -671,20 +677,20 @@ impl Agent {
         }
     }
 
-    /// Call request_status on the RequestId in a loop and return the response as a byte vector.
+    /// Call `request_status` on the `RequestId` in a loop and return the response as a byte vector.
     pub async fn wait(
         &self,
         request_id: &RequestId,
         effective_canister_id: Principal,
-    ) -> Result<Vec<u8>, AgentError> {
+    ) -> Result<(Vec<u8>, Certificate), AgentError> {
         let mut retry_policy = self.get_retry_policy();
 
         let mut request_accepted = false;
         loop {
-            match self
+            let (resp, cert) = self
                 .request_status_raw(request_id, effective_canister_id)
-                .await?
-            {
+                .await?;
+            match resp {
                 RequestStatusResponse::Unknown => {}
 
                 RequestStatusResponse::Received | RequestStatusResponse::Processing => {
@@ -701,7 +707,9 @@ impl Agent {
                     }
                 }
 
-                RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => return Ok(arg),
+                RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => {
+                    return Ok((arg, cert))
+                }
 
                 RequestStatusResponse::Rejected(response) => {
                     return Err(AgentError::CertifiedReject(response))
@@ -877,7 +885,7 @@ impl Agent {
                     delegation.subnet_id.as_ref(),
                     "public_key".as_bytes(),
                 ];
-                lookup_value(&cert.tree, public_key_path).map(|pk| pk.to_vec())
+                lookup_value(&cert.tree, public_key_path).map(<[u8]>::to_vec)
             }
         }
     }
@@ -964,24 +972,24 @@ impl Agent {
         &self,
         request_id: &RequestId,
         effective_canister_id: Principal,
-    ) -> Result<RequestStatusResponse, AgentError> {
+    ) -> Result<(RequestStatusResponse, Certificate), AgentError> {
         let paths: Vec<Vec<Label>> =
             vec![vec!["request_status".into(), request_id.to_vec().into()]];
 
         let cert = self.read_state_raw(paths, effective_canister_id).await?;
 
-        lookup_request_status(cert, request_id)
+        Ok((lookup_request_status(&cert, request_id)?, cert))
     }
 
-    /// Send the signed request_status to the network. Will return [`RequestStatusResponse`].
-    /// The bytes will be checked to verify that it is a valid request_status.
-    /// If you want to inspect the fields of the request_status, use [`signed_request_status_inspect`] before calling this method.
+    /// Send the signed `request_status` to the network. Will return [`RequestStatusResponse`].
+    /// The bytes will be checked to verify that it is a valid `request_status`.
+    /// If you want to inspect the fields of the `request_status`, use [`signed_request_status_inspect`] before calling this method.
     pub async fn request_status_signed(
         &self,
         request_id: &RequestId,
         effective_canister_id: Principal,
         signed_request_status: Vec<u8>,
-    ) -> Result<RequestStatusResponse, AgentError> {
+    ) -> Result<(RequestStatusResponse, Certificate), AgentError> {
         let _envelope: Envelope =
             serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
         let read_state_response: ReadStateResponse = self
@@ -991,10 +999,10 @@ impl Agent {
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
         self.verify(&cert, effective_canister_id)?;
-        lookup_request_status(cert, request_id)
+        Ok((lookup_request_status(&cert, request_id)?, cert))
     }
 
-    /// Returns an UpdateBuilder enabling the construction of an update call without
+    /// Returns an `UpdateBuilder` enabling the construction of an update call without
     /// passing all arguments.
     pub fn update<S: Into<String>>(
         &self,
@@ -1015,14 +1023,14 @@ impl Agent {
         Status::try_from(&cbor).map_err(|_| AgentError::InvalidReplicaStatus)
     }
 
-    /// Returns a QueryBuilder enabling the construction of a query call without
+    /// Returns a `QueryBuilder` enabling the construction of a query call without
     /// passing all arguments.
     pub fn query<S: Into<String>>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder {
         QueryBuilder::new(self, *canister_id, method_name.into())
     }
 
-    /// Sign a request_status call. This will return a [`signed::SignedRequestStatus`]
-    /// which contains all fields of the request_status and the signed request_status in CBOR encoding
+    /// Sign a `request_status` call. This will return a [`signed::SignedRequestStatus`]
+    /// which contains all fields of the `request_status` and the signed `request_status` in CBOR encoding
     pub fn sign_request_status(
         &self,
         effective_canister_id: Principal,
@@ -1059,7 +1067,7 @@ impl Agent {
         }
     }
 
-    /// Retrieve all existing API boundary nodes from the state tree via endpoint /api/v2/canister/<effective_canister_id>/read_state
+    /// Retrieve all existing API boundary nodes from the state tree via endpoint `/api/v2/canister/<effective_canister_id>/read_state`
     pub async fn fetch_api_boundary_nodes_by_canister_id(
         &self,
         canister_id: Principal,
@@ -1070,7 +1078,7 @@ impl Agent {
         Ok(api_boundary_nodes)
     }
 
-    /// Retrieve all existing API boundary nodes from the state tree via endpoint /api/v2/subnet/<subnet_id>/read_state
+    /// Retrieve all existing API boundary nodes from the state tree via endpoint `/api/v2/subnet/<subnet_id>/read_state`
     pub async fn fetch_api_boundary_nodes_by_subnet_id(
         &self,
         subnet_id: Principal,
@@ -1110,7 +1118,7 @@ impl Agent {
             http_request
                 .headers_mut()
                 .insert(CONTENT_TYPE, "application/cbor".parse().unwrap());
-            *http_request.body_mut() = body.as_ref().cloned().map(Body::from);
+            *http_request.body_mut() = body.clone().map(Body::from);
             Ok(http_request)
         };
 
@@ -1128,7 +1136,7 @@ impl Agent {
         // Size Check (Content-Length)
         if matches!(self
             .max_response_body_size
-            .zip(response.content_length()), Some((size_limit, content_length)) if content_length as usize > size_limit)
+            .zip(response.content_length()), Some((size_limit, content_length)) if content_length > size_limit as u64)
         {
             return Err(AgentError::ResponseSizeExceededLimit());
         }
@@ -1161,9 +1169,7 @@ impl Agent {
         endpoint: &str,
         body: Option<Vec<u8>>,
     ) -> Result<(StatusCode, Vec<u8>), AgentError> {
-        let request_result = self
-            .request(method.clone(), endpoint, body.as_ref().cloned())
-            .await?;
+        let request_result = self.request(method.clone(), endpoint, body.clone()).await?;
 
         let status = request_result.0;
         let headers = request_result.1;
@@ -1175,13 +1181,12 @@ impl Agent {
                 content_type: headers
                     .get(CONTENT_TYPE)
                     .and_then(|value| value.to_str().ok())
-                    .map(|x| x.to_string()),
+                    .map(str::to_string),
                 content: body,
             }))
         } else if !(status == StatusCode::OK || status == StatusCode::ACCEPTED) {
             Err(AgentError::InvalidHttpResponse(format!(
-                "Expected `200`, `202`, 4xx`, or `5xx` HTTP status code. Got: {}",
-                status
+                "Expected `200`, `202`, 4xx`, or `5xx` HTTP status code. Got: {status}",
             )))
         } else {
             Ok((status, body))
@@ -1270,8 +1275,8 @@ pub fn signed_query_inspect(
             if arg != *arg_cbor {
                 return Err(AgentError::CallDataMismatch {
                     field: "arg".to_string(),
-                    value_arg: format!("{:?}", arg),
-                    value_cbor: format!("{:?}", arg_cbor),
+                    value_arg: format!("{arg:?}"),
+                    value_cbor: format!("{arg_cbor:?}"),
                 });
             }
         }
@@ -1345,8 +1350,8 @@ pub fn signed_update_inspect(
             if arg != *arg_cbor {
                 return Err(AgentError::CallDataMismatch {
                     field: "arg".to_string(),
-                    value_arg: format!("{:?}", arg),
-                    value_cbor: format!("{:?}", arg_cbor),
+                    value_arg: format!("{arg:?}"),
+                    value_cbor: format!("{arg_cbor:?}"),
                 });
             }
         }
@@ -1368,8 +1373,8 @@ pub fn signed_update_inspect(
     Ok(())
 }
 
-/// Inspect the bytes to be sent as a request_status
-/// Return Ok only when the bytes can be deserialized as a request_status and all fields match with the arguments
+/// Inspect the bytes to be sent as a `request_status`
+/// Return Ok only when the bytes can be deserialized as a `request_status` and all fields match with the arguments
 pub fn signed_request_status_inspect(
     sender: Principal,
     request_id: &RequestId,
@@ -1403,8 +1408,8 @@ pub fn signed_request_status_inspect(
             if paths != *paths_cbor {
                 return Err(AgentError::CallDataMismatch {
                     field: "paths".to_string(),
-                    value_arg: format!("{:?}", paths),
-                    value_cbor: format!("{:?}", paths_cbor),
+                    value_arg: format!("{paths:?}"),
+                    value_cbor: format!("{paths_cbor:?}"),
                 });
             }
         }
@@ -1552,13 +1557,13 @@ impl<'agent> QueryBuilder<'agent> {
         self
     }
 
-    /// Sets ingress_expiry_datetime to the provided timestamp, at nanosecond precision.
+    /// Sets `ingress_expiry_datetime` to the provided timestamp, at nanosecond precision.
     pub fn expire_at(mut self, time: impl Into<OffsetDateTime>) -> Self {
         self.ingress_expiry_datetime = Some(time.into().unix_timestamp_nanos() as u64);
         self
     }
 
-    /// Sets ingress_expiry_datetime to `max(now, 4min)`.
+    /// Sets `ingress_expiry_datetime` to `max(now, 4min)`.
     pub fn expire_after(mut self, duration: Duration) -> Self {
         self.ingress_expiry_datetime = Some(
             OffsetDateTime::now_utc()
@@ -1593,7 +1598,7 @@ impl<'agent> QueryBuilder<'agent> {
     /// Make a query call with signature verification. This will return a byte vector.
     ///
     /// Compared with [call][Self::call], this method will **always** verify the signature of the query response
-    /// regardless the Agent level configuration from [AgentBuilder::with_verify_query_signatures].
+    /// regardless the Agent level configuration from [`AgentBuilder::with_verify_query_signatures`].
     pub async fn call_with_verification(self) -> Result<Vec<u8>, AgentError> {
         self.agent
             .query_raw(
@@ -1611,7 +1616,7 @@ impl<'agent> QueryBuilder<'agent> {
     /// Make a query call without signature verification. This will return a byte vector.
     ///
     /// Compared with [call][Self::call], this method will **never** verify the signature of the query response
-    /// regardless the Agent level configuration from [AgentBuilder::with_verify_query_signatures].
+    /// regardless the Agent level configuration from [`AgentBuilder::with_verify_query_signatures`].
     pub async fn call_without_verification(self) -> Result<Vec<u8>, AgentError> {
         self.agent
             .query_raw(
@@ -1679,7 +1684,7 @@ impl<'agent> IntoFuture for QueryBuilder<'agent> {
 /// An in-flight canister update call. Useful primarily as a `Future`.
 pub struct UpdateCall<'agent> {
     agent: &'agent Agent,
-    response_future: AgentFuture<'agent, CallResponse<Vec<u8>>>,
+    response_future: AgentFuture<'agent, CallResponse<(Vec<u8>, Certificate)>>,
     effective_canister_id: Principal,
 }
 
@@ -1693,13 +1698,15 @@ impl fmt::Debug for UpdateCall<'_> {
 }
 
 impl Future for UpdateCall<'_> {
-    type Output = Result<CallResponse<Vec<u8>>, AgentError>;
+    type Output = Result<CallResponse<(Vec<u8>, Certificate)>, AgentError>;
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.response_future.as_mut().poll(cx)
     }
 }
+
 impl<'a> UpdateCall<'a> {
-    async fn and_wait(self) -> Result<Vec<u8>, AgentError> {
+    /// Waits for the update call to be completed, polling if necessary.
+    pub async fn and_wait(self) -> Result<(Vec<u8>, Certificate), AgentError> {
         let response = self.response_future.await?;
 
         match response {
@@ -1756,13 +1763,13 @@ impl<'agent> UpdateBuilder<'agent> {
         self
     }
 
-    /// Sets ingress_expiry_datetime to the provided timestamp, at nanosecond precision.
+    /// Sets `ingress_expiry_datetime` to the provided timestamp, at nanosecond precision.
     pub fn expire_at(mut self, time: impl Into<OffsetDateTime>) -> Self {
         self.ingress_expiry_datetime = Some(time.into().unix_timestamp_nanos() as u64);
         self
     }
 
-    /// Sets ingress_expiry_datetime to `min(now, 4min)`.
+    /// Sets `ingress_expiry_datetime` to `min(now, 4min)`.
     pub fn expire_after(mut self, duration: Duration) -> Self {
         self.ingress_expiry_datetime = Some(
             OffsetDateTime::now_utc()
@@ -1772,14 +1779,14 @@ impl<'agent> UpdateBuilder<'agent> {
         self
     }
 
-    /// Make an update call. This will call request_status on the RequestId in a loop and return
+    /// Make an update call. This will call `request_status` on the `RequestId` in a loop and return
     /// the response as a byte vector.
     pub async fn call_and_wait(self) -> Result<Vec<u8>, AgentError> {
-        self.call().and_wait().await
+        self.call().and_wait().await.map(|x| x.0)
     }
 
-    /// Make an update call. This will return a RequestId.
-    /// The RequestId should then be used for request_status (most likely in a loop).
+    /// Make an update call. This will return a `RequestId`.
+    /// The `RequestId` should then be used for `request_status` (most likely in a loop).
     pub fn call(self) -> UpdateCall<'agent> {
         let response_future = async move {
             self.agent

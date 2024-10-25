@@ -138,7 +138,7 @@ fn wait_signed() {
 
         let read_envelope_serialized = serialized_bytes(read_state_envelope);
 
-        let result = agent
+        let (result, _) = agent
             .wait_signed(&call_request_id, canister_id, read_envelope_serialized)
             .await
             .unwrap();
@@ -261,7 +261,7 @@ fn wallet_canister_create_and_install() {
         let args = Argument::from_candid((install_config,));
 
         wallet
-            .call64(Principal::management_canister(), "install_code", args, 0)
+            .call64::<(), _>(Principal::management_canister(), "install_code", args, 0)
             .call_and_wait()
             .await?;
 
@@ -629,7 +629,7 @@ mod sign_send {
             let ten_secs = time::Duration::from_secs(10);
             thread::sleep(ten_secs);
 
-            let response = agent
+            let (response, _) = agent
                 .request_status_signed(
                     &signed_request_status.request_id,
                     signed_request_status.effective_canister_id,

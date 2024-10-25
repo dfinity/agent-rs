@@ -33,7 +33,7 @@ type Sha256Hash = GenericArray<u8, <Sha256 as OutputSizeUser>::OutputSize>;
 // We expect the parameters to be curve secp256r1.  This is the base127 encoded form:
 const EXPECTED_EC_PARAMS: &[u8; 10] = b"\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07";
 
-/// An error happened related to a HardwareIdentity.
+/// An error happened related to a `HardwareIdentity`.
 #[derive(Error, Debug)]
 pub enum HardwareIdentityError {
     /// A PKCS11 error occurred.
@@ -61,11 +61,11 @@ pub enum HardwareIdentityError {
     #[error("Unexpected key type {0}")]
     UnexpectedKeyType(CK_KEY_TYPE),
 
-    /// An EcPoint block was expected to be an OctetString, but was not.
+    /// An `EcPoint` block was expected to be an `OctetString`, but was not.
     #[error("Expected EcPoint to be an OctetString")]
     ExpectedEcPointOctetString,
 
-    /// An EcPoint block was unexpectedly empty.
+    /// An `EcPoint` block was unexpectedly empty.
     #[error("EcPoint is empty")]
     EcPointEmpty,
 
@@ -73,12 +73,12 @@ pub enum HardwareIdentityError {
     #[error("Attribute with type={0} not found")]
     AttributeNotFound(CK_ATTRIBUTE_TYPE),
 
-    /// The EcParams given were not the ones the crate expected.
+    /// The `EcParams` given were not the ones the crate expected.
     #[error("Invalid EcParams.  Expected prime256v1 {:02x?}, actual is {:02x?}", .expected, .actual)]
     InvalidEcParams {
-        /// The expected value of the EcParams.
+        /// The expected value of the `EcParams`.
         expected: Vec<u8>,
-        /// The actual value of the EcParams.
+        /// The actual value of the `EcParams`.
         actual: Vec<u8>,
     },
 
@@ -104,9 +104,11 @@ pub struct HardwareIdentity {
 impl HardwareIdentity {
     /// Create an identity using a specific key on an HSM.
     /// The filename will be something like /usr/local/lib/opensc-pkcs11.s
-    /// The key_id must refer to a ECDSA key with parameters prime256v1 (secp256r1)
+    /// The `key_id` must refer to a ECDSA key with parameters prime256v1 (secp256r1)
     /// The key must already have been created.  You can create one with pkcs11-tool:
-    /// $ pkcs11-tool -k --slot $SLOT -d $KEY_ID --key-type EC:prime256v1 --pin $PIN
+    /// ```sh
+    /// pkcs11-tool -k --slot $SLOT -d $KEY_ID --key-type EC:prime256v1 --pin $PIN
+    /// ```
     pub fn new<P, PinFn>(
         pkcs11_lib_path: P,
         slot_index: usize,
@@ -167,7 +169,7 @@ fn get_slot_id(ctx: &Ctx, slot_index: usize) -> Result<CK_SLOT_ID, HardwareIdent
     ctx.get_slot_list(true)?
         .get(slot_index)
         .ok_or(HardwareIdentityError::NoSuchSlotIndex(slot_index))
-        .map(|x| *x)
+        .copied()
 }
 
 // We open a session for the duration of the lifetime of the HardwareIdentity.
@@ -245,10 +247,10 @@ fn validate_key_type(
 
     let mut attribute_types = vec![CK_ATTRIBUTE::new(CKA_KEY_TYPE).with_ck_ulong(&kt)];
     ctx.get_attribute_value(session_handle, object_handle, &mut attribute_types)?;
-    if kt != CKK_ECDSA {
-        Err(HardwareIdentityError::UnexpectedKeyType(kt))
-    } else {
+    if kt == CKK_ECDSA {
         Ok(())
+    } else {
+        Err(HardwareIdentityError::UnexpectedKeyType(kt))
     }
 }
 
@@ -260,13 +262,13 @@ fn validate_ec_params(
     object_handle: CK_OBJECT_HANDLE,
 ) -> Result<(), HardwareIdentityError> {
     let ec_params = get_ec_params(ctx, session_handle, object_handle)?;
-    if ec_params != EXPECTED_EC_PARAMS {
+    if ec_params == EXPECTED_EC_PARAMS {
+        Ok(())
+    } else {
         Err(HardwareIdentityError::InvalidEcParams {
             expected: EXPECTED_EC_PARAMS.to_vec(),
             actual: ec_params,
         })
-    } else {
-        Ok(())
     }
 }
 
@@ -376,7 +378,7 @@ impl HardwareIdentity {
     fn sign_hash(&self, hash: &Sha256Hash) -> Result<Vec<u8>, String> {
         let private_key_handle =
             get_private_key_handle(&self.ctx, self.session_handle, &self.key_id)
-                .map_err(|e| format!("Failed to get private key handle: {}", e))?;
+                .map_err(|e| format!("Failed to get private key handle: {e}"))?;
 
         let mechanism = CK_MECHANISM {
             mechanism: CKM_ECDSA,
@@ -385,10 +387,10 @@ impl HardwareIdentity {
         };
         self.ctx
             .sign_init(self.session_handle, &mechanism, private_key_handle)
-            .map_err(|e| format!("Failed to initialize signature: {}", e))?;
+            .map_err(|e| format!("Failed to initialize signature: {e}"))?;
         self.ctx
             .sign(self.session_handle, hash)
-            .map_err(|e| format!("Failed to generate signature: {}", e))
+            .map_err(|e| format!("Failed to generate signature: {e}"))
     }
 }
 

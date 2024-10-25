@@ -50,7 +50,7 @@ impl AgentBuilder {
         self.with_route_provider(url.into().parse::<Url>().unwrap())
     }
 
-    /// Add a NonceFactory to this Agent. By default, no nonce is produced.
+    /// Add a `NonceFactory` to this Agent. By default, no nonce is produced.
     pub fn with_nonce_factory(self, nonce_factory: NonceFactory) -> AgentBuilder {
         self.with_nonce_generator(nonce_factory)
     }

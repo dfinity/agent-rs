@@ -269,7 +269,7 @@ pub struct GetUtxosResponse {
     pub next_page: Option<Vec<u8>>,
 }
 
-/// Response type for the ``.
+/// Response type for the [`BitcoinCanister::get_block_headers`] function.
 #[derive(Debug, Clone, CandidType, Deserialize)]
 pub struct GetBlockHeadersResponse {
     /// The tip of the chain, current to when the headers were fetched.

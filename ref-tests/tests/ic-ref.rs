@@ -908,7 +908,7 @@ mod management_canister {
 
             // fetch root subnet metrics
             let metrics = agent
-                .read_state_subnet_metrics(Principal::self_authenticating(&agent.read_root_key()))
+                .read_state_subnet_metrics(Principal::self_authenticating(agent.read_root_key()))
                 .await?;
             assert!(
                 metrics.num_canisters >= 1,
