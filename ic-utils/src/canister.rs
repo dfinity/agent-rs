@@ -395,24 +395,14 @@ mod tests {
     const POCKET_IC: &str = "POCKET_IC";
 
     async fn get_effective_canister_id() -> Principal {
+        let default_effective_canister_id =
+            Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap();
         if let Ok(pocket_ic_url) = std::env::var(POCKET_IC) {
-            let client = reqwest::Client::new();
-            let topology: pocket_ic::common::rest::Topology = client
-                .get(format!("{}{}", pocket_ic_url, "/_/topology"))
-                .send()
+            pocket_ic::nonblocking::get_default_effective_canister_id(pocket_ic_url)
                 .await
-                .unwrap()
-                .json()
-                .await
-                .unwrap();
-            let app_subnet = topology.get_app_subnets()[0];
-            Principal::from_slice(
-                &topology.0.get(&app_subnet).unwrap().canister_ranges[0]
-                    .start
-                    .canister_id,
-            )
+                .unwrap_or(default_effective_canister_id)
         } else {
-            Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap()
+            default_effective_canister_id
         }
     }
 

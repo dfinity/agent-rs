@@ -1002,6 +1002,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "http-body-to-bytes"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17a08236c6f51c2ee95d840f45acf8fa9e339390e00b4ef640857b2f2a534d70"
+dependencies = [
+ "bytes",
+ "http-body",
+ "http-body-util",
+]
+
+[[package]]
 name = "http-body-util"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1094,6 +1105,53 @@ dependencies = [
 
 [[package]]
 name = "ic-agent"
+version = "0.37.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fd3fdf5e5c4f4a9fe5ca612f0febd22dcb161d2f2b75b0142326732be5e4978"
+dependencies = [
+ "async-lock",
+ "backoff",
+ "cached",
+ "candid",
+ "ed25519-consensus",
+ "futures-util",
+ "hex",
+ "http",
+ "http-body",
+ "http-body-to-bytes",
+ "http-body-util",
+ "hyper",
+ "hyper-rustls",
+ "hyper-util",
+ "ic-certification",
+ "ic-transport-types 0.37.1",
+ "ic-verify-bls-signature",
+ "k256",
+ "leb128",
+ "p256",
+ "pem",
+ "pkcs8",
+ "rand",
+ "rangemap",
+ "reqwest",
+ "ring",
+ "rustls-webpki",
+ "sec1",
+ "serde",
+ "serde_bytes",
+ "serde_cbor",
+ "serde_repr",
+ "sha2 0.10.8",
+ "simple_asn1",
+ "thiserror",
+ "time",
+ "tokio",
+ "tower",
+ "url",
+]
+
+[[package]]
+name = "ic-agent"
 version = "0.39.1"
 dependencies = [
  "arc-swap",
@@ -1114,7 +1172,7 @@ dependencies = [
  "http",
  "http-body",
  "ic-certification",
- "ic-transport-types",
+ "ic-transport-types 0.39.1",
  "ic-verify-bls-signature",
  "js-sys",
  "k256",
@@ -1151,9 +1209,9 @@ dependencies = [
 
 [[package]]
 name = "ic-cdk"
-version = "0.13.5"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b1da6a25b045f9da3c9459c0cb2b0700ac368ee16382975a17185a23b9c18ab"
+checksum = "dd8ecacd682fa05a985253592963306cb9799622d7b1cce4b1edb89c6ec85be1"
 dependencies = [
  "candid",
  "ic-cdk-macros",
@@ -1164,16 +1222,16 @@ dependencies = [
 
 [[package]]
 name = "ic-cdk-macros"
-version = "0.13.2"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a45800053d80a6df839a71aaea5797e723188c0b992618208ca3b941350c7355"
+checksum = "0d4d857135deef20cc7ea8f3869a30cd9cfeb1392b3a81043790b2cd82adc3e0"
 dependencies = [
  "candid",
  "proc-macro2",
  "quote",
  "serde",
  "serde_tokenstream",
- "syn 1.0.109",
+ "syn 2.0.76",
 ]
 
 [[package]]
@@ -1193,10 +1251,27 @@ name = "ic-identity-hsm"
 version = "0.39.1"
 dependencies = [
  "hex",
- "ic-agent",
+ "ic-agent 0.39.1",
  "pkcs11",
  "sha2 0.10.8",
  "simple_asn1",
+ "thiserror",
+]
+
+[[package]]
+name = "ic-transport-types"
+version = "0.37.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "875dc4704780383112e8e8b5063a1b98de114321d0c7d3e7f635dcf360a57fba"
+dependencies = [
+ "candid",
+ "hex",
+ "ic-certification",
+ "leb128",
+ "serde",
+ "serde_bytes",
+ "serde_repr",
+ "sha2 0.10.8",
  "thiserror",
 ]
 
@@ -1225,7 +1300,7 @@ dependencies = [
  "candid",
  "ed25519-consensus",
  "futures-util",
- "ic-agent",
+ "ic-agent 0.39.1",
  "once_cell",
  "pocket-ic",
  "rand",
@@ -1257,9 +1332,9 @@ dependencies = [
 
 [[package]]
 name = "ic0"
-version = "0.21.1"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a54b5297861c651551676e8c43df805dad175cc33bc97dbd992edbbb85dcbcdf"
+checksum = "8de254dd67bbd58073e23dc1c8553ba12fa1dc610a19de94ad2bbcd0460c067f"
 
 [[package]]
 name = "ic_bls12_381"
@@ -1300,7 +1375,7 @@ dependencies = [
  "ed25519-consensus",
  "hex",
  "humantime",
- "ic-agent",
+ "ic-agent 0.39.1",
  "ic-utils",
  "pocket-ic",
  "rand",
@@ -1869,20 +1944,23 @@ dependencies = [
 [[package]]
 name = "pocket-ic"
 version = "5.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "beff607d4dbebff8d003453ced669d2645e905de496ca93713f3d47633357e6c"
+source = "git+https://github.com/dfinity/ic?rev=3c76b9142f67da01393d9280c705f88b6e522a93#3c76b9142f67da01393d9280c705f88b6e522a93"
 dependencies = [
  "base64 0.13.1",
  "candid",
  "hex",
+ "ic-agent 0.37.1",
  "ic-cdk",
+ "ic-transport-types 0.37.1",
  "reqwest",
  "schemars",
  "serde",
  "serde_bytes",
+ "serde_cbor",
  "serde_json",
  "sha2 0.10.8",
  "slog",
+ "thiserror",
  "tokio",
  "tracing",
  "tracing-appender",
@@ -2067,7 +2145,7 @@ version = "0.0.0"
 dependencies = [
  "candid",
  "ed25519-consensus",
- "ic-agent",
+ "ic-agent 0.39.1",
  "ic-certification",
  "ic-identity-hsm",
  "ic-utils",
@@ -2463,13 +2541,14 @@ dependencies = [
 
 [[package]]
 name = "serde_tokenstream"
-version = "0.1.7"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "797ba1d80299b264f3aac68ab5d12e5825a561749db4df7cd7c8083900c5d4e9"
+checksum = "64060d864397305347a78851c51588fd283767e7e7589829e8121d65512340f1"
 dependencies = [
  "proc-macro2",
+ "quote",
  "serde",
- "syn 1.0.109",
+ "syn 2.0.76",
 ]
 
 [[package]]
@@ -2906,6 +2985,7 @@ dependencies = [
  "tokio",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -2926,6 +3006,7 @@ version = "0.1.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3523ab5a71916ccf420eebdf5521fcef02141234bbc0b8a49f2fdc4544364ef"
 dependencies = [
+ "log",
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",

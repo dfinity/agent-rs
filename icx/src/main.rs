@@ -352,34 +352,10 @@ async fn main() -> Result<()> {
         .build()
         .context("Failed to build the Agent")?;
 
-    let get_default_effective_canister_id = || async {
-        let client = reqwest::Client::new();
-        let topology: pocket_ic::common::rest::Topology = client
-            .get(format!(
-                "{}{}",
-                opts.replica.trim_end_matches('/'),
-                "/_/topology"
-            ))
-            .send()
-            .await?
-            .json()
-            .await?;
-        let subnet = topology.get_app_subnets().into_iter().next().unwrap_or_else(||
-                    topology
-                        .get_verified_app_subnets()
-                        .into_iter()
-                        .next()
-                        .unwrap_or_else(|| topology.get_system_subnets().into_iter().next().unwrap_or_else(|| panic!("PocketIC topology contains no application, verified application, and system subnet."))),
-                );
-        Ok::<_, reqwest::Error>(Principal::from_slice(
-            &topology.0.get(&subnet).unwrap().canister_ranges[0]
-                .start
-                .canister_id,
-        ))
-    };
-    let default_effective_canister_id = get_default_effective_canister_id()
-        .await
-        .unwrap_or(Principal::management_canister());
+    let default_effective_canister_id =
+        pocket_ic::nonblocking::get_default_effective_canister_id(opts.replica.clone())
+            .await
+            .unwrap_or(Principal::management_canister());
 
     // You can handle information about subcommands by requesting their matches by name
     // (as below), requesting just the name used, or both at the same time
