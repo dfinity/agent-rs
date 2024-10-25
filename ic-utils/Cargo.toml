@@ -35,7 +35,6 @@ ed25519-consensus = { workspace = true }
 ic-agent = { workspace = true, default-features = true }
 pocket-ic = { workspace = true }
 rand = { workspace = true }
-reqwest = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
 [features]

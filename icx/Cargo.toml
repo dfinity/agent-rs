@@ -30,7 +30,6 @@ ic-agent = { workspace = true, default-features = true }
 ic-utils = { workspace = true }
 pocket-ic = { workspace = true }
 rand = { workspace = true }
-reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
