@@ -15,7 +15,7 @@ on:
 jobs:
   check_macos:
     # ubuntu-latest has shellcheck 0.4.6, while macos-12 has 0.7.1
-    runs-on: macos-12
+    runs-on: macos-13-large
     steps:
       - uses: actions/checkout@v4
       - name: Install shellcheck
