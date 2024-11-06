@@ -89,6 +89,8 @@ pub enum MgmtMethod {
     BitcoinSendTransaction,
     /// There is no corresponding agent function as only canisters can call it. Use [`BitcoinCanister`](super::BitcoinCanister) instead.
     BitcoinGetCurrentFeePercentiles,
+    /// There is no corresponding agent function as only canisters can call it. Use [`BitcoinCanister`](super::BitcoinCanister) instead.
+    BitcoinGetBlockHeaders,
     /// There is no corresponding agent function as only canisters can call it.
     NodeMetricsHistory,
 }
