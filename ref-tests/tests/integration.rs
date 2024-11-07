@@ -138,7 +138,7 @@ fn wait_signed() {
 
         let read_envelope_serialized = serialized_bytes(read_state_envelope);
 
-        let result = agent
+        let (result, _) = agent
             .wait_signed(&call_request_id, canister_id, read_envelope_serialized)
             .await
             .unwrap();
@@ -261,7 +261,7 @@ fn wallet_canister_create_and_install() {
         let args = Argument::from_candid((install_config,));
 
         wallet
-            .call64(Principal::management_canister(), "install_code", args, 0)
+            .call64::<(), _>(Principal::management_canister(), "install_code", args, 0)
             .call_and_wait()
             .await?;
 
@@ -629,7 +629,7 @@ mod sign_send {
             let ten_secs = time::Duration::from_secs(10);
             thread::sleep(ten_secs);
 
-            let response = agent
+            let (response, _) = agent
                 .request_status_signed(
                     &signed_request_status.request_id,
                     signed_request_status.effective_canister_id,
@@ -673,27 +673,23 @@ mod sign_send {
 
 mod identity {
     use candid::Principal;
+    use ed25519_consensus::SigningKey;
     use ic_agent::{
-        identity::{BasicIdentity, DelegatedIdentity, Delegation, SignedDelegation},
+        identity::{
+            BasicIdentity, DelegatedIdentity, Delegation, Prime256v1Identity, Secp256k1Identity,
+            SignedDelegation,
+        },
         Identity,
     };
+    use rand::thread_rng;
     use ref_tests::{universal_canister::payload, with_universal_canister_as};
-    use ring::{
-        rand::{SecureRandom, SystemRandom},
-        signature::Ed25519KeyPair,
-    };
 
     #[ignore]
     #[test]
-    fn delegated_identity() {
-        let random = SystemRandom::new();
-        let mut seed = [0; 32];
-        random.fill(&mut seed).unwrap();
-        let sending_identity =
-            BasicIdentity::from_key_pair(Ed25519KeyPair::from_seed_unchecked(&seed).unwrap());
-        random.fill(&mut seed).unwrap();
-        let signing_identity =
-            BasicIdentity::from_key_pair(Ed25519KeyPair::from_seed_unchecked(&seed).unwrap());
+    fn delegated_eddsa_identity() {
+        let mut random = thread_rng();
+        let sending_identity = BasicIdentity::from_signing_key(SigningKey::new(&mut random));
+        let signing_identity = BasicIdentity::from_signing_key(SigningKey::new(&mut random));
         let delegation = Delegation {
             expiration: i64::MAX as u64,
             pubkey: signing_identity.public_key().unwrap(),
@@ -707,7 +703,45 @@ mod identity {
                 delegation,
                 signature: signature.signature.unwrap(),
             }],
-        );
+        )
+        .unwrap();
+        with_universal_canister_as(delegated_identity, |agent, canister| async move {
+            let payload = payload().caller().append_and_reply().build();
+            let caller_resp = agent
+                .query(&canister, "query")
+                .with_arg(payload)
+                .call()
+                .await
+                .unwrap();
+            let caller = Principal::from_slice(&caller_resp);
+            assert_eq!(caller, sending_identity.sender().unwrap());
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn delegated_ecdsa_identity() {
+        let mut random = thread_rng();
+        let sending_identity =
+            Secp256k1Identity::from_private_key(k256::SecretKey::random(&mut random));
+        let signing_identity =
+            Prime256v1Identity::from_private_key(p256::SecretKey::random(&mut random));
+        let delegation = Delegation {
+            expiration: i64::MAX as u64,
+            pubkey: signing_identity.public_key().unwrap(),
+            targets: None,
+        };
+        let signature = sending_identity.sign_delegation(&delegation).unwrap();
+        let delegated_identity = DelegatedIdentity::new(
+            signature.public_key.unwrap(),
+            Box::new(signing_identity),
+            vec![SignedDelegation {
+                delegation,
+                signature: signature.signature.unwrap(),
+            }],
+        )
+        .unwrap();
         with_universal_canister_as(delegated_identity, |agent, canister| async move {
             let payload = payload().caller().append_and_reply().build();
             let caller_resp = agent

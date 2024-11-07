@@ -11,7 +11,7 @@ use crate::{
             },
             RouteProvider,
         },
-        Agent,
+        Agent, HttpService,
     },
     AgentError, Identity, NonceFactory, NonceGenerator,
 };
@@ -53,7 +53,7 @@ impl AgentBuilder {
         self.with_route_provider(url.into().parse::<Url>().unwrap())
     }
 
-    /// Add a NonceFactory to this Agent. By default, no nonce is produced.
+    /// Add a `NonceFactory` to this Agent. By default, no nonce is produced.
     pub fn with_nonce_factory(self, nonce_factory: NonceFactory) -> AgentBuilder {
         self.with_nonce_generator(nonce_factory)
     }
@@ -101,7 +101,7 @@ impl AgentBuilder {
     /// The timestamp corresponding to this duration may be rounded in order to reduce
     /// cache misses. The current implementation rounds to the nearest minute if the
     /// expiry is more than a minute, but this is not guaranteed.
-    pub fn with_ingress_expiry(mut self, ingress_expiry: Option<std::time::Duration>) -> Self {
+    pub fn with_ingress_expiry(mut self, ingress_expiry: std::time::Duration) -> Self {
         self.config.ingress_expiry = ingress_expiry;
         self
     }
@@ -134,20 +134,25 @@ impl AgentBuilder {
 
     /// Provide a pre-configured HTTP client to use. Use this to set e.g. HTTP timeouts or proxy configuration.
     pub fn with_http_client(mut self, client: reqwest::Client) -> Self {
+        assert!(
+            self.config.http_service.is_none(),
+            "with_arc_http_middleware cannot be called with with_http_client"
+        );
         self.config.client = Some(client);
         self
     }
 
-    /// Use call v3 endpoint for synchronous update calls.
-    /// __This is an experimental feature, and should not be used in production,
-    /// as the endpoint is not available yet on the mainnet IC.__
+    /// Provide a custom `reqwest`-compatible HTTP service, e.g. to add per-request headers for custom boundary nodes.
+    /// Most users will not need this and should use `with_http_client`. Cannot be called with `with_http_client`.
     ///
-    /// By enabling this feature, the agent will use the `v3` endpoint for update calls,
-    /// which is synchronous. This means the replica will wait for a certificate for the call,
-    /// meaning the agent will not need to poll for the certificate.
-    #[cfg(feature = "experimental_sync_call")]
-    pub fn with_call_v3_endpoint(mut self) -> Self {
-        self.config.use_call_v3_endpoint = true;
+    /// The trait is automatically implemented for any `tower::Service` impl matching the one `reqwest::Client` uses,
+    /// including `reqwest-middleware`. This is a low-level interface, and direct implementations must provide all automatic retry logic.
+    pub fn with_arc_http_middleware(mut self, service: Arc<dyn HttpService>) -> Self {
+        assert!(
+            self.config.client.is_none(),
+            "with_arc_http_middleware cannot be called with with_http_client"
+        );
+        self.config.http_service = Some(service);
         self
     }
 
@@ -160,6 +165,11 @@ impl AgentBuilder {
     /// Don't accept HTTP bodies any larger than `max_size` bytes.
     pub fn with_max_response_body_size(mut self, max_size: usize) -> Self {
         self.config.max_response_body_size = Some(max_size);
+        self
+    }
+    /// Set the maximum time to wait for a response from the replica.
+    pub fn with_max_polling_time(mut self, max_polling_time: std::time::Duration) -> Self {
+        self.config.max_polling_time = max_polling_time;
         self
     }
 }

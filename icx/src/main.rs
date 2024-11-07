@@ -6,6 +6,7 @@ use candid::{
 };
 use candid_parser::{check_prog, parse_idl_args, parse_idl_value, IDLProg};
 use clap::{crate_authors, crate_version, Parser, ValueEnum};
+use ed25519_consensus::SigningKey;
 use ic_agent::{
     agent::{
         self,
@@ -21,7 +22,7 @@ use ic_utils::interfaces::management_canister::{
     builders::{CanisterInstall, CanisterSettings},
     MgmtMethod,
 };
-use ring::signature::Ed25519KeyPair;
+use rand::thread_rng;
 use std::{
     collections::VecDeque, convert::TryFrom, io::BufRead, path::PathBuf, str::FromStr,
     time::Duration,
@@ -36,7 +37,7 @@ const DEFAULT_IC_GATEWAY: &str = "https://ic0.app";
     propagate_version(true),
 )]
 struct Opts {
-    /// Some input. Because this isn't an Option<T> it's required to be used
+    /// The URL of the replica.
     #[clap(default_value = "http://localhost:8000/")]
     replica: String,
 
@@ -114,7 +115,7 @@ impl std::str::FromStr for ArgType {
         match s {
             "idl" => Ok(ArgType::Idl),
             "raw" => Ok(ArgType::Raw),
-            other => Err(format!("invalid argument type: {}", other)),
+            other => Err(format!("invalid argument type: {other}")),
         }
     }
 }
@@ -129,25 +130,21 @@ struct PrincipalConvertOpts {
     to_hex: Option<String>,
 }
 
-/// Parse IDL file into TypeEnv. This is a best effort function: it will succeed if
+/// Parse IDL file into `TypeEnv`. This is a best effort function: it will succeed if
 /// the IDL file can be parsed and type checked in Rust parser, and has an
 /// actor in the IDL file. If anything fails, it returns None.
 pub fn get_candid_type(
     idl_path: &std::path::Path,
     method_name: &str,
 ) -> Result<Option<(TypeEnv, Function)>> {
-    let (env, ty) = check_candid_file(idl_path).with_context(|| {
-        format!(
-            "Failed when checking candid file: {}",
-            idl_path.to_string_lossy()
-        )
-    })?;
+    let (env, ty) = check_candid_file(idl_path)
+        .with_context(|| format!("Failed when checking candid file: {}", idl_path.display()))?;
     match ty {
         None => Ok(None),
         Some(actor) => {
             let method = env
                 .get_method(&actor, method_name)
-                .with_context(|| format!("Failed to get method: {}", method_name))?
+                .with_context(|| format!("Failed to get method: {method_name}"))?
                 .clone();
             Ok(Some((env, method)))
         }
@@ -157,17 +154,14 @@ pub fn get_candid_type(
 pub fn check_candid_file(idl_path: &std::path::Path) -> Result<(TypeEnv, Option<Type>)> {
     let idl_file = std::fs::read_to_string(idl_path)
         .with_context(|| format!("Failed to read Candid file: {}", idl_path.to_string_lossy()))?;
-    let ast = idl_file.parse::<IDLProg>().with_context(|| {
-        format!(
-            "Failed to parse the Candid file: {}",
-            idl_path.to_string_lossy()
-        )
-    })?;
+    let ast = idl_file
+        .parse::<IDLProg>()
+        .with_context(|| format!("Failed to parse the Candid file: {}", idl_path.display()))?;
     let mut env = TypeEnv::new();
     let actor = check_prog(&mut env, &ast).with_context(|| {
         format!(
             "Failed to type check the Candid file: {}",
-            idl_path.to_string_lossy()
+            idl_path.display()
         )
     })?;
     Ok((env, actor))
@@ -236,7 +230,7 @@ fn print_idl_blob(
     let hex_string = hex::encode(blob);
     match output_type {
         ArgType::Raw => {
-            println!("{}", hex_string);
+            println!("{hex_string}");
         }
         ArgType::Idl => {
             let result = match method_type {
@@ -245,7 +239,7 @@ fn print_idl_blob(
             };
             println!(
                 "{}",
-                result.with_context(|| format!("Failed to deserialize blob 0x{}", hex_string))?
+                result.with_context(|| format!("Failed to deserialize blob 0x{hex_string}"))?
             );
         }
     }
@@ -270,10 +264,7 @@ pub fn get_effective_canister_id(
 ) -> Result<Principal> {
     if is_management_canister {
         let method_name = MgmtMethod::from_str(method_name).with_context(|| {
-            format!(
-                "Attempted to call an unsupported management canister method: {}",
-                method_name
-            )
+            format!("Attempted to call an unsupported management canister method: {method_name}")
         })?;
         match method_name {
             MgmtMethod::CreateCanister | MgmtMethod::RawRand => bail!(
@@ -332,6 +323,7 @@ pub fn get_effective_canister_id(
             | MgmtMethod::BitcoinGetUtxos
             | MgmtMethod::BitcoinSendTransaction
             | MgmtMethod::BitcoinGetCurrentFeePercentiles
+            | MgmtMethod::BitcoinGetBlockHeaders
             | MgmtMethod::EcdsaPublicKey
             | MgmtMethod::SignWithEcdsa
             | MgmtMethod::NodeMetricsHistory => {
@@ -347,15 +339,7 @@ fn create_identity(maybe_pem: Option<PathBuf>) -> impl Identity {
     if let Some(pem_path) = maybe_pem {
         BasicIdentity::from_pem_file(pem_path).expect("Could not read the key pair.")
     } else {
-        let rng = ring::rand::SystemRandom::new();
-        let pkcs8_bytes = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
-            .expect("Could not generate a key pair.")
-            .as_ref()
-            .to_vec();
-
-        BasicIdentity::from_key_pair(
-            Ed25519KeyPair::from_pkcs8(&pkcs8_bytes).expect("Could not generate the key pair."),
-        )
+        BasicIdentity::from_signing_key(SigningKey::new(thread_rng()))
     }
 }
 
@@ -374,7 +358,7 @@ async fn main() -> Result<()> {
     match &opts.subcommand {
         SubCommand::Update(t) | SubCommand::Query(t) => {
             let maybe_candid_path = t.candid.as_ref();
-            let expire_after: Option<std::time::Duration> = opts.ttl.map(|ht| ht.into());
+            let expire_after: Option<std::time::Duration> = opts.ttl.map(Into::into);
 
             let method_type = match maybe_candid_path {
                 None => None,
@@ -393,7 +377,51 @@ async fn main() -> Result<()> {
             )
             .context("Failed to get effective_canister_id for this call")?;
 
-            if !t.serialize {
+            if t.serialize {
+                match &opts.subcommand {
+                    SubCommand::Update(_) => {
+                        // For local emulator, we need to fetch the root key for updates.
+                        // So on an air-gapped machine, we can only generate message for the IC main net
+                        // which agent hard-coded its root key
+                        fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
+
+                        let mut builder = agent.update(&t.canister_id, &t.method_name);
+                        if let Some(d) = expire_after {
+                            builder = builder.expire_after(d);
+                        }
+                        let signed_update = builder
+                            .with_arg(arg)
+                            .with_effective_canister_id(effective_canister_id)
+                            .sign()
+                            .context("Failed to sign the update call")?;
+                        let serialized = serde_json::to_string(&signed_update).unwrap();
+                        println!("{serialized}");
+
+                        let signed_request_status = agent
+                            .sign_request_status(effective_canister_id, signed_update.request_id)
+                            .context(
+                                "Failed to sign the request_status call accompany with the update",
+                            )?;
+                        let serialized = serde_json::to_string(&signed_request_status).unwrap();
+                        println!("{serialized}");
+                    }
+                    &SubCommand::Query(_) => {
+                        fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
+                        let mut builder = agent.query(&t.canister_id, &t.method_name);
+                        if let Some(d) = expire_after {
+                            builder = builder.expire_after(d);
+                        }
+                        let signed_query = builder
+                            .with_arg(arg)
+                            .with_effective_canister_id(effective_canister_id)
+                            .sign()
+                            .context("Failed to sign the query call")?;
+                        let serialized = serde_json::to_string(&signed_query).unwrap();
+                        println!("{serialized}");
+                    }
+                    _ => unreachable!(),
+                }
+            } else {
                 let result = match &opts.subcommand {
                     SubCommand::Update(_) => {
                         // We need to fetch the root key for updates.
@@ -450,11 +478,11 @@ async fn main() -> Result<()> {
                         content,
                     })) => {
                         let mut error_message =
-                            format!("Server returned an HTTP Error:\n  Code: {}\n", status);
+                            format!("Server returned an HTTP Error:\n  Code: {status}\n");
                         match content_type.as_deref() {
                             None => error_message
                                 .push_str(&format!("  Content: {}\n", hex::encode(content))),
-                            Some("text/plain; charset=UTF-8") | Some("text/plain") => {
+                            Some("text/plain; charset=UTF-8" | "text/plain") => {
                                 error_message.push_str("  ContentType: text/plain\n");
                                 error_message.push_str(&format!(
                                     "  Content:     {}\n",
@@ -462,7 +490,7 @@ async fn main() -> Result<()> {
                                 ));
                             }
                             Some(x) => {
-                                error_message.push_str(&format!("  ContentType: {}\n", x));
+                                error_message.push_str(&format!("  ContentType: {x}\n"));
                                 error_message.push_str(&format!(
                                     "  Content:     {}\n",
                                     hex::encode(&content)
@@ -473,50 +501,6 @@ async fn main() -> Result<()> {
                     }
                     Err(s) => Err(s).context("Got an error when make the canister call")?,
                 }
-            } else {
-                match &opts.subcommand {
-                    SubCommand::Update(_) => {
-                        // For local emulator, we need to fetch the root key for updates.
-                        // So on an air-gapped machine, we can only generate message for the IC main net
-                        // which agent hard-coded its root key
-                        fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
-
-                        let mut builder = agent.update(&t.canister_id, &t.method_name);
-                        if let Some(d) = expire_after {
-                            builder = builder.expire_after(d);
-                        }
-                        let signed_update = builder
-                            .with_arg(arg)
-                            .with_effective_canister_id(effective_canister_id)
-                            .sign()
-                            .context("Failed to sign the update call")?;
-                        let serialized = serde_json::to_string(&signed_update).unwrap();
-                        println!("{}", serialized);
-
-                        let signed_request_status = agent
-                            .sign_request_status(effective_canister_id, signed_update.request_id)
-                            .context(
-                                "Failed to sign the request_status call accompany with the update",
-                            )?;
-                        let serialized = serde_json::to_string(&signed_request_status).unwrap();
-                        println!("{}", serialized);
-                    }
-                    &SubCommand::Query(_) => {
-                        fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
-                        let mut builder = agent.query(&t.canister_id, &t.method_name);
-                        if let Some(d) = expire_after {
-                            builder = builder.expire_after(d);
-                        }
-                        let signed_query = builder
-                            .with_arg(arg)
-                            .with_effective_canister_id(effective_canister_id)
-                            .sign()
-                            .context("Failed to sign the query call")?;
-                        let serialized = serde_json::to_string(&signed_query).unwrap();
-                        println!("{}", serialized);
-                    }
-                    _ => unreachable!(),
-                }
             }
         }
         SubCommand::Status => {
@@ -524,13 +508,13 @@ async fn main() -> Result<()> {
                 .status()
                 .await
                 .context("Failed to get network status")?;
-            println!("{:#}", status);
+            println!("{status:#}");
         }
         SubCommand::PrincipalConvert(t) => {
             if let Some(hex) = &t.from_hex {
                 let p = Principal::try_from(hex::decode(hex).expect("Could not decode hex: {}"))
                     .expect("Could not transform into a Principal: {}");
-                eprintln!("Principal: {}", p);
+                eprintln!("Principal: {p}");
             } else if let Some(txt) = &t.to_hex {
                 let p = Principal::from_text(txt.as_str())
                     .expect("Could not transform into a Principal: {}");
@@ -548,7 +532,7 @@ async fn main() -> Result<()> {
                 buffer.push_str(&line);
             }
 
-            println!("{}", buffer);
+            println!("{buffer}");
 
             if let Ok(signed_update) = serde_json::from_str::<SignedUpdate>(&buffer) {
                 fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
@@ -583,7 +567,7 @@ async fn main() -> Result<()> {
                 serde_json::from_str::<SignedRequestStatus>(&buffer)
             {
                 fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
-                let response = agent
+                let (response, _) = agent
                     .request_status_signed(
                         &signed_request_status.request_id,
                         signed_request_status.effective_canister_id,

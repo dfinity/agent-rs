@@ -3,7 +3,7 @@ use crate::{agent::EnvelopeContent, export::Principal, Identity, Signature};
 #[cfg(feature = "pem")]
 use crate::identity::error::PemError;
 
-use ring::signature::{Ed25519KeyPair, KeyPair};
+use ed25519_consensus::SigningKey;
 use simple_asn1::{
     oid, to_der,
     ASN1Block::{BitString, ObjectIdentifier, Sequence},
@@ -13,9 +13,11 @@ use std::fmt;
 
 use super::Delegation;
 
-/// A Basic Identity which sign using an ED25519 key pair.
+/// A cryptographic identity which signs using an Ed25519 key pair.
+///
+/// The caller will be represented via [`Principal::self_authenticating`], which contains the SHA-224 hash of the public key.
 pub struct BasicIdentity {
-    key_pair: Ed25519KeyPair,
+    private_key: KeyCompat,
     der_encoded_public_key: Vec<u8>,
 }
 
@@ -28,31 +30,88 @@ impl fmt::Debug for BasicIdentity {
 }
 
 impl BasicIdentity {
-    /// Create a BasicIdentity from reading a PEM file at the path.
+    /// Create a `BasicIdentity` from reading a PEM file at the path.
     #[cfg(feature = "pem")]
     pub fn from_pem_file<P: AsRef<std::path::Path>>(file_path: P) -> Result<Self, PemError> {
         Self::from_pem(std::fs::File::open(file_path)?)
     }
 
-    /// Create a BasicIdentity from reading a PEM File from a Reader.
+    /// Create a `BasicIdentity` from reading a PEM File from a Reader.
     #[cfg(feature = "pem")]
     pub fn from_pem<R: std::io::Read>(pem_reader: R) -> Result<Self, PemError> {
-        let bytes: Vec<u8> = pem_reader
-            .bytes()
-            .collect::<Result<Vec<u8>, std::io::Error>>()?;
+        use der::{asn1::OctetString, Decode, ErrorKind, SliceReader, Tag, TagNumber};
+        use pkcs8::PrivateKeyInfo;
 
-        Ok(BasicIdentity::from_key_pair(Ed25519KeyPair::from_pkcs8(
-            pem::parse(bytes)?.contents(),
-        )?))
+        let bytes: Vec<u8> = pem_reader.bytes().collect::<Result<_, _>>()?;
+        let pem = pem::parse(bytes)?;
+        let pki_res = PrivateKeyInfo::decode(&mut SliceReader::new(pem.contents())?);
+        let mut truncated;
+        let pki = match pki_res {
+            Ok(pki) => pki,
+            Err(e) => {
+                if e.kind()
+                    == (ErrorKind::Noncanonical {
+                        tag: Tag::ContextSpecific {
+                            constructed: true,
+                            number: TagNumber::new(1),
+                        },
+                    })
+                {
+                    // Very old versions of dfx generated nonconforming containers. They can only be imported if the extra data is removed.
+                    truncated = pem.into_contents();
+                    if truncated[48..52] != *b"\xA1\x23\x03\x21" {
+                        return Err(e.into());
+                    }
+                    // hatchet surgery
+                    truncated.truncate(48);
+                    truncated[1] = 46;
+                    truncated[4] = 0;
+                    PrivateKeyInfo::decode(&mut SliceReader::new(&truncated)?).map_err(|_| e)?
+                } else {
+                    return Err(e.into());
+                }
+            }
+        };
+        let decoded_key = OctetString::from_der(pki.private_key)?; // ed25519 uses an octet string within another octet string
+        let private_key = SigningKey::try_from(decoded_key.as_bytes())?;
+        Ok(BasicIdentity::from_signing_key(private_key))
     }
 
-    /// Create a BasicIdentity from a KeyPair from the ring crate.
-    pub fn from_key_pair(key_pair: Ed25519KeyPair) -> Self {
-        let der_encoded_public_key = der_encode_public_key(key_pair.public_key().as_ref().to_vec());
+    /// Create a `BasicIdentity` from a `SigningKey` from `ed25519-consensus`.
+    pub fn from_signing_key(key: SigningKey) -> Self {
+        let public_key = key.verification_key();
+        let der_encoded_public_key = der_encode_public_key(public_key.as_bytes().to_vec());
 
         Self {
-            key_pair,
+            private_key: KeyCompat::Standard(key),
             der_encoded_public_key,
+        }
+    }
+
+    /// Create a `BasicIdentity` from an `Ed25519KeyPair` from `ring`.
+    #[cfg(feature = "ring")]
+    pub fn from_key_pair(key_pair: ring::signature::Ed25519KeyPair) -> Self {
+        use ring::signature::KeyPair;
+        let der_encoded_public_key = der_encode_public_key(key_pair.public_key().as_ref().to_vec());
+        Self {
+            private_key: KeyCompat::Ring(key_pair),
+            der_encoded_public_key,
+        }
+    }
+}
+
+enum KeyCompat {
+    Standard(SigningKey),
+    #[cfg(feature = "ring")]
+    Ring(ring::signature::Ed25519KeyPair),
+}
+
+impl KeyCompat {
+    fn sign(&self, payload: &[u8]) -> Vec<u8> {
+        match self {
+            Self::Standard(k) => k.sign(payload).to_bytes().to_vec(),
+            #[cfg(feature = "ring")]
+            Self::Ring(k) => k.sign(payload).as_ref().to_vec(),
         }
     }
 }
@@ -75,9 +134,9 @@ impl Identity for BasicIdentity {
     }
 
     fn sign_arbitrary(&self, content: &[u8]) -> Result<Signature, String> {
-        let signature = self.key_pair.sign(content);
+        let signature = self.private_key.sign(content);
         Ok(Signature {
-            signature: Some(signature.as_ref().to_vec()),
+            signature: Some(signature),
             public_key: self.public_key(),
             delegations: None,
         })

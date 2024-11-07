@@ -90,11 +90,11 @@ impl RoundRobinRouteProvider {
                     // rewrite *.ic0.app to ic0.app
                     if let Some(domain) = url.domain() {
                         if domain.ends_with(IC0_SUB_DOMAIN) {
-                            url.set_host(Some(IC0_DOMAIN))?
+                            url.set_host(Some(IC0_DOMAIN))?;
                         } else if domain.ends_with(ICP0_SUB_DOMAIN) {
-                            url.set_host(Some(ICP0_DOMAIN))?
+                            url.set_host(Some(ICP0_DOMAIN))?;
                         } else if domain.ends_with(ICP_API_SUB_DOMAIN) {
-                            url.set_host(Some(ICP_API_DOMAIN))?
+                            url.set_host(Some(ICP_API_DOMAIN))?;
                         } else if domain.ends_with(LOCALHOST_SUB_DOMAIN) {
                             url.set_host(Some(LOCALHOST_DOMAIN))?;
                         }

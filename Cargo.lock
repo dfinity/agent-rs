@@ -1006,9 +1006,9 @@ dependencies = [
 
 [[package]]
 name = "hyper-rustls"
-version = "0.27.2"
+version = "0.27.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ee4be2c948921a1a5320b629c4193916ed787a7f7f293fd3f7f5a6c9de74155"
+checksum = "08afdbb5c31130e3034af566421053ab03787c640246a446327f550d11bcb333"
 dependencies = [
  "futures-util",
  "http",
@@ -1044,7 +1044,7 @@ dependencies = [
 
 [[package]]
 name = "ic-agent"
-version = "0.37.1"
+version = "0.39.1"
 dependencies = [
  "arc-swap",
  "async-channel",
@@ -1054,7 +1054,10 @@ dependencies = [
  "backoff",
  "cached",
  "candid",
+ "der",
+ "ecdsa",
  "ed25519-consensus",
+ "elliptic-curve",
  "futures-util",
  "getrandom",
  "hex",
@@ -1074,7 +1077,6 @@ dependencies = [
  "rangemap",
  "reqwest",
  "ring",
- "rustls-webpki",
  "sec1",
  "serde",
  "serde_bytes",
@@ -1087,6 +1089,7 @@ dependencies = [
  "thiserror",
  "time",
  "tokio",
+ "tower-service",
  "tracing",
  "tracing-subscriber",
  "url",
@@ -1110,7 +1113,7 @@ dependencies = [
 
 [[package]]
 name = "ic-identity-hsm"
-version = "0.37.1"
+version = "0.39.1"
 dependencies = [
  "hex",
  "ic-agent",
@@ -1122,7 +1125,7 @@ dependencies = [
 
 [[package]]
 name = "ic-transport-types"
-version = "0.37.1"
+version = "0.39.1"
 dependencies = [
  "candid",
  "hex",
@@ -1130,6 +1133,7 @@ dependencies = [
  "leb128",
  "serde",
  "serde_bytes",
+ "serde_cbor",
  "serde_json",
  "serde_repr",
  "sha2 0.10.8",
@@ -1138,14 +1142,15 @@ dependencies = [
 
 [[package]]
 name = "ic-utils"
-version = "0.37.1"
+version = "0.39.1"
 dependencies = [
  "async-trait",
  "candid",
+ "ed25519-consensus",
  "futures-util",
  "ic-agent",
  "once_cell",
- "ring",
+ "rand",
  "semver",
  "serde",
  "serde_bytes",
@@ -1201,17 +1206,18 @@ dependencies = [
 
 [[package]]
 name = "icx"
-version = "0.37.1"
+version = "0.39.1"
 dependencies = [
  "anyhow",
  "candid",
  "candid_parser",
  "clap",
+ "ed25519-consensus",
  "hex",
  "humantime",
  "ic-agent",
  "ic-utils",
- "ring",
+ "rand",
  "serde",
  "serde_json",
  "tokio",
@@ -1219,7 +1225,7 @@ dependencies = [
 
 [[package]]
 name = "icx-cert"
-version = "0.37.1"
+version = "0.39.1"
 dependencies = [
  "anyhow",
  "base64",
@@ -1305,9 +1311,9 @@ dependencies = [
 
 [[package]]
 name = "k256"
-version = "0.13.3"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "956ff9b67e26e1a6a866cb758f12c6f8746208489e3e4a4b5580802f2f0a587b"
+checksum = "f6e3919bbaa2945715f0bb6d3934a173d1e9a59ac23767fbaaef277265a7411b"
 dependencies = [
  "cfg-if",
  "ecdsa",
@@ -1827,9 +1833,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.6"
+version = "0.11.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba92fb39ec7ad06ca2582c0ca834dfeadcaf06ddfc8e635c80aa7e1c05315fdd"
+checksum = "fadfaed2cd7f389d0161bb73eeb07b7b78f8691047a6f3e73caaeae55310a4a6"
 dependencies = [
  "bytes",
  "rand",
@@ -1925,11 +1931,14 @@ name = "ref-tests"
 version = "0.0.0"
 dependencies = [
  "candid",
+ "ed25519-consensus",
  "ic-agent",
  "ic-certification",
  "ic-identity-hsm",
  "ic-utils",
- "ring",
+ "k256",
+ "p256",
+ "rand",
  "serde",
  "serde_cbor",
  "sha2 0.10.8",
@@ -2079,15 +2088,15 @@ dependencies = [
 
 [[package]]
 name = "rustls-pki-types"
-version = "1.8.0"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc0a2ce646f8655401bb81e7927b812614bd5d91dbc968696be50603510fcaf0"
+checksum = "0e696e35370c65c9c541198af4543ccd580cf17fc25d8e05c5a242b202488c55"
 
 [[package]]
 name = "rustls-webpki"
-version = "0.102.6"
+version = "0.102.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e6b52d4fda176fd835fdc55a835d4a89b8499cad995885a21149d5ad62f852e"
+checksum = "64ca1bc8749bd4cf37b5ce386cc146580777b4e8572c7b97baf22c83f444bee9"
 dependencies = [
  "ring",
  "rustls-pki-types",

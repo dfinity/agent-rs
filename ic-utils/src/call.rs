@@ -33,7 +33,7 @@ pub trait SyncCall: CallIntoFuture<Output = Result<Self::Value, AgentError>> {
 }
 
 /// A type that implements asynchronous calls (ie. 'update' calls).
-/// This can call synchronous and return a [RequestId], or it can wait for the result
+/// This can call synchronous and return a [`RequestId`](ic_agent::RequestId), or it can wait for the result
 /// by polling the agent, and return a type.
 ///
 /// The return type must be a tuple type that represents all the values the return
@@ -43,15 +43,15 @@ pub trait SyncCall: CallIntoFuture<Output = Result<Self::Value, AgentError>> {
 pub trait AsyncCall: CallIntoFuture<Output = Result<Self::Value, AgentError>> {
     /// The return type of the Candid function being called.
     type Value: for<'de> ArgumentDecoder<'de> + Send;
-    /// Execute the call, but returns the RequestId. Waiting on the request Id must be
+    /// Execute the call, but returns the `RequestId`. Waiting on the request Id must be
     /// managed by the caller using the Agent directly.
     ///
     /// Since the return type is encoded in the trait itself, this can lead to types
     /// that are not compatible to `Out` when getting the result from the Request Id.
     /// For example, you might hold a [`AsyncCall<u8>`], use `call()` and poll for
-    /// the result, and try to deserialize it as a [String]. This would be caught by
-    /// Rust type system, but in this case it will be checked at runtime (as Request
-    /// Id does not have a type associated with it).
+    /// the result, and try to deserialize it as a [`String`]. This would be caught by
+    /// Rust type system, but in this case it will be checked at runtime (as `RequestId`
+    /// does not have a type associated with it).
     async fn call(self) -> Result<CallResponse<Self::Value>, AgentError>;
 
     /// Execute the call, and wait for an answer using an exponential-backoff strategy. The return
@@ -72,13 +72,8 @@ pub trait AsyncCall: CallIntoFuture<Output = Result<Self::Value, AgentError>> {
     /// async fn create_a_canister() -> Result<Principal, Box<dyn std::error::Error>> {
     /// # let canister_wasm = b"\0asm\x01\0\0\0";
     /// # fn create_identity() -> impl Identity {
-    /// #     let rng = ring::rand::SystemRandom::new();
-    /// #     let key_pair = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
-    /// #         .expect("Could not generate a key pair.");
-    /// #
-    /// #     BasicIdentity::from_key_pair(
-    /// #         ring::signature::Ed25519KeyPair::from_pkcs8(key_pair.as_ref())
-    /// #           .expect("Could not read the key pair."),
+    /// #     BasicIdentity::from_signing_key(
+    /// #         ed25519_consensus::SigningKey::new(rand::thread_rng()),
     /// #     )
     /// # }
     /// #
@@ -246,7 +241,7 @@ impl<'agent, Out> AsyncCaller<'agent, Out>
 where
     Out: for<'de> ArgumentDecoder<'de> + Send + 'agent,
 {
-    /// Build an UpdateBuilder call that can be used directly with the [Agent]. This is
+    /// Build an `UpdateBuilder` call that can be used directly with the [Agent]. This is
     /// essentially downleveling this type into the lower level [ic-agent] abstraction.
     pub fn build_call(self) -> Result<UpdateBuilder<'agent>, AgentError> {
         let mut builder = self.agent.update(&self.canister_id, &self.method_name);
@@ -260,7 +255,7 @@ where
     /// See [`AsyncCall::call`].
     pub async fn call(self) -> Result<CallResponse<Out>, AgentError> {
         let response_bytes = match self.build_call()?.call().await? {
-            CallResponse::Response(response_bytes) => response_bytes,
+            CallResponse::Response((response_bytes, _)) => response_bytes,
             CallResponse::Poll(request_id) => return Ok(CallResponse::Poll(request_id)),
         };
 
@@ -325,7 +320,7 @@ where
     }
 }
 
-/// An AsyncCall that applies a transform function to the result of the call. Because of
+/// An `AsyncCall` that applies a transform function to the result of the call. Because of
 /// constraints on the type system in Rust, both the input and output to the function must be
 /// deserializable.
 pub struct AndThenAsyncCaller<

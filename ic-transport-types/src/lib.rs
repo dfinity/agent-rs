@@ -16,7 +16,8 @@ use thiserror::Error;
 mod request_id;
 pub mod signed;
 
-/// The authentication envelope, containing the contents and their signature.
+/// The authentication envelope, containing the contents and their signature. This struct can be passed to `Agent`'s
+/// `*_signed` methods via [`encode_bytes`](Envelope::encode_bytes).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct Envelope<'a> {
@@ -32,6 +33,17 @@ pub struct Envelope<'a> {
     /// The chain of delegations connecting `sender_pubkey` to `sender_sig`, and in that order.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sender_delegation: Option<Vec<SignedDelegation>>,
+}
+
+impl Envelope<'_> {
+    /// Convert the authentication envelope to the format expected by the IC HTTP interface. The result can be passed to `Agent`'s `*_signed` methods.
+    pub fn encode_bytes(&self) -> Vec<u8> {
+        let mut serializer = serde_cbor::Serializer::new(Vec::new());
+        serializer.self_describe().unwrap();
+        self.serialize(&mut serializer)
+            .expect("infallible Envelope::serialize");
+        serializer.into_inner()
+    }
 }
 
 /// The content of an IC ingress message, not including any signature information.
@@ -181,7 +193,7 @@ impl<T> CallResponse<Option<T>> {
 }
 
 impl<T> CallResponse<(T,)> {
-    /// Extracts the inner value of a 1-tuple, if this is `Response`.`
+    /// Extracts the inner value of a 1-tuple, if this is `Response`.
     #[inline]
     pub fn detuple(self) -> CallResponse<T> {
         match self {
@@ -260,10 +272,8 @@ impl QueryResponse {
 
     /// Helper function to get the signatures field present in both variants.
     pub fn signatures(&self) -> &[NodeSignature] {
-        match self {
-            Self::Rejected { signatures, .. } => signatures,
-            Self::Replied { signatures, .. } => signatures,
-        }
+        let (Self::Rejected { signatures, .. } | Self::Replied { signatures, .. }) = self;
+        signatures
     }
 }
 

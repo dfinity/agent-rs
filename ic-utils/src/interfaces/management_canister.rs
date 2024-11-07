@@ -51,7 +51,7 @@ pub enum MgmtMethod {
     DepositCycles,
     /// See [`ManagementCanister::raw_rand`].
     RawRand,
-    /// See [`ManagementCanister::provisional_create_canister_with_cycles`].
+    /// See [`CreateCanisterBuilder::as_provisional_create_with_amount`].
     ProvisionalCreateCanisterWithCycles,
     /// See [`ManagementCanister::provisional_top_up_canister`].
     ProvisionalTopUpCanister,
@@ -89,6 +89,8 @@ pub enum MgmtMethod {
     BitcoinSendTransaction,
     /// There is no corresponding agent function as only canisters can call it. Use [`BitcoinCanister`](super::BitcoinCanister) instead.
     BitcoinGetCurrentFeePercentiles,
+    /// There is no corresponding agent function as only canisters can call it. Use [`BitcoinCanister`](super::BitcoinCanister) instead.
+    BitcoinGetBlockHeaders,
     /// There is no corresponding agent function as only canisters can call it.
     NodeMetricsHistory,
 }
@@ -112,7 +114,7 @@ impl<'agent> ManagementCanister<'agent> {
 }
 
 /// The complete canister status information of a canister. This includes
-/// the CanisterStatus, a hash of the module installed on the canister (None if nothing installed),
+/// the `CanisterStatus`, a hash of the module installed on the canister (None if nothing installed),
 /// the controller of the canister, the canister's memory size, and its balance in cycles.
 #[derive(Clone, Debug, Deserialize, CandidType)]
 pub struct StatusCallResult {
@@ -149,7 +151,7 @@ pub struct QueryStats {
 }
 
 /// Log visibility for a canister.
-#[derive(Default, Clone, Copy, CandidType, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Default, Clone, CandidType, Deserialize, Debug, PartialEq, Eq)]
 pub enum LogVisibility {
     #[default]
     #[serde(rename = "controllers")]
@@ -158,6 +160,9 @@ pub enum LogVisibility {
     #[serde(rename = "public")]
     /// Canister logs are visible to everyone.
     Public,
+    #[serde(rename = "allowed_viewers")]
+    /// Canister logs are visible to a set of principals.
+    AllowedViewers(Vec<Principal>),
 }
 
 /// The concrete settings of a canister.
@@ -233,10 +238,10 @@ pub struct ChunkHash {
     pub hash: Vec<u8>,
 }
 
-/// Return type of [ManagementCanister::stored_chunks].
+/// Return type of [`ManagementCanister::stored_chunks`].
 pub type StoreChunksResult = Vec<ChunkHash>;
 
-/// Return type of [ManagementCanister::upload_chunk].
+/// Return type of [`ManagementCanister::upload_chunk`].
 pub type UploadChunkResult = ChunkHash;
 
 /// A recorded snapshot of a canister. Can be restored with [`ManagementCanister::load_canister_snapshot`].
@@ -308,9 +313,9 @@ impl<'agent> ManagementCanister<'agent> {
     }
 
     /// Until developers can convert real ICP tokens to a top up an existing canister,
-    /// the system provides the provisional_top_up_canister method.
+    /// the system provides the `provisional_top_up_canister` method.
     /// It adds amount cycles to the balance of canister identified by amount
-    /// (implicitly capping it at MAX_CANISTER_BALANCE).
+    /// (implicitly capping it at `MAX_CANISTER_BALANCE`).
     pub fn provisional_top_up_canister(
         &self,
         canister_id: &Principal,

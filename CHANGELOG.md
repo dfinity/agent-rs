@@ -8,9 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.39.0]
+
+* The lower-level update call functions now return the certificate in addition to the parsed response data.
+* Make ingress_expiry required and set the default value to 3 min.
+* Changed `BasicIdentity`'s implementation from `ring` to `ed25519-consensus`.
+* Added `AgentBuilder::with_max_polling_time` to config the maximum time to wait for a response from the replica.
+* `DelegatedIdentity::new` now checks the delegation chain. The old behavior is available under `new_unchecked`.
+
+## [0.38.2] - 2024-09-30
+
+* Limited the number of HTTP 429 retries. Users receiving this error should configure `with_max_concurrent_requests`.
+* Added `Envelope::encode_bytes` and `Query/UpdateBuilder::into_envelope` for external signing workflows.
+* Added `AgentBuilder::with_arc_http_middleware` for `Transport`-like functionality at the level of HTTP requests.
+* Add support for dynamic routing based on boundary node discovery. This is an internal feature for now, with a feature flag `_internal_dynamic-routing`.
+
+## [0.38.1] - 2024-09-23
+
+* Fix `ic-agent` manifest so that documentation can be built for docs.rs.
+
+## [0.38.0] - 2024-09-20
+
 * Breaking: Removed `Transport` and the `hyper` and `reqwest` features. `ReqwestTransport` is now the default and `HyperTransport` has been removed. Existing `ReqwestTransport` functions have been moved to `AgentBuilder`.
 * `Url` now implements `RouteProvider`.
 * Add canister snapshot methods to `ManagementCanister`.
+* Add `AllowedViewers` to `LogVisibility` enum.
+* Remove the cargo feature, `experimental_sync_call`, and enable synchronous update calls by default. 
 
 ## [0.37.1] - 2024-07-25
 

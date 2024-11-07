@@ -8,10 +8,13 @@ publish = false
 
 [dependencies]
 candid = { workspace = true }
+ed25519-consensus = { workspace = true }
 ic-agent = { path = "../ic-agent" }
 ic-identity-hsm = { path = "../ic-identity-hsm" }
 ic-utils = { path = "../ic-utils", features = ["raw"] }
-ring = { workspace = true }
+k256 = { workspace = true }
+p256 = { workspace = true }
+rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 sha2 = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
@@ -19,6 +22,3 @@ tokio = { workspace = true, features = ["full"] }
 [dev-dependencies]
 serde_cbor = { workspace = true }
 ic-certification = { workspace = true }
-
-[features]
-experimental_sync_call = ["ic-agent/experimental_sync_call"]

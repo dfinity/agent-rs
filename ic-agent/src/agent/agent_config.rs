@@ -1,11 +1,12 @@
+use reqwest::Client;
+
 use crate::{
     agent::{NonceFactory, NonceGenerator},
     identity::{anonymous::AnonymousIdentity, Identity},
 };
-use reqwest::Client;
 use std::{sync::Arc, time::Duration};
 
-use super::{route_provider::RouteProvider, IC_ROOT_KEY};
+use super::{route_provider::RouteProvider, HttpService};
 
 /// A configuration for an agent.
 #[derive(Clone)]
@@ -16,7 +17,7 @@ pub struct AgentConfig {
     /// See [`with_identity`](super::AgentBuilder::with_identity).
     pub identity: Arc<dyn Identity>,
     /// See [`with_ingress_expiry`](super::AgentBuilder::with_ingress_expiry).
-    pub ingress_expiry: Option<Duration>,
+    pub ingress_expiry: Duration,
     /// See [`with_http_client`](super::AgentBuilder::with_http_client).
     pub client: Option<Client>,
     /// See [`with_route_provider`](super::AgentBuilder::with_route_provider).
@@ -29,11 +30,12 @@ pub struct AgentConfig {
     pub max_response_body_size: Option<usize>,
     /// See [`with_max_tcp_error_retries`](super::AgentBuilder::with_max_tcp_error_retries).
     pub max_tcp_error_retries: usize,
-    /// See [`with_call_v3_endpoint`](super::AgentBuilder::with_call_v3_endpoint).
-    #[cfg(feature = "experimental_sync_call")]
-    pub use_call_v3_endpoint: bool,
     /// See [`with_preset_root_key`](super::AgentBuilder::with_preset_root_key).
     pub root_key: Option<Vec<u8>>,
+    /// See [`with_arc_http_middleware`](super::AgentBuilder::with_arc_http_middleware).
+    pub http_service: Option<Arc<dyn HttpService>>,
+    /// See [`with_max_polling_time`](super::AgentBuilder::with_max_polling_time).
+    pub max_polling_time: Duration,
 }
 
 impl Default for AgentConfig {
@@ -41,16 +43,16 @@ impl Default for AgentConfig {
         Self {
             nonce_factory: Arc::new(NonceFactory::random()),
             identity: Arc::new(AnonymousIdentity {}),
-            ingress_expiry: None,
+            ingress_expiry: Duration::from_secs(3 * 60),
             client: None,
+            http_service: None,
             verify_query_signatures: true,
             max_concurrent_requests: 50,
             route_provider: None,
             max_response_body_size: None,
             max_tcp_error_retries: 0,
-            #[cfg(feature = "experimental_sync_call")]
-            use_call_v3_endpoint: false,
             root_key: None,
+            max_polling_time: Duration::from_secs(60 * 5),
         }
     }
 }
