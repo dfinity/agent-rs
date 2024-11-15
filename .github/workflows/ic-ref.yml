@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         build: [linux-stable]
-        pocket-ic: ["0", "1"]
+        pocket-ic: ["replica", "pocketic"]
         include:
           - build: linux-stable
             ic-hs-ref: "3d71032e"
@@ -54,7 +54,7 @@ jobs:
       - name: Run Integration Tests
         run: |
           set -ex
-          if [[ "${{ matrix.pocket-ic }}" == "0" ]]
+          if [[ "${{ matrix.pocket-ic }}" == "replica" ]]
           then
             dfx start --background --clean
           else
@@ -64,7 +64,7 @@ jobs:
           export IC_REF_PORT=$(dfx info webserver-port)
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
           export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
-          if [[ "${{ matrix.pocket-ic }}" == "1" ]]
+          if [[ "${{ matrix.pocket-ic }}" == "pocketic" ]]
           then
             export POCKET_IC="http://localhost:${IC_REF_PORT}"
           fi
@@ -89,7 +89,7 @@ jobs:
           # create key:
           pkcs11-tool -k --module $HSM_PKCS11_LIBRARY_PATH --login --slot-index $HSM_SLOT_INDEX -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
 
-          if [[ "${{ matrix.pocket-ic }}" == "0" ]]
+          if [[ "${{ matrix.pocket-ic }}" == "replica" ]]
           then
             dfx start --background --clean
           else
@@ -99,7 +99,7 @@ jobs:
           export IC_REF_PORT=$(dfx info webserver-port)
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
           export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
-          if [[ "${{ matrix.pocket-ic }}" == "1" ]]
+          if [[ "${{ matrix.pocket-ic }}" == "pocketic" ]]
           then
             export POCKET_IC="http://localhost:${IC_REF_PORT}"
           fi
@@ -117,7 +117,7 @@ jobs:
       - name: Run Doc Tests
         run: |
           set -ex
-          if [[ "${{ matrix.pocket-ic }}" == "0" ]]
+          if [[ "${{ matrix.pocket-ic }}" == "replica" ]]
           then
             dfx start --background --clean
           else
@@ -125,7 +125,7 @@ jobs:
           fi
           sleep 1
           export IC_REF_PORT=$(dfx info webserver-port)
-          if [[ "${{ matrix.pocket-ic }}" == "1" ]]
+          if [[ "${{ matrix.pocket-ic }}" == "pocketic" ]]
           then
             export POCKET_IC="http://localhost:${IC_REF_PORT}"
           fi
