@@ -323,6 +323,7 @@ pub fn get_effective_canister_id(
             | MgmtMethod::BitcoinGetUtxos
             | MgmtMethod::BitcoinSendTransaction
             | MgmtMethod::BitcoinGetCurrentFeePercentiles
+            | MgmtMethod::BitcoinGetBlockHeaders
             | MgmtMethod::EcdsaPublicKey
             | MgmtMethod::SignWithEcdsa
             | MgmtMethod::NodeMetricsHistory => {
