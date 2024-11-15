@@ -28,7 +28,7 @@ jobs:
       - name: Install dfx
         uses: dfinity/setup-dfx@main
         with:
-          dfx-version: "0.24.2-beta.0"
+          dfx-version: "0.24.1"
 
       - name: Cargo cache
         uses: actions/cache@v4
@@ -72,7 +72,7 @@ jobs:
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
           export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
           export POCKET_IC="http://localhost:${IC_REF_PORT}"
-          cargo test --all-features -- --ignored --test-threads=1 # TODO: drop --test-threads=1
+          cargo test --all-features -- --ignored
           dfx stop
         env:
           RUST_BACKTRACE: 1
@@ -147,7 +147,7 @@ jobs:
           sleep 1
           export IC_REF_PORT=$(dfx info webserver-port)
           export POCKET_IC="http://localhost:${IC_REF_PORT}"
-          cargo test --all-features --doc -- --ignored --test-threads=1 # TODO: drop --test-threads=1
+          cargo test --all-features --doc -- --ignored
           dfx stop
         env:
           RUST_BACKTRACE: 1

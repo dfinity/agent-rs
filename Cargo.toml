@@ -35,7 +35,7 @@ futures-util = "0.3.21"
 hex = "0.4.3"
 k256 = "0.13.4"
 leb128 = "0.2.5"
-pocket-ic = { git = "https://github.com/dfinity/ic", rev = "f2b767f15611fe8594a76cf21250e26524b07615" }
+pocket-ic = "6.0.0"
 p256 = "0.13.2"
 rand = "0.8.5"
 reqwest = { version = "0.12", default-features = false }
