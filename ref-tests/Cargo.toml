@@ -14,6 +14,7 @@ ic-identity-hsm = { path = "../ic-identity-hsm" }
 ic-utils = { path = "../ic-utils", features = ["raw"] }
 k256 = { workspace = true }
 p256 = { workspace = true }
+pocket-ic = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 sha2 = { workspace = true }

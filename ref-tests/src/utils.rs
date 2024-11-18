@@ -10,9 +10,18 @@ const HSM_PKCS11_LIBRARY_PATH: &str = "HSM_PKCS11_LIBRARY_PATH";
 const HSM_SLOT_INDEX: &str = "HSM_SLOT_INDEX";
 const HSM_KEY_ID: &str = "HSM_KEY_ID";
 const HSM_PIN: &str = "HSM_PIN";
+const POCKET_IC: &str = "POCKET_IC";
 
-pub fn get_effective_canister_id() -> Principal {
-    Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap()
+pub async fn get_effective_canister_id() -> Principal {
+    let default_effective_canister_id =
+        Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap();
+    if let Ok(pocket_ic_url) = std::env::var(POCKET_IC) {
+        pocket_ic::nonblocking::get_default_effective_canister_id(pocket_ic_url)
+            .await
+            .unwrap_or(default_effective_canister_id)
+    } else {
+        default_effective_canister_id
+    }
 }
 
 pub fn create_identity() -> Result<Box<dyn Identity>, String> {
@@ -149,7 +158,7 @@ pub async fn create_universal_canister(agent: &Agent) -> Result<Principal, Box<d
     let (canister_id,) = ic00
         .create_canister()
         .as_provisional_create_with_amount(None)
-        .with_effective_canister_id(get_effective_canister_id())
+        .with_effective_canister_id(get_effective_canister_id().await)
         .call_and_wait()
         .await?;
 
@@ -185,7 +194,7 @@ pub async fn create_wallet_canister(
     let (canister_id,) = ic00
         .create_canister()
         .as_provisional_create_with_amount(cycles)
-        .with_effective_canister_id(get_effective_canister_id())
+        .with_effective_canister_id(get_effective_canister_id().await)
         .with_memory_allocation(
             MemoryAllocation::try_from(8000000000_u64)
                 .expect("Memory allocation must be between 0 and 2^48 (i.e 256TB), inclusively."),

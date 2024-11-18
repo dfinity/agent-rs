@@ -28,6 +28,7 @@ hex = { workspace = true }
 humantime = "2.0.1"
 ic-agent = { workspace = true, default-features = true }
 ic-utils = { workspace = true }
+pocket-ic = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

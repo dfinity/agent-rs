@@ -392,8 +392,18 @@ mod tests {
     use ic_agent::identity::BasicIdentity;
     use rand::thread_rng;
 
-    fn get_effective_canister_id() -> Principal {
-        Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap()
+    const POCKET_IC: &str = "POCKET_IC";
+
+    async fn get_effective_canister_id() -> Principal {
+        let default_effective_canister_id =
+            Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap();
+        if let Ok(pocket_ic_url) = std::env::var(POCKET_IC) {
+            pocket_ic::nonblocking::get_default_effective_canister_id(pocket_ic_url)
+                .await
+                .unwrap_or(default_effective_canister_id)
+        } else {
+            default_effective_canister_id
+        }
     }
 
     #[ignore]
@@ -423,7 +433,7 @@ mod tests {
         let (new_canister_id,) = management_canister
             .create_canister()
             .as_provisional_create_with_amount(None)
-            .with_effective_canister_id(get_effective_canister_id())
+            .with_effective_canister_id(get_effective_canister_id().await)
             .call_and_wait()
             .await
             .unwrap();
