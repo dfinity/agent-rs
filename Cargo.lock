@@ -1066,6 +1066,7 @@ dependencies = [
  "ic-certification",
  "ic-transport-types",
  "ic-verify-bls-signature",
+ "indexmap",
  "js-sys",
  "k256",
  "leb128",

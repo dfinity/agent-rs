@@ -5,8 +5,11 @@ use std::{
 
 use rand::Rng;
 
-use crate::agent::route_provider::dynamic_routing::{
-    health_check::HealthCheckStatus, node::Node, snapshot::routing_snapshot::RoutingSnapshot,
+use crate::agent::{
+    route_provider::dynamic_routing::{
+        health_check::HealthCheckStatus, snapshot::routing_snapshot::RoutingSnapshot,
+    },
+    ApiBoundaryNode,
 };
 
 // Determines the size of the sliding window used for storing latencies and availabilities of nodes.
@@ -24,12 +27,12 @@ fn generate_exp_decaying_weights(n: usize, lambda: f64) -> Vec<f64> {
     weights
 }
 
-// Node with meta information and metrics (latencies, availabilities).
+// ApiBoundaryNode with meta information and metrics (latencies, availabilities).
 // Routing URLs a generated based on the score field.
 #[derive(Clone, Debug)]
-struct NodeWithMetrics {
-    // Node information.
-    node: Node,
+struct ApiBoundaryNodeWithMetrics {
+    // ApiBoundaryNode information.
+    node: ApiBoundaryNode,
     // Size of the sliding window used for store latencies and availabilities of the node.
     window_size: usize,
     /// Reflects the status of the most recent health check. It should be the same as the last element in `availabilities`.
@@ -42,8 +45,8 @@ struct NodeWithMetrics {
     score: f64,
 }
 
-impl NodeWithMetrics {
-    pub fn new(node: Node, window_size: usize) -> Self {
+impl ApiBoundaryNodeWithMetrics {
+    pub fn new(node: ApiBoundaryNode, window_size: usize) -> Self {
         Self {
             node,
             window_size,
@@ -152,11 +155,11 @@ fn compute_score(
 
 /// Routing snapshot for latency-based routing.
 /// In this routing strategy, nodes are randomly selected based on their averaged latency of the last WINDOW_SIZE health checks.
-/// Nodes with smaller average latencies are preferred for routing.
+/// ApiBoundaryNodes with smaller average latencies are preferred for routing.
 #[derive(Default, Debug, Clone)]
 pub struct LatencyRoutingSnapshot {
-    nodes_with_metrics: Vec<NodeWithMetrics>,
-    existing_nodes: HashSet<Node>,
+    nodes_with_metrics: Vec<ApiBoundaryNodeWithMetrics>,
+    existing_nodes: HashSet<ApiBoundaryNode>,
     window_weights: Vec<f64>,
     window_weights_sum: f64,
     use_availability_penalty: bool,
@@ -198,7 +201,7 @@ impl LatencyRoutingSnapshot {
 /// Helper function to sample nodes based on their weights.
 /// Here weight index is selected based on the input number in range [0, 1]
 #[inline(always)]
-fn weighted_sample(weighted_nodes: &[(f64, &Node)], number: f64) -> Option<usize> {
+fn weighted_sample(weighted_nodes: &[(f64, &ApiBoundaryNode)], number: f64) -> Option<usize> {
     if !(0.0..=1.0).contains(&number) {
         return None;
     }
@@ -218,12 +221,12 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
         self.nodes_with_metrics.iter().any(|n| n.is_healthy)
     }
 
-    fn next_node(&self) -> Option<Node> {
+    fn next_node(&self) -> Option<ApiBoundaryNode> {
         self.next_n_nodes(1).into_iter().next()
     }
 
-    // Uses weighted random sampling algorithm n times. Node can be selected at most once (sampling without replacement).
-    fn next_n_nodes(&self, n: usize) -> Vec<Node> {
+    // Uses weighted random sampling algorithm n times. ApiBoundaryNode can be selected at most once (sampling without replacement).
+    fn next_n_nodes(&self, n: usize) -> Vec<ApiBoundaryNode> {
         if n == 0 {
             return Vec::new();
         }
@@ -257,7 +260,7 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
         nodes
     }
 
-    fn sync_nodes(&mut self, nodes: &[Node]) -> bool {
+    fn sync_nodes(&mut self, nodes: &[ApiBoundaryNode]) -> bool {
         let new_nodes = HashSet::from_iter(nodes.iter().cloned());
         // Find nodes removed from topology.
         let nodes_removed: Vec<_> = self
@@ -284,7 +287,7 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
         has_added_nodes || has_removed_nodes
     }
 
-    fn update_node(&mut self, node: &Node, health: HealthCheckStatus) -> bool {
+    fn update_node(&mut self, node: &ApiBoundaryNode, health: HealthCheckStatus) -> bool {
         // Skip the update if the node is not in the existing nodes.
         if !self.existing_nodes.contains(node) {
             return false;
@@ -295,7 +298,7 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
             .iter()
             .position(|x| &x.node == node)
             .unwrap_or_else(|| {
-                let node = NodeWithMetrics::new(node.clone(), self.window_weights.len());
+                let node = ApiBoundaryNodeWithMetrics::new(node.clone(), self.window_weights.len());
                 self.nodes_with_metrics.push(node);
                 self.nodes_with_metrics.len() - 1
             });
@@ -323,13 +326,13 @@ mod tests {
 
     use crate::agent::route_provider::dynamic_routing::{
         health_check::HealthCheckStatus,
-        node::Node,
         snapshot::{
             latency_based_routing::{
-                compute_score, weighted_sample, LatencyRoutingSnapshot, NodeWithMetrics,
+                compute_score, weighted_sample, ApiBoundaryNodeWithMetrics, LatencyRoutingSnapshot,
             },
             routing_snapshot::RoutingSnapshot,
         },
+        test_utils::mock_node,
     };
 
     #[test]
@@ -348,7 +351,7 @@ mod tests {
     fn test_update_for_non_existing_node_fails() {
         // Arrange
         let mut snapshot = LatencyRoutingSnapshot::new();
-        let node = Node::new("api1.com").unwrap();
+        let node = mock_node("api1");
         let health = HealthCheckStatus::new(Some(Duration::from_secs(1)));
         // Act
         let is_updated = snapshot.update_node(&node, health);
@@ -365,7 +368,7 @@ mod tests {
         let mut snapshot = LatencyRoutingSnapshot::new()
             .set_window_weights(&[2.0, 1.0])
             .set_availability_penalty(false);
-        let node = Node::new("api1.com").unwrap();
+        let node = mock_node("api1");
         let health = HealthCheckStatus::new(Some(Duration::from_secs(1)));
         snapshot.existing_nodes.insert(node.clone());
         // Check first update
@@ -404,7 +407,7 @@ mod tests {
         // Arrange
         let window_size = 1;
         let mut snapshot = LatencyRoutingSnapshot::new();
-        let node_1 = Node::new("api1.com").unwrap();
+        let node_1 = mock_node("api1.com");
         // Sync with node_1
         let nodes_changed = snapshot.sync_nodes(&[node_1.clone()]);
         assert!(nodes_changed);
@@ -416,7 +419,7 @@ mod tests {
         // Add node_1 to weighted_nodes manually
         snapshot
             .nodes_with_metrics
-            .push(NodeWithMetrics::new(node_1.clone(), window_size));
+            .push(ApiBoundaryNodeWithMetrics::new(node_1.clone(), window_size));
         // Sync with node_1 again
         let nodes_changed = snapshot.sync_nodes(&[node_1.clone()]);
         assert!(!nodes_changed);
@@ -426,7 +429,7 @@ mod tests {
         );
         assert_eq!(snapshot.nodes_with_metrics[0].node, node_1);
         // Sync with node_2
-        let node_2 = Node::new("api2.com").unwrap();
+        let node_2 = mock_node("api2");
         let nodes_changed = snapshot.sync_nodes(&[node_2.clone()]);
         assert!(nodes_changed);
         assert_eq!(
@@ -438,9 +441,9 @@ mod tests {
         // Add node_2 to weighted_nodes manually
         snapshot
             .nodes_with_metrics
-            .push(NodeWithMetrics::new(node_2.clone(), window_size));
+            .push(ApiBoundaryNodeWithMetrics::new(node_2.clone(), window_size));
         // Sync with [node_2, node_3]
-        let node_3 = Node::new("api3.com").unwrap();
+        let node_3 = mock_node("api3");
         let nodes_changed = snapshot.sync_nodes(&[node_3.clone(), node_2.clone()]);
         assert!(nodes_changed);
         assert_eq!(
@@ -451,7 +454,7 @@ mod tests {
         // Add node_3 to weighted_nodes manually
         snapshot
             .nodes_with_metrics
-            .push(NodeWithMetrics::new(node_3, window_size));
+            .push(ApiBoundaryNodeWithMetrics::new(node_3, window_size));
         // Sync with []
         let nodes_changed = snapshot.sync_nodes(&[]);
         assert!(nodes_changed);
@@ -467,13 +470,13 @@ mod tests {
 
     #[test]
     fn test_weighted_sample() {
-        let node = &Node::new("api1.com").unwrap();
+        let node = mock_node("api1");
         // Case 1: empty array
         let arr = &[];
         let idx = weighted_sample(arr, 0.5);
         assert_eq!(idx, None);
         // Case 2: single element in array
-        let arr = &[(1.0, node)];
+        let arr = &[(1.0, &node)];
         let idx = weighted_sample(arr, 0.0);
         assert_eq!(idx, Some(0));
         let idx = weighted_sample(arr, 1.0);
@@ -484,7 +487,7 @@ mod tests {
         let idx = weighted_sample(arr, 1.1);
         assert_eq!(idx, None);
         // Case 3: two elements in array (second element has twice the weight of the first)
-        let arr = &[(1.0, node), (2.0, node)]; // // prefixed_sum = [1.0, 3.0]
+        let arr = &[(1.0, &node), (2.0, &node)]; // // prefixed_sum = [1.0, 3.0]
         let idx = weighted_sample(arr, 0.0); // 0.0 * 3.0 < 1.0
         assert_eq!(idx, Some(0));
         let idx = weighted_sample(arr, 0.33); // 0.33 * 3.0 < 1.0
@@ -499,7 +502,7 @@ mod tests {
         let idx = weighted_sample(arr, 1.1);
         assert_eq!(idx, None);
         // Case 4: four elements in array
-        let arr = &[(1.0, node), (2.0, node), (1.5, node), (2.5, node)]; // prefixed_sum = [1.0, 3.0, 4.5, 7.0]
+        let arr = &[(1.0, &node), (2.0, &node), (1.5, &node), (2.5, &node)]; // prefixed_sum = [1.0, 3.0, 4.5, 7.0]
         let idx = weighted_sample(arr, 0.14); // 0.14 * 7 < 1.0
         assert_eq!(idx, Some(0)); // probability ~0.14
         let idx = weighted_sample(arr, 0.15); // 0.15 * 7 > 1.0
@@ -598,15 +601,15 @@ mod tests {
 
         let window_size = 1;
 
-        let node_1 = Node::new("api1.com").unwrap();
-        let node_2 = Node::new("api2.com").unwrap();
-        let node_3 = Node::new("api3.com").unwrap();
-        let node_4 = Node::new("api4.com").unwrap();
+        let node_1 = mock_node("api1");
+        let node_2 = mock_node("api2");
+        let node_3 = mock_node("api3");
+        let node_4 = mock_node("api4");
 
-        let mut node_1 = NodeWithMetrics::new(node_1, window_size);
-        let mut node_2 = NodeWithMetrics::new(node_2, window_size);
-        let mut node_3 = NodeWithMetrics::new(node_3, window_size);
-        let mut node_4 = NodeWithMetrics::new(node_4, window_size);
+        let mut node_1 = ApiBoundaryNodeWithMetrics::new(node_1, window_size);
+        let mut node_2 = ApiBoundaryNodeWithMetrics::new(node_2, window_size);
+        let mut node_3 = ApiBoundaryNodeWithMetrics::new(node_3, window_size);
+        let mut node_4 = ApiBoundaryNodeWithMetrics::new(node_4, window_size);
 
         node_1.is_healthy = true;
         node_2.is_healthy = true;
@@ -633,8 +636,8 @@ mod tests {
         }
         for (node, count) in stats {
             println!(
-                "Node {:?} is selected with probability {}",
-                node.domain(),
+                "ApiBoundaryNode {:?} is selected with probability {}",
+                node.domain,
                 count as f64 / experiments as f64
             );
         }

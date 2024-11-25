@@ -6,7 +6,6 @@ use crate::{
         route_provider::{
             dynamic_routing::{
                 dynamic_route_provider::{DynamicRouteProviderBuilder, IC0_SEED_DOMAIN},
-                node::Node,
                 snapshot::latency_based_routing::LatencyRoutingSnapshot,
             },
             RouteProvider,
@@ -16,6 +15,8 @@ use crate::{
     AgentError, Identity, NonceFactory, NonceGenerator,
 };
 use std::sync::Arc;
+
+use super::ApiBoundaryNode;
 
 /// A builder for an [`Agent`].
 #[derive(Default)]
@@ -32,7 +33,11 @@ impl AgentBuilder {
     /// Set the dynamic transport layer for the [`Agent`], performing continuos discovery of the API boundary nodes and routing traffic via them based on the latencies.
     pub async fn with_discovery_transport(self, client: reqwest::Client) -> Self {
         // TODO: This is a temporary solution to get the seed node.
-        let seed = Node::new(IC0_SEED_DOMAIN).unwrap();
+        let seed = ApiBoundaryNode {
+            domain: IC0_SEED_DOMAIN.to_string(),
+            ipv4_address: None,
+            ipv6_address: None,
+        };
 
         let route_provider = DynamicRouteProviderBuilder::new(
             LatencyRoutingSnapshot::new(),
@@ -170,6 +175,11 @@ impl AgentBuilder {
     /// Set the maximum time to wait for a response from the replica.
     pub fn with_max_polling_time(mut self, max_polling_time: std::time::Duration) -> Self {
         self.config.max_polling_time = max_polling_time;
+        self
+    }
+    /// Sets a custom root key for a local replica.
+    pub fn with_preset_root_key(mut self, root_key: Vec<u8>) -> Self {
+        self.config.root_key = Some(root_key);
         self
     }
 }

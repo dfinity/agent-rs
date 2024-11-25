@@ -34,6 +34,7 @@ http-body = "1.0.0"
 ic-certification = { workspace = true }
 ic-transport-types = { workspace = true }
 ic-verify-bls-signature = "0.5"
+indexmap = "2.4"
 k256 = { workspace = true, features = ["pem"] }
 p256 = { workspace = true, features = ["pem"] }
 leb128 = { workspace = true }

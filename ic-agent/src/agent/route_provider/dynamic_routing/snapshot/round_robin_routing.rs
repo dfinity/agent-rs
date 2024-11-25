@@ -6,16 +6,19 @@ use std::{
     },
 };
 
-use crate::agent::route_provider::dynamic_routing::{
-    health_check::HealthCheckStatus, node::Node, snapshot::routing_snapshot::RoutingSnapshot,
+use crate::agent::{
+    route_provider::dynamic_routing::{
+        health_check::HealthCheckStatus, snapshot::routing_snapshot::RoutingSnapshot,
+    },
+    ApiBoundaryNode,
 };
 
 /// Routing snapshot, which samples nodes in a round-robin fashion.
 #[derive(Default, Debug, Clone)]
 pub struct RoundRobinRoutingSnapshot {
     current_idx: Arc<AtomicUsize>,
-    healthy_nodes: HashSet<Node>,
-    existing_nodes: HashSet<Node>,
+    healthy_nodes: HashSet<ApiBoundaryNode>,
+    existing_nodes: HashSet<ApiBoundaryNode>,
 }
 
 impl RoundRobinRoutingSnapshot {
@@ -34,7 +37,7 @@ impl RoutingSnapshot for RoundRobinRoutingSnapshot {
         !self.healthy_nodes.is_empty()
     }
 
-    fn next_node(&self) -> Option<Node> {
+    fn next_node(&self) -> Option<ApiBoundaryNode> {
         if self.healthy_nodes.is_empty() {
             return None;
         }
@@ -45,7 +48,7 @@ impl RoutingSnapshot for RoundRobinRoutingSnapshot {
             .cloned()
     }
 
-    fn next_n_nodes(&self, n: usize) -> Vec<Node> {
+    fn next_n_nodes(&self, n: usize) -> Vec<ApiBoundaryNode> {
         if n == 0 {
             return Vec::new();
         }
@@ -70,7 +73,7 @@ impl RoutingSnapshot for RoundRobinRoutingSnapshot {
         nodes
     }
 
-    fn sync_nodes(&mut self, nodes: &[Node]) -> bool {
+    fn sync_nodes(&mut self, nodes: &[ApiBoundaryNode]) -> bool {
         let new_nodes = HashSet::from_iter(nodes.iter().cloned());
         // Find nodes removed from topology.
         let nodes_removed: Vec<_> = self
@@ -96,7 +99,7 @@ impl RoutingSnapshot for RoundRobinRoutingSnapshot {
         has_added_nodes || has_removed_nodes
     }
 
-    fn update_node(&mut self, node: &Node, health: HealthCheckStatus) -> bool {
+    fn update_node(&mut self, node: &ApiBoundaryNode, health: HealthCheckStatus) -> bool {
         if !self.existing_nodes.contains(node) {
             return false;
         }
@@ -114,9 +117,9 @@ mod tests {
     use std::time::Duration;
     use std::{collections::HashSet, sync::atomic::Ordering};
 
+    use crate::agent::route_provider::dynamic_routing::test_utils::mock_node;
     use crate::agent::route_provider::dynamic_routing::{
         health_check::HealthCheckStatus,
-        node::Node,
         snapshot::{
             round_robin_routing::RoundRobinRoutingSnapshot, routing_snapshot::RoutingSnapshot,
         },
@@ -139,7 +142,7 @@ mod tests {
         // Arrange
         let mut snapshot = RoundRobinRoutingSnapshot::new();
         // This node is not present in existing_nodes
-        let node = Node::new("api1.com").unwrap();
+        let node = mock_node("api1");
         let healthy = HealthCheckStatus::new(Some(Duration::from_secs(1)));
         let unhealthy = HealthCheckStatus::new(None);
         // Act 1
@@ -160,7 +163,7 @@ mod tests {
     fn test_update_of_existing_unhealthy_node_with_healthy_node_returns_true() {
         // Arrange
         let mut snapshot = RoundRobinRoutingSnapshot::new();
-        let node = Node::new("api1.com").unwrap();
+        let node = mock_node("api1");
         // node is present in existing_nodes, but not in healthy_nodes
         snapshot.existing_nodes.insert(node.clone());
         let health = HealthCheckStatus::new(Some(Duration::from_secs(1)));
@@ -176,7 +179,7 @@ mod tests {
     fn test_update_of_existing_healthy_node_with_unhealthy_node_returns_true() {
         // Arrange
         let mut snapshot = RoundRobinRoutingSnapshot::new();
-        let node = Node::new("api1.com").unwrap();
+        let node = mock_node("api1");
         snapshot.existing_nodes.insert(node.clone());
         snapshot.healthy_nodes.insert(node.clone());
         let unhealthy = HealthCheckStatus::new(None);
@@ -191,7 +194,7 @@ mod tests {
     fn test_sync_node_scenarios() {
         // Arrange
         let mut snapshot = RoundRobinRoutingSnapshot::new();
-        let node_1 = Node::new("api1.com").unwrap();
+        let node_1 = mock_node("api1");
         // Sync with node_1
         let nodes_changed = snapshot.sync_nodes(&[node_1.clone()]);
         assert!(nodes_changed);
@@ -211,7 +214,7 @@ mod tests {
         );
         assert_eq!(snapshot.healthy_nodes, HashSet::from_iter(vec![node_1]));
         // Sync with node_2
-        let node_2 = Node::new("api2.com").unwrap();
+        let node_2 = mock_node("api2");
         let nodes_changed = snapshot.sync_nodes(&[node_2.clone()]);
         assert!(nodes_changed);
         assert_eq!(
@@ -223,7 +226,7 @@ mod tests {
         // Add node_2 to healthy_nodes manually
         snapshot.healthy_nodes.insert(node_2.clone());
         // Sync with [node_2, node_3]
-        let node_3 = Node::new("api3.com").unwrap();
+        let node_3 = mock_node("api3");
         let nodes_changed = snapshot.sync_nodes(&[node_3.clone(), node_2.clone()]);
         assert!(nodes_changed);
         assert_eq!(
@@ -248,9 +251,9 @@ mod tests {
     fn test_next_node() {
         // Arrange
         let mut snapshot = RoundRobinRoutingSnapshot::new();
-        let node_1 = Node::new("api1.com").unwrap();
-        let node_2 = Node::new("api2.com").unwrap();
-        let node_3 = Node::new("api3.com").unwrap();
+        let node_1 = mock_node("api1");
+        let node_2 = mock_node("api2");
+        let node_3 = mock_node("api3");
         let nodes = vec![node_1, node_2, node_3];
         snapshot.existing_nodes.extend(nodes.clone());
         snapshot.healthy_nodes.extend(nodes.clone());
@@ -282,11 +285,11 @@ mod tests {
     fn test_n_nodes() {
         // Arrange
         let mut snapshot = RoundRobinRoutingSnapshot::new();
-        let node_1 = Node::new("api1.com").unwrap();
-        let node_2 = Node::new("api2.com").unwrap();
-        let node_3 = Node::new("api3.com").unwrap();
-        let node_4 = Node::new("api4.com").unwrap();
-        let node_5 = Node::new("api5.com").unwrap();
+        let node_1 = mock_node("api1");
+        let node_2 = mock_node("api2");
+        let node_3 = mock_node("api3");
+        let node_4 = mock_node("api4");
+        let node_5 = mock_node("api5");
         let nodes = vec![
             node_1.clone(),
             node_2.clone(),

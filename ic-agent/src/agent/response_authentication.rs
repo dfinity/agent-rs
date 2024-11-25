@@ -233,9 +233,10 @@ pub(crate) fn lookup_api_boundary_nodes<Storage: AsRef<[u8]> + Clone>(
             String::from_utf8(lookup_value(&api_bn_tree, [node_id, domain_path])?.to_vec())
                 .map_err(|err| AgentError::Utf8ReadError(err.utf8_error()))?;
 
-        let ipv6_address =
+        let ipv6_address = Some(
             String::from_utf8(lookup_value(&api_bn_tree, [node_id, ipv6_path])?.to_vec())
-                .map_err(|err| AgentError::Utf8ReadError(err.utf8_error()))?;
+                .map_err(|err| AgentError::Utf8ReadError(err.utf8_error()))?,
+        );
 
         let ipv4_address = match lookup_value(&api_bn_tree, [node_id, ipv4_path]) {
             Ok(ipv4) => Some(

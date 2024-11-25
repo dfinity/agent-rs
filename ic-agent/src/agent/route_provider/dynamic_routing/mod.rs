@@ -4,8 +4,6 @@ pub mod dynamic_route_provider;
 pub mod health_check;
 /// Messages used in dynamic routing.
 pub(super) mod messages;
-/// Node implementation.
-pub mod node;
 /// Nodes fetch implementation.
 pub mod nodes_fetch;
 /// Routing snapshot implementation.

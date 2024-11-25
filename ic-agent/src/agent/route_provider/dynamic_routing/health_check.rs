@@ -1,6 +1,6 @@
 use futures_util::FutureExt;
 use http::{Method, StatusCode};
-use reqwest::{Client, Request};
+use reqwest::Request;
 use std::{
     fmt::Debug,
     sync::Arc,
@@ -10,12 +10,14 @@ use stop_token::{StopSource, StopToken};
 use tracing::{debug, error, info, trace, warn};
 use url::Url;
 
-use crate::agent::route_provider::dynamic_routing::{
-    dynamic_route_provider::DynamicRouteProviderError,
-    messages::{FetchedNodes, NodeHealthState},
-    node::Node,
-    snapshot::routing_snapshot::RoutingSnapshot,
-    type_aliases::{AtomicSwap, ReceiverWatch, SenderMpsc},
+use crate::agent::{
+    route_provider::dynamic_routing::{
+        dynamic_route_provider::DynamicRouteProviderError,
+        messages::{FetchedNodes, NodeHealthState},
+        snapshot::routing_snapshot::RoutingSnapshot,
+        type_aliases::{AtomicSwap, ReceiverWatch, SenderMpsc},
+    },
+    ApiBoundaryNode, HttpService,
 };
 
 const CHANNEL_BUFFER: usize = 128;
@@ -46,22 +48,29 @@ impl HealthCheckStatus {
 const HEALTH_CHECKER: &str = "HealthChecker";
 
 pub(crate) async fn health_check(
-    client: &Client,
+    client: Arc<dyn HttpService>,
     check_timeout: Duration,
-    node: &Node,
+    node: &ApiBoundaryNode,
 ) -> Result<HealthCheckStatus, DynamicRouteProviderError> {
     // API boundary node exposes /health endpoint and should respond with 204 (No Content) if it's healthy.
-    let url = Url::parse(&format!("https://{}/health", node.domain())).unwrap();
-
-    let mut request = Request::new(Method::GET, url.clone());
-    *request.timeout_mut() = Some(check_timeout);
+    let url = node.to_routing_url().join("/health").unwrap();
 
     let start = Instant::now();
-    let response = client.execute(request).await.map_err(|err| {
-        DynamicRouteProviderError::HealthCheckError(format!(
-            "Failed to execute GET request to {url}: {err}"
-        ))
-    })?;
+    let response = client
+        .call(
+            &|| {
+                let mut request = Request::new(Method::GET, url.clone());
+                *request.timeout_mut() = Some(check_timeout);
+                Ok(request)
+            },
+            0,
+        )
+        .await
+        .map_err(|err| {
+            DynamicRouteProviderError::HealthCheckError(format!(
+                "Failed to execute GET request to {url}: {err}"
+            ))
+        })?;
     let latency = start.elapsed();
 
     if response.status() != StatusCode::NO_CONTENT {
@@ -82,17 +91,17 @@ const HEALTH_CHECK_ACTOR: &str = "HealthCheckActor";
 pub(super) const HEALTH_MANAGER_ACTOR: &str = "HealthManagerActor";
 
 pub(crate) async fn health_check_actor(
-    client: Client,
+    client: Arc<dyn HttpService>,
     period: Duration,
     timeout: Duration,
-    node: Node,
+    node: ApiBoundaryNode,
     sender_channel: SenderMpsc<NodeHealthState>,
     token: StopToken,
 ) {
     loop {
         futures_util::select! {
             _ = crate::util::sleep(period).fuse() => {
-                let health = health_check(&client, timeout, &node).await.unwrap_or_default();
+                let health = health_check(client.clone(), timeout, &node).await.unwrap_or_default();
                 let message = NodeHealthState {
                     node: node.clone(),
                     health,
@@ -109,7 +118,7 @@ pub(crate) async fn health_check_actor(
 }
 
 pub(crate) async fn health_check_manager_actor<S: RoutingSnapshot>(
-    client: Client,
+    client: Arc<dyn HttpService>,
     period: Duration,
     timeout: Duration,
     routing_snapshot: AtomicSwap<S>,

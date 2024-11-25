@@ -1512,14 +1512,24 @@ pub(crate) struct Subnet {
 }
 
 /// API boundary node, which routes /api calls to IC replica nodes.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ApiBoundaryNode {
     /// Domain name
     pub domain: String,
     /// IPv6 address in the hexadecimal notation with colons.
-    pub ipv6_address: String,
+    pub ipv6_address: Option<String>,
     /// IPv4 address in the dotted-decimal notation.
     pub ipv4_address: Option<String>,
+}
+
+impl ApiBoundaryNode {
+    fn to_routing_url(&self) -> Url {
+        if cfg!(test) {
+            Url::parse(&format!("http://{}:7357", self.domain)).expect("failed to parse URL")
+        } else {
+            Url::parse(&format!("https://{}", self.domain)).expect("failed to parse URL")
+        }
+    }
 }
 
 /// A query request builder.

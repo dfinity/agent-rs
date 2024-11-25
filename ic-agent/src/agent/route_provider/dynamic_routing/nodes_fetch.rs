@@ -10,11 +10,10 @@ use crate::{
         route_provider::dynamic_routing::{
             health_check::HEALTH_MANAGER_ACTOR,
             messages::FetchedNodes,
-            node::Node,
             snapshot::routing_snapshot::RoutingSnapshot,
             type_aliases::{AtomicSwap, SenderWatch},
         },
-        Agent,
+        Agent, ApiBoundaryNode,
     },
     AgentError,
 };
@@ -24,16 +23,16 @@ const NODES_FETCH_ACTOR: &str = "NodesFetchActor";
 async fn fetch_subnet_nodes(
     agent: &Agent,
     subnet_id: Principal,
-    url: Url,
-) -> Result<Vec<Node>, AgentError> {
-    let agent = agent.clone_with_url(url);
+    node: &ApiBoundaryNode,
+) -> Result<Vec<ApiBoundaryNode>, AgentError> {
+    let agent = agent.clone_with_url(node.to_routing_url());
     let api_bns = agent
         .fetch_api_boundary_nodes_by_subnet_id(subnet_id)
         .await?;
     // If some API BNs have invalid domain names, they are discarded.
     let nodes = api_bns
-        .iter()
-        .filter_map(|api_node| api_node.try_into().ok())
+        .into_iter()
+        .filter(|api_node| is_valid_domain(&api_node.domain))
         .collect();
     Ok(nodes)
 }
@@ -60,7 +59,7 @@ pub(crate) async fn nodes_fetch_actor<S: RoutingSnapshot>(
                     loop {
                         let snapshot = snapshot.load();
                         if let Some(node) = snapshot.next_node() {
-                            match fetch_subnet_nodes(&agent, subnet_id, (&node).into()).await {
+                            match fetch_subnet_nodes(&agent, subnet_id, &node).await {
                                 Ok(nodes) => {
                                     let msg = Some(FetchedNodes {nodes});
                                     match fetch_sender.send(msg) {
@@ -89,4 +88,11 @@ pub(crate) async fn nodes_fetch_actor<S: RoutingSnapshot>(
             }
         }
     }
+}
+
+/// Checks if the given domain is a valid URL.
+fn is_valid_domain<S: AsRef<str>>(domain: S) -> bool {
+    // Prepend scheme to make it a valid URL
+    let url_string = format!("http://{}", domain.as_ref());
+    Url::parse(&url_string).is_ok()
 }
