@@ -25,17 +25,17 @@ pub(super) fn route_n_times(n: usize, f: Arc<impl RouteProvider + ?Sized>) -> Ve
 
 pub(super) fn assert_routed_domains<T>(
     actual: Vec<T>,
-    expected: Vec<T>,
+    expected: Vec<&str>,
     expected_repetitions: usize,
 ) where
     T: AsRef<str> + Eq + Hash + Debug + Ord,
 {
-    fn build_count_map<T>(items: &[T]) -> HashMap<&T, usize>
+    fn build_count_map<T>(items: &[T]) -> HashMap<&str, usize>
     where
-        T: Eq + Hash,
+        T: AsRef<str>,
     {
         items.iter().fold(HashMap::new(), |mut map, item| {
-            *map.entry(item).or_insert(0) += 1;
+            *map.entry(item.as_ref()).or_insert(0) += 1;
             map
         })
     }
@@ -62,7 +62,8 @@ pub(super) struct NodesFetcherMock {
     pub nodes: AtomicSwap<Vec<Node>>,
 }
 
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl Fetch for NodesFetcherMock {
     async fn fetch(&self, _url: Url) -> Result<Vec<Node>, DynamicRouteProviderError> {
         let nodes = (*self.nodes.load_full()).clone();
@@ -99,7 +100,8 @@ impl Default for NodeHealthCheckerMock {
     }
 }
 
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl HealthCheck for NodeHealthCheckerMock {
     async fn check(&self, node: &Node) -> Result<HealthCheckStatus, DynamicRouteProviderError> {
         let nodes = self.healthy_nodes.load_full();

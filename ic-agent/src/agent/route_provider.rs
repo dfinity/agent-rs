@@ -1,12 +1,29 @@
 //! A [`RouteProvider`] for dynamic generation of routing urls.
+use arc_swap::ArcSwapOption;
+use dynamic_routing::{
+    dynamic_route_provider::DynamicRouteProviderBuilder,
+    node::Node,
+    snapshot::{
+        latency_based_routing::LatencyRoutingSnapshot,
+        round_robin_routing::RoundRobinRoutingSnapshot,
+    },
+};
 use std::{
+    future::Future,
     str::FromStr,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    time::Duration,
 };
 use url::Url;
 
 use crate::agent::AgentError;
 
+use super::HttpService;
+#[cfg(not(feature = "_internal_dynamic-routing"))]
+pub(crate) mod dynamic_routing;
 #[cfg(feature = "_internal_dynamic-routing")]
 pub mod dynamic_routing;
 
@@ -115,6 +132,143 @@ impl RouteProvider for Url {
     }
     fn n_ordered_routes(&self, _: usize) -> Result<Vec<Url>, AgentError> {
         Ok(vec![self.route()?])
+    }
+}
+
+/// A [`RouteProvider`] that will attempt to discover new boundary nodes and cycle through them, optionally prioritizing those with low latency.
+#[derive(Debug)]
+pub struct DynamicRouter {
+    inner: Box<dyn RouteProvider>,
+}
+
+impl DynamicRouter {
+    /// Create a new `DynamicRouter` from a list of seed domains and a routing strategy.
+    pub async fn run_in_background(
+        seed_domains: Vec<String>,
+        client: Arc<dyn HttpService>,
+        strategy: DynamicRoutingStrategy,
+    ) -> Result<Self, AgentError> {
+        let seed_nodes: Result<Vec<_>, _> = seed_domains.into_iter().map(Node::new).collect();
+        let boxed = match strategy {
+            DynamicRoutingStrategy::ByLatency => Box::new(
+                DynamicRouteProviderBuilder::new(
+                    LatencyRoutingSnapshot::new(),
+                    seed_nodes?,
+                    client,
+                )
+                .build()
+                .await,
+            ) as Box<dyn RouteProvider>,
+            DynamicRoutingStrategy::RoundRobin => Box::new(
+                DynamicRouteProviderBuilder::new(
+                    RoundRobinRoutingSnapshot::new(),
+                    seed_nodes?,
+                    client,
+                )
+                .build()
+                .await,
+            ),
+        };
+        Ok(Self { inner: boxed })
+    }
+    /// Same as [`run_in_background`](Self::run_in_background), but with custom intervals for refreshing the routing list and health-checking nodes.
+    pub async fn run_in_background_with_intervals(
+        seed_domains: Vec<String>,
+        client: Arc<dyn HttpService>,
+        strategy: DynamicRoutingStrategy,
+        list_update_interval: Duration,
+        health_check_interval: Duration,
+    ) -> Result<Self, AgentError> {
+        let seed_nodes: Result<Vec<_>, _> = seed_domains.into_iter().map(Node::new).collect();
+        let boxed = match strategy {
+            DynamicRoutingStrategy::ByLatency => Box::new(
+                DynamicRouteProviderBuilder::new(
+                    LatencyRoutingSnapshot::new(),
+                    seed_nodes?,
+                    client,
+                )
+                .with_fetch_period(list_update_interval)
+                .with_check_period(health_check_interval)
+                .build()
+                .await,
+            ) as Box<dyn RouteProvider>,
+            DynamicRoutingStrategy::RoundRobin => Box::new(
+                DynamicRouteProviderBuilder::new(
+                    RoundRobinRoutingSnapshot::new(),
+                    seed_nodes?,
+                    client,
+                )
+                .with_fetch_period(list_update_interval)
+                .with_check_period(health_check_interval)
+                .build()
+                .await,
+            ),
+        };
+        Ok(Self { inner: boxed })
+    }
+}
+
+impl RouteProvider for DynamicRouter {
+    fn route(&self) -> Result<Url, AgentError> {
+        self.inner.route()
+    }
+    fn n_ordered_routes(&self, n: usize) -> Result<Vec<Url>, AgentError> {
+        self.inner.n_ordered_routes(n)
+    }
+}
+
+/// Strategy for [`DynamicRouter`]'s routing mechanism.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum DynamicRoutingStrategy {
+    /// Prefer nodes with low latency.
+    ByLatency,
+    /// Cycle through discovered nodes with no regard for latency.
+    RoundRobin,
+}
+
+#[derive(Debug)]
+pub(crate) struct UrlUntilReady<R> {
+    url: Url,
+    router: ArcSwapOption<R>,
+}
+
+impl<R: RouteProvider + 'static> UrlUntilReady<R> {
+    pub(crate) fn new<
+        #[cfg(not(target_family = "wasm"))] F: Future<Output = R> + Send + 'static,
+        #[cfg(target_family = "wasm")] F: Future<Output = R> + 'static,
+    >(
+        url: Url,
+        fut: F,
+    ) -> Arc<Self> {
+        let s = Arc::new(Self {
+            url,
+            router: ArcSwapOption::empty(),
+        });
+        let weak = Arc::downgrade(&s);
+        crate::util::spawn(async move {
+            let router = fut.await;
+            if let Some(outer) = weak.upgrade() {
+                outer.router.store(Some(Arc::new(router)))
+            }
+        });
+        s
+    }
+}
+
+impl<R: RouteProvider> RouteProvider for UrlUntilReady<R> {
+    fn n_ordered_routes(&self, n: usize) -> Result<Vec<Url>, AgentError> {
+        if let Some(r) = &*self.router.load() {
+            r.n_ordered_routes(n)
+        } else {
+            self.url.n_ordered_routes(n)
+        }
+    }
+    fn route(&self) -> Result<Url, AgentError> {
+        if let Some(r) = &*self.router.load() {
+            r.route()
+        } else {
+            self.url.route()
+        }
     }
 }
 

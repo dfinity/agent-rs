@@ -1,28 +1,28 @@
 use async_trait::async_trait;
 use candid::Principal;
 use futures_util::FutureExt;
-use reqwest::Client;
 use std::{fmt::Debug, sync::Arc, time::Duration};
 use stop_token::StopToken;
-use tracing::{error, warn};
 use url::Url;
 
+#[allow(unused)]
+use crate::agent::route_provider::dynamic_routing::health_check::HEALTH_MANAGER_ACTOR;
 use crate::agent::{
     route_provider::dynamic_routing::{
         dynamic_route_provider::DynamicRouteProviderError,
-        health_check::HEALTH_MANAGER_ACTOR,
         messages::FetchedNodes,
         node::Node,
         snapshot::routing_snapshot::RoutingSnapshot,
         type_aliases::{AtomicSwap, SenderWatch},
     },
-    Agent,
+    Agent, HttpService,
 };
-
+#[allow(unused)]
 const NODES_FETCH_ACTOR: &str = "NodesFetchActor";
 
 /// Fetcher of nodes in the topology.
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub trait Fetch: Sync + Send + Debug {
     /// Fetches the nodes from the topology.
     async fn fetch(&self, url: Url) -> Result<Vec<Node>, DynamicRouteProviderError>;
@@ -31,7 +31,7 @@ pub trait Fetch: Sync + Send + Debug {
 /// A struct representing the fetcher of the nodes from the topology.
 #[derive(Debug)]
 pub struct NodesFetcher {
-    http_client: Client,
+    http_client: Arc<dyn HttpService>,
     subnet_id: Principal,
     // By default, the nodes fetcher is configured to talk to the mainnet of Internet Computer, and verifies responses using a hard-coded public key.
     // However, for testnets one can set up a custom public key.
@@ -40,7 +40,11 @@ pub struct NodesFetcher {
 
 impl NodesFetcher {
     /// Creates a new `NodesFetcher` instance.
-    pub fn new(http_client: Client, subnet_id: Principal, root_key: Option<Vec<u8>>) -> Self {
+    pub fn new(
+        http_client: Arc<dyn HttpService>,
+        subnet_id: Principal,
+        root_key: Option<Vec<u8>>,
+    ) -> Self {
         Self {
             http_client,
             subnet_id,
@@ -49,12 +53,13 @@ impl NodesFetcher {
     }
 }
 
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl Fetch for NodesFetcher {
     async fn fetch(&self, url: Url) -> Result<Vec<Node>, DynamicRouteProviderError> {
         let agent = Agent::builder()
             .with_url(url)
-            .with_http_client(self.http_client.clone())
+            .with_arc_http_middleware(self.http_client.clone())
             .build()
             .map_err(|err| {
                 DynamicRouteProviderError::NodesFetchError(format!(
@@ -74,7 +79,7 @@ impl Fetch for NodesFetcher {
             })?;
         // If some API BNs have invalid domain names, they are discarded.
         let nodes = api_bns
-            .iter()
+            .into_iter()
             .filter_map(|api_node| api_node.try_into().ok())
             .collect();
         return Ok(nodes);
@@ -138,21 +143,25 @@ where
                             let msg = Some(FetchedNodes { nodes });
                             match self.fetch_sender.send(msg) {
                                 Ok(()) => break, // message sent successfully, exist the loop
-                                Err(err) => {
-                                    error!("{NODES_FETCH_ACTOR}: failed to send results to {HEALTH_MANAGER_ACTOR}: {err:?}");
+                                Err(_err) => {
+                                    log!(error, "{NODES_FETCH_ACTOR}: failed to send results to {HEALTH_MANAGER_ACTOR}: {_err:?}");
                                 }
                             }
                         }
-                        Err(err) => {
-                            error!("{NODES_FETCH_ACTOR}: failed to fetch nodes: {err:?}");
+                        Err(_err) => {
+                            log!(
+                                error,
+                                "{NODES_FETCH_ACTOR}: failed to fetch nodes: {_err:?}"
+                            );
                         }
                     };
                 } else {
                     // No healthy nodes in the snapshot, break the cycle and wait for the next fetch cycle
-                    error!("{NODES_FETCH_ACTOR}: no nodes in the snapshot");
+                    log!(error, "{NODES_FETCH_ACTOR}: no nodes in the snapshot");
                     break;
                 };
-                warn!(
+                log!(
+                    warn,
                     "Retrying to fetch the nodes in {:?}",
                     self.fetch_retry_interval
                 );
@@ -163,7 +172,7 @@ where
                     continue;
                 }
                 _ = self.token.clone().fuse() => {
-                    warn!("{NODES_FETCH_ACTOR}: was gracefully cancelled");
+                    log!(warn, "{NODES_FETCH_ACTOR}: was gracefully cancelled");
                     break;
                 }
             }
