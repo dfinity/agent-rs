@@ -137,11 +137,11 @@ impl RouteProvider for Url {
 
 /// A [`RouteProvider`] that will attempt to discover new boundary nodes and cycle through them, optionally prioritizing those with low latency.
 #[derive(Debug)]
-pub struct DynamicRouter {
+pub struct DynamicRouteProvider {
     inner: Box<dyn RouteProvider>,
 }
 
-impl DynamicRouter {
+impl DynamicRouteProvider {
     /// Create a new `DynamicRouter` from a list of seed domains and a routing strategy.
     pub async fn run_in_background(
         seed_domains: Vec<String>,
@@ -208,7 +208,7 @@ impl DynamicRouter {
     }
 }
 
-impl RouteProvider for DynamicRouter {
+impl RouteProvider for DynamicRouteProvider {
     fn route(&self) -> Result<Url, AgentError> {
         self.inner.route()
     }

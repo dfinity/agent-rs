@@ -20,6 +20,8 @@ impl AgentBuilder {
 
     /// Set the dynamic transport layer for the [`Agent`], performing continuous discovery of the API boundary nodes
     /// and routing traffic via them based on latency. Cannot be set together with `with_route_provider`.
+    ///
+    /// See [`DynamicRouteProvider`](super::route_provider::DynamicRouteProvider) if more customization is needed such as polling intervals.
     pub async fn with_background_dynamic_routing(mut self) -> Self {
         assert!(
             self.config.route_provider.is_none(),
