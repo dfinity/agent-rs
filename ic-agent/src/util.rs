@@ -32,3 +32,7 @@ pub fn spawn(f: impl Future<Output = ()> + 'static) {
 pub fn spawn(f: impl Future<Output = ()> + Send + 'static) {
     tokio::spawn(f);
 }
+
+macro_rules! log {
+    ($name:ident, $($t:tt)*) => { #[cfg(feature = "tracing")] { tracing::$name!($($t)*) } };
+}

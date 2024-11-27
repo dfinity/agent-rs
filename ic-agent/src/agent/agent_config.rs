@@ -1,4 +1,5 @@
 use reqwest::Client;
+use url::Url;
 
 use crate::{
     agent::{NonceFactory, NonceGenerator},
@@ -33,6 +34,10 @@ pub struct AgentConfig {
     pub http_service: Option<Arc<dyn HttpService>>,
     /// See [`with_max_polling_time`](super::AgentBuilder::with_max_polling_time).
     pub max_polling_time: Duration,
+    /// See [`with_background_dynamic_routing`](super::AgentBuilder::with_background_dynamic_routing).
+    pub background_dynamic_routing: bool,
+    /// See [`with_url`](super::AgentBuilder::with_url).
+    pub url: Option<Url>,
 }
 
 impl Default for AgentConfig {
@@ -49,6 +54,8 @@ impl Default for AgentConfig {
             max_response_body_size: None,
             max_tcp_error_retries: 0,
             max_polling_time: Duration::from_secs(60 * 5),
+            background_dynamic_routing: false,
+            url: None,
         }
     }
 }

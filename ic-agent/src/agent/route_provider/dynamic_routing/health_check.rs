@@ -1,28 +1,31 @@
 use async_trait::async_trait;
 use futures_util::FutureExt;
 use http::{Method, StatusCode};
-use reqwest::{Client, Request};
+use reqwest::Request;
 use std::{
     fmt::Debug,
     sync::Arc,
     time::{Duration, Instant},
 };
 use stop_token::{StopSource, StopToken};
-use tracing::{debug, error, info, warn};
 use url::Url;
 
-use crate::agent::route_provider::dynamic_routing::{
-    dynamic_route_provider::DynamicRouteProviderError,
-    messages::{FetchedNodes, NodeHealthState},
-    node::Node,
-    snapshot::routing_snapshot::RoutingSnapshot,
-    type_aliases::{AtomicSwap, ReceiverMpsc, ReceiverWatch, SenderMpsc},
+use crate::agent::{
+    route_provider::dynamic_routing::{
+        dynamic_route_provider::DynamicRouteProviderError,
+        messages::{FetchedNodes, NodeHealthState},
+        node::Node,
+        snapshot::routing_snapshot::RoutingSnapshot,
+        type_aliases::{AtomicSwap, ReceiverMpsc, ReceiverWatch, SenderMpsc},
+    },
+    HttpService,
 };
 
 const CHANNEL_BUFFER: usize = 128;
 
 /// A trait representing a health check of the node.
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub trait HealthCheck: Send + Sync + Debug {
     /// Checks the health of the node.
     async fn check(&self, node: &Node) -> Result<HealthCheckStatus, DynamicRouteProviderError>;
@@ -54,15 +57,20 @@ impl HealthCheckStatus {
 /// A struct implementing the `HealthCheck` for the nodes.
 #[derive(Debug)]
 pub struct HealthChecker {
-    http_client: Client,
+    http_client: Arc<dyn HttpService>,
+    #[cfg(not(target_family = "wasm"))]
     timeout: Duration,
 }
 
 impl HealthChecker {
     /// Creates a new `HealthChecker` instance.
-    pub fn new(http_client: Client, timeout: Duration) -> Self {
+    pub fn new(
+        http_client: Arc<dyn HttpService>,
+        #[cfg(not(target_family = "wasm"))] timeout: Duration,
+    ) -> Self {
         Self {
             http_client,
+            #[cfg(not(target_family = "wasm"))]
             timeout,
         }
     }
@@ -70,21 +78,30 @@ impl HealthChecker {
 
 const HEALTH_CHECKER: &str = "HealthChecker";
 
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl HealthCheck for HealthChecker {
+    #[allow(unused_mut)]
     async fn check(&self, node: &Node) -> Result<HealthCheckStatus, DynamicRouteProviderError> {
         // API boundary node exposes /health endpoint and should respond with 204 (No Content) if it's healthy.
         let url = Url::parse(&format!("https://{}/health", node.domain())).unwrap();
 
         let mut request = Request::new(Method::GET, url.clone());
-        *request.timeout_mut() = Some(self.timeout);
+        #[cfg(not(target_family = "wasm"))]
+        {
+            *request.timeout_mut() = Some(self.timeout);
+        }
 
         let start = Instant::now();
-        let response = self.http_client.execute(request).await.map_err(|err| {
-            DynamicRouteProviderError::HealthCheckError(format!(
-                "Failed to execute GET request to {url}: {err}"
-            ))
-        })?;
+        let response = self
+            .http_client
+            .call(&|| Ok(request.try_clone().unwrap()), 1)
+            .await
+            .map_err(|err| {
+                DynamicRouteProviderError::HealthCheckError(format!(
+                    "Failed to execute GET request to {url}: {err}"
+                ))
+            })?;
         let latency = start.elapsed();
 
         if response.status() != StatusCode::NO_CONTENT {
@@ -92,7 +109,7 @@ impl HealthCheck for HealthChecker {
                 "{HEALTH_CHECKER}: Unexpected http status code {} for url={url} received",
                 response.status()
             );
-            error!(err_msg);
+            log!(error, err_msg);
             return Err(DynamicRouteProviderError::HealthCheckError(err_msg));
         }
 
@@ -100,6 +117,7 @@ impl HealthCheck for HealthChecker {
     }
 }
 
+#[allow(unused)]
 const HEALTH_CHECK_ACTOR: &str = "HealthCheckActor";
 
 /// A struct performing the health check of the node and sending the health status to the listener.
@@ -151,7 +169,7 @@ impl HealthCheckActor {
                     continue;
                 }
                 _ = self.token.clone().fuse() => {
-                    info!("{HEALTH_CHECK_ACTOR}: was gracefully cancelled for node {:?}", self.node);
+                    log!(info, "{HEALTH_CHECK_ACTOR}: was gracefully cancelled for node {:?}", self.node);
                     break;
                 }
             }
@@ -160,6 +178,7 @@ impl HealthCheckActor {
 }
 
 /// The name of the health manager actor.
+#[allow(unused)]
 pub(super) const HEALTH_MANAGER_ACTOR: &str = "HealthManagerActor";
 
 /// A struct managing the health checks of the nodes.
@@ -225,8 +244,8 @@ where
                 result = self.fetch_receiver.recv().fuse() => {
                     let value = match result {
                         Ok(value) => value,
-                        Err(err) => {
-                            error!("{HEALTH_MANAGER_ACTOR}: nodes fetch sender has been dropped: {err:?}");
+                        Err(_err) => {
+                            log!(error, "{HEALTH_MANAGER_ACTOR}: nodes fetch sender has been dropped: {_err:?}");
                             continue;
                         }
                     };
@@ -243,7 +262,7 @@ where
                 _ = self.token.clone().fuse() => {
                     self.stop_all_checks().await;
                     self.check_receiver.close();
-                    warn!("{HEALTH_MANAGER_ACTOR}: was gracefully cancelled, all nodes health checks stopped");
+                    log!(warn, "{HEALTH_MANAGER_ACTOR}: was gracefully cancelled, all nodes health checks stopped");
                     break;
                 }
             }
@@ -267,10 +286,17 @@ where
             // This is a bug in the IC registry. There should be at least one API Boundary Node in the registry.
             // Updating nodes snapshot with an empty array, would lead to an irrecoverable error, as new nodes couldn't be fetched.
             // We avoid such updates and just wait for a non-empty list.
-            error!("{HEALTH_MANAGER_ACTOR}: list of fetched nodes is empty");
+            log!(
+                error,
+                "{HEALTH_MANAGER_ACTOR}: list of fetched nodes is empty"
+            );
             return;
         }
-        debug!("{HEALTH_MANAGER_ACTOR}: fetched nodes received {:?}", nodes);
+        log!(
+            debug,
+            "{HEALTH_MANAGER_ACTOR}: fetched nodes received {:?}",
+            nodes
+        );
         let current_snapshot = self.routing_snapshot.load_full();
         let mut new_snapshot = (*current_snapshot).clone();
         // If the snapshot has changed, store it and restart all node's health checks.
@@ -285,7 +311,10 @@ where
         // Create a single cancellation token for all started health checks.
         self.nodes_token = StopSource::new();
         for node in nodes {
-            debug!("{HEALTH_MANAGER_ACTOR}: starting health check for node {node:?}");
+            log!(
+                debug,
+                "{HEALTH_MANAGER_ACTOR}: starting health check for node {node:?}"
+            );
             let actor = HealthCheckActor::new(
                 Arc::clone(&self.checker),
                 self.period,
@@ -298,7 +327,10 @@ where
     }
 
     async fn stop_all_checks(&mut self) {
-        warn!("{HEALTH_MANAGER_ACTOR}: stopping all running health checks");
+        log!(
+            warn,
+            "{HEALTH_MANAGER_ACTOR}: stopping all running health checks"
+        );
         self.nodes_token = StopSource::new();
     }
 }

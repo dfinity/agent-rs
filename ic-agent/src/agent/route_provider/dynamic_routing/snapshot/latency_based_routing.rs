@@ -181,6 +181,7 @@ impl LatencyRoutingSnapshot {
     }
 
     /// Sets whether to use availability penalty in the score computation.
+    #[allow(unused)]
     pub fn set_availability_penalty(mut self, use_penalty: bool) -> Self {
         self.use_availability_penalty = use_penalty;
         self
@@ -188,6 +189,7 @@ impl LatencyRoutingSnapshot {
 
     /// Sets the weights for the sliding window.
     /// The weights are ordered from left to right, where the leftmost weight is for the most recent health check.
+    #[allow(unused)]
     pub fn set_window_weights(mut self, weights: &[f64]) -> Self {
         self.window_weights_sum = weights.iter().sum();
         self.window_weights = weights.to_vec();

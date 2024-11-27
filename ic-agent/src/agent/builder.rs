@@ -1,5 +1,3 @@
-use url::Url;
-
 use crate::{
     agent::{agent_config::AgentConfig, Agent},
     AgentError, Identity, NonceFactory, NonceGenerator,
@@ -20,34 +18,27 @@ impl AgentBuilder {
         Agent::new(self.config)
     }
 
-    /// Set the dynamic transport layer for the [`Agent`], performing continuous discovery of the API boundary nodes and routing traffic via them based on latency.
-    #[cfg(feature = "_internal_dynamic-routing")]
-    pub async fn with_discovery_transport(self, client: reqwest::Client) -> Self {
-        use crate::agent::route_provider::dynamic_routing::{
-            dynamic_route_provider::{DynamicRouteProviderBuilder, IC0_SEED_DOMAIN},
-            node::Node,
-            snapshot::latency_based_routing::LatencyRoutingSnapshot,
-        };
-        // TODO: This is a temporary solution to get the seed node.
-        let seed = Node::new(IC0_SEED_DOMAIN).unwrap();
-
-        let route_provider = DynamicRouteProviderBuilder::new(
-            LatencyRoutingSnapshot::new(),
-            vec![seed],
-            client.clone(),
-        )
-        .build()
-        .await;
-
-        let route_provider = Arc::new(route_provider) as Arc<dyn RouteProvider>;
-
-        self.with_arc_route_provider(route_provider)
-            .with_http_client(client)
+    /// Set the dynamic transport layer for the [`Agent`], performing continuous discovery of the API boundary nodes
+    /// and routing traffic via them based on latency. Cannot be set together with `with_route_provider`.
+    ///
+    /// See [`DynamicRouteProvider`](super::route_provider::DynamicRouteProvider) if more customization is needed such as polling intervals.
+    pub async fn with_background_dynamic_routing(mut self) -> Self {
+        assert!(
+            self.config.route_provider.is_none(),
+            "with_background_dynamic_routing cannot be called with with_route_provider"
+        );
+        self.config.background_dynamic_routing = true;
+        self
     }
 
-    /// Set the URL of the [Agent].
-    pub fn with_url<S: Into<String>>(self, url: S) -> Self {
-        self.with_route_provider(url.into().parse::<Url>().unwrap())
+    /// Set the URL of the [`Agent`]. Either this or `with_route_provider` must be called (but not both).
+    pub fn with_url<S: Into<String>>(mut self, url: S) -> Self {
+        assert!(
+            self.config.route_provider.is_none(),
+            "with_url cannot be called with with_route_provider"
+        );
+        self.config.url = Some(url.into().parse().unwrap());
+        self
     }
 
     /// Add a `NonceFactory` to this Agent. By default, no nonce is produced.
@@ -125,6 +116,14 @@ impl AgentBuilder {
 
     /// Same as [`Self::with_route_provider`], but reuses an existing `Arc`.
     pub fn with_arc_route_provider(mut self, provider: Arc<dyn RouteProvider>) -> Self {
+        assert!(
+            !self.config.background_dynamic_routing,
+            "with_background_dynamic_routing cannot be called with with_route_provider"
+        );
+        assert!(
+            self.config.url.is_none(),
+            "with_url cannot be called with with_route_provider"
+        );
         self.config.route_provider = Some(provider);
         self
     }

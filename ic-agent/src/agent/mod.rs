@@ -29,7 +29,13 @@ pub use ic_transport_types::{
 pub use nonce::{NonceFactory, NonceGenerator};
 use rangemap::{RangeInclusiveMap, RangeInclusiveSet, StepFns};
 use reqwest::{Body, Client, Request, Response};
-use route_provider::RouteProvider;
+use route_provider::{
+    dynamic_routing::{
+        dynamic_route_provider::DynamicRouteProviderBuilder, node::Node,
+        snapshot::latency_based_routing::LatencyRoutingSnapshot,
+    },
+    RouteProvider, UrlUntilReady,
+};
 use time::OffsetDateTime;
 use tower_service::Service;
 
@@ -58,7 +64,7 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     convert::TryFrom,
-    fmt,
+    fmt::{self, Debug},
     future::{Future, IntoFuture},
     pin::Pin,
     sync::{Arc, Mutex, RwLock},
@@ -177,32 +183,54 @@ impl Agent {
 
     /// Create an instance of an [`Agent`].
     pub fn new(config: agent_config::AgentConfig) -> Result<Agent, AgentError> {
+        let client = config.http_service.unwrap_or_else(|| {
+            Arc::new(Retry429Logic {
+                client: config.client.unwrap_or_else(|| {
+                    #[cfg(not(target_family = "wasm"))]
+                    {
+                        Client::builder()
+                            .use_rustls_tls()
+                            .timeout(Duration::from_secs(360))
+                            .build()
+                            .expect("Could not create HTTP client.")
+                    }
+                    #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
+                    {
+                        Client::new()
+                    }
+                }),
+            })
+        });
         Ok(Agent {
             nonce_factory: config.nonce_factory,
             identity: config.identity,
             ingress_expiry: config.ingress_expiry,
             root_key: Arc::new(RwLock::new(IC_ROOT_KEY.to_vec())),
-            client: config.http_service.unwrap_or_else(|| {
-                Arc::new(Retry429Logic {
-                    client: config.client.unwrap_or_else(|| {
-                        #[cfg(not(target_family = "wasm"))]
-                        {
-                            Client::builder()
-                                .use_rustls_tls()
-                                .timeout(Duration::from_secs(360))
-                                .build()
-                                .expect("Could not create HTTP client.")
-                        }
-                        #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
-                        {
-                            Client::new()
-                        }
-                    }),
-                })
-            }),
-            route_provider: config
-                .route_provider
-                .expect("missing `url` or `route_provider` in `AgentBuilder`"),
+            client: client.clone(),
+            route_provider: if let Some(route_provider) = config.route_provider {
+                route_provider
+            } else if let Some(url) = config.url {
+                if config.background_dynamic_routing {
+                    assert!(
+                        url.scheme() == "https" && url.path() == "/" && url.port().is_none() && url.domain().is_some(),
+                        "in dynamic routing mode, URL must be in the exact form https://domain with no path, port, IP, or non-HTTPS scheme"
+                    );
+                    let seeds = vec![Node::new(url.domain().unwrap()).unwrap()];
+                    UrlUntilReady::new(url, async move {
+                        DynamicRouteProviderBuilder::new(
+                            LatencyRoutingSnapshot::new(),
+                            seeds,
+                            client,
+                        )
+                        .build()
+                        .await
+                    }) as Arc<dyn RouteProvider>
+                } else {
+                    Arc::new(url)
+                }
+            } else {
+                panic!("either route_provider or url must be specified");
+            },
             subnet_key_cache: Arc::new(Mutex::new(SubnetCache::new())),
             verify_query_signatures: config.verify_query_signatures,
             concurrent_requests_semaphore: Arc::new(Semaphore::new(config.max_concurrent_requests)),
@@ -1862,7 +1890,7 @@ impl<'agent> IntoFuture for UpdateBuilder<'agent> {
 /// HTTP client middleware. Implemented automatically for `reqwest`-compatible by-ref `tower::Service`, such as `reqwest_middleware`.
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-pub trait HttpService: Send + Sync {
+pub trait HttpService: Send + Sync + Debug {
     /// Perform a HTTP request. Any retry logic should call `req` again, instead of `Request::try_clone`.
     async fn call<'a>(
         &'a self,
@@ -1876,7 +1904,7 @@ impl<T> HttpService for T
 where
     for<'a> &'a T: Service<Request, Response = Response, Error = reqwest::Error>,
     for<'a> <&'a Self as Service<Request>>::Future: Send,
-    T: Send + Sync + ?Sized,
+    T: Send + Sync + Debug + ?Sized,
 {
     #[allow(clippy::needless_arbitrary_self_type)]
     async fn call<'a>(
@@ -1907,7 +1935,7 @@ where
 impl<T> HttpService for T
 where
     for<'a> &'a T: Service<Request, Response = Response, Error = reqwest::Error>,
-    T: Send + Sync + ?Sized,
+    T: Send + Sync + Debug + ?Sized,
 {
     #[allow(clippy::needless_arbitrary_self_type)]
     async fn call<'a>(
@@ -1919,6 +1947,7 @@ where
     }
 }
 
+#[derive(Debug)]
 struct Retry429Logic {
     client: Client,
 }

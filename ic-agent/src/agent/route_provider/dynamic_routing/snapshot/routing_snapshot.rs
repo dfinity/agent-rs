@@ -5,6 +5,7 @@ use crate::agent::route_provider::dynamic_routing::{health_check::HealthCheckSta
 /// A trait for interacting with the snapshot of nodes (routing table).
 pub trait RoutingSnapshot: Send + Sync + Clone + Debug {
     /// Returns `true` if the snapshot has nodes.
+    #[allow(unused)]
     fn has_nodes(&self) -> bool;
     /// Get next node from the snapshot.
     fn next_node(&self) -> Option<Node>;

@@ -103,10 +103,13 @@
 )]
 #![cfg_attr(not(target_family = "wasm"), warn(clippy::future_not_send))]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+
+#[macro_use]
+mod util;
+
 pub mod agent;
 pub mod export;
 pub mod identity;
-mod util;
 
 use agent::response_authentication::LookupPath;
 #[doc(inline)]

@@ -1,9 +1,6 @@
 use url::Url;
 
-use crate::agent::{
-    route_provider::dynamic_routing::dynamic_route_provider::DynamicRouteProviderError,
-    ApiBoundaryNode,
-};
+use crate::agent::ApiBoundaryNode;
 
 /// Represents a node in the dynamic routing.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -13,20 +10,15 @@ pub struct Node {
 
 impl Node {
     /// Creates a new `Node` instance from the domain name.
-    pub fn new(domain: &str) -> Result<Self, DynamicRouteProviderError> {
-        if !is_valid_domain(domain) {
-            return Err(DynamicRouteProviderError::InvalidDomainName(
-                domain.to_string(),
-            ));
-        }
-        Ok(Self {
-            domain: domain.to_string(),
-        })
+    pub fn new(domain: impl Into<String>) -> Result<Self, url::ParseError> {
+        let domain = domain.into();
+        check_valid_domain(&domain)?;
+        Ok(Self { domain })
     }
 
     /// Returns the domain name of the node.
-    pub fn domain(&self) -> String {
-        self.domain.clone()
+    pub fn domain(&self) -> &str {
+        &self.domain
     }
 }
 
@@ -44,17 +36,18 @@ impl From<&Node> for Url {
     }
 }
 
-impl TryFrom<&ApiBoundaryNode> for Node {
-    type Error = DynamicRouteProviderError;
+impl TryFrom<ApiBoundaryNode> for Node {
+    type Error = url::ParseError;
 
-    fn try_from(value: &ApiBoundaryNode) -> Result<Self, Self::Error> {
-        Node::new(&value.domain)
+    fn try_from(value: ApiBoundaryNode) -> Result<Self, Self::Error> {
+        Node::new(value.domain)
     }
 }
 
 /// Checks if the given domain is a valid URL.
-fn is_valid_domain<S: AsRef<str>>(domain: S) -> bool {
+fn check_valid_domain<S: AsRef<str>>(domain: S) -> Result<(), url::ParseError> {
     // Prepend scheme to make it a valid URL
     let url_string = format!("http://{}", domain.as_ref());
-    Url::parse(&url_string).is_ok()
+    Url::parse(&url_string)?;
+    Ok(())
 }
