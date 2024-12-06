@@ -108,11 +108,12 @@ pub(crate) fn lookup_rejection<Storage: AsRef<[u8]>>(
 ) -> Result<RequestStatusResponse, AgentError> {
     let reject_code = lookup_reject_code(certificate, request_id)?;
     let reject_message = lookup_reject_message(certificate, request_id)?;
+    let error_code = lookup_error_code(certificate, request_id)?;
 
     Ok(RequestStatusResponse::Rejected(RejectResponse {
         reject_code,
         reject_message,
-        error_code: None,
+        error_code,
     }))
 }
 
@@ -142,6 +143,23 @@ pub(crate) fn lookup_reject_message<Storage: AsRef<[u8]>>(
     ];
     let msg = lookup_value(&certificate.tree, path)?;
     Ok(from_utf8(msg)?.to_string())
+}
+
+pub(crate) fn lookup_error_code<Storage: AsRef<[u8]>>(
+    certificate: &Certificate<Storage>,
+    request_id: &RequestId,
+) -> Result<Option<String>, AgentError> {
+    let path = [
+        "request_status".as_bytes(),
+        request_id.as_slice(),
+        "error_code".as_bytes(),
+    ];
+    let msg = lookup_value(&certificate.tree, path);
+    match msg {
+        Ok(val) => Ok(Some(from_utf8(val)?.to_string())),
+        Err(AgentError::LookupPathAbsent(_)) => Ok(None),
+        Err(e) => Err(e),
+    }
 }
 
 pub(crate) fn lookup_reply<Storage: AsRef<[u8]>>(
