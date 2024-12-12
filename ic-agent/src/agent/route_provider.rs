@@ -217,7 +217,7 @@ impl RouteProvider for DynamicRouteProvider {
     }
 }
 
-/// Strategy for [`DynamicRouter`]'s routing mechanism.
+/// Strategy for [`DynamicRouteProvider`]'s routing mechanism.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum DynamicRoutingStrategy {
     /// Prefer nodes with low latency.
