@@ -265,7 +265,7 @@ where
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
     use candid::Principal;
     use reqwest::Client;

@@ -14,6 +14,7 @@ pub mod nodes_fetch;
 /// Routing snapshot implementation.
 pub mod snapshot;
 #[cfg(test)]
+#[cfg_attr(target_family = "wasm", allow(unused))]
 pub(super) mod test_utils;
 /// Type aliases used in dynamic routing.
 pub(super) mod type_aliases;
