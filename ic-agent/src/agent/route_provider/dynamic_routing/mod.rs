@@ -1,6 +1,6 @@
 //! Dynamic routing implementation.
 //!
-//! This is an internal unstable feature. It works, but it's still in the oven; its design will go through drastic changes before it is released.
+//! This is an internal unstable feature. The guts of this system are not subject to semver and are likely to change.
 
 pub mod dynamic_route_provider;
 /// Health check implementation.
@@ -14,6 +14,7 @@ pub mod nodes_fetch;
 /// Routing snapshot implementation.
 pub mod snapshot;
 #[cfg(test)]
+#[cfg_attr(target_family = "wasm", allow(unused))]
 pub(super) mod test_utils;
 /// Type aliases used in dynamic routing.
 pub(super) mod type_aliases;
