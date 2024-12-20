@@ -1246,8 +1246,8 @@ mod extras {
                     Err(AgentError::CertifiedReject(RejectResponse {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
-                        error_code: None,
-                    })) if reject_message.contains("Canister iimsn-6yaaa-aaaaa-afiaa-cai is already installed")
+                        error_code: Some(code),
+                    })) if reject_message.contains("Canister iimsn-6yaaa-aaaaa-afiaa-cai is already installed") && code == "IC0538"
                 ),
                 "wrong error: {result:?}"
             );
