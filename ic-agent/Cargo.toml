@@ -15,11 +15,11 @@ keywords = ["internet-computer", "agent", "icp", "dfinity"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
-arc-swap = { version = "1.7", optional = true }
-async-channel = { version = "1.9", optional = true }
+arc-swap = "1.7"
+async-channel = "1.9"
 async-lock = "3.3"
 async-trait = "0.1"
-async-watch = { version = "0.3", optional = true }
+async-watch = "0.3"
 backoff = "0.4.0"
 cached = { version = "0.52", features = ["ahash"], default-features = false }
 candid = { workspace = true }
@@ -48,7 +48,7 @@ serde_cbor = { workspace = true }
 serde_repr = { workspace = true }
 sha2 = { workspace = true }
 simple_asn1 = "0.6.1"
-stop-token = { version = "0.7", optional = true }
+stop-token = "0.7"
 thiserror = { workspace = true }
 time = { workspace = true }
 tower-service = "0.3"
@@ -77,6 +77,7 @@ web-sys = { version = "0.3", features = ["Window"], optional = true }
 [dev-dependencies]
 serde_json.workspace = true
 tracing-subscriber = "0.3"
+tracing = "0.1"
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
@@ -109,16 +110,10 @@ wasm-bindgen = [
     "backoff/wasm-bindgen",
     "cached/wasm",
 ]
-_internal_dynamic-routing = [
-    "dep:arc-swap",
-    "dep:async-channel",
-    "dep:async-watch",
-    "dep:stop-token",
-    "tracing",
-]
+_internal_dynamic-routing = []
 tracing = ["dep:tracing"] # Does very little right now.
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 rustdoc-args = ["--cfg=docsrs"]
-features = ["_internal_dynamic-routing"]
+features = []
