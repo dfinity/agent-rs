@@ -29,7 +29,7 @@ jobs:
       - name: Install dfx
         uses: dfinity/setup-dfx@main
         with:
-          dfx-version: "0.24.2"
+          dfx-version: "0.24.3"
 
       - name: Cargo cache
         uses: actions/cache@v4
