@@ -514,8 +514,9 @@ mod management_canister {
                     Err(AgentError::CertifiedReject(RejectResponse {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
-                        error_code: None,
+                        error_code: Some(error_code),
                     })) if reject_message.contains(&format!("Canister {canister_id}: Canister has no update method 'update'"))
+                        && error_code == "IC0536"
                 ),
                 "wrong error: {result:?}"
             );
@@ -738,7 +739,7 @@ mod management_canister {
 
             let args = Argument::from_candid((create_args,));
 
-            let creation_fee = 100_000_000_000;
+            let creation_fee = 500_000_000_000;
             let canister_initial_balance = 4_000_000_000;
             let (create_result,): (CreateResult,) = wallet
                 .call(
