@@ -8,9 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-## [0.39.0]
+## [0.39.2] - 2024-12-20
 
 * Bumped `ic-certification` to `3.0.0`.
+
+## [0.39.0]
+
 * The lower-level update call functions now return the certificate in addition to the parsed response data.
 * Make ingress_expiry required and set the default value to 3 min.
 * Changed `BasicIdentity`'s implementation from `ring` to `ed25519-consensus`.

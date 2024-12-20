@@ -1116,7 +1116,7 @@ dependencies = [
 
 [[package]]
 name = "ic-agent"
-version = "0.39.1"
+version = "0.39.2"
 dependencies = [
  "arc-swap",
  "async-channel",
@@ -1136,7 +1136,7 @@ dependencies = [
  "http",
  "http-body",
  "ic-certification 3.0.2",
- "ic-transport-types 0.39.1",
+ "ic-transport-types 0.39.2",
  "ic-verify-bls-signature",
  "js-sys",
  "k256",
@@ -1197,7 +1197,7 @@ dependencies = [
 
 [[package]]
 name = "ic-identity-hsm"
-version = "0.39.1"
+version = "0.39.2"
 dependencies = [
  "hex",
  "ic-agent",
@@ -1226,7 +1226,7 @@ dependencies = [
 
 [[package]]
 name = "ic-transport-types"
-version = "0.39.1"
+version = "0.39.2"
 dependencies = [
  "candid",
  "hex",
@@ -1243,7 +1243,7 @@ dependencies = [
 
 [[package]]
 name = "ic-utils"
-version = "0.39.1"
+version = "0.39.2"
 dependencies = [
  "async-trait",
  "candid",
@@ -1426,7 +1426,7 @@ dependencies = [
 
 [[package]]
 name = "icx"
-version = "0.39.1"
+version = "0.39.2"
 dependencies = [
  "anyhow",
  "candid",
@@ -1446,7 +1446,7 @@ dependencies = [
 
 [[package]]
 name = "icx-cert"
-version = "0.39.1"
+version = "0.39.2"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
