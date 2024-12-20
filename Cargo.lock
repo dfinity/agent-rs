@@ -1135,7 +1135,7 @@ dependencies = [
  "hex",
  "http",
  "http-body",
- "ic-certification",
+ "ic-certification 3.0.2",
  "ic-transport-types 0.39.1",
  "ic-verify-bls-signature",
  "js-sys",
@@ -1184,6 +1184,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-certification"
+version = "3.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9eae40f26fcac9c141cad54d9aa5f423efffde78ac371057c53d275ebbcad443"
+dependencies = [
+ "hex",
+ "serde",
+ "serde_bytes",
+ "sha2 0.10.8",
+]
+
+[[package]]
 name = "ic-identity-hsm"
 version = "0.39.1"
 dependencies = [
@@ -1203,7 +1215,7 @@ checksum = "875dc4704780383112e8e8b5063a1b98de114321d0c7d3e7f635dcf360a57fba"
 dependencies = [
  "candid",
  "hex",
- "ic-certification",
+ "ic-certification 2.6.0",
  "leb128",
  "serde",
  "serde_bytes",
@@ -1218,7 +1230,7 @@ version = "0.39.1"
 dependencies = [
  "candid",
  "hex",
- "ic-certification",
+ "ic-certification 3.0.2",
  "leb128",
  "serde",
  "serde_bytes",
@@ -1440,7 +1452,7 @@ dependencies = [
  "base64 0.22.1",
  "clap",
  "hex",
- "ic-certification",
+ "ic-certification 3.0.2",
  "leb128",
  "reqwest",
  "serde",
@@ -1994,7 +2006,7 @@ dependencies = [
  "base64 0.13.1",
  "candid",
  "hex",
- "ic-certification",
+ "ic-certification 2.6.0",
  "ic-transport-types 0.37.1",
  "reqwest",
  "schemars",
@@ -2197,7 +2209,7 @@ dependencies = [
  "candid",
  "ed25519-consensus",
  "ic-agent",
- "ic-certification",
+ "ic-certification 3.0.2",
  "ic-identity-hsm",
  "ic-utils",
  "k256",
