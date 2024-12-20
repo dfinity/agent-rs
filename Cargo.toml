@@ -26,7 +26,7 @@ ic-agent = { path = "ic-agent", version = "0.39.1", default-features = false }
 ic-utils = { path = "ic-utils", version = "0.39.1" }
 ic-transport-types = { path = "ic-transport-types", version = "0.39.1" }
 
-ic-certification = "2.6.0"
+ic-certification = "3"
 candid = "0.10.10"
 candid_parser = "0.1.4"
 clap = "4.5.21"

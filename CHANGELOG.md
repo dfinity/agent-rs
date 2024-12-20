@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.39.0]
 
+* Bumped `ic-certification` to `3.0.0`.
 * The lower-level update call functions now return the certificate in addition to the parsed response data.
 * Make ingress_expiry required and set the default value to 3 min.
 * Changed `BasicIdentity`'s implementation from `ring` to `ed25519-consensus`.
@@ -33,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * `Url` now implements `RouteProvider`.
 * Add canister snapshot methods to `ManagementCanister`.
 * Add `AllowedViewers` to `LogVisibility` enum.
-* Remove the cargo feature, `experimental_sync_call`, and enable synchronous update calls by default. 
+* Remove the cargo feature, `experimental_sync_call`, and enable synchronous update calls by default.
 
 ## [0.37.1] - 2024-07-25
 
@@ -75,7 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * `ReqwestTransport` and `HyperTransport` structures storing the trait object `route_provider: Box<dyn RouteProvider>` have been modified to allow for shared ownership via `Arc<dyn RouteProvider>`.
 * Added `wasm_memory_limit` to canister creation and canister setting update options.
 * Bumped Reqwest version from `0.11.7` to `0.12.4`
- 
+
 ## [0.34.0] - 2024-03-18
 
 * Changed `AgentError::ReplicaError` to `CertifiedReject` or `UncertifiedReject`. `CertifiedReject`s went through consensus, and `UncertifiedReject`s did not. If your code uses `ReplicaError`:
