@@ -174,13 +174,15 @@ pub struct DefiniteCanisterSettings {
     pub compute_allocation: Nat,
     /// The allocation, in bytes (up to 256 TiB) that the canister is allowed to use for storage.
     pub memory_allocation: Nat,
-    /// The IC will freeze a canister protectively if it will likely run out of cycles before this amount of time, in seconds (up to `u64::MAX`), has passed.
+    /// The IC will freeze a canister protectively if it will likely run out of cycles before this amount of time,
+    /// in seconds (up to `u64::MAX`), has passed.
     pub freezing_threshold: Nat,
     /// The upper limit of the canister's reserved cycles balance.
     pub reserved_cycles_limit: Option<Nat>,
     /// A soft limit on the Wasm memory usage of the canister in bytes (up to 256TiB).
     pub wasm_memory_limit: Option<Nat>,
-    /// A threshold limit on the Wasm memory usage of the canister in bytes, at which the canister's `on_low_wasm_memory` hook will be called (up to 256TiB)
+    /// A threshold on the Wasm memory usage of the canister as a distance in bytes from `wasm_memory_limit`,
+    /// at which the canister's `on_low_wasm_memory` hook will be called (up to 256TiB)
     pub wasm_memory_threshold: Option<Nat>,
     /// The canister log visibility. Defines which principals are allowed to fetch logs.
     pub log_visibility: LogVisibility,
