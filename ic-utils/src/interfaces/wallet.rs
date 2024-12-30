@@ -673,6 +673,7 @@ impl<'agent> WalletCanister<'agent> {
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
             wasm_memory_limit: None,
+            wasm_memory_threshold: None,
             log_visibility: None,
         };
 
@@ -704,6 +705,7 @@ impl<'agent> WalletCanister<'agent> {
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
             wasm_memory_limit: None,
+            wasm_memory_threshold: None,
             log_visibility: None,
         };
 
@@ -833,6 +835,7 @@ impl<'agent> WalletCanister<'agent> {
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
             wasm_memory_limit: None,
+            wasm_memory_threshold: None,
             log_visibility: None,
         };
 
@@ -864,6 +867,7 @@ impl<'agent> WalletCanister<'agent> {
             freezing_threshold: freezing_threshold.map(u64::from).map(Nat::from),
             reserved_cycles_limit: None,
             wasm_memory_limit: None,
+            wasm_memory_threshold: None,
             log_visibility: None,
         };
 

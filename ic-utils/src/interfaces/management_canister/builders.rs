@@ -76,6 +76,14 @@ pub struct CanisterSettings {
     /// Must be a number between 0 and 2^48^ (i.e 256TB), inclusively.
     pub wasm_memory_limit: Option<Nat>,
 
+    /// A threshold on the remaining Wasm memory of the canister.
+    ///
+    /// When the remaining memory drops below this threshold, its
+    /// `on_low_wasm_memory` hook will be invoked. This enables it
+    /// to self-optimize or raise an alert or otherwise attempt to
+    /// prevent itself from reaching `wasm_memory_limit`.
+    pub wasm_memory_threshold: Option<Nat>,
+
     /// The canister log visibility of the canister.
     ///
     /// If unspecified and a canister is being created with these settings, defaults to `Controllers`, i.e. private by default.
@@ -93,6 +101,7 @@ pub struct CreateCanisterBuilder<'agent, 'canister: 'agent> {
     freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
     reserved_cycles_limit: Option<Result<ReservedCyclesLimit, AgentError>>,
     wasm_memory_limit: Option<Result<WasmMemoryLimit, AgentError>>,
+    wasm_memory_threshold: Option<Result<WasmMemoryLimit, AgentError>>,
     log_visibility: Option<Result<LogVisibility, AgentError>>,
     is_provisional_create: bool,
     amount: Option<u128>,
@@ -111,6 +120,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             freezing_threshold: None,
             reserved_cycles_limit: None,
             wasm_memory_limit: None,
+            wasm_memory_threshold: None,
             log_visibility: None,
             is_provisional_create: false,
             amount: None,
@@ -161,7 +171,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         }
     }
 
-    /// Pass in an optional controller for the canister. If this is [None],
+    /// Pass in an optional controller for the canister. If this is [`None`],
     /// it will revert the controller to default.
     pub fn with_optional_controller<C, E>(self, controller: Option<C>) -> Self
     where
@@ -199,7 +209,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         self.with_optional_controller(Some(controller))
     }
 
-    /// Pass in a compute allocation optional value for the canister. If this is [None],
+    /// Pass in a compute allocation optional value for the canister. If this is [`None`],
     /// it will revert the compute allocation to default.
     pub fn with_optional_compute_allocation<C, E>(self, compute_allocation: Option<C>) -> Self
     where
@@ -224,7 +234,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         self.with_optional_compute_allocation(Some(compute_allocation))
     }
 
-    /// Pass in a memory allocation optional value for the canister. If this is [None],
+    /// Pass in a memory allocation optional value for the canister. If this is [`None`],
     /// it will revert the memory allocation to default.
     pub fn with_optional_memory_allocation<E, C>(self, memory_allocation: Option<C>) -> Self
     where
@@ -249,7 +259,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         self.with_optional_memory_allocation(Some(memory_allocation))
     }
 
-    /// Pass in a freezing threshold optional value for the canister. If this is [None],
+    /// Pass in a freezing threshold optional value for the canister. If this is [`None`],
     /// it will revert the freezing threshold to default.
     pub fn with_optional_freezing_threshold<E, C>(self, freezing_threshold: Option<C>) -> Self
     where
@@ -283,7 +293,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         self.with_optional_reserved_cycles_limit(Some(limit))
     }
 
-    /// Pass in a reserved cycles limit optional value for the canister. If this is [None],
+    /// Pass in a reserved cycles limit optional value for the canister. If this is [`None`],
     /// it will create the canister with the default limit.
     pub fn with_optional_reserved_cycles_limit<E, C>(self, limit: Option<C>) -> Self
     where
@@ -309,7 +319,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         self.with_optional_wasm_memory_limit(Some(wasm_memory_limit))
     }
 
-    /// Pass in a Wasm memory limit optional value for the canister. If this is [None],
+    /// Pass in a Wasm memory limit optional value for the canister. If this is [`None`],
     /// it will revert the Wasm memory limit to default.
     pub fn with_optional_wasm_memory_limit<E, C>(self, wasm_memory_limit: Option<C>) -> Self
     where
@@ -318,6 +328,32 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
     {
         Self {
             wasm_memory_limit: wasm_memory_limit.map(|limit| {
+                limit
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}")))
+            }),
+            ..self
+        }
+    }
+
+    /// Pass in a Wasm memory threshold value for the canister.
+    pub fn with_wasm_memory_threshold<C, E>(self, wasm_memory_threshold: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<WasmMemoryLimit, Error = E>,
+    {
+        self.with_optional_wasm_memory_threshold(Some(wasm_memory_threshold))
+    }
+
+    /// Pass in a Wasm memory threshold optional value for the canister. If this is [`None`],
+    /// it will revert the Wasm memory threshold to default.
+    pub fn with_optional_wasm_memory_threshold<E, C>(self, wasm_memory_threshold: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<WasmMemoryLimit, Error = E>,
+    {
+        Self {
+            wasm_memory_threshold: wasm_memory_threshold.map(|limit| {
                 limit
                     .try_into()
                     .map_err(|e| AgentError::MessageError(format!("{e}")))
@@ -335,7 +371,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         self.with_optional_log_visibility(Some(log_visibility))
     }
 
-    /// Pass in a log visibility optional setting for the canister. If this is [None],
+    /// Pass in a log visibility optional setting for the canister. If this is [`None`],
     /// it will revert the log visibility to default.
     pub fn with_optional_log_visibility<E, C>(self, log_visibility: Option<C>) -> Self
     where
@@ -385,6 +421,11 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
+        let wasm_memory_threshold = match self.wasm_memory_threshold {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
+            None => None,
+        };
         let log_visibility = match self.log_visibility {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(x),
@@ -412,6 +453,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     freezing_threshold,
                     reserved_cycles_limit,
                     wasm_memory_limit,
+                    wasm_memory_threshold,
                     log_visibility,
                 },
                 specified_id: self.specified_id,
@@ -430,6 +472,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     freezing_threshold,
                     reserved_cycles_limit,
                     wasm_memory_limit,
+                    wasm_memory_threshold,
                     log_visibility,
                 })
                 .with_effective_canister_id(self.effective_canister_id)
@@ -956,6 +999,7 @@ pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent> {
     freezing_threshold: Option<Result<FreezingThreshold, AgentError>>,
     reserved_cycles_limit: Option<Result<ReservedCyclesLimit, AgentError>>,
     wasm_memory_limit: Option<Result<WasmMemoryLimit, AgentError>>,
+    wasm_memory_threshold: Option<Result<WasmMemoryLimit, AgentError>>,
     log_visibility: Option<Result<LogVisibility, AgentError>>,
 }
 
@@ -971,11 +1015,12 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             freezing_threshold: None,
             reserved_cycles_limit: None,
             wasm_memory_limit: None,
+            wasm_memory_threshold: None,
             log_visibility: None,
         }
     }
 
-    /// Pass in an optional controller for the canister. If this is [None],
+    /// Pass in an optional controller for the canister. If this is [`None`],
     /// it will revert the controller to default.
     pub fn with_optional_controller<C, E>(self, controller: Option<C>) -> Self
     where
@@ -1014,7 +1059,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         self.with_optional_controller(Some(controller))
     }
 
-    /// Pass in a compute allocation optional value for the canister. If this is [None],
+    /// Pass in a compute allocation optional value for the canister. If this is [`None`],
     /// it will revert the compute allocation to default.
     pub fn with_optional_compute_allocation<C, E>(self, compute_allocation: Option<C>) -> Self
     where
@@ -1039,7 +1084,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         self.with_optional_compute_allocation(Some(compute_allocation))
     }
 
-    /// Pass in a memory allocation optional value for the canister. If this is [None],
+    /// Pass in a memory allocation optional value for the canister. If this is [`None`],
     /// it will revert the memory allocation to default.
     pub fn with_optional_memory_allocation<E, C>(self, memory_allocation: Option<C>) -> Self
     where
@@ -1064,7 +1109,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         self.with_optional_memory_allocation(Some(memory_allocation))
     }
 
-    /// Pass in a freezing threshold optional value for the canister. If this is [None],
+    /// Pass in a freezing threshold optional value for the canister. If this is [`None`],
     /// it will revert the freezing threshold to default.
     pub fn with_optional_freezing_threshold<E, C>(self, freezing_threshold: Option<C>) -> Self
     where
@@ -1099,7 +1144,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
     }
 
     /// Pass in a reserved cycles limit optional value for the canister.
-    /// If this is [None], leaves the reserved cycles limit unchanged.
+    /// If this is [`None`], leaves the reserved cycles limit unchanged.
     pub fn with_optional_reserved_cycles_limit<E, C>(self, limit: Option<C>) -> Self
     where
         E: std::fmt::Display,
@@ -1123,7 +1168,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         self.with_optional_wasm_memory_limit(Some(wasm_memory_limit))
     }
 
-    /// Pass in a Wasm memory limit optional value for the canister. If this is [None],
+    /// Pass in a Wasm memory limit optional value for the canister. If this is [`None`],
     /// leaves the Wasm memory limit unchanged.
     pub fn with_optional_wasm_memory_limit<E, C>(self, wasm_memory_limit: Option<C>) -> Self
     where
@@ -1132,6 +1177,32 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
     {
         Self {
             wasm_memory_limit: wasm_memory_limit.map(|limit| {
+                limit
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}")))
+            }),
+            ..self
+        }
+    }
+
+    /// Pass in a Wasm memory limit threshold value for the canister.
+    pub fn with_wasm_memory_threshold<C, E>(self, wasm_memory_threshold: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<WasmMemoryLimit, Error = E>,
+    {
+        self.with_optional_wasm_memory_threshold(Some(wasm_memory_threshold))
+    }
+
+    /// Pass in a Wasm memory limit threshold value for the canister. If this is [`None`],
+    /// leaves the memory threshold unchanged.
+    pub fn with_optional_wasm_memory_threshold<E, C>(self, wasm_memory_threshold: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<WasmMemoryLimit, Error = E>,
+    {
+        Self {
+            wasm_memory_threshold: wasm_memory_threshold.map(|limit| {
                 limit
                     .try_into()
                     .map_err(|e| AgentError::MessageError(format!("{e}")))
@@ -1149,7 +1220,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         self.with_optional_log_visibility(Some(log_visibility))
     }
 
-    /// Pass in a log visibility optional setting for the canister. If this is [None],
+    /// Pass in a log visibility optional setting for the canister. If this is [`None`],
     /// leaves the log visibility unchanged.
     pub fn with_optional_log_visibility<E, C>(self, log_visibility: Option<C>) -> Self
     where
@@ -1205,6 +1276,11 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
+        let wasm_memory_threshold = match self.wasm_memory_threshold {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
+            None => None,
+        };
         let log_visibility = match self.log_visibility {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(x),
@@ -1223,6 +1299,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
                     freezing_threshold,
                     reserved_cycles_limit,
                     wasm_memory_limit,
+                    wasm_memory_threshold,
                     log_visibility,
                 },
             })
