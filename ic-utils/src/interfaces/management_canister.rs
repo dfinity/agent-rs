@@ -180,6 +180,8 @@ pub struct DefiniteCanisterSettings {
     pub reserved_cycles_limit: Option<Nat>,
     /// A soft limit on the Wasm memory usage of the canister in bytes (up to 256TiB).
     pub wasm_memory_limit: Option<Nat>,
+    /// A threshold limit on the Wasm memory usage of the canister in bytes, at which the canister's `on_low_wasm_memory` hook will be called (up to 256TiB)
+    pub wasm_memory_threshold: Option<Nat>,
     /// The canister log visibility. Defines which principals are allowed to fetch logs.
     pub log_visibility: LogVisibility,
 }
