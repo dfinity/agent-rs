@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Added `wasm_memory_threshold` field to `CanisterSettings`.
+
 ## [0.39.2] - 2024-12-20
 
 * Bumped `ic-certification` to `3.0.0`.
