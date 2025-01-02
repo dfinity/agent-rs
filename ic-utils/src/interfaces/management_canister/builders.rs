@@ -76,12 +76,13 @@ pub struct CanisterSettings {
     /// Must be a number between 0 and 2^48^ (i.e 256TB), inclusively.
     pub wasm_memory_limit: Option<Nat>,
 
-    /// A threshold on the remaining Wasm memory of the canister.
+    /// A threshold on the Wasm memory usage of the canister, as a distance from
+    /// `wasm_memory_limit`.
     ///
-    /// When the remaining memory drops below this threshold, its
-    /// `on_low_wasm_memory` hook will be invoked. This enables it
-    /// to self-optimize or raise an alert or otherwise attempt to
-    /// prevent itself from reaching `wasm_memory_limit`.
+    /// When the remaining memory before the limit drops below this threshold, its
+    /// `on_low_wasm_memory` hook will be invoked. This enables it to self-optimize,
+    /// or raise an alert, or otherwise attempt to prevent itself from reaching
+    /// `wasm_memory_limit`.
     pub wasm_memory_threshold: Option<Nat>,
 
     /// The canister log visibility of the canister.
@@ -1185,7 +1186,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         }
     }
 
-    /// Pass in a Wasm memory limit threshold value for the canister.
+    /// Pass in a Wasm memory threshold value for the canister.
     pub fn with_wasm_memory_threshold<C, E>(self, wasm_memory_threshold: C) -> Self
     where
         E: std::fmt::Display,
@@ -1194,7 +1195,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         self.with_optional_wasm_memory_threshold(Some(wasm_memory_threshold))
     }
 
-    /// Pass in a Wasm memory limit threshold value for the canister. If this is [`None`],
+    /// Pass in a Wasm memory threshold value for the canister. If this is [`None`],
     /// leaves the memory threshold unchanged.
     pub fn with_optional_wasm_memory_threshold<E, C>(self, wasm_memory_threshold: Option<C>) -> Self
     where
