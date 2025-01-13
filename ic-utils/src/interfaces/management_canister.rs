@@ -93,6 +93,8 @@ pub enum MgmtMethod {
     BitcoinGetBlockHeaders,
     /// There is no corresponding agent function as only canisters can call it.
     NodeMetricsHistory,
+    /// There is no corresponding agent function as only canisters can call it.
+    CanisterInfo
 }
 
 impl<'agent> ManagementCanister<'agent> {
