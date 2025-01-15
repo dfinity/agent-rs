@@ -326,7 +326,8 @@ pub fn get_effective_canister_id(
             | MgmtMethod::BitcoinGetBlockHeaders
             | MgmtMethod::EcdsaPublicKey
             | MgmtMethod::SignWithEcdsa
-            | MgmtMethod::NodeMetricsHistory => {
+            | MgmtMethod::NodeMetricsHistory
+            | MgmtMethod::CanisterInfo => {
                 bail!("Management canister method {method_name} can only be run from canisters");
             }
         }
