@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ macos-13-large, ubuntu-latest ]
+        os: [ macos-13-large, ubuntu-22.04 ]
         dfx: [ '0.8.4', '0.9.2', '0.10.1', '0.11.1' ]
 
     steps:
