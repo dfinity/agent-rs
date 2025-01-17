@@ -157,6 +157,7 @@ fn compute_score(
 pub struct LatencyRoutingSnapshot {
     nodes_with_metrics: Vec<NodeWithMetrics>,
     existing_nodes: HashSet<Node>,
+    healthy_nodes: HashSet<Node>,
     window_weights: Vec<f64>,
     window_weights_sum: f64,
     use_availability_penalty: bool,
@@ -174,6 +175,7 @@ impl LatencyRoutingSnapshot {
         Self {
             nodes_with_metrics: vec![],
             existing_nodes: HashSet::new(),
+            healthy_nodes: HashSet::new(),
             use_availability_penalty: true,
             window_weights,
             window_weights_sum,
@@ -302,6 +304,12 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
                 self.nodes_with_metrics.len() - 1
             });
 
+        if health.is_healthy() {
+            self.healthy_nodes.insert(node.clone());
+        } else {
+            self.healthy_nodes.remove(node);
+        }
+
         self.nodes_with_metrics[idx].add_latency_measurement(health.latency());
 
         self.nodes_with_metrics[idx].score = compute_score(
@@ -313,6 +321,10 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
         );
 
         true
+    }
+
+    fn nodes_stats(&self) -> (usize, usize) {
+        (self.existing_nodes.len(), self.healthy_nodes.len())
     }
 }
 
@@ -344,6 +356,7 @@ mod tests {
         assert!(!snapshot.has_nodes());
         assert!(snapshot.next_node().is_none());
         assert!(snapshot.next_n_nodes(1).is_empty());
+        assert_eq!(snapshot.nodes_stats(), (0, 0));
     }
 
     #[test]
@@ -359,6 +372,7 @@ mod tests {
         assert!(snapshot.nodes_with_metrics.is_empty());
         assert!(!snapshot.has_nodes());
         assert!(snapshot.next_node().is_none());
+        assert_eq!(snapshot.nodes_stats(), (0, 0));
     }
 
     #[test]
@@ -370,6 +384,7 @@ mod tests {
         let node = Node::new("api1.com").unwrap();
         let health = HealthCheckStatus::new(Some(Duration::from_secs(1)));
         snapshot.existing_nodes.insert(node.clone());
+        assert_eq!(snapshot.nodes_stats(), (1, 0));
         // Check first update
         let is_updated = snapshot.update_node(&node, health);
         assert!(is_updated);
@@ -377,6 +392,7 @@ mod tests {
         let node_with_metrics = snapshot.nodes_with_metrics.first().unwrap();
         assert_eq!(node_with_metrics.score, (2.0 / 1.0) / 2.0);
         assert_eq!(snapshot.next_node().unwrap(), node);
+        assert_eq!(snapshot.nodes_stats(), (1, 1));
         // Check second update
         let health = HealthCheckStatus::new(Some(Duration::from_secs(2)));
         let is_updated = snapshot.update_node(&node, health);
@@ -399,6 +415,7 @@ mod tests {
         assert_eq!(snapshot.nodes_with_metrics.len(), 1);
         assert_eq!(snapshot.existing_nodes.len(), 1);
         assert!(snapshot.next_node().is_none());
+        assert_eq!(snapshot.nodes_stats(), (1, 0));
     }
 
     #[test]

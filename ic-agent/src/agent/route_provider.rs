@@ -51,6 +51,15 @@ pub trait RouteProvider: std::fmt::Debug + Send + Sync {
     /// appearing first. The returned vector can contain fewer than `n` URLs if
     /// fewer are available.
     fn n_ordered_routes(&self, n: usize) -> Result<Vec<Url>, AgentError>;
+
+    /// Returns the total number of routes and healthy routes as a tuple.
+    ///
+    /// - First element is the total number of routes available (both healthy and unhealthy)
+    /// - Second element is the number of currently healthy routes
+    ///
+    /// A healthy route is one that is available and ready to receive traffic.
+    /// The specific criteria for what constitutes a "healthy" route is implementation dependent.
+    fn routes_stats(&self) -> (usize, usize);
 }
 
 /// A simple implementation of the [`RouteProvider`] which produces an even distribution of the urls from the input ones.
@@ -94,6 +103,10 @@ impl RouteProvider for RoundRobinRouteProvider {
 
         Ok(urls)
     }
+
+    fn routes_stats(&self) -> (usize, usize) {
+        (self.routes.len(), self.routes.len())
+    }
 }
 
 impl RoundRobinRouteProvider {
@@ -132,6 +145,9 @@ impl RouteProvider for Url {
     }
     fn n_ordered_routes(&self, _: usize) -> Result<Vec<Url>, AgentError> {
         Ok(vec![self.route()?])
+    }
+    fn routes_stats(&self) -> (usize, usize) {
+        (1, 1)
     }
 }
 
@@ -215,6 +231,9 @@ impl RouteProvider for DynamicRouteProvider {
     fn n_ordered_routes(&self, n: usize) -> Result<Vec<Url>, AgentError> {
         self.inner.n_ordered_routes(n)
     }
+    fn routes_stats(&self) -> (usize, usize) {
+        self.inner.routes_stats()
+    }
 }
 
 /// Strategy for [`DynamicRouteProvider`]'s routing mechanism.
@@ -269,6 +288,9 @@ impl<R: RouteProvider> RouteProvider for UrlUntilReady<R> {
         } else {
             self.url.route()
         }
+    }
+    fn routes_stats(&self) -> (usize, usize) {
+        (1, 1)
     }
 }
 
