@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Added `CanisterInfo` to `MgmtMethod`.
 
+* Extended `RouteProvider` trait with `fn routes_stats()`, returning the number of total and healthy routes as a tuple.
+
 ## [0.39.2] - 2024-12-20
 
 * Bumped `ic-certification` to `3.0.0`.
