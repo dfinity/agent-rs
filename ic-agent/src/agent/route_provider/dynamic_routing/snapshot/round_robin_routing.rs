@@ -107,8 +107,8 @@ impl RoutingSnapshot for RoundRobinRoutingSnapshot {
         }
     }
 
-    fn nodes_stats(&self) -> (usize, usize) {
-        (self.existing_nodes.len(), self.healthy_nodes.len())
+    fn nodes_stats(&self) -> (usize, Option<usize>) {
+        (self.existing_nodes.len(), Some(self.healthy_nodes.len()))
     }
 }
 

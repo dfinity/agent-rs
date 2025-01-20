@@ -15,6 +15,11 @@ pub trait RoutingSnapshot: Send + Sync + Clone + Debug {
     fn sync_nodes(&mut self, nodes: &[Node]) -> bool;
     /// Updates the health status of a specific node, returning `true` if the node was found and updated.
     fn update_node(&mut self, node: &Node, health: HealthCheckStatus) -> bool;
-    /// Returns the total number of nodes and healthy nodes as a tuple with first and second element, respectively.
-    fn nodes_stats(&self) -> (usize, usize);
+    /// Returns the total number of nodes and healthy nodes as a tuple.
+    ///
+    /// - First element is the total number of nodes available (both healthy and unhealthy)
+    /// - Second element is the number of currently healthy nodes, or None if health status information is unavailable
+    ///
+    /// The specific criteria for what constitutes a "healthy" node is implementation dependent.
+    fn nodes_stats(&self) -> (usize, Option<usize>);
 }

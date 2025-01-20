@@ -55,11 +55,11 @@ pub trait RouteProvider: std::fmt::Debug + Send + Sync {
     /// Returns the total number of routes and healthy routes as a tuple.
     ///
     /// - First element is the total number of routes available (both healthy and unhealthy)
-    /// - Second element is the number of currently healthy routes
+    /// - Second element is the number of currently healthy routes, or None if health status information is unavailable
     ///
     /// A healthy route is one that is available and ready to receive traffic.
     /// The specific criteria for what constitutes a "healthy" route is implementation dependent.
-    fn routes_stats(&self) -> (usize, usize);
+    fn routes_stats(&self) -> (usize, Option<usize>);
 }
 
 /// A simple implementation of the [`RouteProvider`] which produces an even distribution of the urls from the input ones.
@@ -104,8 +104,8 @@ impl RouteProvider for RoundRobinRouteProvider {
         Ok(urls)
     }
 
-    fn routes_stats(&self) -> (usize, usize) {
-        (self.routes.len(), self.routes.len())
+    fn routes_stats(&self) -> (usize, Option<usize>) {
+        (self.routes.len(), None)
     }
 }
 
@@ -146,8 +146,8 @@ impl RouteProvider for Url {
     fn n_ordered_routes(&self, _: usize) -> Result<Vec<Url>, AgentError> {
         Ok(vec![self.route()?])
     }
-    fn routes_stats(&self) -> (usize, usize) {
-        (1, 1)
+    fn routes_stats(&self) -> (usize, Option<usize>) {
+        (1, None)
     }
 }
 
@@ -231,7 +231,7 @@ impl RouteProvider for DynamicRouteProvider {
     fn n_ordered_routes(&self, n: usize) -> Result<Vec<Url>, AgentError> {
         self.inner.n_ordered_routes(n)
     }
-    fn routes_stats(&self) -> (usize, usize) {
+    fn routes_stats(&self) -> (usize, Option<usize>) {
         self.inner.routes_stats()
     }
 }
@@ -289,8 +289,8 @@ impl<R: RouteProvider> RouteProvider for UrlUntilReady<R> {
             self.url.route()
         }
     }
-    fn routes_stats(&self) -> (usize, usize) {
-        (1, 1)
+    fn routes_stats(&self) -> (usize, Option<usize>) {
+        (1, None)
     }
 }
 
