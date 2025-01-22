@@ -36,6 +36,24 @@ const ICP0_SUB_DOMAIN: &str = ".icp0.io";
 const ICP_API_SUB_DOMAIN: &str = ".icp-api.io";
 const LOCALHOST_SUB_DOMAIN: &str = ".localhost";
 
+/// Statistical info about routing urls.
+#[derive(Debug, PartialEq)]
+pub struct RoutesStats {
+    /// Total number of existing routes (both healthy and unhealthy).
+    pub total: usize,
+
+    /// Number of currently healthy routes, or None if health status information is unavailable.
+    /// A healthy route is one that is available and ready to receive traffic.
+    /// The specific criteria for what constitutes a "healthy" route is implementation dependent.
+    pub healthy: Option<usize>,
+}
+
+impl RoutesStats {
+    pub fn new(total: usize, healthy: Option<usize>) -> Self {
+        Self { total, healthy }
+    }
+}
+
 /// A [`RouteProvider`] for dynamic generation of routing urls.
 pub trait RouteProvider: std::fmt::Debug + Send + Sync {
     /// Generates the next routing URL based on the internal routing logic.
@@ -52,14 +70,8 @@ pub trait RouteProvider: std::fmt::Debug + Send + Sync {
     /// fewer are available.
     fn n_ordered_routes(&self, n: usize) -> Result<Vec<Url>, AgentError>;
 
-    /// Returns the total number of routes and healthy routes as a tuple.
-    ///
-    /// - First element is the total number of routes available (both healthy and unhealthy)
-    /// - Second element is the number of currently healthy routes, or None if health status information is unavailable
-    ///
-    /// A healthy route is one that is available and ready to receive traffic.
-    /// The specific criteria for what constitutes a "healthy" route is implementation dependent.
-    fn routes_stats(&self) -> (usize, Option<usize>);
+    /// Returns statistics about the total number of existing routes and the number of healthy routes.
+    fn routes_stats(&self) -> RoutesStats;
 }
 
 /// A simple implementation of the [`RouteProvider`] which produces an even distribution of the urls from the input ones.
@@ -104,8 +116,8 @@ impl RouteProvider for RoundRobinRouteProvider {
         Ok(urls)
     }
 
-    fn routes_stats(&self) -> (usize, Option<usize>) {
-        (self.routes.len(), None)
+    fn routes_stats(&self) -> RoutesStats {
+        RoutesStats::new(self.routes.len(), None)
     }
 }
 
@@ -146,8 +158,8 @@ impl RouteProvider for Url {
     fn n_ordered_routes(&self, _: usize) -> Result<Vec<Url>, AgentError> {
         Ok(vec![self.route()?])
     }
-    fn routes_stats(&self) -> (usize, Option<usize>) {
-        (1, None)
+    fn routes_stats(&self) -> RoutesStats {
+        RoutesStats::new(1, None)
     }
 }
 
@@ -231,7 +243,7 @@ impl RouteProvider for DynamicRouteProvider {
     fn n_ordered_routes(&self, n: usize) -> Result<Vec<Url>, AgentError> {
         self.inner.n_ordered_routes(n)
     }
-    fn routes_stats(&self) -> (usize, Option<usize>) {
+    fn routes_stats(&self) -> RoutesStats {
         self.inner.routes_stats()
     }
 }
@@ -289,8 +301,8 @@ impl<R: RouteProvider> RouteProvider for UrlUntilReady<R> {
             self.url.route()
         }
     }
-    fn routes_stats(&self) -> (usize, Option<usize>) {
-        (1, None)
+    fn routes_stats(&self) -> RoutesStats {
+        RoutesStats::new(1, None)
     }
 }
 

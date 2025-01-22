@@ -5,8 +5,11 @@ use std::{
 
 use rand::Rng;
 
-use crate::agent::route_provider::dynamic_routing::{
-    health_check::HealthCheckStatus, node::Node, snapshot::routing_snapshot::RoutingSnapshot,
+use crate::agent::route_provider::{
+    dynamic_routing::{
+        health_check::HealthCheckStatus, node::Node, snapshot::routing_snapshot::RoutingSnapshot,
+    },
+    RoutesStats,
 };
 
 // Determines the size of the sliding window used for storing latencies and availabilities of nodes.
@@ -323,8 +326,8 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
         true
     }
 
-    fn nodes_stats(&self) -> (usize, Option<usize>) {
-        (self.existing_nodes.len(), Some(self.healthy_nodes.len()))
+    fn routes_stats(&self) -> RoutesStats {
+        RoutesStats::new(self.existing_nodes.len(), Some(self.healthy_nodes.len()))
     }
 }
 
@@ -335,15 +338,18 @@ mod tests {
         time::Duration,
     };
 
-    use crate::agent::route_provider::dynamic_routing::{
-        health_check::HealthCheckStatus,
-        node::Node,
-        snapshot::{
-            latency_based_routing::{
-                compute_score, weighted_sample, LatencyRoutingSnapshot, NodeWithMetrics,
+    use crate::agent::route_provider::{
+        dynamic_routing::{
+            health_check::HealthCheckStatus,
+            node::Node,
+            snapshot::{
+                latency_based_routing::{
+                    compute_score, weighted_sample, LatencyRoutingSnapshot, NodeWithMetrics,
+                },
+                routing_snapshot::RoutingSnapshot,
             },
-            routing_snapshot::RoutingSnapshot,
         },
+        RoutesStats,
     };
 
     #[test]
@@ -356,7 +362,7 @@ mod tests {
         assert!(!snapshot.has_nodes());
         assert!(snapshot.next_node().is_none());
         assert!(snapshot.next_n_nodes(1).is_empty());
-        assert_eq!(snapshot.nodes_stats(), (0, Some(0)));
+        assert_eq!(snapshot.routes_stats(), RoutesStats::new(0, Some(0)));
     }
 
     #[test]
@@ -372,7 +378,7 @@ mod tests {
         assert!(snapshot.nodes_with_metrics.is_empty());
         assert!(!snapshot.has_nodes());
         assert!(snapshot.next_node().is_none());
-        assert_eq!(snapshot.nodes_stats(), (0, Some(0)));
+        assert_eq!(snapshot.routes_stats(), RoutesStats::new(0, Some(0)));
     }
 
     #[test]
@@ -384,7 +390,7 @@ mod tests {
         let node = Node::new("api1.com").unwrap();
         let health = HealthCheckStatus::new(Some(Duration::from_secs(1)));
         snapshot.existing_nodes.insert(node.clone());
-        assert_eq!(snapshot.nodes_stats(), (1, Some(0)));
+        assert_eq!(snapshot.routes_stats(), RoutesStats::new(1, Some(0)));
         // Check first update
         let is_updated = snapshot.update_node(&node, health);
         assert!(is_updated);
@@ -392,7 +398,7 @@ mod tests {
         let node_with_metrics = snapshot.nodes_with_metrics.first().unwrap();
         assert_eq!(node_with_metrics.score, (2.0 / 1.0) / 2.0);
         assert_eq!(snapshot.next_node().unwrap(), node);
-        assert_eq!(snapshot.nodes_stats(), (1, Some(1)));
+        assert_eq!(snapshot.routes_stats(), RoutesStats::new(1, Some(1)));
         // Check second update
         let health = HealthCheckStatus::new(Some(Duration::from_secs(2)));
         let is_updated = snapshot.update_node(&node, health);
@@ -415,7 +421,7 @@ mod tests {
         assert_eq!(snapshot.nodes_with_metrics.len(), 1);
         assert_eq!(snapshot.existing_nodes.len(), 1);
         assert!(snapshot.next_node().is_none());
-        assert_eq!(snapshot.nodes_stats(), (1, Some(0)));
+        assert_eq!(snapshot.routes_stats(), RoutesStats::new(1, Some(0)));
     }
 
     #[test]
