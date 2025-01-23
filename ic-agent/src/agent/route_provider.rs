@@ -49,6 +49,7 @@ pub struct RoutesStats {
 }
 
 impl RoutesStats {
+    /// Creates an new instance of [`RoutesStats`].
     pub fn new(total: usize, healthy: Option<usize>) -> Self {
         Self { total, healthy }
     }
