@@ -11,7 +11,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.39.2"
+version = "0.39.3"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2021"
 repository = "https://github.com/dfinity/agent-rs"
