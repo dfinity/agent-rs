@@ -117,3 +117,19 @@ tracing = ["dep:tracing"] # Does very little right now.
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 rustdoc-args = ["--cfg=docsrs"]
 features = []
+
+[[bin]]
+name = "demo_1_fetch_nodes"
+path = "./src/demo_1_fetch_nodes.rs"
+
+[[bin]]
+name = "demo_2_fetch_nodes_via_api"
+path = "./src/demo_2_fetch_nodes_via_api.rs"
+
+[[bin]]
+name = "demo_3_dynamic_routing"
+path = "./src/demo_3_dynamic_routing.rs"
+
+[[bin]]
+name = "demo_4_dynamic_routing"
+path = "./src/demo_4_dynamic_routing.rs"

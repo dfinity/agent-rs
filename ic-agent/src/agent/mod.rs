@@ -1142,6 +1142,10 @@ impl Agent {
     ) -> Result<(StatusCode, HeaderMap, Vec<u8>), AgentError> {
         let create_request_with_generated_url = || -> Result<Request, AgentError> {
             let url = self.route_provider.route()?.join(endpoint)?;
+            println!(
+                "routing via {}",
+                url.as_str().split("api/v2").next().unwrap()
+            );
             let mut http_request = Request::new(method.clone(), url);
             http_request
                 .headers_mut()
