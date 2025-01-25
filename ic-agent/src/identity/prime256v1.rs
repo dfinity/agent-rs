@@ -72,7 +72,6 @@ impl Prime256v1Identity {
         }
     }
 }
-
 #[async_trait]
 impl Identity for Prime256v1Identity {
     fn sender(&self) -> Result<Principal, String> {
@@ -85,7 +84,7 @@ impl Identity for Prime256v1Identity {
         Some(self.der_encoded_public_key.as_ref().to_vec())
     }
 
-    async fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
+  async  fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
         self.sign_arbitrary(&content.to_request_id().signable())
     }
 
@@ -97,7 +96,7 @@ impl Identity for Prime256v1Identity {
         let ecdsa_sig: ecdsa::Signature = self
             .private_key
             .try_sign(content)
-            .map_err(|err| format!("Cannot create prime256v1 signature: {}", err))?;
+            .map_err(|err| format!("Cannot create prime256v1 signature: {err}"))?;
         let r = ecdsa_sig.r().as_ref().to_bytes();
         let s = ecdsa_sig.s().as_ref().to_bytes();
         let mut bytes = [0u8; 64];
@@ -191,7 +190,7 @@ Sks4xGbA/ZbazsrMl4v446U5UIVxCGGaKw==
     }
 
     #[tokio::test]
-    async fn test_prime256v1_signature() {
+   async fn test_prime256v1_signature() {
         // Create a prime256v1 identity from a PEM file.
         let identity = Prime256v1Identity::from_pem(IDENTITY_FILE.as_bytes())
             .expect("Cannot create prime256v1 identity from PEM file.");
@@ -206,8 +205,7 @@ Sks4xGbA/ZbazsrMl4v446U5UIVxCGGaKw==
             arg: Encode!(&"world").unwrap(),
         };
         let signature = identity
-            .sign(&message)
-            .await
+            .sign(&message).await
             .expect("Cannot create prime256v1 signature.")
             .signature
             .expect("Cannot find prime256v1 signature bytes.");

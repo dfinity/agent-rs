@@ -50,9 +50,13 @@ pub enum AgentError {
     #[error("Cannot parse Principal: {0}")]
     PrincipalError(#[from] crate::export::PrincipalError),
 
-    /// The replica rejected the message.
-    #[error("The replica returned a replica error: reject code {:?}, reject message {}, error code {:?}", .0.reject_code, .0.reject_message, .0.error_code)]
-    ReplicaError(RejectResponse),
+    /// The subnet rejected the message.
+    #[error("The replica returned a rejection error: reject code {:?}, reject message {}, error code {:?}", .0.reject_code, .0.reject_message, .0.error_code)]
+    CertifiedReject(RejectResponse),
+
+    /// The replica rejected the message. This rejection cannot be verified as authentic.
+    #[error("The replica returned a rejection error: reject code {:?}, reject message {}, error code {:?}", .0.reject_code, .0.reject_message, .0.error_code)]
+    UncertifiedReject(RejectResponse),
 
     /// The replica returned an HTTP error.
     #[error("The replica returned an HTTP Error: {0}")]
@@ -94,7 +98,7 @@ pub enum AgentError {
     #[error("The request status ({1}) at path {0:?} is invalid.")]
     InvalidRequestStatus(Vec<Label>, String),
 
-    /// The certificate verification for a read_state call failed.
+    /// The certificate verification for a `read_state` call failed.
     #[error("Certificate verification failed.")]
     CertificateVerificationFailed(),
 
@@ -102,7 +106,7 @@ pub enum AgentError {
     #[error("Query signature verification failed.")]
     QuerySignatureVerificationFailed,
 
-    /// The certificate contained a delegation that does not include the effective_canister_id in the canister_ranges field.
+    /// The certificate contained a delegation that does not include the `effective_canister_id` in the `canister_ranges` field.
     #[error("Certificate is not authorized to respond to queries for this canister. While developing: Did you forget to set effective_canister_id?")]
     CertificateNotAuthorized(),
 
@@ -171,17 +175,13 @@ pub enum AgentError {
     #[error("The wallet canister must be upgraded: {0}")]
     WalletUpgradeRequired(String),
 
-    /// The transport was not specified in the [`AgentBuilder`](super::AgentBuilder).
-    #[error("Missing replica transport in the Agent Builder.")]
-    MissingReplicaTransport(),
-
     /// The response size exceeded the provided limit.
     #[error("Response size exceeded limit.")]
     ResponseSizeExceededLimit(),
 
     /// An unknown error occurred during communication with the replica.
     #[error("An error happened during communication with the replica: {0}")]
-    TransportError(Box<dyn std::error::Error + Send + Sync>),
+    TransportError(#[from] reqwest::Error),
 
     /// There was a mismatch between the expected and actual CBOR data during inspection.
     #[error("There is a mismatch between the CBOR encoded call and the arguments: field {field}, value in argument is {value_arg}, value in CBOR is {value_cbor}")]
@@ -201,13 +201,17 @@ pub enum AgentError {
     /// Route provider failed to generate a url for some reason.
     #[error("Route provider failed to generate url: {0}")]
     RouteProviderError(String),
+
+    /// Invalid HTTP response.
+    #[error("Invalid HTTP response: {0}")]
+    InvalidHttpResponse(String),
 }
 
 impl PartialEq for AgentError {
     fn eq(&self, other: &Self) -> bool {
         // Verify the debug string is the same. Some of the subtypes of this error
         // don't implement Eq or PartialEq, so we cannot rely on derive.
-        format!("{:?}", self) == format!("{:?}", other)
+        format!("{self:?}") == format!("{other:?}")
     }
 }
 
@@ -235,7 +239,7 @@ impl HttpErrorPayload {
         f.write_fmt(format_args!(
             "Http Error: status {}, content type {:?}, content: {}",
             http::StatusCode::from_u16(self.status)
-                .map_or_else(|_| format!("{}", self.status), |code| format!("{}", code)),
+                .map_or_else(|_| format!("{}", self.status), |code| format!("{code}")),
             self.content_type.clone().unwrap_or_default(),
             String::from_utf8(self.content.clone()).unwrap_or_else(|_| format!(
                 "(unable to decode content as UTF-8: {:?})",

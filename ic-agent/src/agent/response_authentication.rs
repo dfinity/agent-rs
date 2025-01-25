@@ -1,10 +1,10 @@
-use crate::agent::{RejectCode, RejectResponse, RequestStatusResponse};
+use crate::agent::{ApiBoundaryNode, RejectCode, RejectResponse, RequestStatusResponse};
 use crate::{export::Principal, AgentError, RequestId};
 use ic_certification::hash_tree::{HashTree, SubtreeLookupResult};
 use ic_certification::{certificate::Certificate, hash_tree::Label, LookupResult};
 use ic_transport_types::{ReplyResponse, SubnetMetrics};
 use rangemap::RangeInclusiveSet;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::str::from_utf8;
 
 use super::Subnet;
@@ -31,6 +31,13 @@ pub fn extract_der(buf: Vec<u8>) -> Result<Vec<u8>, AgentError> {
 
     let key = &buf[DER_PREFIX.len()..];
     Ok(key.to_vec())
+}
+
+pub(crate) fn lookup_time<Storage: AsRef<[u8]>>(
+    certificate: &Certificate<Storage>,
+) -> Result<u64, AgentError> {
+    let mut time = lookup_value(&certificate.tree, ["time".as_bytes()])?;
+    Ok(leb128::read::unsigned(&mut time)?)
 }
 
 pub(crate) fn lookup_canister_info<Storage: AsRef<[u8]>>(
@@ -71,7 +78,7 @@ pub(crate) fn lookup_subnet_metrics<Storage: AsRef<[u8]>>(
 }
 
 pub(crate) fn lookup_request_status<Storage: AsRef<[u8]>>(
-    certificate: Certificate<Storage>,
+    certificate: &Certificate<Storage>,
     request_id: &RequestId,
 ) -> Result<RequestStatusResponse, AgentError> {
     use AgentError::*;
@@ -87,8 +94,8 @@ pub(crate) fn lookup_request_status<Storage: AsRef<[u8]>>(
             "done" => Ok(RequestStatusResponse::Done),
             "processing" => Ok(RequestStatusResponse::Processing),
             "received" => Ok(RequestStatusResponse::Received),
-            "rejected" => lookup_rejection(&certificate, request_id),
-            "replied" => lookup_reply(&certificate, request_id),
+            "rejected" => lookup_rejection(certificate, request_id),
+            "replied" => lookup_reply(certificate, request_id),
             other => Err(InvalidRequestStatus(path_status.into(), other.to_string())),
         },
         LookupResult::Error => Err(LookupPathError(path_status.into())),
@@ -101,11 +108,12 @@ pub(crate) fn lookup_rejection<Storage: AsRef<[u8]>>(
 ) -> Result<RequestStatusResponse, AgentError> {
     let reject_code = lookup_reject_code(certificate, request_id)?;
     let reject_message = lookup_reject_message(certificate, request_id)?;
+    let error_code = lookup_error_code(certificate, request_id)?;
 
     Ok(RequestStatusResponse::Rejected(RejectResponse {
         reject_code,
         reject_message,
-        error_code: None,
+        error_code,
     }))
 }
 
@@ -135,6 +143,23 @@ pub(crate) fn lookup_reject_message<Storage: AsRef<[u8]>>(
     ];
     let msg = lookup_value(&certificate.tree, path)?;
     Ok(from_utf8(msg)?.to_string())
+}
+
+pub(crate) fn lookup_error_code<Storage: AsRef<[u8]>>(
+    certificate: &Certificate<Storage>,
+    request_id: &RequestId,
+) -> Result<Option<String>, AgentError> {
+    let path = [
+        "request_status".as_bytes(),
+        request_id.as_slice(),
+        "error_code".as_bytes(),
+    ];
+    let msg = lookup_value(&certificate.tree, path);
+    match msg {
+        Ok(val) => Ok(Some(from_utf8(val)?.to_string())),
+        Err(AgentError::LookupPathAbsent(_)) => Ok(None),
+        Err(e) => Err(e),
+    }
 }
 
 pub(crate) fn lookup_reply<Storage: AsRef<[u8]>>(
@@ -204,6 +229,52 @@ pub(crate) fn lookup_subnet<Storage: AsRef<[u8]> + Clone>(
         node_keys,
     };
     Ok((subnet_id, subnet))
+}
+
+pub(crate) fn lookup_api_boundary_nodes<Storage: AsRef<[u8]> + Clone>(
+    certificate: Certificate<Storage>,
+) -> Result<Vec<ApiBoundaryNode>, AgentError> {
+    // API boundary nodes paths in the state tree, as defined in the spec (https://internetcomputer.org/docs/current/references/ic-interface-spec#state-tree-api-bn).
+    let api_bn_path = "api_boundary_nodes".as_bytes();
+    let domain_path = "domain".as_bytes();
+    let ipv4_path = "ipv4_address".as_bytes();
+    let ipv6_path = "ipv6_address".as_bytes();
+
+    let api_bn_tree = lookup_tree(&certificate.tree, [api_bn_path])?;
+
+    let mut api_bns = Vec::<ApiBoundaryNode>::new();
+    let paths = api_bn_tree.list_paths();
+    let node_ids: HashSet<&[u8]> = paths.iter().map(|path| path[0].as_bytes()).collect();
+
+    for node_id in node_ids {
+        let domain =
+            String::from_utf8(lookup_value(&api_bn_tree, [node_id, domain_path])?.to_vec())
+                .map_err(|err| AgentError::Utf8ReadError(err.utf8_error()))?;
+
+        let ipv6_address =
+            String::from_utf8(lookup_value(&api_bn_tree, [node_id, ipv6_path])?.to_vec())
+                .map_err(|err| AgentError::Utf8ReadError(err.utf8_error()))?;
+
+        let ipv4_address = match lookup_value(&api_bn_tree, [node_id, ipv4_path]) {
+            Ok(ipv4) => Some(
+                String::from_utf8(ipv4.to_vec())
+                    .map_err(|err| AgentError::Utf8ReadError(err.utf8_error()))?,
+            ),
+            // By convention an absent path `/api_boundary_nodes/<node_id>/ipv4_address` in the state tree signifies that ipv4 is None.
+            Err(AgentError::LookupPathAbsent(_)) => None,
+            Err(err) => return Err(err),
+        };
+
+        let api_bn = ApiBoundaryNode {
+            domain,
+            ipv6_address,
+            ipv4_address,
+        };
+
+        api_bns.push(api_bn);
+    }
+
+    Ok(api_bns)
 }
 
 /// The path to [`lookup_value`]

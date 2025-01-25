@@ -72,7 +72,6 @@ impl Secp256k1Identity {
         }
     }
 }
-
 #[async_trait]
 impl Identity for Secp256k1Identity {
     fn sender(&self) -> Result<Principal, String> {
@@ -85,7 +84,7 @@ impl Identity for Secp256k1Identity {
         Some(self.der_encoded_public_key.as_ref().to_vec())
     }
 
-    async fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
+   async fn sign(&self, content: &EnvelopeContent) -> Result<Signature, String> {
         self.sign_arbitrary(&content.to_request_id().signable())
     }
 
@@ -97,7 +96,7 @@ impl Identity for Secp256k1Identity {
         let ecdsa_sig: ecdsa::Signature = self
             .private_key
             .try_sign(content)
-            .map_err(|err| format!("Cannot create secp256k1 signature: {}", err))?;
+            .map_err(|err| format!("Cannot create secp256k1 signature: {err}"))?;
         let r = ecdsa_sig.r().as_ref().to_bytes();
         let s = ecdsa_sig.s().as_ref().to_bytes();
         let mut bytes = [0u8; 64];
@@ -206,8 +205,7 @@ N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
             arg: Encode!(&"world").unwrap(),
         };
         let signature = identity
-            .sign(&message)
-            .await
+            .sign(&message).await
             .expect("Cannot create secp256k1 signature.")
             .signature
             .expect("Cannot find secp256k1 signature bytes.");
