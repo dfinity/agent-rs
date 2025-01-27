@@ -23,7 +23,7 @@ use crate::{
                 snapshot::routing_snapshot::RoutingSnapshot,
                 type_aliases::AtomicSwap,
             },
-            RouteProvider,
+            RouteProvider, RoutesStats,
         },
         HttpService,
     },
@@ -186,6 +186,11 @@ where
         let urls = nodes.iter().map(|n| n.to_routing_url()).collect();
         Ok(urls)
     }
+
+    fn routes_stats(&self) -> RoutesStats {
+        let snapshot = self.routing_snapshot.load();
+        snapshot.routes_stats()
+    }
 }
 
 impl<S> DynamicRouteProvider<S>
@@ -291,7 +296,7 @@ mod tests {
                     assert_routed_domains, route_n_times, NodeHealthCheckerMock, NodesFetcherMock,
                 },
             },
-            RouteProvider,
+            RouteProvider, RoutesStats,
         },
         Agent, AgentError,
     };
@@ -417,6 +422,7 @@ mod tests {
         tokio::time::sleep(snapshot_update_duration).await;
         let routed_domains = route_n_times(6, Arc::clone(&route_provider));
         assert_routed_domains(routed_domains, vec![node_1.domain()], 6);
+        assert_eq!(route_provider.routes_stats(), RoutesStats::new(1, Some(1)));
 
         // Test 2: multiple route() calls return 3 different domains with equal fairness (repetition).
         // Two healthy nodes are added to the topology.
@@ -431,6 +437,7 @@ mod tests {
             vec![node_1.domain(), node_2.domain(), node_3.domain()],
             2,
         );
+        assert_eq!(route_provider.routes_stats(), RoutesStats::new(3, Some(3)));
 
         // Test 3:  multiple route() calls return 2 different domains with equal fairness (repetition).
         // One node is set to unhealthy.
@@ -438,6 +445,7 @@ mod tests {
         tokio::time::sleep(snapshot_update_duration).await;
         let routed_domains = route_n_times(6, Arc::clone(&route_provider));
         assert_routed_domains(routed_domains, vec![node_1.domain(), node_3.domain()], 3);
+        assert_eq!(route_provider.routes_stats(), RoutesStats::new(3, Some(2)));
 
         // Test 4: multiple route() calls return 3 different domains with equal fairness (repetition).
         // Unhealthy node is set back to healthy.
@@ -449,6 +457,7 @@ mod tests {
             vec![node_1.domain(), node_2.domain(), node_3.domain()],
             2,
         );
+        assert_eq!(route_provider.routes_stats(), RoutesStats::new(3, Some(3)));
 
         // Test 5: multiple route() calls return 3 different domains with equal fairness (repetition).
         // One healthy node is added, but another one goes unhealthy.
@@ -467,6 +476,7 @@ mod tests {
             vec![node_2.domain(), node_3.domain(), node_4.domain()],
             2,
         );
+        assert_eq!(route_provider.routes_stats(), RoutesStats::new(4, Some(3)));
 
         // Test 6: multiple route() calls return a single domain=api1.com.
         // One node is set to unhealthy and one is removed from the topology.
@@ -475,6 +485,7 @@ mod tests {
         tokio::time::sleep(snapshot_update_duration).await;
         let routed_domains = route_n_times(3, Arc::clone(&route_provider));
         assert_routed_domains(routed_domains, vec![node_2.domain()], 3);
+        assert_eq!(route_provider.routes_stats(), RoutesStats::new(3, Some(1)));
     }
 
     #[tokio::test]

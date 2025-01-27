@@ -1,6 +1,9 @@
 use std::fmt::Debug;
 
-use crate::agent::route_provider::dynamic_routing::{health_check::HealthCheckStatus, node::Node};
+use crate::agent::route_provider::{
+    dynamic_routing::{health_check::HealthCheckStatus, node::Node},
+    RoutesStats,
+};
 
 /// A trait for interacting with the snapshot of nodes (routing table).
 pub trait RoutingSnapshot: Send + Sync + Clone + Debug {
@@ -15,4 +18,6 @@ pub trait RoutingSnapshot: Send + Sync + Clone + Debug {
     fn sync_nodes(&mut self, nodes: &[Node]) -> bool;
     /// Updates the health status of a specific node, returning `true` if the node was found and updated.
     fn update_node(&mut self, node: &Node, health: HealthCheckStatus) -> bool;
+    /// Returns statistics about the routes (nodes).
+    fn routes_stats(&self) -> RoutesStats;
 }

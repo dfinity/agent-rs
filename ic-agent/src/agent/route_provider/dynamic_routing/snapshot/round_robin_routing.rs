@@ -6,8 +6,11 @@ use std::{
     },
 };
 
-use crate::agent::route_provider::dynamic_routing::{
-    health_check::HealthCheckStatus, node::Node, snapshot::routing_snapshot::RoutingSnapshot,
+use crate::agent::route_provider::{
+    dynamic_routing::{
+        health_check::HealthCheckStatus, node::Node, snapshot::routing_snapshot::RoutingSnapshot,
+    },
+    RoutesStats,
 };
 
 /// Routing snapshot, which samples nodes in a round-robin fashion.
@@ -105,6 +108,10 @@ impl RoutingSnapshot for RoundRobinRoutingSnapshot {
         } else {
             self.healthy_nodes.remove(node)
         }
+    }
+
+    fn routes_stats(&self) -> RoutesStats {
+        RoutesStats::new(self.existing_nodes.len(), Some(self.healthy_nodes.len()))
     }
 }
 
