@@ -524,9 +524,11 @@ impl<'agent, 'canister: 'agent> IntoFuture for CreateCanisterBuilder<'agent, 'ca
 pub enum WasmMemoryPersistence {
     /// Retain the main memory across upgrades.
     /// Used for enhanced orthogonal persistence, as implemented in Motoko
+    #[serde(rename = "keep")]
     Keep,
     /// Reinitialize the main memory on upgrade.
     /// Default behavior without enhanced orthogonal persistence.
+    #[serde(rename = "replace")]
     Replace,
 }
 
@@ -537,6 +539,16 @@ pub struct CanisterUpgradeOptions {
     pub skip_pre_upgrade: Option<bool>,
     /// Support for enhanced orthogonal persistence: Retain the main memory on upgrade.
     pub wasm_memory_persistence: Option<WasmMemoryPersistence>,
+}
+
+impl Default for CanisterUpgradeOptions {
+    /// Default: `skip_pre_upgrade = true`, `wasm_memory_persistence = Replace`
+    fn default() -> Self {
+        Self {
+            skip_pre_upgrade: Some(false),
+            wasm_memory_persistence: Some(WasmMemoryPersistence::Replace),
+        }
+    }
 }
 
 /// The install mode of the canister to install. If a canister is already installed,
@@ -553,6 +565,22 @@ pub enum InstallMode {
     /// Upgrade the canister with this module and some options.
     #[serde(rename = "upgrade")]
     Upgrade(Option<CanisterUpgradeOptions>),
+}
+
+impl InstallMode {
+    /// Fills in all `Option` fields with their default values.
+    pub fn canonicalize(&self) -> InstallMode {
+        match self {
+            Self::Upgrade(u) => {
+                let mut opts = u.unwrap_or_default();
+                opts.skip_pre_upgrade.get_or_insert(false);
+                opts.wasm_memory_persistence
+                    .get_or_insert(WasmMemoryPersistence::Replace);
+                Self::Upgrade(Some(opts))
+            }
+            x => *x,
+        }
+    }
 }
 
 /// A prepared call to `install_code`.
