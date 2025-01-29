@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Updated the serialization of `WasmMemoryPersistence`.
+
 ## [0.39.3] - 2025-01-21
 
 * Added `wasm_memory_threshold` field to `CanisterSettings`.

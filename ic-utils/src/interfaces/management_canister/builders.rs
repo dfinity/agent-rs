@@ -524,9 +524,11 @@ impl<'agent, 'canister: 'agent> IntoFuture for CreateCanisterBuilder<'agent, 'ca
 pub enum WasmMemoryPersistence {
     /// Retain the main memory across upgrades.
     /// Used for enhanced orthogonal persistence, as implemented in Motoko
+    #[serde(rename = "keep")]
     Keep,
     /// Reinitialize the main memory on upgrade.
     /// Default behavior without enhanced orthogonal persistence.
+    #[serde(rename = "replace")]
     Replace,
 }
 
