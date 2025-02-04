@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 * Updated the serialization of `WasmMemoryPersistence`.
+* [BREAKING] `AgentBuilder::with_background_dynamic_routing` is no longer `async`.
 
 ## [0.39.3] - 2025-01-21
 
