@@ -1,8 +1,10 @@
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
+    sync::Arc,
     time::Duration,
 };
 
+use arc_swap::ArcSwap;
 use rand::Rng;
 
 use crate::agent::route_provider::{
@@ -27,12 +29,24 @@ fn generate_exp_decaying_weights(n: usize, lambda: f64) -> Vec<f64> {
     weights
 }
 
-// Node with meta information and metrics (latencies, availabilities).
+// A node, which is selected to participate in the routing.
+// The choice for selection is based on node's ranking (score).
+#[derive(Clone, Debug)]
+struct RoutingNode {
+    node: Node,
+    score: f64,
+}
+
+impl RoutingNode {
+    fn new(node: Node, score: f64) -> Self {
+        Self { node, score }
+    }
+}
+
+// Stores node's meta information and metrics (latencies, availabilities).
 // Routing URLs a generated based on the score field.
 #[derive(Clone, Debug)]
-struct NodeWithMetrics {
-    // Node information.
-    node: Node,
+struct NodeMetrics {
     // Size of the sliding window used for store latencies and availabilities of the node.
     window_size: usize,
     /// Reflects the status of the most recent health check. It should be the same as the last element in `availabilities`.
@@ -45,10 +59,9 @@ struct NodeWithMetrics {
     score: f64,
 }
 
-impl NodeWithMetrics {
-    pub fn new(node: Node, window_size: usize) -> Self {
+impl NodeMetrics {
+    pub fn new(window_size: usize) -> Self {
         Self {
-            node,
             window_size,
             is_healthy: false,
             latencies: VecDeque::with_capacity(window_size + 1),
@@ -158,9 +171,9 @@ fn compute_score(
 /// Nodes with smaller average latencies are preferred for routing.
 #[derive(Default, Debug, Clone)]
 pub struct LatencyRoutingSnapshot {
-    nodes_with_metrics: Vec<NodeWithMetrics>,
-    existing_nodes: HashSet<Node>,
-    healthy_nodes: HashSet<Node>,
+    k_top_nodes: Option<usize>,
+    existing_nodes: HashMap<Node, NodeMetrics>,
+    routing_nodes: Arc<ArcSwap<Vec<RoutingNode>>>,
     window_weights: Vec<f64>,
     window_weights_sum: f64,
     use_availability_penalty: bool,
@@ -176,13 +189,20 @@ impl LatencyRoutingSnapshot {
         let window_weights_sum: f64 = window_weights.iter().sum();
 
         Self {
-            nodes_with_metrics: vec![],
-            existing_nodes: HashSet::new(),
-            healthy_nodes: HashSet::new(),
+            k_top_nodes: None,
+            existing_nodes: HashMap::new(),
+            routing_nodes: Arc::new(ArcSwap::new(vec![].into())),
             use_availability_penalty: true,
             window_weights,
             window_weights_sum,
         }
+    }
+
+    /// Sets whether to use only k nodes with the highest score for routing.
+    #[allow(unused)]
+    pub fn set_k_top_nodes(mut self, k_top_nodes: usize) -> Self {
+        self.k_top_nodes = Some(k_top_nodes);
+        self
     }
 
     /// Sets whether to use availability penalty in the score computation.
@@ -200,19 +220,42 @@ impl LatencyRoutingSnapshot {
         self.window_weights = weights.to_vec();
         self
     }
+
+    fn publish_routing_nodes(&self) {
+        let mut routing_nodes: Vec<RoutingNode> = self
+            .existing_nodes
+            .iter()
+            .filter_map(|(k, v)| v.is_healthy.then(|| RoutingNode::new(k.clone(), v.score)))
+            .collect();
+
+        // In case requests are routed to only k top nodes, select these top nodes
+        if let Some(k_top) = self.k_top_nodes {
+            routing_nodes.sort_by(|a, b| {
+                b.score
+                    .partial_cmp(&a.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+
+            if routing_nodes.len() > k_top {
+                routing_nodes.truncate(k_top);
+            }
+        }
+        // Atomically update the routing table
+        self.routing_nodes.store(Arc::new(routing_nodes));
+    }
 }
 
 /// Helper function to sample nodes based on their weights.
 /// Here weight index is selected based on the input number in range [0, 1]
 #[inline(always)]
-fn weighted_sample(weighted_nodes: &[(f64, &Node)], number: f64) -> Option<usize> {
+fn weighted_sample(weighted_nodes: &[RoutingNode], number: f64) -> Option<usize> {
     if !(0.0..=1.0).contains(&number) {
         return None;
     }
-    let sum: f64 = weighted_nodes.iter().map(|n| n.0).sum();
+    let sum: f64 = weighted_nodes.iter().map(|n| n.score).sum();
     let mut weighted_number = number * sum;
-    for (idx, &(weight, _)) in weighted_nodes.iter().enumerate() {
-        weighted_number -= weight;
+    for (idx, node) in weighted_nodes.iter().enumerate() {
+        weighted_number -= node.score;
         if weighted_number <= 0.0 {
             return Some(idx);
         }
@@ -222,7 +265,7 @@ fn weighted_sample(weighted_nodes: &[(f64, &Node)], number: f64) -> Option<usize
 
 impl RoutingSnapshot for LatencyRoutingSnapshot {
     fn has_nodes(&self) -> bool {
-        self.nodes_with_metrics.iter().any(|n| n.is_healthy)
+        !self.routing_nodes.load().is_empty()
     }
 
     fn next_node(&self) -> Option<Node> {
@@ -235,29 +278,18 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
             return Vec::new();
         }
 
-        // Preallocate array for a better efficiency.
-        let mut healthy_nodes = Vec::with_capacity(self.nodes_with_metrics.len());
-        for n in &self.nodes_with_metrics {
-            if n.is_healthy {
-                healthy_nodes.push((n.score, &n.node));
-            }
-        }
+        let mut routing_nodes: Vec<RoutingNode> = self.routing_nodes.load().as_ref().clone();
 
-        // Limit the number of returned nodes to the number of healthy nodes.
-        let n = std::cmp::min(n, healthy_nodes.len());
-
+        // Limit the number of returned nodes to the number of available nodes
+        let n = std::cmp::min(n, routing_nodes.len());
         let mut nodes = Vec::with_capacity(n);
-
         let mut rng = rand::thread_rng();
 
         for _ in 0..n {
-            // Generate a random float in the range [0, 1)
             let rand_num = rng.gen::<f64>();
-            if let Some(idx) = weighted_sample(healthy_nodes.as_slice(), rand_num) {
-                let node = healthy_nodes[idx].1;
-                nodes.push(node.clone());
-                // Remove the item, so that it can't be selected anymore.
-                healthy_nodes.swap_remove(idx);
+            if let Some(idx) = weighted_sample(routing_nodes.as_slice(), rand_num) {
+                let removed_node = routing_nodes.swap_remove(idx);
+                nodes.push(removed_node.node);
             }
         }
 
@@ -265,76 +297,68 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
     }
 
     fn sync_nodes(&mut self, nodes: &[Node]) -> bool {
-        let new_nodes = HashSet::from_iter(nodes.iter().cloned());
-        // Find nodes removed from topology.
-        let nodes_removed: Vec<_> = self
-            .existing_nodes
-            .difference(&new_nodes)
-            .cloned()
-            .collect();
-        let has_removed_nodes = !nodes_removed.is_empty();
-        // Find nodes added to topology.
-        let nodes_added: Vec<_> = new_nodes
-            .difference(&self.existing_nodes)
-            .cloned()
-            .collect();
-        let has_added_nodes = !nodes_added.is_empty();
-        self.existing_nodes.extend(nodes_added);
-        // NOTE: newly added nodes will appear in the weighted_nodes later.
-        // This happens after the first node health check round and a consequent update_node() invocation.
-        for node in nodes_removed.into_iter() {
-            self.existing_nodes.remove(&node);
-            let idx = self.nodes_with_metrics.iter().position(|x| x.node == node);
-            idx.map(|idx| self.nodes_with_metrics.swap_remove(idx));
+        let new_nodes: HashSet<&Node> = nodes.iter().collect();
+        let mut has_changes = false;
+
+        // Remove nodes that are no longer present
+        self.existing_nodes.retain(|node, _| {
+            let keep = new_nodes.contains(node);
+            if !keep {
+                has_changes = true;
+            }
+            keep
+        });
+
+        // Add new nodes that don't exist yet
+        for node in nodes {
+            if !self.existing_nodes.contains_key(node) {
+                self.existing_nodes
+                    .insert(node.clone(), NodeMetrics::new(self.window_weights.len()));
+                has_changes = true;
+            }
         }
 
-        has_added_nodes || has_removed_nodes
+        if has_changes {
+            self.publish_routing_nodes();
+        }
+
+        has_changes
     }
 
     fn update_node(&mut self, node: &Node, health: HealthCheckStatus) -> bool {
-        // Skip the update if the node is not in the existing nodes.
-        if !self.existing_nodes.contains(node) {
-            return false;
-        }
+        // Get mut reference to the existing node metrics or return false if not found
+        let updated_node: &mut NodeMetrics = match self.existing_nodes.get_mut(node) {
+            Some(metrics) => metrics,
+            None => return false,
+        };
+        // Update the node's metrics
+        updated_node.add_latency_measurement(health.latency());
 
-        let idx = self
-            .nodes_with_metrics
-            .iter()
-            .position(|x| &x.node == node)
-            .unwrap_or_else(|| {
-                let node = NodeWithMetrics::new(node.clone(), self.window_weights.len());
-                self.nodes_with_metrics.push(node);
-                self.nodes_with_metrics.len() - 1
-            });
-
-        if health.is_healthy() {
-            self.healthy_nodes.insert(node.clone());
-        } else {
-            self.healthy_nodes.remove(node);
-        }
-
-        self.nodes_with_metrics[idx].add_latency_measurement(health.latency());
-
-        self.nodes_with_metrics[idx].score = compute_score(
-            self.window_weights.as_slice(),
+        updated_node.score = compute_score(
+            &self.window_weights,
             self.window_weights_sum,
-            &self.nodes_with_metrics[idx].availabilities,
-            &self.nodes_with_metrics[idx].latencies,
+            &updated_node.availabilities,
+            &updated_node.latencies,
             self.use_availability_penalty,
         );
+
+        self.publish_routing_nodes();
 
         true
     }
 
     fn routes_stats(&self) -> RoutesStats {
-        RoutesStats::new(self.existing_nodes.len(), Some(self.healthy_nodes.len()))
+        RoutesStats::new(
+            self.existing_nodes.len(),
+            Some(self.routing_nodes.load().len()),
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
     use std::{
-        collections::{HashMap, HashSet, VecDeque},
+        collections::{HashMap, VecDeque},
         time::Duration,
     };
 
@@ -344,7 +368,8 @@ mod tests {
             node::Node,
             snapshot::{
                 latency_based_routing::{
-                    compute_score, weighted_sample, LatencyRoutingSnapshot, NodeWithMetrics,
+                    compute_score, weighted_sample, LatencyRoutingSnapshot, NodeMetrics,
+                    RoutingNode,
                 },
                 routing_snapshot::RoutingSnapshot,
             },
@@ -357,7 +382,6 @@ mod tests {
         // Arrange
         let snapshot = LatencyRoutingSnapshot::new();
         // Assert
-        assert!(snapshot.nodes_with_metrics.is_empty());
         assert!(snapshot.existing_nodes.is_empty());
         assert!(!snapshot.has_nodes());
         assert!(snapshot.next_node().is_none());
@@ -375,7 +399,7 @@ mod tests {
         let is_updated = snapshot.update_node(&node, health);
         // Assert
         assert!(!is_updated);
-        assert!(snapshot.nodes_with_metrics.is_empty());
+        assert!(snapshot.existing_nodes.is_empty());
         assert!(!snapshot.has_nodes());
         assert!(snapshot.next_node().is_none());
         assert_eq!(snapshot.routes_stats(), RoutesStats::new(0, Some(0)));
@@ -389,36 +413,37 @@ mod tests {
             .set_availability_penalty(false);
         let node = Node::new("api1.com").unwrap();
         let health = HealthCheckStatus::new(Some(Duration::from_secs(1)));
-        snapshot.existing_nodes.insert(node.clone());
+        snapshot
+            .existing_nodes
+            .insert(node.clone(), NodeMetrics::new(2));
         assert_eq!(snapshot.routes_stats(), RoutesStats::new(1, Some(0)));
         // Check first update
         let is_updated = snapshot.update_node(&node, health);
         assert!(is_updated);
         assert!(snapshot.has_nodes());
-        let node_with_metrics = snapshot.nodes_with_metrics.first().unwrap();
-        assert_eq!(node_with_metrics.score, (2.0 / 1.0) / 2.0);
+        let (_, metrics) = snapshot.existing_nodes.iter().next().unwrap();
+        assert_eq!(metrics.score, (2.0 / 1.0) / 2.0);
         assert_eq!(snapshot.next_node().unwrap(), node);
         assert_eq!(snapshot.routes_stats(), RoutesStats::new(1, Some(1)));
         // Check second update
         let health = HealthCheckStatus::new(Some(Duration::from_secs(2)));
         let is_updated = snapshot.update_node(&node, health);
         assert!(is_updated);
-        let node_with_metrics = snapshot.nodes_with_metrics.first().unwrap();
-        assert_eq!(node_with_metrics.score, (2.0 / 2.0 + 1.0 / 1.0) / 3.0);
+        let (_, metrics) = snapshot.existing_nodes.iter().next().unwrap();
+        assert_eq!(metrics.score, (2.0 / 2.0 + 1.0 / 1.0) / 3.0);
         // Check third update
         let health = HealthCheckStatus::new(Some(Duration::from_secs(3)));
         let is_updated = snapshot.update_node(&node, health);
         assert!(is_updated);
-        let node_with_metrics = snapshot.nodes_with_metrics.first().unwrap();
-        assert_eq!(node_with_metrics.score, (2.0 / 3.0 + 1.0 / 2.0) / 3.0);
+        let (_, metrics) = snapshot.existing_nodes.iter().next().unwrap();
+        assert_eq!(metrics.score, (2.0 / 3.0 + 1.0 / 2.0) / 3.0);
         // Check forth update with none
         let health = HealthCheckStatus::new(None);
         let is_updated = snapshot.update_node(&node, health);
         assert!(is_updated);
-        let node_with_metrics = snapshot.nodes_with_metrics.first().unwrap();
-        assert_eq!(node_with_metrics.score, (2.0 / 3.0 + 1.0 / 2.0) / 3.0);
+        let (_, metrics) = snapshot.existing_nodes.iter().next().unwrap();
+        assert_eq!(metrics.score, (2.0 / 3.0 + 1.0 / 2.0) / 3.0);
         assert!(!snapshot.has_nodes());
-        assert_eq!(snapshot.nodes_with_metrics.len(), 1);
         assert_eq!(snapshot.existing_nodes.len(), 1);
         assert!(snapshot.next_node().is_none());
         assert_eq!(snapshot.routes_stats(), RoutesStats::new(1, Some(0)));
@@ -427,62 +452,41 @@ mod tests {
     #[test]
     fn test_sync_node_scenarios() {
         // Arrange
-        let window_size = 1;
         let mut snapshot = LatencyRoutingSnapshot::new();
         let node_1 = Node::new("api1.com").unwrap();
         // Sync with node_1
         let nodes_changed = snapshot.sync_nodes(&[node_1.clone()]);
         assert!(nodes_changed);
-        assert!(snapshot.nodes_with_metrics.is_empty());
-        assert_eq!(
-            snapshot.existing_nodes,
-            HashSet::from_iter(vec![node_1.clone()])
-        );
-        // Add node_1 to weighted_nodes manually
-        snapshot
-            .nodes_with_metrics
-            .push(NodeWithMetrics::new(node_1.clone(), window_size));
+        assert!(snapshot.existing_nodes.contains_key(&node_1));
+        assert!(!snapshot.has_nodes());
         // Sync with node_1 again
         let nodes_changed = snapshot.sync_nodes(&[node_1.clone()]);
         assert!(!nodes_changed);
         assert_eq!(
-            snapshot.existing_nodes,
-            HashSet::from_iter(vec![node_1.clone()])
+            snapshot.existing_nodes.keys().collect::<Vec<_>>(),
+            vec![&node_1]
         );
-        assert_eq!(snapshot.nodes_with_metrics[0].node, node_1);
         // Sync with node_2
         let node_2 = Node::new("api2.com").unwrap();
         let nodes_changed = snapshot.sync_nodes(&[node_2.clone()]);
         assert!(nodes_changed);
         assert_eq!(
-            snapshot.existing_nodes,
-            HashSet::from_iter(vec![node_2.clone()])
+            snapshot.existing_nodes.keys().collect::<Vec<_>>(),
+            vec![&node_2]
         );
-        // Make sure node_1 was removed from weighted_nodes too
-        assert!(snapshot.nodes_with_metrics.is_empty());
-        // Add node_2 to weighted_nodes manually
-        snapshot
-            .nodes_with_metrics
-            .push(NodeWithMetrics::new(node_2.clone(), window_size));
+        assert!(!snapshot.has_nodes());
         // Sync with [node_2, node_3]
         let node_3 = Node::new("api3.com").unwrap();
         let nodes_changed = snapshot.sync_nodes(&[node_3.clone(), node_2.clone()]);
         assert!(nodes_changed);
-        assert_eq!(
-            snapshot.existing_nodes,
-            HashSet::from_iter(vec![node_3.clone(), node_2.clone()])
-        );
-        assert_eq!(snapshot.nodes_with_metrics[0].node, node_2);
-        // Add node_3 to weighted_nodes manually
-        snapshot
-            .nodes_with_metrics
-            .push(NodeWithMetrics::new(node_3, window_size));
+        let mut keys = snapshot.existing_nodes.keys().collect::<Vec<_>>();
+        keys.sort_by(|a, b| a.domain().cmp(b.domain()));
+        assert_eq!(keys, vec![&node_2, &node_3]);
+        assert!(!snapshot.has_nodes());
         // Sync with []
         let nodes_changed = snapshot.sync_nodes(&[]);
         assert!(nodes_changed);
         assert!(snapshot.existing_nodes.is_empty());
-        // Make sure all nodes were removed from the healthy_nodes
-        assert!(snapshot.nodes_with_metrics.is_empty());
         // Sync with [] again
         let nodes_changed = snapshot.sync_nodes(&[]);
         assert!(!nodes_changed);
@@ -492,13 +496,13 @@ mod tests {
 
     #[test]
     fn test_weighted_sample() {
-        let node = &Node::new("api1.com").unwrap();
+        let node = Node::new("api1.com").unwrap();
         // Case 1: empty array
-        let arr = &[];
+        let arr: &[RoutingNode] = &[];
         let idx = weighted_sample(arr, 0.5);
         assert_eq!(idx, None);
         // Case 2: single element in array
-        let arr = &[(1.0, node)];
+        let arr = &[RoutingNode::new(node.clone(), 1.0)];
         let idx = weighted_sample(arr, 0.0);
         assert_eq!(idx, Some(0));
         let idx = weighted_sample(arr, 1.0);
@@ -509,7 +513,10 @@ mod tests {
         let idx = weighted_sample(arr, 1.1);
         assert_eq!(idx, None);
         // Case 3: two elements in array (second element has twice the weight of the first)
-        let arr = &[(1.0, node), (2.0, node)]; // // prefixed_sum = [1.0, 3.0]
+        let arr = &[
+            RoutingNode::new(node.clone(), 1.0),
+            RoutingNode::new(node.clone(), 2.0),
+        ]; // prefixed_sum = [1.0, 3.0]
         let idx = weighted_sample(arr, 0.0); // 0.0 * 3.0 < 1.0
         assert_eq!(idx, Some(0));
         let idx = weighted_sample(arr, 0.33); // 0.33 * 3.0 < 1.0
@@ -524,7 +531,12 @@ mod tests {
         let idx = weighted_sample(arr, 1.1);
         assert_eq!(idx, None);
         // Case 4: four elements in array
-        let arr = &[(1.0, node), (2.0, node), (1.5, node), (2.5, node)]; // prefixed_sum = [1.0, 3.0, 4.5, 7.0]
+        let arr = &[
+            RoutingNode::new(node.clone(), 1.0),
+            RoutingNode::new(node.clone(), 2.0),
+            RoutingNode::new(node.clone(), 1.5),
+            RoutingNode::new(node.clone(), 2.5),
+        ]; // prefixed_sum = [1.0, 3.0, 4.5, 7.0]
         let idx = weighted_sample(arr, 0.14); // 0.14 * 7 < 1.0
         assert_eq!(idx, Some(0)); // probability ~0.14
         let idx = weighted_sample(arr, 0.15); // 0.15 * 7 > 1.0
@@ -545,7 +557,6 @@ mod tests {
         let idx = weighted_sample(arr, 1.1);
         assert_eq!(idx, None);
     }
-
     #[test]
     fn test_compute_score_with_penalty() {
         let use_penalty = true;
@@ -628,23 +639,27 @@ mod tests {
         let node_3 = Node::new("api3.com").unwrap();
         let node_4 = Node::new("api4.com").unwrap();
 
-        let mut node_1 = NodeWithMetrics::new(node_1, window_size);
-        let mut node_2 = NodeWithMetrics::new(node_2, window_size);
-        let mut node_3 = NodeWithMetrics::new(node_3, window_size);
-        let mut node_4 = NodeWithMetrics::new(node_4, window_size);
+        let mut metrics_1 = NodeMetrics::new(window_size);
+        let mut metrics_2 = NodeMetrics::new(window_size);
+        let mut metrics_3 = NodeMetrics::new(window_size);
+        let mut metrics_4 = NodeMetrics::new(window_size);
 
-        node_1.is_healthy = true;
-        node_2.is_healthy = true;
-        node_3.is_healthy = true;
-        node_4.is_healthy = false;
-
-        node_1.score = 16.0;
-        node_2.score = 8.0;
-        node_3.score = 4.0;
+        metrics_1.is_healthy = true;
+        metrics_2.is_healthy = true;
+        metrics_3.is_healthy = true;
+        metrics_4.is_healthy = false;
+        metrics_1.score = 16.0;
+        metrics_2.score = 8.0;
+        metrics_3.score = 4.0;
         // even though the score is high, this node should never be selected as it is unhealthy
-        node_4.score = 30.0;
+        metrics_4.score = 30.0;
 
-        snapshot.nodes_with_metrics = vec![node_1, node_2, node_3, node_4];
+        snapshot.existing_nodes.extend(vec![
+            (node_1, metrics_1),
+            (node_2, metrics_2),
+            (node_3, metrics_3),
+            (node_4, metrics_4),
+        ]);
 
         let mut stats = HashMap::new();
         let experiments = 30;
