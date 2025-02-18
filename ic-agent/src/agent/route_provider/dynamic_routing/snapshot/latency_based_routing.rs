@@ -246,7 +246,8 @@ impl LatencyRoutingSnapshot {
         let mut routing_nodes: Vec<RoutingNode> = self
             .existing_nodes
             .iter()
-            .filter_map(|(k, v)| v.is_healthy.then(|| RoutingNode::new(k.clone(), v.score)))
+            .filter(|(_, v)| v.is_healthy)
+            .map(|(k, v)| RoutingNode::new(k.clone(), v.score))
             .collect();
 
         // In case requests are routed to only k top nodes, select these top nodes
