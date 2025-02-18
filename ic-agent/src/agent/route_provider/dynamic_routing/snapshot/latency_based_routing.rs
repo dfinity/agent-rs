@@ -20,6 +20,7 @@ const WINDOW_SIZE: usize = 15;
 const LAMBDA_DECAY: f64 = 0.3;
 
 /// Generates exponentially decaying weights for the sliding window.
+/// Weights are higher for more recent observations and decay exponentially for older ones.
 fn generate_exp_decaying_weights(n: usize, lambda: f64) -> Vec<f64> {
     let mut weights: Vec<f64> = Vec::with_capacity(n);
     for i in 0..n {
@@ -44,7 +45,7 @@ impl RoutingNode {
 }
 
 // Stores node's meta information and metrics (latencies, availabilities).
-// Routing URLs a generated based on the score field.
+// Routing URLs are generated based on the score field.
 #[derive(Clone, Debug)]
 struct NodeMetrics {
     // Size of the sliding window used for store latencies and availabilities of the node.
@@ -88,7 +89,7 @@ impl NodeMetrics {
 }
 
 /// Computes the score of the node based on the latencies, availabilities and window weights.
-/// `window_weights_sum`` is passed for efficiency reasons, as it is pre-calculated.
+/// `window_weights_sum` is passed for efficiency reasons, as it is pre-calculated.
 fn compute_score(
     window_weights: &[f64],
     window_weights_sum: f64,
@@ -102,11 +103,11 @@ fn compute_score(
 
     if weights_size < availabilities_size {
         panic!(
-            "Weights array of size {weights_size} is smaller than array of availabilities of size {availabilities_size}",
+            "Configuration error: Weights array of size {weights_size} is smaller than array of availabilities of size {availabilities_size}.",
         );
     } else if weights_size < latencies_size {
         panic!(
-            "Weights array of size {weights_size} is smaller than array of latencies of size {latencies_size}",
+            "Configuration error: Weights array of size {weights_size} is smaller than array of latencies of size {latencies_size}.",
         );
     }
 
@@ -166,14 +167,27 @@ fn compute_score(
     score_l * score_a
 }
 
-/// Routing snapshot for latency-based routing.
-/// In this routing strategy, nodes are randomly selected based on their averaged latency of the last WINDOW_SIZE health checks.
-/// Nodes with smaller average latencies are preferred for routing.
+/// # Latency-based dynamic routing
+///
+/// This module implements a routing strategy that uses weighted random selection of nodes based on their historical data (latencies and availabilities).
+/// The main features of this strategy are:
+///
+/// - Uses sliding windows for storing last N latencies and availabilities of each node
+/// - The overall score of each node is computed as a product of latencies and availabilities scores, score = score_l * score_a
+/// - Latency score (score_l) and availability score (score_a) are computed from sliding window using additional window_weights (exponentially decaying weights by default) to prioritize recent observations
+/// - If the latest health check reveals that node is unhealthy, this node is removed from routing
+/// - Uses weighted random selection for load balancing
+///
+/// ## Configuration Options
+///
+/// - `k_top_nodes`: Limit routing to only the top K nodes with highest score
+/// - `use_availability_penalty`: Whether to penalize nodes for being unavailable
+/// - Custom window weights can be provided for specialized decay functions
 #[derive(Default, Debug, Clone)]
 pub struct LatencyRoutingSnapshot {
-    // If set, only k nodes with best scores are used for routing requests
+    // If set, only k nodes with best scores are used for routing
     k_top_nodes: Option<usize>,
-    // Stores all existing nodes in the topology
+    // Stores all existing nodes in the topology along with their historical data (latencies and availabilities)
     existing_nodes: HashMap<Node, NodeMetrics>,
     // Snapshot of selected nodes, which are participating in routing. Snapshot is published via publish_routing_nodes() when either: topology changes or a health check of some node is received.
     routing_nodes: Arc<ArcSwap<Vec<RoutingNode>>>,
@@ -187,7 +201,7 @@ pub struct LatencyRoutingSnapshot {
 
 /// Implementation of the LatencyRoutingSnapshot.
 impl LatencyRoutingSnapshot {
-    /// Creates a new LatencyRoutingSnapshot.
+    /// Creates a new LatencyRoutingSnapshot with default configuration.
     pub fn new() -> Self {
         // Weights are ordered from left to right, where the leftmost weight is for the most recent health check.
         let window_weights = generate_exp_decaying_weights(WINDOW_SIZE, LAMBDA_DECAY);
@@ -227,6 +241,7 @@ impl LatencyRoutingSnapshot {
         self
     }
 
+    /// Atomically updates the routing_nodes
     fn publish_routing_nodes(&self) {
         let mut routing_nodes: Vec<RoutingNode> = self
             .existing_nodes
@@ -252,13 +267,18 @@ impl LatencyRoutingSnapshot {
 }
 
 /// Helper function to sample nodes based on their weights.
-/// Here weight index is selected based on the input number in range [0, 1]
+/// Node index is selected based on the input number in range [0.0, 1.0]
 #[inline(always)]
 fn weighted_sample(weighted_nodes: &[RoutingNode], number: f64) -> Option<usize> {
-    if !(0.0..=1.0).contains(&number) {
+    if !(0.0..=1.0).contains(&number) || weighted_nodes.is_empty() {
         return None;
     }
     let sum: f64 = weighted_nodes.iter().map(|n| n.score).sum();
+
+    if sum == 0.0 {
+        return None;
+    }
+
     let mut weighted_number = number * sum;
     for (idx, node) in weighted_nodes.iter().enumerate() {
         weighted_number -= node.score;
@@ -266,7 +286,9 @@ fn weighted_sample(weighted_nodes: &[RoutingNode], number: f64) -> Option<usize>
             return Some(idx);
         }
     }
-    None
+
+    // If this part is reached due to floating-point precision, return the last index
+    Some(weighted_nodes.len() - 1)
 }
 
 impl RoutingSnapshot for LatencyRoutingSnapshot {
@@ -563,6 +585,7 @@ mod tests {
         let idx = weighted_sample(arr, 1.1);
         assert_eq!(idx, None);
     }
+
     #[test]
     fn test_compute_score_with_penalty() {
         let use_penalty = true;
