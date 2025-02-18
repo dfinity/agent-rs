@@ -690,7 +690,7 @@ mod tests {
             (node_3, metrics_3),
             (node_4, metrics_4),
         ]);
-
+        snapshot.publish_routing_nodes();
         let mut stats = HashMap::new();
         let experiments = 30;
         let select_nodes_count = 1;
