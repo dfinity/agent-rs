@@ -172,11 +172,10 @@ fn compute_score(
 /// This module implements a routing strategy that uses weighted random selection of nodes based on their historical data (latencies and availabilities).
 /// The main features of this strategy are:
 ///
-/// - Uses sliding windows for storing last N latencies and availabilities of each node
-/// - The overall score of each node is computed as a product of latencies and availabilities scores, score = score_l * score_a
-/// - Latency score (score_l) and availability score (score_a) are computed from sliding window using additional window_weights (exponentially decaying weights by default) to prioritize recent observations
-/// - If the latest health check reveals that node is unhealthy, this node is removed from routing
-/// - Uses weighted random selection for load balancing
+/// - Uses sliding windows for storing latencies and availabilities of each node
+/// - The overall score of each node is computed as a product of latency and availability scores, score = score_l * score_a
+/// - Latency and availability scores are computed from sliding windows using an additional array of weights, allowing prioritization of more recent observations. By default, exponentially decaying weights are used.
+/// - Uses weighted random selection of nodes for load balancing
 ///
 /// ## Configuration Options
 ///
