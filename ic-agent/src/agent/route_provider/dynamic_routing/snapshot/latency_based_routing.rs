@@ -171,11 +171,17 @@ fn compute_score(
 /// Nodes with smaller average latencies are preferred for routing.
 #[derive(Default, Debug, Clone)]
 pub struct LatencyRoutingSnapshot {
+    // If set, only k nodes with best scores are used for routing requests
     k_top_nodes: Option<usize>,
+    // Stores all existing nodes in the topology
     existing_nodes: HashMap<Node, NodeMetrics>,
+    // Snapshot of selected nodes, which are participating in routing. Snapshot is published via publish_routing_nodes() when either: topology changes or a health check of some node is received.
     routing_nodes: Arc<ArcSwap<Vec<RoutingNode>>>,
+    // Weights used to compute the availability score of a node.
     window_weights: Vec<f64>,
+    // Pre-computed weights sum, passed for efficiency purpose as this sum doesn't change.
     window_weights_sum: f64,
+    // Whether or not penalize nodes score for being unavailable
     use_availability_penalty: bool,
 }
 
