@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Updated the serialization of `WasmMemoryPersistence`.
 * [BREAKING] `AgentBuilder::with_background_dynamic_routing` is no longer `async`.
 * Extended `RouteProvider` trait with `fn routes_stats()`, returning the number of total and healthy routes.
+* Added `set_k_top_nodes` configuration option to `LatencyRoutingSnapshot` that enables selective routing to only `k` API boundary nodes with best ranking (based on latencies and availabilities).
 
 ## [0.39.3] - 2025-01-21
 
