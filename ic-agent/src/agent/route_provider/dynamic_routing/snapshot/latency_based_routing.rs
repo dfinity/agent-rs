@@ -180,11 +180,13 @@ fn compute_score(
 /// - Uses sliding windows for storing latencies and availabilities of each node
 /// - Latency and availability scores are first computed separately from the sliding windows using an additional array of weights, allowing prioritization of more recent observations. By default, exponentially decaying weights are used.
 /// - The final overall score of each node is computed as a product of latency and availability scores, namely score = score_l * score_a
-/// - Nodes pre-selection phase: if k-top-nodes setting is enabled, then only k nodes with highest scores are filtered into the routing candidate pool, otherwise all nodes are taken
-/// - Final nodes selection for routing from the candidate pool is probabilistic and proportional to score
+/// - Nodes pre-selection phase for routing candidate pool (snapshot):
+///   - Criteria: if k-top-nodes setting is enabled, then only k nodes with highest scores are filtered into the routing candidate pool (snapshot), otherwise all healthy nodes are used
+///   - Trigger conditions: topology updates, node health check status updates
+/// - Final selection of nodes for routing from the candidate pool is probabilistic and is proportional to the score of the node
 ///
 /// ## Configuration Options
-/// - `k_top_nodes`: Limit routing to only the top K nodes with highest score
+/// - `k_top_nodes`: Limit routing to only top k nodes with highest score
 /// - `use_availability_penalty`: Whether to penalize nodes for being unavailable
 /// - Custom window weights can be provided for specialized decay functions
 #[derive(Default, Debug, Clone)]
