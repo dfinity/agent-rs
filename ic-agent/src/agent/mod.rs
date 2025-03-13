@@ -13,7 +13,7 @@ pub mod status;
 
 pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
-use agent_error::HttpErrorPayload;
+use agent_error::{HttpErrorPayload, Operation};
 use async_lock::Semaphore;
 use async_trait::async_trait;
 pub use builder::AgentBuilder;
@@ -396,6 +396,10 @@ impl Agent {
         use_nonce: bool,
         explicit_verify_query_signatures: Option<bool>,
     ) -> Result<Vec<u8>, AgentError> {
+        let operation = Operation::Call {
+            canister: canister_id,
+            method: method_name.clone(),
+        };
         let content = self.query_content(
             canister_id,
             method_name,
@@ -409,6 +413,7 @@ impl Agent {
             serialized_bytes,
             content.to_request_id(),
             explicit_verify_query_signatures,
+            operation,
         )
         .await
     }
@@ -423,11 +428,33 @@ impl Agent {
     ) -> Result<Vec<u8>, AgentError> {
         let envelope: Envelope =
             serde_cbor::from_slice(&signed_query).map_err(AgentError::InvalidCborData)?;
+        let EnvelopeContent::Query {
+            canister_id,
+            method_name,
+            ..
+        } = &*envelope.content
+        else {
+            return Err(AgentError::CallDataMismatch {
+                field: "request_type".to_string(),
+                value_arg: "query".to_string(),
+                value_cbor: if matches!(*envelope.content, EnvelopeContent::Call { .. }) {
+                    "update"
+                } else {
+                    "read_state"
+                }
+                .to_string(),
+            });
+        };
+        let operation = Operation::Call {
+            canister: *canister_id,
+            method: method_name.clone(),
+        };
         self.query_inner(
             effective_canister_id,
             signed_query,
             envelope.content.to_request_id(),
             None,
+            operation,
         )
         .await
     }
@@ -441,6 +468,7 @@ impl Agent {
         signed_query: Vec<u8>,
         request_id: RequestId,
         explicit_verify_query_signatures: Option<bool>,
+        operation: Operation,
     ) -> Result<Vec<u8>, AgentError> {
         let response = if explicit_verify_query_signatures.unwrap_or(self.verify_query_signatures) {
             let (response, mut subnet) = futures_util::try_join!(
@@ -517,7 +545,10 @@ impl Agent {
 
         match response {
             QueryResponse::Replied { reply, .. } => Ok(reply.arg),
-            QueryResponse::Rejected { reject, .. } => Err(AgentError::UncertifiedReject(reject)),
+            QueryResponse::Rejected { reject, .. } => Err(AgentError::UncertifiedReject {
+                reject,
+                operation: Some(operation),
+            }),
         }
     }
 
@@ -551,11 +582,15 @@ impl Agent {
         let nonce = self.nonce_factory.generate();
         let content = self.update_content(
             canister_id,
-            method_name,
+            method_name.clone(),
             arg,
             ingress_expiry_datetime,
             nonce,
         )?;
+        let operation = Some(Operation::Call {
+            canister: canister_id,
+            method: method_name,
+        });
         let request_id = to_request_id(&content)?;
         let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
 
@@ -576,14 +611,20 @@ impl Agent {
                         Ok(CallResponse::Response((reply.arg, certificate)))
                     }
                     RequestStatusResponse::Rejected(reject_response) => {
-                        Err(AgentError::CertifiedReject(reject_response))?
+                        Err(AgentError::CertifiedReject {
+                            reject: reject_response,
+                            operation,
+                        })?
                     }
                     _ => Ok(CallResponse::Poll(request_id)),
                 }
             }
             TransportCallResponse::Accepted => Ok(CallResponse::Poll(request_id)),
             TransportCallResponse::NonReplicatedRejection(reject_response) => {
-                Err(AgentError::UncertifiedReject(reject_response))
+                Err(AgentError::UncertifiedReject {
+                    reject: reject_response,
+                    operation,
+                })
             }
         }
     }
@@ -598,6 +639,27 @@ impl Agent {
     ) -> Result<CallResponse<Vec<u8>>, AgentError> {
         let envelope: Envelope =
             serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
+        let EnvelopeContent::Call {
+            canister_id,
+            method_name,
+            ..
+        } = &*envelope.content
+        else {
+            return Err(AgentError::CallDataMismatch {
+                field: "request_type".to_string(),
+                value_arg: "update".to_string(),
+                value_cbor: if matches!(*envelope.content, EnvelopeContent::Query { .. }) {
+                    "query"
+                } else {
+                    "read_state"
+                }
+                .to_string(),
+            });
+        };
+        let operation = Some(Operation::Call {
+            canister: *canister_id,
+            method: method_name.clone(),
+        });
         let request_id = to_request_id(&envelope.content)?;
 
         let response_body = self
@@ -615,14 +677,20 @@ impl Agent {
                 match status {
                     RequestStatusResponse::Replied(reply) => Ok(CallResponse::Response(reply.arg)),
                     RequestStatusResponse::Rejected(reject_response) => {
-                        Err(AgentError::CertifiedReject(reject_response))?
+                        Err(AgentError::CertifiedReject {
+                            reject: reject_response,
+                            operation,
+                        })?
                     }
                     _ => Ok(CallResponse::Poll(request_id)),
                 }
             }
             TransportCallResponse::Accepted => Ok(CallResponse::Poll(request_id)),
             TransportCallResponse::NonReplicatedRejection(reject_response) => {
-                Err(AgentError::UncertifiedReject(reject_response))
+                Err(AgentError::UncertifiedReject {
+                    reject: reject_response,
+                    operation,
+                })
             }
         }
     }
@@ -687,7 +755,10 @@ impl Agent {
                 }
 
                 RequestStatusResponse::Rejected(response) => {
-                    return Err(AgentError::CertifiedReject(response))
+                    return Err(AgentError::CertifiedReject {
+                        reject: response,
+                        operation: None,
+                    })
                 }
 
                 RequestStatusResponse::Done => {
@@ -710,6 +781,16 @@ impl Agent {
         &self,
         request_id: &RequestId,
         effective_canister_id: Principal,
+    ) -> Result<(Vec<u8>, Certificate), AgentError> {
+        self.wait_inner(request_id, effective_canister_id, None)
+            .await
+    }
+
+    async fn wait_inner(
+        &self,
+        request_id: &RequestId,
+        effective_canister_id: Principal,
+        operation: Option<Operation>,
     ) -> Result<(Vec<u8>, Certificate), AgentError> {
         let mut retry_policy = self.get_retry_policy();
 
@@ -740,7 +821,10 @@ impl Agent {
                 }
 
                 RequestStatusResponse::Rejected(response) => {
-                    return Err(AgentError::CertifiedReject(response))
+                    return Err(AgentError::CertifiedReject {
+                        reject: response,
+                        operation,
+                    })
                 }
 
                 RequestStatusResponse::Done => {
@@ -1714,6 +1798,8 @@ pub struct UpdateCall<'agent> {
     agent: &'agent Agent,
     response_future: AgentFuture<'agent, CallResponse<(Vec<u8>, Certificate)>>,
     effective_canister_id: Principal,
+    canister_id: Principal,
+    method_name: String,
 }
 
 impl fmt::Debug for UpdateCall<'_> {
@@ -1741,7 +1827,14 @@ impl<'a> UpdateCall<'a> {
             CallResponse::Response(response) => Ok(response),
             CallResponse::Poll(request_id) => {
                 self.agent
-                    .wait(&request_id, self.effective_canister_id)
+                    .wait_inner(
+                        &request_id,
+                        self.effective_canister_id,
+                        Some(Operation::Call {
+                            canister: self.canister_id,
+                            method: self.method_name,
+                        }),
+                    )
                     .await
             }
         }
@@ -1816,6 +1909,7 @@ impl<'agent> UpdateBuilder<'agent> {
     /// Make an update call. This will return a `RequestId`.
     /// The `RequestId` should then be used for `request_status` (most likely in a loop).
     pub fn call(self) -> UpdateCall<'agent> {
+        let method_name = self.method_name.clone();
         let response_future = async move {
             self.agent
                 .update_raw(
@@ -1831,6 +1925,8 @@ impl<'agent> UpdateBuilder<'agent> {
             agent: self.agent,
             response_future: Box::pin(response_future),
             effective_canister_id: self.effective_canister_id,
+            canister_id: self.canister_id,
+            method_name,
         }
     }
 

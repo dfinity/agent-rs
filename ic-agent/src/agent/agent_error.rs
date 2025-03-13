@@ -1,6 +1,7 @@
 //! Errors that can occur when using the replica agent.
 
 use crate::{agent::status::Status, RequestIdError};
+use candid::Principal;
 use ic_certification::Label;
 use ic_transport_types::{InvalidRejectCodeError, RejectResponse};
 use leb128::read;
@@ -51,12 +52,22 @@ pub enum AgentError {
     PrincipalError(#[from] crate::export::PrincipalError),
 
     /// The subnet rejected the message.
-    #[error("The replica returned a rejection error: reject code {:?}, reject message {}, error code {:?}", .0.reject_code, .0.reject_message, .0.error_code)]
-    CertifiedReject(RejectResponse),
+    #[error("The replica returned a rejection error: reject code {:?}, reject message {}, error code {:?}", .reject.reject_code, .reject.reject_message, .reject.error_code)]
+    CertifiedReject {
+        /// The rejection returned by the replica.
+        reject: RejectResponse,
+        /// The operation that was rejected.
+        operation: Option<Operation>,
+    },
 
-    /// The replica rejected the message. This rejection cannot be verified as authentic.
-    #[error("The replica returned a rejection error: reject code {:?}, reject message {}, error code {:?}", .0.reject_code, .0.reject_message, .0.error_code)]
-    UncertifiedReject(RejectResponse),
+    /// The subnet may have rejected the message. This rejection cannot be verified as authentic.
+    #[error("The replica returned a rejection error: reject code {:?}, reject message {}, error code {:?}", .reject.reject_code, .reject.reject_message, .reject.error_code)]
+    UncertifiedReject {
+        /// The rejection returned by the boundary node.
+        reject: RejectResponse,
+        /// The operation that was rejected.
+        operation: Option<Operation>,
+    },
 
     /// The replica returned an HTTP error.
     #[error("The replica returned an HTTP Error: {0}")]
@@ -260,6 +271,32 @@ impl Display for HttpErrorPayload {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         self.fmt_human_readable(f)
     }
+}
+
+/// An operation that can result in a reject.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum Operation {
+    /// A call to a canister method.
+    Call {
+        /// The canister whose method was called.
+        canister: Principal,
+        /// The name of the method.
+        method: String,
+    },
+    /// A read of the state tree, in the context of a canister.
+    ReadState {
+        /// The requested paths within the state tree.
+        paths: Vec<Vec<String>>,
+        /// The canister the read request was made in the context of.
+        canister: Principal,
+    },
+    /// A read of the state tree, in the context of a subnet.
+    ReadSubnetState {
+        /// The requested paths within the state tree.
+        paths: Vec<Vec<String>>,
+        /// The subnet the read request was made in the context of.
+        subnet: Principal,
+    },
 }
 
 #[cfg(test)]

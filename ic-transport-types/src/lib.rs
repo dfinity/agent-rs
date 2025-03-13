@@ -456,7 +456,7 @@ mod map_u128 {
                 .ok_or_else(|| A::Error::missing_field("0"))?;
             let opt: Option<(IgnoredAny, Option<u64>)> = map.next_entry()?;
             let high = opt.and_then(|x| x.1).unwrap_or(0);
-            Ok((high as u128) << 64 | low as u128)
+            Ok(((high as u128) << 64) | low as u128)
         }
     }
 }

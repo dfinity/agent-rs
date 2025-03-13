@@ -196,12 +196,12 @@ fn blob_from_arguments(
                     .to_bytes(),
                 Some((env, func)) => {
                     let first_char = arguments.chars().next();
-                    let is_candid_format = first_char.map_or(false, |c| c == '(');
+                    let is_candid_format = first_char == Some('(');
                     // If parsing fails and method expects a single value, try parsing as IDLValue.
                     // If it still fails, and method expects a text type, send arguments as text.
                     let args = args.or_else(|e| {
                         if func.args.len() == 1 && !is_candid_format {
-                            let is_quote = first_char.map_or(false, |c| c == '"');
+                            let is_quote = first_char == Some('"');
                             if &TypeInner::Text == func.args[0].as_ref() && !is_quote {
                                 Ok(IDLValue::Text(arguments.to_string()))
                             } else {

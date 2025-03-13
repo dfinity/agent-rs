@@ -188,12 +188,12 @@ fn canister_reject_call() {
         assert!(
             matches!(
                 &result,
-                Err(AgentError::CertifiedReject(RejectResponse {
+                Err(AgentError::CertifiedReject { reject: RejectResponse {
                     reject_code: RejectCode::CanisterError,
                     reject_message,
                     error_code: Some(error_code),
                     ..
-                })) if reject_message.contains(&format!(
+                }, .. }) if reject_message.contains(&format!(
                     "Canister {}: Canister has no update method 'wallet_send'",
                     alice.canister_id()
                 )) && error_code == "IC0536"
