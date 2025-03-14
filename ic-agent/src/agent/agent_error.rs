@@ -56,7 +56,7 @@ pub enum AgentError {
     CertifiedReject {
         /// The rejection returned by the replica.
         reject: RejectResponse,
-        /// The operation that was rejected.
+        /// The operation that was rejected. Not always available.
         operation: Option<Operation>,
     },
 
@@ -65,7 +65,7 @@ pub enum AgentError {
     UncertifiedReject {
         /// The rejection returned by the boundary node.
         reject: RejectResponse,
-        /// The operation that was rejected.
+        /// The operation that was rejected. Not always available.
         operation: Option<Operation>,
     },
 
@@ -283,7 +283,7 @@ pub enum Operation {
         /// The name of the method.
         method: String,
     },
-    /// A read of the state tree, in the context of a canister.
+    /// A read of the state tree, in the context of a canister. This will *not* be returned for request polling.
     ReadState {
         /// The requested paths within the state tree.
         paths: Vec<Vec<String>>,
