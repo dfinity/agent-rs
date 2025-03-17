@@ -14,6 +14,9 @@ categories = ["api-bindings", "data-structures", "no-std"]
 keywords = ["internet-computer", "agent", "utility", "icp", "dfinity"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
+[lints]
+workspace = true
+
 [dependencies]
 async-trait = "0.1.68"
 candid = { workspace = true, features = ["value"] }

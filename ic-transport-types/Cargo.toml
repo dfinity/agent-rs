@@ -10,6 +10,9 @@ description = "Types related to the HTTP transport for the Internet Computer"
 keywords = ["internet-computer", "agent", "types", "ic", "dfinity"]
 categories = ["cryptography::cryptocurrencies", "api-bindings"]
 
+[lints]
+workspace = true
+
 [dependencies]
 candid.workspace = true
 hex.workspace = true
