@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.40.0] - 2025-03-17
+
 * BREAKING: Added data about the rejected call to CertifiedReject/UncertifiedReject.
 * Updated the serialization of `WasmMemoryPersistence`.
 * BREAKING: `AgentBuilder::with_background_dynamic_routing` is no longer `async`.
