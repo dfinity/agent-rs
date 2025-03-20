@@ -38,19 +38,20 @@ ic-certification = { workspace = true }
 ic-transport-types = { workspace = true }
 ic-verify-bls-signature = "0.5"
 k256 = { workspace = true, features = ["pem"] }
-p256 = { workspace = true, features = ["pem"] }
 leb128 = { workspace = true }
+p256 = { workspace = true, features = ["pem"] }
 pkcs8 = { version = "0.10.2", features = ["std"] }
-sec1 = { version = "0.7.2", features = ["pem"] }
 rand = { workspace = true }
 rangemap = "1.4"
 ring = { version = "0.17", optional = true }
+sec1 = { version = "0.7.2", features = ["pem"] }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
 serde_cbor = { workspace = true }
 serde_repr = { workspace = true }
 sha2 = { workspace = true }
 simple_asn1 = "0.6.1"
+snafu = "0.8.5"
 stop-token = "0.7"
 thiserror = { workspace = true }
 time = { workspace = true }

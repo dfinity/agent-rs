@@ -12,8 +12,11 @@ pub mod route_provider;
 pub mod status;
 
 pub use agent_config::AgentConfig;
-pub use agent_error::AgentError;
-use agent_error::{HttpErrorPayload, Operation};
+use agent_error::{
+    AgentError, AgentErrorInner, CannotCalculateRequestIdErr, CertificateNotAuthorizedErr,
+    CertificateVerificationFailedErr, HttpErrorPayload, InvalidCborDataErr, MalformedPublicKeyErr,
+    ResultExt as _, TransportErr, UrlParseErr,
+};
 use async_lock::Semaphore;
 use async_trait::async_trait;
 pub use builder::AgentBuilder;
@@ -36,7 +39,9 @@ use route_provider::{
     },
     RouteProvider, UrlUntilReady,
 };
+use snafu::{OptionExt, ResultExt};
 use time::OffsetDateTime;
+use tokio::task_local;
 use tower_service::Service;
 
 #[cfg(test)]
@@ -60,6 +65,7 @@ use ic_transport_types::{
 };
 use serde::Serialize;
 use status::Status;
+use std::cell::RefCell;
 use std::{
     borrow::Cow,
     collections::HashMap,
@@ -275,7 +281,7 @@ impl Agent {
         }
         let status = self.status().await?;
         let Some(root_key) = status.root_key else {
-            return Err(AgentError::NoRootKeyInStatus(status));
+            return Err(AgentErrorInner::NoRootKeyInStatus { status }.op_context());
         };
         self.set_root_key(root_key);
         Ok(())
@@ -325,7 +331,9 @@ impl Agent {
             )
             .await?
             .1;
-        serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
+        serde_cbor::from_slice(&bytes)
+            .context(InvalidCborDataErr)
+            .op_context()
     }
 
     async fn read_state_endpoint<A>(
@@ -345,7 +353,9 @@ impl Agent {
             .execute(Method::POST, &endpoint, Some(serialized_bytes))
             .await?
             .1;
-        serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
+        serde_cbor::from_slice(&bytes)
+            .context(InvalidCborDataErr)
+            .op_context()
     }
 
     async fn read_subnet_state_endpoint<A>(
@@ -362,7 +372,9 @@ impl Agent {
             .execute(Method::POST, &endpoint, Some(serialized_bytes))
             .await?
             .1;
-        serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
+        serde_cbor::from_slice(&bytes)
+            .context(InvalidCborDataErr)
+            .op_context()
     }
 
     async fn call_endpoint(
@@ -380,7 +392,9 @@ impl Agent {
             return Ok(TransportCallResponse::Accepted);
         }
 
-        serde_cbor::from_slice(&response_body).map_err(AgentError::InvalidCborData)
+        serde_cbor::from_slice(&response_body)
+            .context(InvalidCborDataErr)
+            .op_context()
     }
 
     /// The simplest way to do a query call; sends a byte array and will return a byte vector.
@@ -400,22 +414,35 @@ impl Agent {
             canister: canister_id,
             method: method_name.clone(),
         };
-        let content = self.query_content(
-            canister_id,
-            method_name,
-            arg,
-            ingress_expiry_datetime,
-            use_nonce,
-        )?;
-        let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
-        self.query_inner(
-            effective_canister_id,
-            serialized_bytes,
-            content.to_request_id(),
-            explicit_verify_query_signatures,
-            operation,
-        )
-        .await
+        let ingress_expiry_datetime =
+            ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date());
+        CURRENT_OPERATION
+            .scope(
+                RefCell::new(OperationInfo {
+                    operation,
+                    expiry: ingress_expiry_datetime,
+                    status: OperationStatus::NotSent,
+                    response: None,
+                }),
+                async {
+                    let content = self.query_content(
+                        canister_id,
+                        method_name,
+                        arg,
+                        ingress_expiry_datetime,
+                        use_nonce,
+                    )?;
+                    let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
+                    self.query_inner(
+                        effective_canister_id,
+                        serialized_bytes,
+                        content.to_request_id(),
+                        explicit_verify_query_signatures,
+                    )
+                    .await
+                },
+            )
+            .await
     }
 
     /// Send the signed query to the network. Will return a byte vector.
@@ -426,15 +453,17 @@ impl Agent {
         effective_canister_id: Principal,
         signed_query: Vec<u8>,
     ) -> Result<Vec<u8>, AgentError> {
-        let envelope: Envelope =
-            serde_cbor::from_slice(&signed_query).map_err(AgentError::InvalidCborData)?;
+        let envelope: Envelope = serde_cbor::from_slice(&signed_query)
+            .context(InvalidCborDataErr)
+            .op_context()?;
         let EnvelopeContent::Query {
             canister_id,
             method_name,
+            ingress_expiry,
             ..
         } = &*envelope.content
         else {
-            return Err(AgentError::CallDataMismatch {
+            return Err(AgentErrorInner::CallDataMismatch {
                 field: "request_type".to_string(),
                 value_arg: "query".to_string(),
                 value_cbor: if matches!(*envelope.content, EnvelopeContent::Call { .. }) {
@@ -443,20 +472,32 @@ impl Agent {
                     "read_state"
                 }
                 .to_string(),
-            });
+            }
+            .op_context());
         };
         let operation = Operation::Call {
             canister: *canister_id,
             method: method_name.clone(),
         };
-        self.query_inner(
-            effective_canister_id,
-            signed_query,
-            envelope.content.to_request_id(),
-            None,
-            operation,
-        )
-        .await
+        CURRENT_OPERATION
+            .scope(
+                RefCell::new(OperationInfo {
+                    operation,
+                    expiry: *ingress_expiry,
+                    status: OperationStatus::NotSent,
+                    response: None,
+                }),
+                async {
+                    self.query_inner(
+                        effective_canister_id,
+                        signed_query,
+                        envelope.content.to_request_id(),
+                        None,
+                    )
+                    .await
+                },
+            )
+            .await
     }
 
     /// Helper function for performing both the query call and possibly a `read_state` to check the subnet node keys.
@@ -468,7 +509,6 @@ impl Agent {
         signed_query: Vec<u8>,
         request_id: RequestId,
         explicit_verify_query_signatures: Option<bool>,
-        operation: Operation,
     ) -> Result<Vec<u8>, AgentError> {
         let response = if explicit_verify_query_signatures.unwrap_or(self.verify_query_signatures) {
             let (response, mut subnet) = futures_util::try_join!(
@@ -476,19 +516,23 @@ impl Agent {
                 self.get_subnet_by_canister(&effective_canister_id)
             )?;
             if response.signatures().is_empty() {
-                return Err(AgentError::MissingSignature);
+                return Err(AgentErrorInner::MissingSignature.op_context());
             } else if response.signatures().len() > subnet.node_keys.len() {
-                return Err(AgentError::TooManySignatures {
+                return Err(AgentErrorInner::TooManySignatures {
                     had: response.signatures().len(),
                     needed: subnet.node_keys.len(),
-                });
+                }
+                .op_context());
             }
             for signature in response.signatures() {
                 if OffsetDateTime::now_utc()
                     - OffsetDateTime::from_unix_timestamp_nanos(signature.timestamp.into()).unwrap()
                     > self.ingress_expiry
                 {
-                    return Err(AgentError::CertificateOutdated(self.ingress_expiry));
+                    return Err(AgentErrorInner::CertificateOutdated {
+                        max_age: self.ingress_expiry,
+                    }
+                    .op_context());
                 }
                 let signable = response.signable(request_id, signature.timestamp);
                 let node_key = if let Some(node_key) = subnet.node_keys.get(&signature.identity) {
@@ -500,38 +544,43 @@ impl Agent {
                     subnet
                         .node_keys
                         .get(&signature.identity)
-                        .ok_or(AgentError::CertificateNotAuthorized())?
+                        .context(CertificateNotAuthorizedErr)
+                        .op_context()?
                 };
                 if node_key.len() != 44 {
-                    return Err(AgentError::DerKeyLengthMismatch {
+                    return Err(AgentErrorInner::DerKeyLengthMismatch {
                         expected: 44,
                         actual: node_key.len(),
-                    });
+                    }
+                    .op_context());
                 }
                 const DER_PREFIX: [u8; 12] = [48, 42, 48, 5, 6, 3, 43, 101, 112, 3, 33, 0];
                 if node_key[..12] != DER_PREFIX {
-                    return Err(AgentError::DerPrefixMismatch {
+                    return Err(AgentErrorInner::DerPrefixMismatch {
                         expected: DER_PREFIX.to_vec(),
                         actual: node_key[..12].to_vec(),
-                    });
+                    }
+                    .op_context());
                 }
                 let pubkey =
                     VerificationKey::try_from(<[u8; 32]>::try_from(&node_key[12..]).unwrap())
-                        .map_err(|_| AgentError::MalformedPublicKey)?;
+                        .context(MalformedPublicKeyErr)
+                        .op_context()?;
                 let sig = Signature::from(
                     <[u8; 64]>::try_from(&signature.signature[..])
-                        .map_err(|_| AgentError::MalformedSignature)?,
+                        .map_err(|e| Malformed)
+                        .op_context()?,
                 );
 
                 match pubkey.verify(&sig, &signable) {
                     Err(Ed25519Error::InvalidSignature) => {
-                        return Err(AgentError::QuerySignatureVerificationFailed)
+                        return Err(AgentErrorInner::QuerySignatureVerificationFailed).op_context()
                     }
-                    Err(Ed25519Error::InvalidSliceLength) => {
-                        return Err(AgentError::MalformedSignature)
+                    Err(source @ Ed25519Error::InvalidSliceLength) => {
+                        return Err(AgentErrorInner::MalformedSignature { source }).op_context()
                     }
-                    Err(Ed25519Error::MalformedPublicKey) => {
-                        return Err(AgentError::MalformedPublicKey)
+                    Err(source @ Ed25519Error::MalformedPublicKey) => {
+                        return Err(AgentErrorInner::MalformedPublicKey { source }).op_context()
                     }
                     Ok(()) => (),
                     _ => unreachable!(),
@@ -545,10 +594,11 @@ impl Agent {
 
         match response {
             QueryResponse::Replied { reply, .. } => Ok(reply.arg),
-            QueryResponse::Rejected { reject, .. } => Err(AgentError::UncertifiedReject {
+            QueryResponse::Rejected { reject, .. } => Err(AgentErrorInner::UncertifiedReject {
                 reject,
                 operation: Some(operation),
-            }),
+            }
+            .op_context()),
         }
     }
 
@@ -557,15 +607,19 @@ impl Agent {
         canister_id: Principal,
         method_name: String,
         arg: Vec<u8>,
-        ingress_expiry_datetime: Option<u64>,
+        ingress_expiry: u64,
         use_nonce: bool,
     ) -> Result<EnvelopeContent, AgentError> {
         Ok(EnvelopeContent::Query {
-            sender: self.identity.sender().map_err(AgentError::SigningError)?,
+            sender: self
+                .identity
+                .sender()
+                .map_err(|message| AgentErrorInner::SigningError { message })
+                .op_context()?,
             canister_id,
             method_name,
             arg,
-            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
+            ingress_expiry,
             nonce: use_nonce.then(|| self.nonce_factory.generate()).flatten(),
         })
     }
@@ -591,7 +645,9 @@ impl Agent {
             canister: canister_id,
             method: method_name,
         });
-        let request_id = to_request_id(&content)?;
+        let request_id = to_request_id(&content)
+            .context(CannotCalculateRequestIdErr)
+            .op_context()?;
         let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
 
         let response_body = self
@@ -600,8 +656,9 @@ impl Agent {
 
         match response_body {
             TransportCallResponse::Replied { certificate } => {
-                let certificate =
-                    serde_cbor::from_slice(&certificate).map_err(AgentError::InvalidCborData)?;
+                let certificate = serde_cbor::from_slice(&certificate)
+                    .context(InvalidCborDataErr)
+                    .op_context()?;
 
                 self.verify(&certificate, effective_canister_id)?;
                 let status = lookup_request_status(&certificate, &request_id)?;
@@ -611,20 +668,22 @@ impl Agent {
                         Ok(CallResponse::Response((reply.arg, certificate)))
                     }
                     RequestStatusResponse::Rejected(reject_response) => {
-                        Err(AgentError::CertifiedReject {
+                        Err(AgentErrorInner::CertifiedReject {
                             reject: reject_response,
                             operation,
-                        })?
+                        }
+                        .op_context())?
                     }
                     _ => Ok(CallResponse::Poll(request_id)),
                 }
             }
             TransportCallResponse::Accepted => Ok(CallResponse::Poll(request_id)),
             TransportCallResponse::NonReplicatedRejection(reject_response) => {
-                Err(AgentError::UncertifiedReject {
+                Err(AgentErrorInner::UncertifiedReject {
                     reject: reject_response,
                     operation,
-                })
+                }
+                .op_context())
             }
         }
     }
@@ -637,15 +696,16 @@ impl Agent {
         effective_canister_id: Principal,
         signed_update: Vec<u8>,
     ) -> Result<CallResponse<Vec<u8>>, AgentError> {
-        let envelope: Envelope =
-            serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
+        let envelope: Envelope = serde_cbor::from_slice(&signed_update)
+            .context(InvalidCborDataErr)
+            .op_context()?;
         let EnvelopeContent::Call {
             canister_id,
             method_name,
             ..
         } = &*envelope.content
         else {
-            return Err(AgentError::CallDataMismatch {
+            return Err(AgentErrorInner::CallDataMismatch {
                 field: "request_type".to_string(),
                 value_arg: "update".to_string(),
                 value_cbor: if matches!(*envelope.content, EnvelopeContent::Query { .. }) {
@@ -654,13 +714,16 @@ impl Agent {
                     "read_state"
                 }
                 .to_string(),
-            });
+            }
+            .op_context());
         };
         let operation = Some(Operation::Call {
             canister: *canister_id,
             method: method_name.clone(),
         });
-        let request_id = to_request_id(&envelope.content)?;
+        let request_id = to_request_id(&envelope.content)
+            .context(CannotCalculateRequestIdErr)
+            .op_context()?;
 
         let response_body = self
             .call_endpoint(effective_canister_id, signed_update)
@@ -668,8 +731,9 @@ impl Agent {
 
         match response_body {
             TransportCallResponse::Replied { certificate } => {
-                let certificate =
-                    serde_cbor::from_slice(&certificate).map_err(AgentError::InvalidCborData)?;
+                let certificate = serde_cbor::from_slice(&certificate)
+                    .context(InvalidCborDataErr)
+                    .op_context()?;
 
                 self.verify(&certificate, effective_canister_id)?;
                 let status = lookup_request_status(&certificate, &request_id)?;
@@ -677,20 +741,22 @@ impl Agent {
                 match status {
                     RequestStatusResponse::Replied(reply) => Ok(CallResponse::Response(reply.arg)),
                     RequestStatusResponse::Rejected(reject_response) => {
-                        Err(AgentError::CertifiedReject {
+                        Err(AgentErrorInner::CertifiedReject {
                             reject: reject_response,
                             operation,
-                        })?
+                        }
+                        .op_context())?
                     }
                     _ => Ok(CallResponse::Poll(request_id)),
                 }
             }
             TransportCallResponse::Accepted => Ok(CallResponse::Poll(request_id)),
             TransportCallResponse::NonReplicatedRejection(reject_response) => {
-                Err(AgentError::UncertifiedReject {
+                Err(AgentErrorInner::UncertifiedReject {
                     reject: reject_response,
                     operation,
-                })
+                }
+                .op_context())
             }
         }
     }
@@ -708,7 +774,11 @@ impl Agent {
             method_name,
             arg,
             nonce,
-            sender: self.identity.sender().map_err(AgentError::SigningError)?,
+            sender: self
+                .identity
+                .sender()
+                .map_err(|message| AgentErrorInner::SigningError { message })
+                .op_context()?,
             ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
         })
     }
@@ -751,27 +821,39 @@ impl Agent {
                 }
 
                 RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => {
-                    return Ok((arg, cert))
+                    CURRENT_OPERATION.try_with(|op| {
+                        let mut op = op.borrow_mut();
+                        op.status = OperationStatus::Received;
+                        op.response = Some(Ok(arg.clone()))
+                    });
+                    return Ok((arg, cert));
                 }
 
                 RequestStatusResponse::Rejected(response) => {
-                    return Err(AgentError::CertifiedReject {
+                    CURRENT_OPERATION.try_with(|op| {
+                        let mut op = op.borrow_mut();
+                        op.status = OperationStatus::Received;
+                        op.response = Some(Err(response.clone()))
+                    });
+                    return Err(AgentErrorInner::CertifiedReject {
                         reject: response,
                         operation: None,
-                    })
+                    }
+                    .op_context());
                 }
 
                 RequestStatusResponse::Done => {
-                    return Err(AgentError::RequestStatusDoneNoReply(String::from(
-                        *request_id,
-                    )))
+                    return Err(AgentErrorInner::RequestStatusDoneNoReply {
+                        request_id: String::from(*request_id),
+                    }
+                    .op_context())
                 }
             };
 
             match retry_policy.next_backoff() {
                 Some(duration) => crate::util::sleep(duration).await,
 
-                None => return Err(AgentError::TimeoutWaitingForResponse()),
+                None => return Err(AgentErrorInner::TimeoutWaitingForResponse).op_context(),
             }
         }
     }
@@ -817,27 +899,39 @@ impl Agent {
                 }
 
                 RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => {
-                    return Ok((arg, cert))
+                    CURRENT_OPERATION.try_with(|op| {
+                        let mut op = op.borrow_mut();
+                        op.status = OperationStatus::Received;
+                        op.response = Some(Ok(arg.clone()))
+                    });
+                    return Ok((arg, cert));
                 }
 
                 RequestStatusResponse::Rejected(response) => {
-                    return Err(AgentError::CertifiedReject {
+                    CURRENT_OPERATION.try_with(|op| {
+                        let mut op = op.borrow_mut();
+                        op.status = OperationStatus::Received;
+                        op.response = Some(Err(response.clone()));
+                    });
+                    return Err(AgentErrorInner::CertifiedReject {
                         reject: response,
                         operation,
-                    })
+                    }
+                    .op_context());
                 }
 
                 RequestStatusResponse::Done => {
-                    return Err(AgentError::RequestStatusDoneNoReply(String::from(
-                        *request_id,
-                    )))
+                    return Err(AgentErrorInner::RequestStatusDoneNoReply {
+                        request_id: String::from(*request_id),
+                    }
+                    .op_context())
                 }
             };
 
             match retry_policy.next_backoff() {
                 Some(duration) => crate::util::sleep(duration).await,
 
-                None => return Err(AgentError::TimeoutWaitingForResponse()),
+                None => return Err(AgentErrorInner::TimeoutWaitingForResponse.op_context()),
             }
         }
     }
@@ -856,7 +950,8 @@ impl Agent {
             .read_state_endpoint(effective_canister_id, serialized_bytes)
             .await?;
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
-            .map_err(AgentError::InvalidCborData)?;
+            .context(InvalidCborDataErr)
+            .op_context()?;
         self.verify(&cert, effective_canister_id)?;
         Ok(cert)
     }
@@ -875,14 +970,19 @@ impl Agent {
             .read_subnet_state_endpoint(subnet_id, serialized_bytes)
             .await?;
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
-            .map_err(AgentError::InvalidCborData)?;
+            .context(InvalidCborDataErr)
+            .op_context()?;
         self.verify_for_subnet(&cert, subnet_id)?;
         Ok(cert)
     }
 
     fn read_state_content(&self, paths: Vec<Vec<Label>>) -> Result<EnvelopeContent, AgentError> {
         Ok(EnvelopeContent::ReadState {
-            sender: self.identity.sender().map_err(AgentError::SigningError)?,
+            sender: self
+                .identity
+                .sender()
+                .map_err(|message| AgentErrorInner::SigningError { message })
+                .op_context()?,
             paths,
             ingress_expiry: self.get_expiry_date(),
         })
@@ -916,7 +1016,9 @@ impl Agent {
         let key = extract_der(der_key)?;
 
         ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
-            .map_err(|_| AgentError::CertificateVerificationFailed())?;
+            .ok()
+            .context(CertificateVerificationFailedErr)
+            .op_context()?;
         Ok(())
     }
 
@@ -948,7 +1050,9 @@ impl Agent {
         let key = extract_der(der_key)?;
 
         ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
-            .map_err(|_| AgentError::CertificateVerificationFailed())?;
+            .ok()
+            .context(CertificateVerificationFailedErr)
+            .op_context()?;
         Ok(())
     }
 
@@ -959,7 +1063,10 @@ impl Agent {
         .abs()
             > self.ingress_expiry
         {
-            Err(AgentError::CertificateOutdated(self.ingress_expiry))
+            Err(AgentErrorInner::CertificateOutdated {
+                max_age: self.ingress_expiry,
+            })
+            .op_context()
         } else {
             Ok(())
         }
@@ -974,9 +1081,10 @@ impl Agent {
             None => Ok(self.read_root_key()),
             Some(delegation) => {
                 let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
-                    .map_err(AgentError::InvalidCborData)?;
+                    .context(InvalidCborDataErr)
+                    .op_context()?;
                 if cert.delegation.is_some() {
-                    return Err(AgentError::CertificateHasTooManyDelegations);
+                    return Err(AgentErrorInner::CertificateHasTooManyDelegations.op_context());
                 }
                 self.verify_cert(&cert, effective_canister_id)?;
                 let canister_range_lookup = [
@@ -985,11 +1093,12 @@ impl Agent {
                     "canister_ranges".as_bytes(),
                 ];
                 let canister_range = lookup_value(&cert.tree, canister_range_lookup)?;
-                let ranges: Vec<(Principal, Principal)> =
-                    serde_cbor::from_slice(canister_range).map_err(AgentError::InvalidCborData)?;
+                let ranges: Vec<(Principal, Principal)> = serde_cbor::from_slice(canister_range)
+                    .context(InvalidCborDataErr)
+                    .op_context()?;
                 if !principal_is_within_ranges(&effective_canister_id, &ranges[..]) {
                     // the certificate is not authorized to answer calls for this canister
-                    return Err(AgentError::CertificateNotAuthorized());
+                    return Err(AgentErrorInner::CertificateNotAuthorized.op_context());
                 }
 
                 let public_key_path = [
@@ -1011,9 +1120,10 @@ impl Agent {
             None => Ok(self.read_root_key()),
             Some(delegation) => {
                 let cert: Certificate = serde_cbor::from_slice(&delegation.certificate)
-                    .map_err(AgentError::InvalidCborData)?;
+                    .context(InvalidCborDataErr)
+                    .op_context()?;
                 if cert.delegation.is_some() {
-                    return Err(AgentError::CertificateHasTooManyDelegations);
+                    return Err(AgentErrorInner::CertificateHasTooManyDelegations.op_context());
                 }
                 self.verify_cert_for_subnet(&cert, subnet_id)?;
                 let public_key_path = [
@@ -1022,7 +1132,7 @@ impl Agent {
                     "public_key".as_bytes(),
                 ];
                 let pk = lookup_value(&cert.tree, public_key_path)
-                    .map_err(|_| AgentError::CertificateNotAuthorized())?
+                    .map_err(|_| AgentErrorInner::CertificateNotAuthorized.op_context())?
                     .to_vec();
                 Ok(pk)
             }
@@ -1102,14 +1212,16 @@ impl Agent {
         effective_canister_id: Principal,
         signed_request_status: Vec<u8>,
     ) -> Result<(RequestStatusResponse, Certificate), AgentError> {
-        let _envelope: Envelope =
-            serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
+        let _envelope: Envelope = serde_cbor::from_slice(&signed_request_status)
+            .context(InvalidCborDataErr)
+            .op_context()?;
         let read_state_response: ReadStateResponse = self
             .read_state_endpoint(effective_canister_id, signed_request_status)
             .await?;
 
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
-            .map_err(AgentError::InvalidCborData)?;
+            .context(InvalidCborDataErr)
+            .op_context()?;
         self.verify(&cert, effective_canister_id)?;
         Ok((lookup_request_status(&cert, request_id)?, cert))
     }
@@ -1129,10 +1241,13 @@ impl Agent {
         let endpoint = "api/v2/status";
         let bytes = self.execute(Method::GET, endpoint, None).await?.1;
 
-        let cbor: serde_cbor::Value =
-            serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)?;
+        let cbor: serde_cbor::Value = serde_cbor::from_slice(&bytes)
+            .context(InvalidCborDataErr)
+            .op_context()?;
 
-        Status::try_from(&cbor).map_err(|_| AgentError::InvalidReplicaStatus)
+        Status::try_from(&cbor)
+            .map_err(|_| AgentErrorInner::InvalidReplicaStatus)
+            .op_context()
     }
 
     /// Returns a `QueryBuilder` enabling the construction of a query call without
@@ -1225,7 +1340,14 @@ impl Agent {
         body: Option<Vec<u8>>,
     ) -> Result<(StatusCode, HeaderMap, Vec<u8>), AgentError> {
         let create_request_with_generated_url = || -> Result<Request, AgentError> {
-            let url = self.route_provider.route()?.join(endpoint)?;
+            let url = self
+                .route_provider
+                .route()?
+                .join(endpoint)
+                .with_context(|_| UrlParseErr {
+                    input: endpoint.to_string(),
+                })
+                .op_context()?;
             let mut http_request = Request::new(method.clone(), url);
             http_request
                 .headers_mut()
@@ -1233,6 +1355,15 @@ impl Agent {
             *http_request.body_mut() = body.clone().map(Body::from);
             Ok(http_request)
         };
+
+        // this is set before the call, because reqwest doesn't actually let you know whether the request went through or not.
+        // better a false positive than a false negative
+        CURRENT_OPERATION.try_with(|op| {
+            let mut op = op.borrow_mut();
+            if op.status == OperationStatus::NotSent {
+                op.status = OperationStatus::MaybeReceived
+            }
+        });
 
         let response = self
             .client
@@ -1250,7 +1381,7 @@ impl Agent {
             .max_response_body_size
             .zip(response.content_length()), Some((size_limit, content_length)) if content_length > size_limit as u64)
         {
-            return Err(AgentError::ResponseSizeExceededLimit());
+            return Err(AgentErrorInner::ResponseSizeExceededLimit.op_context());
         }
 
         let mut body: Vec<u8> = response
@@ -1260,13 +1391,13 @@ impl Agent {
         let mut stream = response.bytes_stream();
 
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk?;
+            let chunk = chunk.context(TransportErr).op_context()?;
 
             // Size Check (Body Size)
             if matches!(self
                 .max_response_body_size, Some(size_limit) if body.len() + chunk.len() > size_limit)
             {
-                return Err(AgentError::ResponseSizeExceededLimit());
+                return Err(AgentErrorInner::ResponseSizeExceededLimit).op_context();
             }
 
             body.extend_from_slice(chunk.as_ref());
@@ -1288,18 +1419,24 @@ impl Agent {
         let body = request_result.2;
 
         if status.is_client_error() || status.is_server_error() {
-            Err(AgentError::HttpError(HttpErrorPayload {
-                status: status.into(),
-                content_type: headers
-                    .get(CONTENT_TYPE)
-                    .and_then(|value| value.to_str().ok())
-                    .map(str::to_string),
-                content: body,
-            }))
+            Err(AgentErrorInner::HttpError {
+                payload: HttpErrorPayload {
+                    status: status.into(),
+                    content_type: headers
+                        .get(CONTENT_TYPE)
+                        .and_then(|value| value.to_str().ok())
+                        .map(str::to_string),
+                    content: body,
+                },
+            })
+            .op_context()
         } else if !(status == StatusCode::OK || status == StatusCode::ACCEPTED) {
-            Err(AgentError::InvalidHttpResponse(format!(
-                "Expected `200`, `202`, 4xx`, or `5xx` HTTP status code. Got: {status}",
-            )))
+            Err(AgentErrorInner::InvalidHttpResponse {
+                message: format!(
+                    "Expected `200`, `202`, 4xx`, or `5xx` HTTP status code. Got: {status}",
+                ),
+            })
+            .op_context()
         } else {
             Ok((status, body))
         }
@@ -1318,7 +1455,10 @@ fn sign_envelope(
     content: &EnvelopeContent,
     identity: Arc<dyn Identity>,
 ) -> Result<Vec<u8>, AgentError> {
-    let signature = identity.sign(content).map_err(AgentError::SigningError)?;
+    let signature = identity
+        .sign(content)
+        .map_err(|message| AgentErrorInner::SigningError { message })
+        .op_context()?;
 
     let envelope = Envelope {
         content: Cow::Borrowed(content),
@@ -1329,8 +1469,12 @@ fn sign_envelope(
 
     let mut serialized_bytes = Vec::new();
     let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
-    serializer.self_describe()?;
-    envelope.serialize(&mut serializer)?;
+    serializer
+        .self_describe()
+        .expect("vec write should be infallible");
+    envelope
+        .serialize(&mut serializer)
+        .expect("envelope serialization should be infallible");
 
     Ok(serialized_bytes)
 }
@@ -1345,8 +1489,9 @@ pub fn signed_query_inspect(
     ingress_expiry: u64,
     signed_query: Vec<u8>,
 ) -> Result<(), AgentError> {
-    let envelope: Envelope =
-        serde_cbor::from_slice(&signed_query).map_err(AgentError::InvalidCborData)?;
+    let envelope: Envelope = serde_cbor::from_slice(&signed_query)
+        .context(InvalidCborDataErr)
+        .op_context()?;
     match envelope.content.as_ref() {
         EnvelopeContent::Query {
             ingress_expiry: ingress_expiry_cbor,
@@ -1357,54 +1502,61 @@ pub fn signed_query_inspect(
             nonce: _nonce,
         } => {
             if ingress_expiry != *ingress_expiry_cbor {
-                return Err(AgentError::CallDataMismatch {
+                return Err(AgentErrorInner::CallDataMismatch {
                     field: "ingress_expiry".to_string(),
                     value_arg: ingress_expiry.to_string(),
                     value_cbor: ingress_expiry_cbor.to_string(),
-                });
+                }
+                .op_context());
             }
             if sender != *sender_cbor {
-                return Err(AgentError::CallDataMismatch {
+                return Err(AgentErrorInner::CallDataMismatch {
                     field: "sender".to_string(),
                     value_arg: sender.to_string(),
                     value_cbor: sender_cbor.to_string(),
-                });
+                }
+                .op_context());
             }
             if canister_id != *canister_id_cbor {
-                return Err(AgentError::CallDataMismatch {
+                return Err(AgentErrorInner::CallDataMismatch {
                     field: "canister_id".to_string(),
                     value_arg: canister_id.to_string(),
                     value_cbor: canister_id_cbor.to_string(),
-                });
+                }
+                .op_context());
             }
             if method_name != *method_name_cbor {
-                return Err(AgentError::CallDataMismatch {
+                return Err(AgentErrorInner::CallDataMismatch {
                     field: "method_name".to_string(),
                     value_arg: method_name.to_string(),
                     value_cbor: method_name_cbor.clone(),
-                });
+                }
+                .op_context());
             }
             if arg != *arg_cbor {
-                return Err(AgentError::CallDataMismatch {
+                return Err(AgentErrorInner::CallDataMismatch {
                     field: "arg".to_string(),
                     value_arg: format!("{arg:?}"),
                     value_cbor: format!("{arg_cbor:?}"),
-                });
+                }
+                .op_context());
             }
         }
         EnvelopeContent::Call { .. } => {
-            return Err(AgentError::CallDataMismatch {
+            return Err(AgentErrorInner::CallDataMismatch {
                 field: "request_type".to_string(),
                 value_arg: "query".to_string(),
                 value_cbor: "call".to_string(),
-            })
+            }
+            .op_context())
         }
         EnvelopeContent::ReadState { .. } => {
-            return Err(AgentError::CallDataMismatch {
+            return Err(AgentErrorInner::CallDataMismatch {
                 field: "request_type".to_string(),
                 value_arg: "query".to_string(),
                 value_cbor: "read_state".to_string(),
-            })
+            }
+            .op_context())
         }
     }
     Ok(())
@@ -1420,8 +1572,9 @@ pub fn signed_update_inspect(
     ingress_expiry: u64,
     signed_update: Vec<u8>,
 ) -> Result<(), AgentError> {
-    let envelope: Envelope =
-        serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
+    let envelope: Envelope = serde_cbor::from_slice(&signed_update)
+        .context(InvalidCborDataErr)
+        .op_context()?;
     match envelope.content.as_ref() {
         EnvelopeContent::Call {
             nonce: _nonce,
@@ -1432,54 +1585,61 @@ pub fn signed_update_inspect(
             arg: arg_cbor,
         } => {
             if ingress_expiry != *ingress_expiry_cbor {
-                return Err(AgentError::CallDataMismatch {
+                return Err(AgentErrorInner::CallDataMismatch {
                     field: "ingress_expiry".to_string(),
                     value_arg: ingress_expiry.to_string(),
                     value_cbor: ingress_expiry_cbor.to_string(),
-                });
+                }
+                .op_context());
             }
             if sender != *sender_cbor {
-                return Err(AgentError::CallDataMismatch {
+                return Err(AgentErrorInner::CallDataMismatch {
                     field: "sender".to_string(),
                     value_arg: sender.to_string(),
                     value_cbor: sender_cbor.to_string(),
-                });
+                }
+                .op_context());
             }
             if canister_id != *canister_id_cbor {
-                return Err(AgentError::CallDataMismatch {
+                return Err(AgentErrorInner::CallDataMismatch {
                     field: "canister_id".to_string(),
                     value_arg: canister_id.to_string(),
                     value_cbor: canister_id_cbor.to_string(),
-                });
+                }
+                .op_context());
             }
             if method_name != *method_name_cbor {
-                return Err(AgentError::CallDataMismatch {
+                return Err(AgentErrorInner::CallDataMismatch {
                     field: "method_name".to_string(),
                     value_arg: method_name.to_string(),
                     value_cbor: method_name_cbor.clone(),
-                });
+                }
+                .op_context());
             }
             if arg != *arg_cbor {
-                return Err(AgentError::CallDataMismatch {
+                return Err(AgentErrorInner::CallDataMismatch {
                     field: "arg".to_string(),
                     value_arg: format!("{arg:?}"),
                     value_cbor: format!("{arg_cbor:?}"),
-                });
+                }
+                .op_context());
             }
         }
         EnvelopeContent::ReadState { .. } => {
-            return Err(AgentError::CallDataMismatch {
+            return Err(AgentErrorInner::CallDataMismatch {
                 field: "request_type".to_string(),
                 value_arg: "call".to_string(),
                 value_cbor: "read_state".to_string(),
-            })
+            }
+            .op_context())
         }
         EnvelopeContent::Query { .. } => {
-            return Err(AgentError::CallDataMismatch {
+            return Err(AgentErrorInner::CallDataMismatch {
                 field: "request_type".to_string(),
                 value_arg: "call".to_string(),
                 value_cbor: "query".to_string(),
-            })
+            }
+            .op_context())
         }
     }
     Ok(())
@@ -1494,8 +1654,9 @@ pub fn signed_request_status_inspect(
     signed_request_status: Vec<u8>,
 ) -> Result<(), AgentError> {
     let paths: Vec<Vec<Label>> = vec![vec!["request_status".into(), request_id.to_vec().into()]];
-    let envelope: Envelope =
-        serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
+    let envelope: Envelope = serde_cbor::from_slice(&signed_request_status)
+        .context(InvalidCborDataErr)
+        .op_context()?;
     match envelope.content.as_ref() {
         EnvelopeContent::ReadState {
             ingress_expiry: ingress_expiry_cbor,
@@ -1503,41 +1664,46 @@ pub fn signed_request_status_inspect(
             paths: paths_cbor,
         } => {
             if ingress_expiry != *ingress_expiry_cbor {
-                return Err(AgentError::CallDataMismatch {
+                return Err(AgentErrorInner::CallDataMismatch {
                     field: "ingress_expiry".to_string(),
                     value_arg: ingress_expiry.to_string(),
                     value_cbor: ingress_expiry_cbor.to_string(),
-                });
+                }
+                .op_context());
             }
             if sender != *sender_cbor {
-                return Err(AgentError::CallDataMismatch {
+                return Err(AgentErrorInner::CallDataMismatch {
                     field: "sender".to_string(),
                     value_arg: sender.to_string(),
                     value_cbor: sender_cbor.to_string(),
-                });
+                }
+                .op_context());
             }
 
             if paths != *paths_cbor {
-                return Err(AgentError::CallDataMismatch {
+                return Err(AgentErrorInner::CallDataMismatch {
                     field: "paths".to_string(),
                     value_arg: format!("{paths:?}"),
                     value_cbor: format!("{paths_cbor:?}"),
-                });
+                }
+                .op_context());
             }
         }
         EnvelopeContent::Query { .. } => {
-            return Err(AgentError::CallDataMismatch {
+            return Err(AgentErrorInner::CallDataMismatch {
                 field: "request_type".to_string(),
                 value_arg: "read_state".to_string(),
                 value_cbor: "query".to_string(),
-            })
+            }
+            .op_context())
         }
         EnvelopeContent::Call { .. } => {
-            return Err(AgentError::CallDataMismatch {
+            return Err(AgentErrorInner::CallDataMismatch {
                 field: "request_type".to_string(),
                 value_arg: "read_state".to_string(),
                 value_cbor: "call".to_string(),
-            })
+            }
+            .op_context())
         }
     }
     Ok(())
@@ -1779,7 +1945,8 @@ impl<'agent> QueryBuilder<'agent> {
             self.canister_id,
             self.method_name,
             self.arg,
-            self.ingress_expiry_datetime,
+            self.ingress_expiry_datetime
+                .unwrap_or(self.agent.get_expiry_date()),
             self.use_nonce,
         )
     }
@@ -1937,7 +2104,9 @@ impl<'agent> UpdateBuilder<'agent> {
         let effective_canister_id = self.effective_canister_id;
         let content = self.into_envelope()?;
         let signed_update = sign_envelope(&content, identity)?;
-        let request_id = to_request_id(&content)?;
+        let request_id = to_request_id(&content)
+            .context(CannotCalculateRequestIdErr)
+            .op_context()?;
         let EnvelopeContent::Call {
             nonce,
             ingress_expiry,
@@ -2015,7 +2184,9 @@ where
                     // Network-related errors can be retried.
                     if err.is_connect() {
                         if retry_count >= max_retries {
-                            return Err(AgentError::TransportError(err));
+                            return Err(
+                                AgentErrorInner::TransportError { source: err }.op_context()
+                            );
                         }
                         retry_count += 1;
                     }
@@ -2076,6 +2247,52 @@ impl HttpService for Retry429Logic {
             }
         }
     }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum OperationStatus {
+    NoOperation,
+    NotSent,
+    MaybeReceived,
+    Received,
+}
+
+#[derive(Debug, Clone)]
+pub struct OperationInfo {
+    status: OperationStatus,
+    operation: Operation,
+    expiry: u64,
+    response: Option<Result<Vec<u8>, RejectResponse>>,
+}
+
+/// An operation that can result in a reject.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum Operation {
+    /// A call to a canister method.
+    Call {
+        /// The canister whose method was called.
+        canister: Principal,
+        /// The name of the method.
+        method: String,
+    },
+    /// A read of the state tree, in the context of a canister. This will *not* be returned for request polling.
+    ReadState {
+        /// The requested paths within the state tree.
+        paths: Vec<Vec<String>>,
+        /// The canister the read request was made in the context of.
+        canister: Principal,
+    },
+    /// A read of the state tree, in the context of a subnet.
+    ReadSubnetState {
+        /// The requested paths within the state tree.
+        paths: Vec<Vec<String>>,
+        /// The subnet the read request was made in the context of.
+        subnet: Principal,
+    },
+}
+
+task_local! {
+    static CURRENT_OPERATION: RefCell<OperationInfo>;
 }
 
 #[cfg(all(test, not(target_family = "wasm")))]

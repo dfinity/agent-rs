@@ -1,7 +1,11 @@
 use self::mock::{
     assert_mock, assert_single_mock, assert_single_mock_count, mock, mock_additional,
 };
-use crate::{agent::Status, export::Principal, Agent, AgentError, Certificate};
+use crate::{
+    agent::{AgentError, Status},
+    export::Principal,
+    Agent, Certificate,
+};
 use candid::{Encode, Nat};
 use futures_util::FutureExt;
 use ic_certification::{Delegation, Label};

@@ -5,54 +5,67 @@ use candid::Principal;
 use ic_certification::Label;
 use ic_transport_types::{InvalidRejectCodeError, RejectResponse};
 use leb128::read;
+use snafu::Snafu;
+use std::error::Error;
 use std::time::Duration;
 use std::{
     fmt::{Debug, Display, Formatter},
     str::Utf8Error,
 };
 use thiserror::Error;
+use time::OffsetDateTime;
+
+use super::CURRENT_OPERATION;
 
 /// An error that occurred when using the agent.
-#[derive(Error, Debug)]
-pub enum AgentError {
-    /// The replica URL was invalid.
-    #[error(r#"Invalid Replica URL: "{0}""#)]
-    InvalidReplicaUrl(String),
-
+#[derive(Snafu, Debug)]
+#[snafu(visibility(pub(crate)), context(suffix(Err)))]
+pub(crate) enum AgentErrorInner {
     /// The request timed out.
-    #[error("The request timed out.")]
-    TimeoutWaitingForResponse(),
+    #[snafu(display("The request timed out."))]
+    TimeoutWaitingForResponse,
 
     /// An error occurred when signing with the identity.
-    #[error("Identity had a signing error: {0}")]
-    SigningError(String),
+    #[snafu(display("Identity had a signing error: {message}"))]
+    SigningError { message: String },
 
     /// The data fetched was invalid CBOR.
-    #[error("Invalid CBOR data, could not deserialize: {0}")]
-    InvalidCborData(#[from] serde_cbor::Error),
+    #[snafu(display("Invalid CBOR data, could not deserialize: {source}"))]
+    InvalidCborData { source: serde_cbor::Error },
 
     /// There was an error calculating a request ID.
-    #[error("Cannot calculate a RequestID: {0}")]
-    CannotCalculateRequestId(#[from] RequestIdError),
+    #[snafu(display("Failed to calculate request ID: {source}"))]
+    CannotCalculateRequestId { source: RequestIdError },
 
     /// There was an error when de/serializing with Candid.
-    #[error("Candid returned an error: {0}")]
-    CandidError(Box<dyn Send + Sync + std::error::Error>),
+    #[snafu(display("Candid returned an error: {source}"))]
+    CandidError {
+        source: Box<dyn Send + Sync + std::error::Error>,
+    },
 
     /// There was an error parsing a URL.
-    #[error(r#"Cannot parse url: "{0}""#)]
-    UrlParseError(#[from] url::ParseError),
+    #[snafu(display(r#"Cannot parse url "{input}": {source}"#))]
+    UrlParseError {
+        input: String,
+        source: url::ParseError,
+    },
 
     /// The HTTP method was invalid.
-    #[error(r#"Invalid method: "{0}""#)]
-    InvalidMethodError(#[from] http::method::InvalidMethod),
+    #[snafu(display(r#"Invalid method "{input}""#))]
+    InvalidMethod {
+        input: String,
+        source: http::method::InvalidMethod,
+    },
 
     /// The principal string was not a valid principal.
-    #[error("Cannot parse Principal: {0}")]
-    PrincipalError(#[from] crate::export::PrincipalError),
+    #[snafu(display(r#"Cannot parse principal "{input}": {source}"#))]
+    PrincipalError {
+        input: String,
+        source: crate::export::PrincipalError,
+    },
 
     /// The subnet rejected the message.
-    #[error("The replica returned a rejection error: reject code {:?}, reject message {}, error code {:?}", .reject.reject_code, .reject.reject_message, .reject.error_code)]
+    #[snafu(display("The replica returned a rejection error: reject code {:?}, reject message {}, error code {:?}", reject.reject_code, reject.reject_message, reject.error_code))]
     CertifiedReject {
         /// The rejection returned by the replica.
         reject: RejectResponse,
@@ -61,7 +74,7 @@ pub enum AgentError {
     },
 
     /// The subnet may have rejected the message. This rejection cannot be verified as authentic.
-    #[error("The replica returned a rejection error: reject code {:?}, reject message {}, error code {:?}", .reject.reject_code, .reject.reject_message, .reject.error_code)]
+    #[snafu(display("The replica returned a rejection error: reject code {:?}, reject message {}, error code {:?}", reject.reject_code, reject.reject_message, reject.error_code))]
     UncertifiedReject {
         /// The rejection returned by the boundary node.
         reject: RejectResponse,
@@ -70,79 +83,83 @@ pub enum AgentError {
     },
 
     /// The replica returned an HTTP error.
-    #[error("The replica returned an HTTP Error: {0}")]
-    HttpError(HttpErrorPayload),
+    #[snafu(display("The replica returned an HTTP Error: {payload}"))]
+    HttpError { payload: HttpErrorPayload },
 
     /// The status endpoint returned an invalid status.
-    #[error("Status endpoint returned an invalid status.")]
+    #[snafu(display("Status endpoint returned an invalid status."))]
     InvalidReplicaStatus,
 
     /// The call was marked done, but no reply was provided.
-    #[error("Call was marked as done but we never saw the reply. Request ID: {0}")]
-    RequestStatusDoneNoReply(String),
+    #[snafu(display(
+        "Call was marked as done but we never saw the reply. Request ID: {request_id}"
+    ))]
+    RequestStatusDoneNoReply { request_id: String },
 
     /// A string error occurred in an external tool.
-    #[error("A tool returned a string message error: {0}")]
-    MessageError(String),
+    #[snafu(display("A tool returned an error: {message}"))]
+    MessageError { message: String },
 
     /// There was an error reading a LEB128 value.
-    #[error("Error reading LEB128 value: {0}")]
-    Leb128ReadError(#[from] read::Error),
+    #[snafu(display("Error reading LEB128 value: {source}"))]
+    Leb128ReadError { source: read::Error },
 
     /// A string was invalid UTF-8.
-    #[error("Error in UTF-8 string: {0}")]
-    Utf8ReadError(#[from] Utf8Error),
+    #[snafu(display("Error in UTF-8 parsing: {source}"))]
+    Utf8ReadError { source: Utf8Error },
 
     /// The lookup path was absent in the certificate.
-    #[error("The lookup path ({0:?}) is absent in the certificate.")]
-    LookupPathAbsent(Vec<Label>),
+    #[snafu(display("The lookup path ({path:?}) is absent in the certificate."))]
+    LookupPathAbsent { path: Vec<Label> },
 
     /// The lookup path was unknown in the certificate.
-    #[error("The lookup path ({0:?}) is unknown in the certificate.")]
-    LookupPathUnknown(Vec<Label>),
+    #[snafu(display("The lookup path ({path:?}) is unknown in the certificate."))]
+    LookupPathUnknown { path: Vec<Label> },
 
     /// The lookup path did not make sense for the certificate.
-    #[error("The lookup path ({0:?}) does not make sense for the certificate.")]
-    LookupPathError(Vec<Label>),
+    #[snafu(display("The lookup path ({path:?}) does not make sense for the certificate."))]
+    LookupPathError { path: Vec<Label> },
 
     /// The request status at the requested path was invalid.
-    #[error("The request status ({1}) at path {0:?} is invalid.")]
-    InvalidRequestStatus(Vec<Label>, String),
+    #[snafu(display("The request status ({status}) at path {path:?} is invalid."))]
+    InvalidRequestStatus { path: Vec<Label>, status: String },
 
     /// The certificate verification for a `read_state` call failed.
-    #[error("Certificate verification failed.")]
-    CertificateVerificationFailed(),
+    #[snafu(display("Certificate verification failed."))]
+    CertificateVerificationFailed,
 
     /// The signature verification for a query call failed.
-    #[error("Query signature verification failed.")]
+    #[snafu(display("Query signature verification failed."))]
     QuerySignatureVerificationFailed,
 
     /// The certificate contained a delegation that does not include the `effective_canister_id` in the `canister_ranges` field.
-    #[error("Certificate is not authorized to respond to queries for this canister. While developing: Did you forget to set effective_canister_id?")]
-    CertificateNotAuthorized(),
+    #[snafu(display("Certificate is not authorized to respond to queries for this canister. While developing: Did you forget to set effective_canister_id?"))]
+    CertificateNotAuthorized,
 
     /// The certificate was older than allowed by the `ingress_expiry`.
-    #[error("Certificate is stale (over {0:?}). Is the computer's clock synchronized?")]
-    CertificateOutdated(Duration),
+    #[snafu(display(
+        "Certificate is stale (over {}s). Is the computer's clock synchronized?", max_age.as_secs()
+    ))]
+    CertificateOutdated { max_age: Duration },
 
     /// The certificate contained more than one delegation.
-    #[error("The certificate contained more than one delegation")]
+    #[snafu(display("The certificate contained more than one delegation"))]
     CertificateHasTooManyDelegations,
 
     /// The query response did not contain any node signatures.
-    #[error("Query response did not contain any node signatures")]
+    #[snafu(display("Query response did not contain any node signatures"))]
     MissingSignature,
 
     /// The query response contained a malformed signature.
-    #[error("Query response contained a malformed signature")]
-    MalformedSignature,
+    #[snafu(display("Query response contained a malformed signature"))]
+    MalformedSignature { source: ed25519_consensus::Error },
 
     /// The read-state response contained a malformed public key.
-    #[error("Read state response contained a malformed public key")]
-    MalformedPublicKey,
+    #[snafu(display("Read state response contained a malformed public key"))]
+    MalformedPublicKey { source: ed25519_consensus::Error },
 
     /// The query response contained more node signatures than the subnet has nodes.
-    #[error("Query response contained too many signatures ({had}, exceeding the subnet's total nodes: {needed})")]
+    #[snafu(display("Query response contained too many signatures ({had}, exceeding the subnet's total nodes: {needed})"))]
     TooManySignatures {
         /// The number of provided signatures.
         had: usize,
@@ -151,9 +168,9 @@ pub enum AgentError {
     },
 
     /// There was a length mismatch between the expected and actual length of the BLS DER-encoded public key.
-    #[error(
-        r#"BLS DER-encoded public key must be ${expected} bytes long, but is {actual} bytes long."#
-    )]
+    #[snafu(display(
+        r#"BLS DER-encoded public key must be {expected} bytes long, but was {actual} bytes long."#
+    ))]
     DerKeyLengthMismatch {
         /// The expected length of the key.
         expected: usize,
@@ -162,7 +179,11 @@ pub enum AgentError {
     },
 
     /// There was a mismatch between the expected and actual prefix of the BLS DER-encoded public key.
-    #[error("BLS DER-encoded public key is invalid. Expected the following prefix: ${expected:?}, but got ${actual:?}")]
+    #[snafu(display(
+        "BLS DER-encoded public key was invalid. Expected the following prefix: {}, but got {}",
+        hex::encode(expected),
+        hex::encode(actual)
+    ))]
     DerPrefixMismatch {
         /// The expected key prefix.
         expected: Vec<u8>,
@@ -171,31 +192,33 @@ pub enum AgentError {
     },
 
     /// The status response did not contain a root key.
-    #[error("The status response did not contain a root key.  Status: {0}")]
-    NoRootKeyInStatus(Status),
+    #[snafu(display("The status response did not contain a root key.  Status: {status}"))]
+    NoRootKeyInStatus { status: Status },
 
     /// The invocation to the wallet call forward method failed with an error.
-    #[error("The invocation to the wallet call forward method failed with the error: {0}")]
-    WalletCallFailed(String),
+    #[snafu(display(
+        "The invocation to the wallet call forward method failed with the error: {message}"
+    ))]
+    WalletCallFailed { message: String },
 
     /// The wallet operation failed.
-    #[error("The  wallet operation failed: {0}")]
-    WalletError(String),
+    #[snafu(display("The  wallet operation failed: {message}"))]
+    WalletError { message: String },
 
     /// The wallet canister must be upgraded. See [`dfx wallet upgrade`](https://internetcomputer.org/docs/current/references/cli-reference/dfx-wallet)
-    #[error("The wallet canister must be upgraded: {0}")]
-    WalletUpgradeRequired(String),
+    #[snafu(display("The wallet canister must be upgraded: {message}"))]
+    WalletUpgradeRequired { message: String },
 
     /// The response size exceeded the provided limit.
-    #[error("Response size exceeded limit.")]
-    ResponseSizeExceededLimit(),
+    #[snafu(display("Response size exceeded limit."))]
+    ResponseSizeExceededLimit,
 
     /// An unknown error occurred during communication with the replica.
-    #[error("An error happened during communication with the replica: {0}")]
-    TransportError(#[from] reqwest::Error),
+    #[snafu(display("An error happened during communication with the replica: {source}"))]
+    TransportError { source: reqwest::Error },
 
     /// There was a mismatch between the expected and actual CBOR data during inspection.
-    #[error("There is a mismatch between the CBOR encoded call and the arguments: field {field}, value in argument is {value_arg}, value in CBOR is {value_cbor}")]
+    #[snafu(display("There is a mismatch between the CBOR encoded call and the arguments: field {field}, value in argument is {value_arg}, value in CBOR is {value_cbor}"))]
     CallDataMismatch {
         /// The field that was mismatched.
         field: String,
@@ -206,19 +229,78 @@ pub enum AgentError {
     },
 
     /// The rejected call had an invalid reject code (valid range 1..5).
-    #[error(transparent)]
-    InvalidRejectCode(#[from] InvalidRejectCodeError),
+    #[snafu(transparent)]
+    InvalidRejectCode { source: InvalidRejectCodeError },
 
     /// Route provider failed to generate a url for some reason.
-    #[error("Route provider failed to generate url: {0}")]
-    RouteProviderError(String),
+    #[snafu(display("Route provider failed to generate url: {message}"))]
+    RouteProviderError { message: String },
 
     /// Invalid HTTP response.
-    #[error("Invalid HTTP response: {0}")]
-    InvalidHttpResponse(String),
+    #[snafu(display("Invalid HTTP response: {message}"))]
+    InvalidHttpResponse { message: String },
 }
 
-impl PartialEq for AgentError {
+impl AgentErrorInner {
+    pub(crate) fn kind(&self) -> ErrorKind {
+        match self {}
+    }
+
+    pub(crate) fn op_context(self) -> AgentError {
+        let operation_info = CURRENT_OPERATION.try_with(|op| (*op.borrow()).clone()).ok();
+        AgentError {
+            operation_info,
+            kind: self.kind(),
+            inner: Box::new(self),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum ErrorKind {
+    Trust,
+    Protocol,
+    Reject,
+    Transport,
+    Timeout,
+    Size,
+}
+
+#[derive(Debug)]
+pub struct AgentError {
+    inner: Box<AgentErrorInner>,
+    kind: ErrorKind,
+    operation_info: Option<OperationInfo>,
+}
+
+impl AgentError {
+    pub fn kind(&self) -> ErrorKind {
+        self.kind
+    }
+    pub fn operation_info(&self) -> Option<&OperationInfo> {
+        self.operation_info.as_ref()
+    }
+    pub fn new_tool_error_in_context(message: String) -> Self {
+        AgentErrorInner::MessageError { message }.op_context()
+    }
+    pub fn new_transport_error_in_context(source: reqwest::Error) -> Self {
+        AgentErrorInner::TransportError { source }.op_context()
+    }
+}
+
+impl Display for AgentError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.inner, f)
+    }
+}
+
+impl Error for AgentError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.inner.source()
+    }
+}
+
+impl PartialEq for AgentErrorInner {
     fn eq(&self, other: &Self) -> bool {
         // Verify the debug string is the same. Some of the subtypes of this error
         // don't implement Eq or PartialEq, so we cannot rely on derive.
@@ -226,9 +308,13 @@ impl PartialEq for AgentError {
     }
 }
 
-impl From<candid::Error> for AgentError {
-    fn from(e: candid::Error) -> AgentError {
-        AgentError::CandidError(e.into())
+pub(crate) trait ResultExt<T> {
+    fn op_context(self) -> Result<T, AgentError>;
+}
+
+impl<T> ResultExt<T> for Result<T, AgentErrorInner> {
+    fn op_context(self) -> Result<T, AgentError> {
+        self.map_err(|e| e.op_context())
     }
 }
 
@@ -273,36 +359,10 @@ impl Display for HttpErrorPayload {
     }
 }
 
-/// An operation that can result in a reject.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum Operation {
-    /// A call to a canister method.
-    Call {
-        /// The canister whose method was called.
-        canister: Principal,
-        /// The name of the method.
-        method: String,
-    },
-    /// A read of the state tree, in the context of a canister. This will *not* be returned for request polling.
-    ReadState {
-        /// The requested paths within the state tree.
-        paths: Vec<Vec<String>>,
-        /// The canister the read request was made in the context of.
-        canister: Principal,
-    },
-    /// A read of the state tree, in the context of a subnet.
-    ReadSubnetState {
-        /// The requested paths within the state tree.
-        paths: Vec<Vec<String>>,
-        /// The subnet the read request was made in the context of.
-        subnet: Principal,
-    },
-}
-
 #[cfg(test)]
 mod tests {
+    use super::AgentError;
     use super::HttpErrorPayload;
-    use crate::AgentError;
 
     #[test]
     fn content_type_none_valid_utf8() {

@@ -1,13 +1,20 @@
-use crate::agent::{ApiBoundaryNode, RejectCode, RejectResponse, RequestStatusResponse};
-use crate::{export::Principal, AgentError, RequestId};
+use crate::agent::{
+    agent_error::{AgentError, AgentErrorInner, InvalidCborDataErr, ResultExt as _, Utf8ReadErr},
+    ApiBoundaryNode, RejectCode, RejectResponse, RequestStatusResponse,
+};
+use crate::{export::Principal, RequestId};
 use ic_certification::hash_tree::{HashTree, SubtreeLookupResult};
 use ic_certification::{certificate::Certificate, hash_tree::Label, LookupResult};
 use ic_transport_types::{ReplyResponse, SubnetMetrics};
 use rangemap::RangeInclusiveSet;
+use snafu::ResultExt;
 use std::collections::{HashMap, HashSet};
 use std::str::from_utf8;
 
-use super::Subnet;
+use super::{
+    agent_error::{CannotCalculateRequestIdErr, Leb128ReadErr},
+    Subnet,
+};
 
 const DER_PREFIX: &[u8; 37] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00";
 const KEY_LENGTH: usize = 96;
@@ -15,18 +22,20 @@ const KEY_LENGTH: usize = 96;
 pub fn extract_der(buf: Vec<u8>) -> Result<Vec<u8>, AgentError> {
     let expected_length = DER_PREFIX.len() + KEY_LENGTH;
     if buf.len() != expected_length {
-        return Err(AgentError::DerKeyLengthMismatch {
+        return Err(AgentErrorInner::DerKeyLengthMismatch {
             expected: expected_length,
             actual: buf.len(),
-        });
+        }
+        .op_context());
     }
 
     let prefix = &buf[0..DER_PREFIX.len()];
     if prefix[..] != DER_PREFIX[..] {
-        return Err(AgentError::DerPrefixMismatch {
+        return Err(AgentErrorInner::DerPrefixMismatch {
             expected: DER_PREFIX.to_vec(),
             actual: prefix.to_vec(),
-        });
+        }
+        .op_context());
     }
 
     let key = &buf[DER_PREFIX.len()..];
@@ -37,7 +46,9 @@ pub(crate) fn lookup_time<Storage: AsRef<[u8]>>(
     certificate: &Certificate<Storage>,
 ) -> Result<u64, AgentError> {
     let mut time = lookup_value(&certificate.tree, ["time".as_bytes()])?;
-    Ok(leb128::read::unsigned(&mut time)?)
+    Ok(leb128::read::unsigned(&mut time)
+        .context(Leb128ReadErr)
+        .op_context()?)
 }
 
 pub(crate) fn lookup_canister_info<Storage: AsRef<[u8]>>(
@@ -74,14 +85,16 @@ pub(crate) fn lookup_subnet_metrics<Storage: AsRef<[u8]>>(
 ) -> Result<SubnetMetrics, AgentError> {
     let path_stats = [b"subnet", subnet_id.as_slice(), b"metrics"];
     let metrics = lookup_value(&certificate.tree, path_stats)?;
-    Ok(serde_cbor::from_slice(metrics)?)
+    Ok(serde_cbor::from_slice(metrics)
+        .context(InvalidCborDataErr)
+        .op_context()?)
 }
 
 pub(crate) fn lookup_request_status<Storage: AsRef<[u8]>>(
     certificate: &Certificate<Storage>,
     request_id: &RequestId,
 ) -> Result<RequestStatusResponse, AgentError> {
-    use AgentError::*;
+    use AgentErrorInner::*;
     let path_status = [
         "request_status".into(),
         request_id.to_vec().into(),
@@ -90,15 +103,15 @@ pub(crate) fn lookup_request_status<Storage: AsRef<[u8]>>(
     match certificate.tree.lookup_path(&path_status) {
         LookupResult::Absent => Ok(RequestStatusResponse::Unknown),
         LookupResult::Unknown => Err(LookupPathUnknown(path_status.to_vec())),
-        LookupResult::Found(status) => match from_utf8(status)? {
+        LookupResult::Found(status) => match from_utf8(status).context(Utf8ReadErr).op_context()? {
             "done" => Ok(RequestStatusResponse::Done),
             "processing" => Ok(RequestStatusResponse::Processing),
             "received" => Ok(RequestStatusResponse::Received),
             "rejected" => lookup_rejection(certificate, request_id),
             "replied" => lookup_reply(certificate, request_id),
-            other => Err(InvalidRequestStatus(path_status.into(), other.to_string())),
+            other => Err(InvalidRequestStatus(path_status.into(), other.to_string()).op_context()),
         },
-        LookupResult::Error => Err(LookupPathError(path_status.into())),
+        LookupResult::Error => Err(LookupPathError(path_status.into()).op_context()),
     }
 }
 
@@ -129,7 +142,9 @@ pub(crate) fn lookup_reject_code<Storage: AsRef<[u8]>>(
     let code = lookup_value(&certificate.tree, path)?;
     let mut readable = code;
     let code_digit = leb128::read::unsigned(&mut readable)?;
-    Ok(RejectCode::try_from(code_digit)?)
+    Ok(RejectCode::try_from(code_digit)
+        .context(InvalidRejectCodeErr)
+        .op_context()?)
 }
 
 pub(crate) fn lookup_reject_message<Storage: AsRef<[u8]>>(
@@ -142,7 +157,7 @@ pub(crate) fn lookup_reject_message<Storage: AsRef<[u8]>>(
         "reject_message".as_bytes(),
     ];
     let msg = lookup_value(&certificate.tree, path)?;
-    Ok(from_utf8(msg)?.to_string())
+    Ok(from_utf8(msg).context(Utf8ReadErr)?.to_string())
 }
 
 pub(crate) fn lookup_error_code<Storage: AsRef<[u8]>>(
@@ -289,7 +304,10 @@ pub trait LookupPath {
 
 impl<'b, const N: usize> LookupPath for [&'b [u8]; N] {
     type Item = &'b [u8];
-    type Iter<'a> = std::slice::Iter<'a, &'b [u8]> where Self: 'a;
+    type Iter<'a>
+        = std::slice::Iter<'a, &'b [u8]>
+    where
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         self.as_slice().iter()
     }
@@ -299,7 +317,10 @@ impl<'b, const N: usize> LookupPath for [&'b [u8]; N] {
 }
 impl<'b, 'c> LookupPath for &'c [&'b [u8]] {
     type Item = &'b [u8];
-    type Iter<'a> = std::slice::Iter<'a, &'b [u8]> where Self: 'a;
+    type Iter<'a>
+        = std::slice::Iter<'a, &'b [u8]>
+    where
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         <[_]>::iter(self)
     }
@@ -309,7 +330,10 @@ impl<'b, 'c> LookupPath for &'c [&'b [u8]] {
 }
 impl<'b> LookupPath for Vec<&'b [u8]> {
     type Item = &'b [u8];
-    type Iter<'a> = std::slice::Iter<'a, &'b [u8]> where Self: 'a;
+    type Iter<'a>
+        = std::slice::Iter<'a, &'b [u8]>
+    where
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         <[_]>::iter(self.as_slice())
     }
@@ -320,7 +344,10 @@ impl<'b> LookupPath for Vec<&'b [u8]> {
 
 impl<const N: usize> LookupPath for [Vec<u8>; N] {
     type Item = Vec<u8>;
-    type Iter<'a> = std::slice::Iter<'a, Vec<u8>> where Self: 'a;
+    type Iter<'a>
+        = std::slice::Iter<'a, Vec<u8>>
+    where
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         self.as_slice().iter()
     }
@@ -330,7 +357,10 @@ impl<const N: usize> LookupPath for [Vec<u8>; N] {
 }
 impl<'c> LookupPath for &'c [Vec<u8>] {
     type Item = Vec<u8>;
-    type Iter<'a> = std::slice::Iter<'a, Vec<u8>> where Self: 'a;
+    type Iter<'a>
+        = std::slice::Iter<'a, Vec<u8>>
+    where
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         <[_]>::iter(self)
     }
@@ -340,7 +370,10 @@ impl<'c> LookupPath for &'c [Vec<u8>] {
 }
 impl LookupPath for Vec<Vec<u8>> {
     type Item = Vec<u8>;
-    type Iter<'a> = std::slice::Iter<'a, Vec<u8>> where Self: 'a;
+    type Iter<'a>
+        = std::slice::Iter<'a, Vec<u8>>
+    where
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         <[_]>::iter(self.as_slice())
     }
@@ -351,7 +384,10 @@ impl LookupPath for Vec<Vec<u8>> {
 
 impl<Storage: AsRef<[u8]> + Into<Vec<u8>>, const N: usize> LookupPath for [Label<Storage>; N] {
     type Item = Label<Storage>;
-    type Iter<'a> = std::slice::Iter<'a, Label<Storage>> where Self: 'a;
+    type Iter<'a>
+        = std::slice::Iter<'a, Label<Storage>>
+    where
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         self.as_slice().iter()
     }
@@ -361,7 +397,10 @@ impl<Storage: AsRef<[u8]> + Into<Vec<u8>>, const N: usize> LookupPath for [Label
 }
 impl<'c, Storage: AsRef<[u8]> + Into<Vec<u8>>> LookupPath for &'c [Label<Storage>] {
     type Item = Label<Storage>;
-    type Iter<'a> = std::slice::Iter<'a, Label<Storage>> where Self: 'a;
+    type Iter<'a>
+        = std::slice::Iter<'a, Label<Storage>>
+    where
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         <[_]>::iter(self)
     }
@@ -373,7 +412,10 @@ impl<'c, Storage: AsRef<[u8]> + Into<Vec<u8>>> LookupPath for &'c [Label<Storage
 }
 impl LookupPath for Vec<Label<Vec<u8>>> {
     type Item = Label<Vec<u8>>;
-    type Iter<'a> = std::slice::Iter<'a, Label<Vec<u8>>> where Self: 'a;
+    type Iter<'a>
+        = std::slice::Iter<'a, Label<Vec<u8>>>
+    where
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         <[_]>::iter(self.as_slice())
     }
