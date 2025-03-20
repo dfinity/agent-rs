@@ -1,55 +1,74 @@
 //! Errors that can occur when using the replica agent.
 
-use crate::{agent::status::Status, RequestIdError};
-use candid::Principal;
 use ic_certification::Label;
-use ic_transport_types::{InvalidRejectCodeError, RejectResponse};
-use leb128::read;
-use std::time::Duration;
+use ic_transport_types::RejectResponse;
 use std::{
+    error::Error,
     fmt::{Debug, Display, Formatter},
-    str::Utf8Error,
+    time::Duration,
 };
 use thiserror::Error;
 
+use super::{status::Status, Operation, OperationInfo, CURRENT_OPERATION};
+
+#[derive(Debug)]
+pub struct AgentError {
+    source: Option<Box<dyn Error + Send + Sync>>,
+    kind: ErrorKind,
+    operation_info: Option<OperationInfo>,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum ErrorKind {
+    Trust,
+    Protocol,
+    Reject,
+    Transport,
+    External,
+    Limit,
+    Input,
+    Unknown,
+}
+
+impl AgentError {
+    pub fn kind(&self) -> ErrorKind {
+        self.kind
+    }
+    pub fn operation_info(&self) -> Option<&OperationInfo> {
+        self.operation_info.as_ref()
+    }
+    pub fn new_tool_error_in_context(message: String) -> Self {
+        todo!()
+    }
+    pub(crate) fn from_boxed_in_context(
+        inner: Box<dyn Error + Send + Sync>,
+        kind: ErrorKind,
+    ) -> Self {
+        match inner.downcast::<AgentError>() {
+            Ok(agent_err) => *agent_err,
+            Err(source) => AgentError {
+                kind,
+                operation_info: CURRENT_OPERATION.try_with(|op| (*op.borrow()).clone()).ok(),
+                source: Some(source),
+            },
+        }
+    }
+}
+
 /// An error that occurred when using the agent.
 #[derive(Error, Debug)]
-pub enum AgentError {
+pub(crate) enum ErrorCode {
     /// The replica URL was invalid.
     #[error(r#"Invalid Replica URL: "{0}""#)]
     InvalidReplicaUrl(String),
 
     /// The request timed out.
     #[error("The request timed out.")]
-    TimeoutWaitingForResponse(),
+    TimeoutWaitingForResponse,
 
     /// An error occurred when signing with the identity.
     #[error("Identity had a signing error: {0}")]
     SigningError(String),
-
-    /// The data fetched was invalid CBOR.
-    #[error("Invalid CBOR data, could not deserialize: {0}")]
-    InvalidCborData(#[from] serde_cbor::Error),
-
-    /// There was an error calculating a request ID.
-    #[error("Cannot calculate a RequestID: {0}")]
-    CannotCalculateRequestId(#[from] RequestIdError),
-
-    /// There was an error when de/serializing with Candid.
-    #[error("Candid returned an error: {0}")]
-    CandidError(Box<dyn Send + Sync + std::error::Error>),
-
-    /// There was an error parsing a URL.
-    #[error(r#"Cannot parse url: "{0}""#)]
-    UrlParseError(#[from] url::ParseError),
-
-    /// The HTTP method was invalid.
-    #[error(r#"Invalid method: "{0}""#)]
-    InvalidMethodError(#[from] http::method::InvalidMethod),
-
-    /// The principal string was not a valid principal.
-    #[error("Cannot parse Principal: {0}")]
-    PrincipalError(#[from] crate::export::PrincipalError),
 
     /// The subnet rejected the message.
     #[error("The replica returned a rejection error: reject code {:?}, reject message {}, error code {:?}", .reject.reject_code, .reject.reject_message, .reject.error_code)]
@@ -85,14 +104,6 @@ pub enum AgentError {
     #[error("A tool returned a string message error: {0}")]
     MessageError(String),
 
-    /// There was an error reading a LEB128 value.
-    #[error("Error reading LEB128 value: {0}")]
-    Leb128ReadError(#[from] read::Error),
-
-    /// A string was invalid UTF-8.
-    #[error("Error in UTF-8 string: {0}")]
-    Utf8ReadError(#[from] Utf8Error),
-
     /// The lookup path was absent in the certificate.
     #[error("The lookup path ({0:?}) is absent in the certificate.")]
     LookupPathAbsent(Vec<Label>),
@@ -111,7 +122,7 @@ pub enum AgentError {
 
     /// The certificate verification for a `read_state` call failed.
     #[error("Certificate verification failed.")]
-    CertificateVerificationFailed(),
+    CertificateVerificationFailed,
 
     /// The signature verification for a query call failed.
     #[error("Query signature verification failed.")]
@@ -119,10 +130,10 @@ pub enum AgentError {
 
     /// The certificate contained a delegation that does not include the `effective_canister_id` in the `canister_ranges` field.
     #[error("Certificate is not authorized to respond to queries for this canister. While developing: Did you forget to set effective_canister_id?")]
-    CertificateNotAuthorized(),
+    CertificateNotAuthorized,
 
     /// The certificate was older than allowed by the `ingress_expiry`.
-    #[error("Certificate is stale (over {0:?}). Is the computer's clock synchronized?")]
+    #[error("Certificate is stale (over {}s). Is the computer's clock synchronized?", .0.as_secs())]
     CertificateOutdated(Duration),
 
     /// The certificate contained more than one delegation.
@@ -188,11 +199,7 @@ pub enum AgentError {
 
     /// The response size exceeded the provided limit.
     #[error("Response size exceeded limit.")]
-    ResponseSizeExceededLimit(),
-
-    /// An unknown error occurred during communication with the replica.
-    #[error("An error happened during communication with the replica: {0}")]
-    TransportError(#[from] reqwest::Error),
+    ResponseSizeExceededLimit,
 
     /// There was a mismatch between the expected and actual CBOR data during inspection.
     #[error("There is a mismatch between the CBOR encoded call and the arguments: field {field}, value in argument is {value_arg}, value in CBOR is {value_cbor}")]
@@ -205,10 +212,6 @@ pub enum AgentError {
         value_cbor: String,
     },
 
-    /// The rejected call had an invalid reject code (valid range 1..5).
-    #[error(transparent)]
-    InvalidRejectCode(#[from] InvalidRejectCodeError),
-
     /// Route provider failed to generate a url for some reason.
     #[error("Route provider failed to generate url: {0}")]
     RouteProviderError(String),
@@ -216,6 +219,18 @@ pub enum AgentError {
     /// Invalid HTTP response.
     #[error("Invalid HTTP response: {0}")]
     InvalidHttpResponse(String),
+}
+
+impl Error for AgentError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.source.as_ref().map(|s| &**s as _)
+    }
+}
+
+impl Display for AgentError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
 }
 
 impl PartialEq for AgentError {
@@ -226,9 +241,13 @@ impl PartialEq for AgentError {
     }
 }
 
-impl From<candid::Error> for AgentError {
-    fn from(e: candid::Error) -> AgentError {
-        AgentError::CandidError(e.into())
+pub(crate) trait ResultExt<T> {
+    fn context(self, kind: ErrorKind) -> Result<T, AgentError>;
+}
+
+impl<T, E: Error + Send + Sync + 'static> ResultExt<T> for Result<T, E> {
+    fn context(self, kind: ErrorKind) -> Result<T, AgentError> {
+        self.map_err(|e| AgentError::from_boxed_in_context(Box::new(e), kind))
     }
 }
 
@@ -271,32 +290,6 @@ impl Display for HttpErrorPayload {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         self.fmt_human_readable(f)
     }
-}
-
-/// An operation that can result in a reject.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum Operation {
-    /// A call to a canister method.
-    Call {
-        /// The canister whose method was called.
-        canister: Principal,
-        /// The name of the method.
-        method: String,
-    },
-    /// A read of the state tree, in the context of a canister. This will *not* be returned for request polling.
-    ReadState {
-        /// The requested paths within the state tree.
-        paths: Vec<Vec<String>>,
-        /// The canister the read request was made in the context of.
-        canister: Principal,
-    },
-    /// A read of the state tree, in the context of a subnet.
-    ReadSubnetState {
-        /// The requested paths within the state tree.
-        paths: Vec<Vec<String>>,
-        /// The subnet the read request was made in the context of.
-        subnet: Principal,
-    },
 }
 
 #[cfg(test)]
