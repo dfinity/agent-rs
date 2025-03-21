@@ -808,7 +808,7 @@ impl Agent {
             match retry_policy.next_backoff() {
                 Some(duration) => crate::util::sleep(duration).await,
 
-                None => return Err(ErrorCode::TimeoutWaitingForResponse).context(Limit),
+                None => return Err(ErrorCode::TimeoutWaitingForResponse).context(Protocol),
             }
         }
     }
