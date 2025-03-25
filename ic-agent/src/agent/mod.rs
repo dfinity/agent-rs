@@ -50,7 +50,7 @@ use crate::{
     },
     export::Principal,
     identity::Identity,
-    to_request_id, RequestId,
+    RequestId,
 };
 use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
 use backoff::{exponential::ExponentialBackoff, SystemClock};
@@ -59,7 +59,6 @@ use ic_transport_types::{
     signed::{SignedQuery, SignedRequestStatus, SignedUpdate},
     QueryResponse, ReadStateResponse, SubnetMetrics, TransportCallResponse,
 };
-use serde::Serialize;
 use status::Status;
 use std::{
     borrow::Cow,
@@ -629,7 +628,8 @@ impl Agent {
                                 serde_cbor::from_slice(&certificate).context(Protocol)?;
 
                             self.verify(&certificate, effective_canister_id)?;
-                            let status = lookup_request_status(&certificate, &request_id)?;
+                            let status = lookup_request_status(&certificate, &request_id)
+                                .context(Protocol)?;
 
                             match status {
                                 RequestStatusResponse::Replied(reply) => {
@@ -701,7 +701,7 @@ impl Agent {
                 let certificate = serde_cbor::from_slice(&certificate).context(Protocol)?;
 
                 self.verify(&certificate, effective_canister_id)?;
-                let status = lookup_request_status(&certificate, &request_id)?;
+                let status = lookup_request_status(&certificate, &request_id).context(Protocol)?;
 
                 match status {
                     RequestStatusResponse::Replied(reply) => Ok(CallResponse::Response(reply.arg)),
@@ -1010,7 +1010,7 @@ impl Agent {
     }
 
     fn verify_cert_timestamp(&self, cert: &Certificate) -> Result<(), AgentError> {
-        let time = lookup_time(cert)?;
+        let time = lookup_time(cert).context(Protocol)?;
         if (OffsetDateTime::now_utc()
             - OffsetDateTime::from_unix_timestamp_nanos(time.into()).unwrap())
         .abs()
@@ -1041,7 +1041,8 @@ impl Agent {
                     delegation.subnet_id.as_ref(),
                     "canister_ranges".as_bytes(),
                 ];
-                let canister_range = lookup_value(&cert.tree, canister_range_lookup)?;
+                let canister_range =
+                    lookup_value(&cert.tree, canister_range_lookup).context(Protocol)?;
                 let ranges: Vec<(Principal, Principal)> =
                     serde_cbor::from_slice(canister_range).context(Protocol)?;
                 if !principal_is_within_ranges(&effective_canister_id, &ranges[..]) {
@@ -1054,7 +1055,9 @@ impl Agent {
                     delegation.subnet_id.as_ref(),
                     "public_key".as_bytes(),
                 ];
-                lookup_value(&cert.tree, public_key_path).map(<[u8]>::to_vec)
+                lookup_value(&cert.tree, public_key_path)
+                    .map(<[u8]>::to_vec)
+                    .context(Protocol)
             }
         }
     }
@@ -1102,7 +1105,7 @@ impl Agent {
 
         let cert = self.read_state_raw(paths, canister_id).await?;
 
-        lookup_canister_info(cert, canister_id, path)
+        lookup_canister_info(cert, canister_id, path).context(Protocol)
     }
 
     /// Request the bytes of the canister's custom section `icp:public <path>` or `icp:private <path>`.
@@ -1120,7 +1123,7 @@ impl Agent {
 
         let cert = self.read_state_raw(paths, canister_id).await?;
 
-        lookup_canister_metadata(cert, canister_id, path)
+        lookup_canister_metadata(cert, canister_id, path).context(Protocol)
     }
 
     /// Request a list of metrics about the subnet.
@@ -1134,7 +1137,7 @@ impl Agent {
             "metrics".into(),
         ]];
         let cert = self.read_subnet_state_raw(paths, subnet_id).await?;
-        lookup_subnet_metrics(cert, subnet_id)
+        lookup_subnet_metrics(cert, subnet_id).context(Protocol)
     }
 
     /// Fetches the status of a particular request by its ID.
@@ -1148,7 +1151,10 @@ impl Agent {
 
         let cert = self.read_state_raw(paths, effective_canister_id).await?;
 
-        Ok((lookup_request_status(&cert, request_id)?, cert))
+        Ok((
+            lookup_request_status(&cert, request_id).context(Protocol)?,
+            cert,
+        ))
     }
 
     /// Send the signed `request_status` to the network. Will return [`RequestStatusResponse`].
@@ -1168,7 +1174,10 @@ impl Agent {
         let cert: Certificate =
             serde_cbor::from_slice(&read_state_response.certificate).context(Protocol)?;
         self.verify(&cert, effective_canister_id)?;
-        Ok((lookup_request_status(&cert, request_id)?, cert))
+        Ok((
+            lookup_request_status(&cert, request_id).context(Protocol)?,
+            cert,
+        ))
     }
 
     /// Returns an `UpdateBuilder` enabling the construction of an update call without
@@ -1244,7 +1253,7 @@ impl Agent {
     ) -> Result<Vec<ApiBoundaryNode>, AgentError> {
         let paths = vec![vec!["api_boundary_nodes".into()]];
         let certificate = self.read_state_raw(paths, canister_id).await?;
-        let api_boundary_nodes = lookup_api_boundary_nodes(certificate)?;
+        let api_boundary_nodes = lookup_api_boundary_nodes(certificate).context(Protocol)?;
         Ok(api_boundary_nodes)
     }
 
@@ -1255,7 +1264,7 @@ impl Agent {
     ) -> Result<Vec<ApiBoundaryNode>, AgentError> {
         let paths = vec![vec!["api_boundary_nodes".into()]];
         let certificate = self.read_subnet_state_raw(paths, subnet_id).await?;
-        let api_boundary_nodes = lookup_api_boundary_nodes(certificate)?;
+        let api_boundary_nodes = lookup_api_boundary_nodes(certificate).context(Protocol)?;
         Ok(api_boundary_nodes)
     }
 

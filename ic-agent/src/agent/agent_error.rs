@@ -267,7 +267,7 @@ impl HttpErrorPayload {
         // always try to parse it as a String.
         // When fail, print the raw byte array
         f.write_fmt(format_args!(
-            "Http Error: status {}, content type {:?}, content: {}",
+            "Replica HTTP error: status {}, content type {:?}, content: {}",
             http::StatusCode::from_u16(self.status)
                 .map_or_else(|_| format!("{}", self.status), |code| format!("{code}")),
             self.content_type.clone().unwrap_or_default(),
@@ -295,7 +295,6 @@ impl Display for HttpErrorPayload {
 #[cfg(test)]
 mod tests {
     use super::HttpErrorPayload;
-    use crate::AgentError;
 
     #[test]
     fn content_type_none_valid_utf8() {
@@ -306,8 +305,8 @@ mod tests {
         };
 
         assert_eq!(
-            format!("{}", AgentError::HttpError(payload)),
-            r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "", content: hello"#,
+            format!("{payload}"),
+            r#"Replica HTTP error: status 420 <unknown status code>, content type "", content: hello"#,
         );
     }
 
@@ -320,8 +319,8 @@ mod tests {
         };
 
         assert_eq!(
-            format!("{}", AgentError::HttpError(payload)),
-            r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "", content: (unable to decode content as UTF-8: [195, 40])"#,
+            format!("{payload}"),
+            r#"Replica HTTP rror: status 420 <unknown status code>, content type "", content: (unable to decode content as UTF-8: [195, 40])"#,
         );
     }
 
@@ -334,8 +333,8 @@ mod tests {
         };
 
         assert_eq!(
-            format!("{}", AgentError::HttpError(payload)),
-            r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "text/plain", content: hello"#,
+            format!("{payload}"),
+            r#"Replica HTTP error: status 420 <unknown status code>, content type "text/plain", content: hello"#,
         );
     }
 
@@ -348,8 +347,8 @@ mod tests {
         };
 
         assert_eq!(
-            format!("{}", AgentError::HttpError(payload)),
-            r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "text/plain; charset=utf-8", content: hello"#,
+            format!("{payload}"),
+            r#"Replica HTTP error: status 420 <unknown status code>, content type "text/plain; charset=utf-8", content: hello"#,
         );
     }
 
@@ -362,8 +361,8 @@ mod tests {
         };
 
         assert_eq!(
-            format!("{}", AgentError::HttpError(payload)),
-            r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "text/html", content: world"#,
+            format!("{payload}"),
+            r#"Replica HTTP error: status 420 <unknown status code>, content type "text/html", content: world"#,
         );
     }
 }

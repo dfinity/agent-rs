@@ -170,7 +170,7 @@ where
     fn route(&self) -> Result<Url, AgentError> {
         let snapshot = self.routing_snapshot.load();
         let node = snapshot.next_node().ok_or_else(|| {
-            AgentError::RouteProviderError("No healthy API nodes found.".to_string())
+            AgentError::new_tool_error_in_context("No healthy API nodes found.".to_string())
         })?;
         Ok(node.to_routing_url())
     }
@@ -179,7 +179,7 @@ where
         let snapshot = self.routing_snapshot.load();
         let nodes = snapshot.next_n_nodes(n);
         if nodes.is_empty() {
-            return Err(AgentError::RouteProviderError(
+            return Err(AgentError::new_tool_error_in_context(
                 "No healthy API nodes found.".to_string(),
             ));
         };
@@ -523,10 +523,7 @@ mod tests {
         for _ in 0..4 {
             tokio::time::sleep(check_interval).await;
             let result = route_provider.route();
-            assert_eq!(
-                result.unwrap_err(),
-                AgentError::RouteProviderError("No healthy API nodes found.".to_string())
-            );
+            assert!(format!("{}", result.unwrap_err()).contains("No healthy API nodes found."));
         }
 
         // Test 2: calls to route() return both seeds, as they become healthy.
@@ -573,10 +570,7 @@ mod tests {
         tokio::time::sleep(2 * check_interval).await;
         for _ in 0..4 {
             let result = route_provider.route();
-            assert_eq!(
-                result.unwrap_err(),
-                AgentError::RouteProviderError("No healthy API nodes found.".to_string())
-            );
+            assert!(format!("{}", result.unwrap_err()).contains("No healthy API nodes found."));
         }
     }
 
@@ -610,10 +604,7 @@ mod tests {
         for _ in 0..4 {
             tokio::time::sleep(check_interval).await;
             let result = route_provider.route();
-            assert_eq!(
-                result.unwrap_err(),
-                AgentError::RouteProviderError("No healthy API nodes found.".to_string())
-            );
+            assert!(format!("{}", result.unwrap_err()).contains("No healthy API nodes found"));
         }
     }
 

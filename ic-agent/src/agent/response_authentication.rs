@@ -7,10 +7,13 @@ use ic_certification::hash_tree::{HashTree, SubtreeLookupResult};
 use ic_certification::{certificate::Certificate, hash_tree::Label, LookupResult};
 use ic_transport_types::{ReplyResponse, SubnetMetrics};
 use rangemap::RangeInclusiveSet;
-use std::str::from_utf8;
 use std::{
     collections::{HashMap, HashSet},
     error::Error,
+};
+use std::{
+    fmt::{Display, Formatter},
+    str::from_utf8,
 };
 
 use super::Subnet;
@@ -43,16 +46,17 @@ pub fn extract_der(buf: Vec<u8>) -> Result<Vec<u8>, AgentError> {
 
 pub(crate) fn lookup_time<Storage: AsRef<[u8]>>(
     certificate: &Certificate<Storage>,
-) -> Result<u64, AgentError> {
-    let mut time = lookup_value(&certificate.tree, ["time".as_bytes()])?;
-    Ok(leb128::read::unsigned(&mut time).context(Protocol)?)
+) -> Result<u64, LookupError> {
+    let path = ["time".as_bytes()];
+    let mut time = lookup_value(&certificate.tree, path)?;
+    Ok(leb128::read::unsigned(&mut time).context_deserialize(path)?)
 }
 
 pub(crate) fn lookup_canister_info<Storage: AsRef<[u8]>>(
     certificate: Certificate<Storage>,
     canister_id: Principal,
     path: &str,
-) -> Result<Vec<u8>, AgentError> {
+) -> Result<Vec<u8>, LookupError> {
     let path_canister = [
         "canister".as_bytes(),
         canister_id.as_slice(),
@@ -65,7 +69,7 @@ pub(crate) fn lookup_canister_metadata<Storage: AsRef<[u8]>>(
     certificate: Certificate<Storage>,
     canister_id: Principal,
     path: &str,
-) -> Result<Vec<u8>, AgentError> {
+) -> Result<Vec<u8>, LookupError> {
     let path_canister = [
         "canister".as_bytes(),
         canister_id.as_slice(),
@@ -79,16 +83,16 @@ pub(crate) fn lookup_canister_metadata<Storage: AsRef<[u8]>>(
 pub(crate) fn lookup_subnet_metrics<Storage: AsRef<[u8]>>(
     certificate: Certificate<Storage>,
     subnet_id: Principal,
-) -> Result<SubnetMetrics, AgentError> {
+) -> Result<SubnetMetrics, LookupError> {
     let path_stats = [b"subnet", subnet_id.as_slice(), b"metrics"];
     let metrics = lookup_value(&certificate.tree, path_stats)?;
-    Ok(serde_cbor::from_slice(metrics).context(Protocol)?)
+    Ok(serde_cbor::from_slice(metrics).context_deserialize(path_stats)?)
 }
 
 pub(crate) fn lookup_request_status<Storage: AsRef<[u8]>>(
     certificate: &Certificate<Storage>,
     request_id: &RequestId,
-) -> Result<RequestStatusResponse, AgentError> {
+) -> Result<RequestStatusResponse, LookupError> {
     let path_status = [
         "request_status".into(),
         request_id.to_vec().into(),
@@ -96,31 +100,32 @@ pub(crate) fn lookup_request_status<Storage: AsRef<[u8]>>(
     ];
     match certificate.tree.lookup_path(&path_status) {
         LookupResult::Absent => Ok(RequestStatusResponse::Unknown),
-        LookupResult::Unknown => {
-            Err(ErrorCode::LookupPathUnknown(path_status.to_vec())).context(Protocol)
+        LookupResult::Unknown => Err(LookupError::Unknown {
+            path: path_status.to_vec(),
+        }),
+        LookupResult::Found(status) => {
+            match from_utf8(status).context_deserialize(&path_status[..])? {
+                "done" => Ok(RequestStatusResponse::Done),
+                "processing" => Ok(RequestStatusResponse::Processing),
+                "received" => Ok(RequestStatusResponse::Received),
+                "rejected" => lookup_rejection(certificate, request_id),
+                "replied" => lookup_reply(certificate, request_id),
+                other => Err(LookupError::Deserialize {
+                    path: path_status.into_vec(),
+                    source: Box::new(InvalidRequestStatusError(other.to_string())),
+                }),
+            }
         }
-        LookupResult::Found(status) => match from_utf8(status).context(Protocol)? {
-            "done" => Ok(RequestStatusResponse::Done),
-            "processing" => Ok(RequestStatusResponse::Processing),
-            "received" => Ok(RequestStatusResponse::Received),
-            "rejected" => lookup_rejection(certificate, request_id),
-            "replied" => lookup_reply(certificate, request_id),
-            other => Err(ErrorCode::InvalidRequestStatus(
-                path_status.into(),
-                other.to_string(),
-            ))
-            .context(Protocol),
-        },
-        LookupResult::Error => {
-            Err(ErrorCode::LookupPathError(path_status.into())).context(Protocol)
-        }
+        LookupResult::Error => Err(LookupError::Unacknowledged {
+            path: path_status.into_vec(),
+        }),
     }
 }
 
 pub(crate) fn lookup_rejection<Storage: AsRef<[u8]>>(
     certificate: &Certificate<Storage>,
     request_id: &RequestId,
-) -> Result<RequestStatusResponse, AgentError> {
+) -> Result<RequestStatusResponse, LookupError> {
     let reject_code = lookup_reject_code(certificate, request_id)?;
     let reject_message = lookup_reject_message(certificate, request_id)?;
     let error_code = lookup_error_code(certificate, request_id)?;
@@ -135,7 +140,7 @@ pub(crate) fn lookup_rejection<Storage: AsRef<[u8]>>(
 pub(crate) fn lookup_reject_code<Storage: AsRef<[u8]>>(
     certificate: &Certificate<Storage>,
     request_id: &RequestId,
-) -> Result<RejectCode, AgentError> {
+) -> Result<RejectCode, LookupError> {
     let path = [
         "request_status".as_bytes(),
         request_id.as_slice(),
@@ -143,27 +148,27 @@ pub(crate) fn lookup_reject_code<Storage: AsRef<[u8]>>(
     ];
     let code = lookup_value(&certificate.tree, path)?;
     let mut readable = code;
-    let code_digit = leb128::read::unsigned(&mut readable).context(Protocol)?;
-    Ok(RejectCode::try_from(code_digit).context(Protocol)?)
+    let code_digit = leb128::read::unsigned(&mut readable).context_deserialize(path)?;
+    Ok(RejectCode::try_from(code_digit).context_deserialize(path)?)
 }
 
 pub(crate) fn lookup_reject_message<Storage: AsRef<[u8]>>(
     certificate: &Certificate<Storage>,
     request_id: &RequestId,
-) -> Result<String, AgentError> {
+) -> Result<String, LookupError> {
     let path = [
         "request_status".as_bytes(),
         request_id.as_slice(),
         "reject_message".as_bytes(),
     ];
     let msg = lookup_value(&certificate.tree, path)?;
-    Ok(from_utf8(msg).context(Protocol)?.to_string())
+    Ok(from_utf8(msg).context_deserialize(path)?.to_string())
 }
 
 pub(crate) fn lookup_error_code<Storage: AsRef<[u8]>>(
     certificate: &Certificate<Storage>,
     request_id: &RequestId,
-) -> Result<Option<String>, AgentError> {
+) -> Result<Option<String>, LookupError> {
     let path = [
         "request_status".as_bytes(),
         request_id.as_slice(),
@@ -171,16 +176,8 @@ pub(crate) fn lookup_error_code<Storage: AsRef<[u8]>>(
     ];
     let msg = lookup_value(&certificate.tree, path);
     match msg {
-        Ok(val) => Ok(Some(from_utf8(val).context(Protocol)?.to_string())),
-        Err(e) //todo
-            if matches!(
-                e.source()
-                    .and_then(|source| source.downcast_ref::<ErrorCode>()),
-                Some(ErrorCode::LookupPathAbsent(_))
-            ) =>
-        {
-            Ok(None)
-        }
+        Ok(val) => Ok(Some(from_utf8(val).context_deserialize(path)?.to_string())),
+        Err(LookupError::Absent { .. }) => Ok(None),
         Err(e) => Err(e),
     }
 }
@@ -188,7 +185,7 @@ pub(crate) fn lookup_error_code<Storage: AsRef<[u8]>>(
 pub(crate) fn lookup_reply<Storage: AsRef<[u8]>>(
     certificate: &Certificate<Storage>,
     request_id: &RequestId,
-) -> Result<RequestStatusResponse, AgentError> {
+) -> Result<RequestStatusResponse, LookupError> {
     let path = [
         "request_status".as_bytes(),
         request_id.as_slice(),
@@ -208,22 +205,30 @@ pub(crate) fn lookup_subnet<Storage: AsRef<[u8]> + Clone>(
     } else {
         Principal::self_authenticating(root_key)
     };
-    let subnet_tree = lookup_tree(&certificate.tree, [b"subnet", subnet_id.as_slice()])?;
-    let key = lookup_value(&subnet_tree, [b"public_key".as_ref()])?.to_vec();
+    let subnet_tree =
+        lookup_tree(&certificate.tree, [b"subnet", subnet_id.as_slice()]).context(Protocol)?;
+    let key = lookup_value(&subnet_tree, [b"public_key".as_ref()])
+        .context(Protocol)?
+        .to_vec();
     let canister_ranges: Vec<(Principal, Principal)> =
         if let Some(delegation) = &certificate.delegation {
             let delegation: Certificate<Vec<u8>> =
                 serde_cbor::from_slice(delegation.certificate.as_ref()).context(Protocol)?;
-            serde_cbor::from_slice(lookup_value(
-                &delegation.tree,
-                [b"subnet", subnet_id.as_slice(), b"canister_ranges"],
-            )?)
+            serde_cbor::from_slice(
+                lookup_value(
+                    &delegation.tree,
+                    [b"subnet", subnet_id.as_slice(), b"canister_ranges"],
+                )
+                .context(Protocol)?,
+            )
             .context(Protocol)?
         } else {
-            serde_cbor::from_slice(lookup_value(&subnet_tree, [b"canister_ranges".as_ref()])?)
-                .context(Protocol)?
+            serde_cbor::from_slice(
+                lookup_value(&subnet_tree, [b"canister_ranges".as_ref()]).context(Protocol)?,
+            )
+            .context(Protocol)?
         };
-    let node_keys_subtree = lookup_tree(&subnet_tree, [b"node".as_ref()])?;
+    let node_keys_subtree = lookup_tree(&subnet_tree, [b"node".as_ref()]).context(Protocol)?;
     let mut node_keys = HashMap::new();
     for path in node_keys_subtree.list_paths() {
         if path.len() < 2 {
@@ -242,7 +247,8 @@ pub(crate) fn lookup_subnet<Storage: AsRef<[u8]> + Clone>(
             .context(Protocol);
         }
         let node_id = Principal::from_slice(path[0].as_bytes());
-        let node_key = lookup_value(&node_keys_subtree, [node_id.as_slice(), b"public_key"])?;
+        let node_key = lookup_value(&node_keys_subtree, [node_id.as_slice(), b"public_key"])
+            .context(Protocol)?;
         node_keys.insert(node_id, node_key.to_vec());
     }
     let mut range_set = RangeInclusiveSet::new_with_step_fns();
@@ -259,7 +265,7 @@ pub(crate) fn lookup_subnet<Storage: AsRef<[u8]> + Clone>(
 
 pub(crate) fn lookup_api_boundary_nodes<Storage: AsRef<[u8]> + Clone>(
     certificate: Certificate<Storage>,
-) -> Result<Vec<ApiBoundaryNode>, AgentError> {
+) -> Result<Vec<ApiBoundaryNode>, LookupError> {
     // API boundary nodes paths in the state tree, as defined in the spec (https://internetcomputer.org/docs/current/references/ic-interface-spec#state-tree-api-bn).
     let api_bn_path = "api_boundary_nodes".as_bytes();
     let domain_path = "domain".as_bytes();
@@ -275,24 +281,18 @@ pub(crate) fn lookup_api_boundary_nodes<Storage: AsRef<[u8]> + Clone>(
     for node_id in node_ids {
         let domain =
             String::from_utf8(lookup_value(&api_bn_tree, [node_id, domain_path])?.to_vec())
-                .context(Protocol)?;
+                .context_deserialize([node_id, domain_path])?;
 
         let ipv6_address =
             String::from_utf8(lookup_value(&api_bn_tree, [node_id, ipv6_path])?.to_vec())
-                .context(Protocol)?;
+                .context_deserialize([node_id, ipv6_path])?;
 
         let ipv4_address = match lookup_value(&api_bn_tree, [node_id, ipv4_path]) {
-            Ok(ipv4) => Some(String::from_utf8(ipv4.to_vec()).context(Protocol)?),
-            // By convention an absent path `/api_boundary_nodes/<node_id>/ipv4_address` in the state tree signifies that ipv4 is None.
-            Err(e) //todo
-            if matches!(
-                e.source()
-                    .and_then(|source| source.downcast_ref::<ErrorCode>()),
-                Some(ErrorCode::LookupPathAbsent(_))
-            ) =>
-            {
-                None
+            Ok(ipv4) => {
+                Some(String::from_utf8(ipv4.to_vec()).context_deserialize([node_id, ipv4_path])?)
             }
+            // By convention an absent path `/api_boundary_nodes/<node_id>/ipv4_address` in the state tree signifies that ipv4 is None.
+            Err(LookupError::Absent { .. }) => None,
             Err(err) => return Err(err),
         };
 
@@ -446,14 +446,18 @@ impl LookupPath for Vec<Label<Vec<u8>>> {
 pub fn lookup_value<P: LookupPath, Storage: AsRef<[u8]>>(
     tree: &HashTree<Storage>,
     path: P,
-) -> Result<&[u8], AgentError> {
+) -> Result<&[u8], LookupError> {
     match tree.lookup_path(path.iter()) {
-        LookupResult::Absent => Err(ErrorCode::LookupPathAbsent(path.into_vec())).context(Protocol),
-        LookupResult::Unknown => {
-            Err(ErrorCode::LookupPathUnknown(path.into_vec())).context(Protocol)
-        }
+        LookupResult::Absent => Err(LookupError::Absent {
+            path: path.into_vec(),
+        }),
+        LookupResult::Unknown => Err(LookupError::Unknown {
+            path: path.into_vec(),
+        }),
         LookupResult::Found(value) => Ok(value),
-        LookupResult::Error => Err(ErrorCode::LookupPathError(path.into_vec())).context(Protocol),
+        LookupResult::Error => Err(LookupError::Unacknowledged {
+            path: path.into_vec(),
+        }),
     }
 }
 
@@ -463,14 +467,70 @@ pub fn lookup_value<P: LookupPath, Storage: AsRef<[u8]>>(
 pub fn lookup_tree<P: LookupPath, Storage: AsRef<[u8]> + Clone>(
     tree: &HashTree<Storage>,
     path: P,
-) -> Result<HashTree<Storage>, AgentError> {
+) -> Result<HashTree<Storage>, LookupError> {
     match tree.lookup_subtree(path.iter()) {
-        SubtreeLookupResult::Absent => {
-            Err(ErrorCode::LookupPathAbsent(path.into_vec())).context(Protocol)
-        }
-        SubtreeLookupResult::Unknown => {
-            Err(ErrorCode::LookupPathUnknown(path.into_vec())).context(Protocol)
-        }
+        SubtreeLookupResult::Absent => Err(LookupError::Absent {
+            path: path.into_vec(),
+        }),
+        SubtreeLookupResult::Unknown => Err(LookupError::Unknown {
+            path: path.into_vec(),
+        }),
         SubtreeLookupResult::Found(value) => Ok(value),
     }
 }
+
+#[derive(Debug)]
+pub enum LookupError {
+    Absent {
+        path: Vec<Label<Vec<u8>>>,
+    },
+    Unknown {
+        path: Vec<Label<Vec<u8>>>,
+    },
+    Unacknowledged {
+        path: Vec<Label<Vec<u8>>>,
+    },
+    Deserialize {
+        path: Vec<Label<Vec<u8>>>,
+        source: Box<dyn Error + Send + Sync>,
+    },
+}
+
+impl Display for LookupError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
+}
+
+impl Error for LookupError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Deserialize { source, .. } => Some(&**source),
+            _ => None,
+        }
+    }
+}
+
+trait LookupResultExt<T> {
+    fn context_deserialize(self, path: impl LookupPath) -> Result<T, LookupError>;
+}
+
+impl<T, E: Error + Send + Sync + 'static> LookupResultExt<T> for Result<T, E> {
+    fn context_deserialize(self, path: impl LookupPath) -> Result<T, LookupError> {
+        self.map_err(|source| LookupError::Deserialize {
+            path: path.into_vec(),
+            source: Box::new(source),
+        })
+    }
+}
+
+#[derive(Debug)]
+struct InvalidRequestStatusError(String);
+
+impl Display for InvalidRequestStatusError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Invalid request status `{}`", self.0)
+    }
+}
+
+impl Error for InvalidRequestStatusError {}

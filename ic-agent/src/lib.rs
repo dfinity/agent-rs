@@ -111,7 +111,7 @@ pub mod agent;
 pub mod export;
 pub mod identity;
 
-use agent::response_authentication::LookupPath;
+use agent::response_authentication::{LookupError, LookupPath};
 #[doc(inline)]
 pub use agent::{agent_error, agent_error::AgentError, Agent, NonceFactory, NonceGenerator};
 #[doc(inline)]
@@ -128,6 +128,6 @@ pub use ic_certification::{hash_tree, Certificate};
 pub fn lookup_value<P: LookupPath, Storage: AsRef<[u8]>>(
     tree: &ic_certification::certificate::Certificate<Storage>,
     path: P,
-) -> Result<&[u8], AgentError> {
+) -> Result<&[u8], LookupError> {
     agent::response_authentication::lookup_value(&tree.tree, path)
 }
