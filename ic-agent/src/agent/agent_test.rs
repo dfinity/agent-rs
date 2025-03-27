@@ -1,14 +1,19 @@
 use self::mock::{
     assert_mock, assert_single_mock, assert_single_mock_count, mock, mock_additional,
 };
-use crate::{agent::Status, export::Principal, Agent, AgentError, Certificate};
+use crate::{
+    agent::{Operation, OperationStatus, Status},
+    agent_error::ErrorKind,
+    export::Principal,
+    Agent, AgentError, Certificate,
+};
 use candid::{Encode, Nat};
 use futures_util::FutureExt;
 use ic_certification::{Delegation, Label};
 use ic_transport_types::{
     NodeSignature, QueryResponse, RejectCode, RejectResponse, ReplyResponse, TransportCallResponse,
 };
-use std::{collections::BTreeMap, str::FromStr, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, error::Error, str::FromStr, sync::Arc, time::Duration};
 #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -52,7 +57,7 @@ fn make_certifying_agent(url: &str) -> Agent {
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
-async fn query() -> Result<(), AgentError> {
+async fn query() -> Result<(), Box<dyn Error + Send + Sync>> {
     let blob = Vec::from("Hello World");
     let response = QueryResponse::Replied {
         reply: ReplyResponse { arg: blob.clone() },
@@ -116,7 +121,7 @@ async fn query_error() -> Result<(), AgentError> {
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
-async fn query_rejected() -> Result<(), AgentError> {
+async fn query_rejected() -> Result<(), Box<dyn Error + Send + Sync>> {
     let response: QueryResponse = QueryResponse::Rejected {
         reject: RejectResponse {
             reject_code: RejectCode::DestinationInvalid,
@@ -152,10 +157,15 @@ async fn query_rejected() -> Result<(), AgentError> {
     assert_mock(query_mock).await;
 
     match result {
-        Err(AgentError::UncertifiedReject {
-            reject: replica_error,
-            ..
-        }) => {
+        Err(err) if err.kind() == ErrorKind::Reject => {
+            let replica_error = err
+                .operation_info()
+                .unwrap()
+                .response
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap_err();
             assert_eq!(replica_error.reject_code, RejectCode::DestinationInvalid);
             assert_eq!(replica_error.reject_message, "Rejected Message");
             assert_eq!(replica_error.error_code, Some("Error code".to_string()));
@@ -217,11 +227,16 @@ async fn call_rejected() -> Result<(), AgentError> {
         .await;
 
     assert_mock(call_mock).await;
-
-    assert!(
-        matches!(result, Err(AgentError::UncertifiedReject { reject, .. }) if reject == reject_response)
-    );
-
+    let agent_error = result.unwrap_err();
+    assert_eq!(agent_error.kind(), ErrorKind::Reject);
+    let operation_info = agent_error.operation_info().unwrap();
+    let reject = operation_info
+        .response
+        .as_ref()
+        .unwrap()
+        .as_ref()
+        .unwrap_err();
+    assert_eq!(*reject, reject_response);
     Ok(())
 }
 
@@ -258,17 +273,23 @@ async fn call_rejected_without_error_code() -> Result<(), AgentError> {
         .await;
 
     assert_mock(call_mock).await;
-
-    assert!(
-        matches!(result, Err(AgentError::UncertifiedReject { reject, .. }) if reject == non_replicated_reject)
-    );
+    let agent_error = result.unwrap_err();
+    assert_eq!(agent_error.kind(), ErrorKind::Reject);
+    let operation_info = agent_error.operation_info().unwrap();
+    let reject = operation_info
+        .response
+        .as_ref()
+        .unwrap()
+        .as_ref()
+        .unwrap_err();
+    assert_eq!(*reject, non_replicated_reject);
 
     Ok(())
 }
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
-async fn status() -> Result<(), AgentError> {
+async fn status() -> Result<(), Box<dyn Error + Send + Sync>> {
     let map = BTreeMap::new();
     let response = serde_cbor::Value::Map(map);
     let (read_mock, url) = mock(
@@ -291,7 +312,7 @@ async fn status() -> Result<(), AgentError> {
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
-async fn status_okay() -> Result<(), AgentError> {
+async fn status_okay() -> Result<(), Box<dyn Error + Send + Sync>> {
     let map = BTreeMap::new();
     let response = serde_cbor::Value::Map(map);
     let (read_mock, url) = mock(
@@ -314,7 +335,8 @@ async fn status_okay() -> Result<(), AgentError> {
 }
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
-async fn reqwest_client_status_okay_when_request_retried() -> Result<(), AgentError> {
+async fn reqwest_client_status_okay_when_request_retried(
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     let map = BTreeMap::new();
     let response = serde_cbor::Value::Map(map);
     let (read_mock, url) = mock(
@@ -431,7 +453,7 @@ async fn check_subnet_range_with_unauthorized_range() {
             wrong_canister,
         )
         .await;
-    assert_eq!(result, Err(AgentError::CertificateNotAuthorized()));
+    assert_eq!(result.unwrap_err().kind(), ErrorKind::Trust);
 }
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
@@ -496,10 +518,7 @@ async fn wrong_subnet_query_certificate() {
     .await;
     let agent = make_certifying_agent(&url);
     let result = agent.query(&canister, "getVersion").call().await;
-    assert!(matches!(
-        result.unwrap_err(),
-        AgentError::CertificateNotAuthorized()
-    ));
+    assert_eq!(result.unwrap_err().kind(), ErrorKind::Trust);
     assert_single_mock(
         "POST",
         "/api/v2/canister/224od-giaaa-aaaao-ae5vq-cai/read_state",
@@ -538,7 +557,7 @@ async fn no_cert() {
     .await;
     let agent = make_certifying_agent(&url);
     let result = agent.query(&canister, "getVersion").call().await;
-    assert!(matches!(result.unwrap_err(), AgentError::MissingSignature));
+    assert_eq!(result.unwrap_err().kind(), ErrorKind::Protocol);
     assert_mock(read_mock).await;
 }
 
@@ -586,10 +605,10 @@ async fn too_many_delegations() {
         .await
         .expect("read state failed");
     let new_cert = self_delegate_cert(&subnet_id, &cert, 1);
-    assert!(matches!(
-        agent.verify(&new_cert, canister_id).unwrap_err(),
-        AgentError::CertificateHasTooManyDelegations
-    ));
+    assert_eq!(
+        agent.verify(&new_cert, canister_id).unwrap_err().kind(),
+        ErrorKind::Protocol
+    );
 }
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
