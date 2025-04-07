@@ -1,8 +1,10 @@
 use crate::call::{AsyncCaller, SyncCaller};
+use crate::error::{BaseError, CanisterError};
 use candid::utils::ArgumentEncoder;
 use candid::{ser::IDLBuilder, types::value::IDLValue, utils::ArgumentDecoder, CandidType, Encode};
 use ic_agent::{export::Principal, Agent, AgentError, RequestId};
 use std::convert::TryInto;
+use std::marker::PhantomData;
 use thiserror::Error;
 
 /// An error happened while building a canister.
@@ -88,6 +90,7 @@ pub struct Canister<'agent> {
 impl<'agent> Canister<'agent> {
     /// Get the canister ID of this canister.
     /// Prefer using [`canister_id`](Canister::canister_id) instead.
+    #[deprecated = "use canister_id"]
     pub fn canister_id_(&self) -> &Principal {
         &self.canister_id
     }
@@ -97,12 +100,12 @@ impl<'agent> Canister<'agent> {
         &self.canister_id
     }
 
-    /// Create an `AsyncCallBuilder` to do an update call.
-    /// Prefer using [`update`](Canister::update) instead.
-    pub fn update_<'canister>(
+    /// Create an `AsyncCallBuilder` to do an update call, auto-selecting the error type.
+    /// Prefer [`update`](Canister::update) for normal use.
+    pub fn update_<'canister, E: CanisterError>(
         &'canister self,
         method_name: &str,
-    ) -> AsyncCallBuilder<'agent, 'canister> {
+    ) -> AsyncCallBuilder<'agent, 'canister, E> {
         AsyncCallBuilder::new(self, method_name)
     }
 
@@ -114,12 +117,12 @@ impl<'agent> Canister<'agent> {
         AsyncCallBuilder::new(self, method_name)
     }
 
-    /// Create a `SyncCallBuilder` to do a query call.
-    /// Prefer using [`query`](Canister::query) instead.
-    pub fn query_<'canister>(
+    /// Create a `SyncCallBuilder` to do a query call, auto-selecting the error type.
+    /// Prefer [`query`](Canister::query) for normal use.
+    pub fn query_<'canister, E: CanisterError>(
         &'canister self,
         method_name: &str,
-    ) -> SyncCallBuilder<'agent, 'canister> {
+    ) -> SyncCallBuilder<'agent, 'canister, E> {
         SyncCallBuilder::new(self, method_name)
     }
 
@@ -144,6 +147,7 @@ impl<'agent> Canister<'agent> {
 
     /// Creates a copy of this canister, changing the canister ID to the provided principal.
     /// Prefer using [`clone_with`](Canister::clone_with) instead.
+    #[deprecated = "use clone_with"]
     pub fn clone_with_(&self, id: Principal) -> Self {
         Self {
             agent: self.agent,
@@ -166,13 +170,13 @@ impl<'agent> Canister<'agent> {
 
 /// A buffer to hold canister argument blob.
 #[derive(Debug, Default)]
-pub struct Argument(pub(crate) Option<Result<Vec<u8>, AgentError>>);
+pub struct Argument(pub(crate) Option<Result<Vec<u8>, candid::Error>>);
 
 impl Argument {
     /// Set an IDL Argument. Can only be called at most once.
     pub fn set_idl_arg<A: CandidType>(&mut self, arg: A) {
         match self.0 {
-            None => self.0 = Some(Encode!(&arg).map_err(|e| e.into())),
+            None => self.0 = Some(Encode!(&arg)),
             Some(_) => panic!("argument is being set more than once"),
         }
     }
@@ -184,8 +188,7 @@ impl Argument {
                 let mut builder = IDLBuilder::new();
                 let result = builder
                     .value_arg(&arg)
-                    .and_then(|builder| builder.serialize_to_vec())
-                    .map_err(Into::into);
+                    .and_then(|builder| builder.serialize_to_vec());
                 self.0 = Some(result);
             }
             Some(_) => panic!("argument is being set more than once"),
@@ -201,7 +204,7 @@ impl Argument {
     }
 
     /// Return the argument blob.
-    pub fn serialize(self) -> Result<Vec<u8>, AgentError> {
+    pub fn serialize(self) -> Result<Vec<u8>, candid::Error> {
         self.0.unwrap_or_else(|| Ok(Encode!()?))
     }
 
@@ -225,8 +228,7 @@ impl Argument {
         let mut builder = IDLBuilder::new();
         let result = tuple
             .encode(&mut builder)
-            .and_then(|_| builder.serialize_to_vec())
-            .map_err(Into::into);
+            .and_then(|_| builder.serialize_to_vec());
         Self(Some(result))
     }
 }
@@ -235,14 +237,15 @@ impl Argument {
 ///
 /// See [`SyncCaller`] for a description of this structure once built.
 #[derive(Debug)]
-pub struct SyncCallBuilder<'agent, 'canister> {
+pub struct SyncCallBuilder<'agent, 'canister, Err = BaseError> {
     canister: &'canister Canister<'agent>,
     method_name: String,
     effective_canister_id: Principal,
     arg: Argument,
+    err: PhantomData<Err>,
 }
 
-impl<'agent: 'canister, 'canister> SyncCallBuilder<'agent, 'canister> {
+impl<'agent: 'canister, 'canister, Err: CanisterError> SyncCallBuilder<'agent, 'canister, Err> {
     /// Create a new instance of an `AsyncCallBuilder`.
     pub(super) fn new<M: Into<String>>(
         canister: &'canister Canister<'agent>,
@@ -253,11 +256,12 @@ impl<'agent: 'canister, 'canister> SyncCallBuilder<'agent, 'canister> {
             method_name: method_name.into(),
             effective_canister_id: canister.canister_id().to_owned(),
             arg: Default::default(),
+            err: PhantomData,
         }
     }
 }
 
-impl<'agent: 'canister, 'canister> SyncCallBuilder<'agent, 'canister> {
+impl<'agent: 'canister, 'canister, Err: CanisterError> SyncCallBuilder<'agent, 'canister, Err> {
     /// Set the argument with candid argument. Can be called at most once.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> Self
     where
@@ -294,7 +298,7 @@ impl<'agent: 'canister, 'canister> SyncCallBuilder<'agent, 'canister> {
     }
 
     /// Builds a [`SyncCaller`] from this builder's state.
-    pub fn build<Output>(self) -> SyncCaller<'agent, Output>
+    pub fn build<Output>(self) -> SyncCaller<'agent, Output, Err>
     where
         Output: for<'de> ArgumentDecoder<'de> + Send + Sync,
     {
@@ -315,29 +319,28 @@ impl<'agent: 'canister, 'canister> SyncCallBuilder<'agent, 'canister> {
 ///
 /// See [`AsyncCaller`] for a description of this structure.
 #[derive(Debug)]
-pub struct AsyncCallBuilder<'agent, 'canister> {
+pub struct AsyncCallBuilder<'agent, 'canister, Err = BaseError> {
     canister: &'canister Canister<'agent>,
     method_name: String,
     effective_canister_id: Principal,
     arg: Argument,
+    err: PhantomData<Err>,
 }
 
-impl<'agent: 'canister, 'canister> AsyncCallBuilder<'agent, 'canister> {
+impl<'agent: 'canister, 'canister, Err: CanisterError> AsyncCallBuilder<'agent, 'canister, Err> {
     /// Create a new instance of an `AsyncCallBuilder`.
-    pub(super) fn new(
-        canister: &'canister Canister<'agent>,
-        method_name: &str,
-    ) -> AsyncCallBuilder<'agent, 'canister> {
+    pub(super) fn new(canister: &'canister Canister<'agent>, method_name: &str) -> Self {
         Self {
             canister,
             method_name: method_name.to_string(),
             effective_canister_id: canister.canister_id().to_owned(),
             arg: Default::default(),
+            err: PhantomData,
         }
     }
 }
 
-impl<'agent: 'canister, 'canister> AsyncCallBuilder<'agent, 'canister> {
+impl<'agent: 'canister, 'canister, Err: CanisterError> AsyncCallBuilder<'agent, 'canister, Err> {
     /// Set the argument with Candid argument. Can be called at most once.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> Self
     where
@@ -366,7 +369,7 @@ impl<'agent: 'canister, 'canister> AsyncCallBuilder<'agent, 'canister> {
     }
 
     /// Builds an [`AsyncCaller`] from this builder's state.
-    pub fn build<Output>(self) -> AsyncCaller<'agent, Output>
+    pub fn build<Output>(self) -> AsyncCaller<'agent, Output, Err>
     where
         Output: for<'de> ArgumentDecoder<'de> + Send + Sync,
     {

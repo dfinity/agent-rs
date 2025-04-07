@@ -398,7 +398,7 @@ impl Agent {
         use_nonce: bool,
         explicit_verify_query_signatures: Option<bool>,
     ) -> Result<Vec<u8>, AgentError> {
-        let operation = Operation::Call {
+        let operation = Operation::Query {
             canister: canister_id,
             method: method_name.clone(),
         };
@@ -447,7 +447,7 @@ impl Agent {
             })
             .context(Input);
         };
-        let operation = Operation::Call {
+        let operation = Operation::Update {
             canister: *canister_id,
             method: method_name.clone(),
         };
@@ -592,7 +592,7 @@ impl Agent {
         arg: Vec<u8>,
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<CallResponse<(Vec<u8>, Certificate)>, AgentError> {
-        let operation = Operation::Call {
+        let operation = Operation::Update {
             canister: canister_id,
             method: method_name.clone(),
         };
@@ -671,6 +671,7 @@ impl Agent {
         let EnvelopeContent::Call {
             canister_id,
             method_name,
+            ingress_expiry,
             ..
         } = &*envelope.content
         else {
@@ -686,44 +687,60 @@ impl Agent {
             })
             .context(Input);
         };
-        let operation = Some(Operation::Call {
+        let operation = Operation::Update {
             canister: *canister_id,
             method: method_name.clone(),
-        });
-        let request_id = envelope.content.to_request_id();
+        };
+        CURRENT_OPERATION
+            .scope(
+                RefCell::new(OperationInfo {
+                    operation: operation.clone(),
+                    expiry: *ingress_expiry,
+                    status: OperationStatus::NotSent,
+                    response: None,
+                }),
+                async {
+                    let request_id = envelope.content.to_request_id();
 
-        let response_body = self
-            .call_endpoint(effective_canister_id, signed_update)
-            .await?;
+                    let response_body = self
+                        .call_endpoint(effective_canister_id, signed_update)
+                        .await?;
 
-        match response_body {
-            TransportCallResponse::Replied { certificate } => {
-                let certificate = serde_cbor::from_slice(&certificate).context(Protocol)?;
+                    match response_body {
+                        TransportCallResponse::Replied { certificate } => {
+                            let certificate =
+                                serde_cbor::from_slice(&certificate).context(Protocol)?;
 
-                self.verify(&certificate, effective_canister_id)?;
-                let status = lookup_request_status(&certificate, &request_id).context(Protocol)?;
+                            self.verify(&certificate, effective_canister_id)?;
+                            let status = lookup_request_status(&certificate, &request_id)
+                                .context(Protocol)?;
 
-                match status {
-                    RequestStatusResponse::Replied(reply) => Ok(CallResponse::Response(reply.arg)),
-                    RequestStatusResponse::Rejected(reject_response) => {
-                        Err(ErrorCode::CertifiedReject {
-                            reject: reject_response,
-                            operation,
-                        })
-                        .context(Reject)?
+                            match status {
+                                RequestStatusResponse::Replied(reply) => {
+                                    Ok(CallResponse::Response(reply.arg))
+                                }
+                                RequestStatusResponse::Rejected(reject_response) => {
+                                    Err(ErrorCode::CertifiedReject {
+                                        reject: reject_response,
+                                        operation: Some(operation),
+                                    })
+                                    .context(Reject)?
+                                }
+                                _ => Ok(CallResponse::Poll(request_id)),
+                            }
+                        }
+                        TransportCallResponse::Accepted => Ok(CallResponse::Poll(request_id)),
+                        TransportCallResponse::NonReplicatedRejection(reject_response) => {
+                            Err(ErrorCode::UncertifiedReject {
+                                reject: reject_response,
+                                operation: Some(operation),
+                            })
+                            .context(Reject)
+                        }
                     }
-                    _ => Ok(CallResponse::Poll(request_id)),
-                }
-            }
-            TransportCallResponse::Accepted => Ok(CallResponse::Poll(request_id)),
-            TransportCallResponse::NonReplicatedRejection(reject_response) => {
-                Err(ErrorCode::UncertifiedReject {
-                    reject: reject_response,
-                    operation,
-                })
-                .context(Reject)
-            }
-        }
+                },
+            )
+            .await
     }
 
     fn update_content(
@@ -1920,7 +1937,7 @@ impl<'a> UpdateCall<'a> {
                     .wait_inner(
                         &request_id,
                         self.effective_canister_id,
-                        Some(Operation::Call {
+                        Some(Operation::Update {
                             canister: self.canister_id,
                             method: self.method_name,
                         }),
@@ -2177,18 +2194,26 @@ pub enum OperationStatus {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct OperationInfo {
-    status: OperationStatus,
-    operation: Operation,
-    expiry: u64,
-    response: Option<Result<Vec<u8>, RejectResponse>>,
+    pub status: OperationStatus,
+    pub operation: Operation,
+    pub expiry: u64,
+    pub response: Option<Result<Vec<u8>, RejectResponse>>,
 }
 
 /// An operation that can result in a reject.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Operation {
-    /// A call to a canister method.
-    Call {
+    /// A certified call to a canister method.
+    Update {
+        /// The canister whose method was called.
+        canister: Principal,
+        /// The name of the method.
+        method: String,
+    },
+    /// A query call to a canister method.
+    Query {
         /// The canister whose method was called.
         canister: Principal,
         /// The name of the method.

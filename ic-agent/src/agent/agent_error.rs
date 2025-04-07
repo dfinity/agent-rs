@@ -185,14 +185,6 @@ pub(crate) enum ErrorCode {
     #[error("The status response did not contain a root key.  Status: {0}")]
     NoRootKeyInStatus(Status),
 
-    /// The invocation to the wallet call forward method failed with an error.
-    #[error("The invocation to the wallet call forward method failed with the error: {0}")]
-    WalletCallFailed(String),
-
-    /// The wallet operation failed.
-    #[error("The  wallet operation failed: {0}")]
-    WalletError(String),
-
     /// The wallet canister must be upgraded. See [`dfx wallet upgrade`](https://internetcomputer.org/docs/current/references/cli-reference/dfx-wallet)
     #[error("The wallet canister must be upgraded: {0}")]
     WalletUpgradeRequired(String),

@@ -3,11 +3,13 @@
 use std::ops::Deref;
 
 use candid::{CandidType, Principal};
-use ic_agent::{Agent, AgentError};
+use ic_agent::Agent;
 use serde::Deserialize;
+use thiserror::Error;
 
 use crate::{
     call::{AsyncCall, SyncCall},
+    error::BaseError,
     Canister,
 };
 
@@ -17,6 +19,12 @@ pub struct BitcoinCanister<'agent> {
     canister: Canister<'agent>,
     network: BitcoinNetwork,
 }
+
+/// An error that can occur when constructing a Bitcoin canister.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+#[error("No applicable canister ID for regtest")]
+pub struct BitcoinCanisterAttachError;
 
 impl<'agent> Deref for BitcoinCanister<'agent> {
     type Target = Canister<'agent>;
@@ -54,15 +62,14 @@ impl<'agent> BitcoinCanister<'agent> {
         Self::for_network(agent, BitcoinNetwork::Testnet).expect("valid network")
     }
     /// Create a `BitcoinCanister` interface for the specified Bitcoin network on the IC mainnet. Errors if `Regtest` is specified.
-    pub fn for_network(agent: &'agent Agent, network: BitcoinNetwork) -> Result<Self, AgentError> {
+    pub fn for_network(
+        agent: &'agent Agent,
+        network: BitcoinNetwork,
+    ) -> Result<Self, BitcoinCanisterAttachError> {
         let canister_id = match network {
             BitcoinNetwork::Mainnet => MAINNET_ID,
             BitcoinNetwork::Testnet => TESTNET_ID,
-            BitcoinNetwork::Regtest => {
-                return Err(AgentError::MessageError(
-                    "No applicable canister ID for regtest".to_string(),
-                ))
-            }
+            BitcoinNetwork::Regtest => return Err(BitcoinCanisterAttachError),
         };
         Ok(Self::create(agent, canister_id, network))
     }
@@ -73,7 +80,7 @@ impl<'agent> BitcoinCanister<'agent> {
         &self,
         address: &str,
         min_confirmations: Option<u32>,
-    ) -> impl 'agent + AsyncCall<Value = (u64,)> {
+    ) -> impl 'agent + AsyncCall<Value = (u64,), Error = BaseError> {
         #[derive(CandidType)]
         struct In<'a> {
             address: &'a str,
@@ -95,7 +102,7 @@ impl<'agent> BitcoinCanister<'agent> {
         &self,
         address: &str,
         min_confirmations: Option<u32>,
-    ) -> impl 'agent + SyncCall<Value = (u64,)> {
+    ) -> impl 'agent + SyncCall<Value = (u64,), Error = BaseError> {
         self.query("bitcoin_get_balance_query")
             .with_arg(GetBalance {
                 address,
@@ -114,7 +121,7 @@ impl<'agent> BitcoinCanister<'agent> {
         &self,
         address: &str,
         filter: Option<UtxosFilter>,
-    ) -> impl 'agent + AsyncCall<Value = (GetUtxosResponse,)> {
+    ) -> impl 'agent + AsyncCall<Value = (GetUtxosResponse,), Error = BaseError> {
         self.update("bitcoin_get_utxos")
             .with_arg(GetUtxos {
                 address,
@@ -133,7 +140,7 @@ impl<'agent> BitcoinCanister<'agent> {
         &self,
         address: &str,
         filter: Option<UtxosFilter>,
-    ) -> impl 'agent + SyncCall<Value = (GetUtxosResponse,)> {
+    ) -> impl 'agent + SyncCall<Value = (GetUtxosResponse,), Error = BaseError> {
         self.query("bitcoin_get_utxos_query")
             .with_arg(GetUtxos {
                 address,
@@ -145,7 +152,9 @@ impl<'agent> BitcoinCanister<'agent> {
 
     /// Gets the transaction fee percentiles for the last 10,000 transactions. In the returned vector, `v[i]` is the `i`th percentile fee,
     /// measured in millisatoshis/vbyte, and `v[0]` is the smallest fee.
-    pub fn get_current_fee_percentiles(&self) -> impl 'agent + AsyncCall<Value = (Vec<u64>,)> {
+    pub fn get_current_fee_percentiles(
+        &self,
+    ) -> impl 'agent + AsyncCall<Value = (Vec<u64>,), Error = BaseError> {
         #[derive(CandidType)]
         struct In {
             network: BitcoinNetwork,
@@ -162,7 +171,7 @@ impl<'agent> BitcoinCanister<'agent> {
         &self,
         start_height: u32,
         end_height: Option<u32>,
-    ) -> impl 'agent + AsyncCall<Value = (GetBlockHeadersResponse,)> {
+    ) -> impl 'agent + AsyncCall<Value = (GetBlockHeadersResponse,), Error = BaseError> {
         #[derive(CandidType)]
         struct In {
             start_height: u32,
@@ -176,7 +185,10 @@ impl<'agent> BitcoinCanister<'agent> {
             .build()
     }
     /// Submits a new Bitcoin transaction. No guarantees are made about the outcome.
-    pub fn send_transaction(&self, transaction: Vec<u8>) -> impl 'agent + AsyncCall<Value = ()> {
+    pub fn send_transaction(
+        &self,
+        transaction: Vec<u8>,
+    ) -> impl 'agent + AsyncCall<Value = (), Error = BaseError> {
         #[derive(CandidType, Deserialize)]
         struct In {
             network: BitcoinNetwork,
