@@ -1047,6 +1047,28 @@ impl Agent {
         lookup_canister_info(cert, canister_id, path)
     }
 
+    /// Request the controller list of a given canister.
+    pub async fn read_state_canister_controllers(
+        &self,
+        canister_id: Principal,
+    ) -> Result<Vec<Principal>, AgentError> {
+        let blob = self
+            .read_state_canister_info(canister_id, "controllers")
+            .await?;
+        let controllers: Vec<Principal> =
+            serde_cbor::from_slice(&blob).map_err(AgentError::InvalidCborData)?;
+        Ok(controllers)
+    }
+
+    /// Request the module hash of a given canister.
+    pub async fn read_state_canister_module_hash(
+        &self,
+        canister_id: Principal,
+    ) -> Result<Vec<u8>, AgentError> {
+        self.read_state_canister_info(canister_id, "module_hash")
+            .await
+    }
+
     /// Request the bytes of the canister's custom section `icp:public <path>` or `icp:private <path>`.
     pub async fn read_state_canister_metadata(
         &self,
