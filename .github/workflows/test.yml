@@ -28,7 +28,6 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-          sudo snap install chromium # DEBUG: explicitly install chromium snap
           sudo apt-get install -y chromium-chromedriver
 
       - name: Run Tests
