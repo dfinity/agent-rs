@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Add `read_state_canister_controllers` and `read_state_canister_module_hash` functions.
+
 ## [0.40.0] - 2025-03-17
 
 * BREAKING: Added data about the rejected call to CertifiedReject/UncertifiedReject.

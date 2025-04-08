@@ -207,6 +207,22 @@ fn canister_reject_call() {
 
 #[ignore]
 #[test]
+fn read_state_canister() {
+    with_universal_canister(|agent, canister_id| async move {
+        let blob = agent
+            .read_state_canister_info(canister_id, "module_hash")
+            .await?;
+        assert_eq!(blob.len(), 32);
+        let controllers = agent.read_state_canister_controllers(canister_id).await?;
+        assert_eq!(controllers.len(), 1);
+        let hash = agent.read_state_canister_module_hash(canister_id).await?;
+        assert_eq!(hash.len(), 32);
+        Ok(())
+    })
+}
+
+#[ignore]
+#[test]
 fn wallet_canister_forward() {
     with_wallet_canister(None, |agent, wallet_id| async move {
         let wallet = WalletCanister::create(&agent, wallet_id).await?;
