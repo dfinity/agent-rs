@@ -6,8 +6,8 @@ use std::{
 };
 
 use arc_swap::ArcSwap;
-use candid::Principal;
 use futures_util::FutureExt;
+use ic_principal::Principal;
 use stop_token::StopSource;
 use thiserror::Error;
 use url::Url;

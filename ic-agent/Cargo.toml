@@ -25,7 +25,6 @@ async-trait = "0.1"
 async-watch = "0.3"
 backoff = "0.4.0"
 cached = { version = "0.52", features = ["ahash"], default-features = false }
-candid = { workspace = true }
 der = "0.7"
 ecdsa = "0.16"
 ed25519-consensus = { workspace = true }
@@ -35,6 +34,7 @@ hex = { workspace = true }
 http = "1.0.0"
 http-body = "1.0.0"
 ic-certification = { workspace = true }
+ic_principal = { workspace = true }
 ic-transport-types = { workspace = true }
 ic-verify-bls-signature = "0.5"
 k256 = { workspace = true, features = ["pem"] }
@@ -78,6 +78,7 @@ wasm-bindgen-futures = { version = "0.4", optional = true }
 web-sys = { version = "0.3", features = ["Window"], optional = true }
 
 [dev-dependencies]
+candid = { workspace = true }
 serde_json.workspace = true
 tracing-subscriber = "0.3"
 tracing = "0.1"

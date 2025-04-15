@@ -1138,6 +1138,7 @@ dependencies = [
  "ic-certification 3.0.2",
  "ic-transport-types 0.40.0",
  "ic-verify-bls-signature",
+ "ic_principal",
  "js-sys",
  "k256",
  "leb128",
