@@ -892,20 +892,24 @@ impl Agent {
                 }
 
                 RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => {
-                    CURRENT_OPERATION.try_with(|op| {
-                        let mut op = op.borrow_mut();
-                        op.status = OperationStatus::Received;
-                        op.response = Some(Ok(arg.clone()));
-                    });
+                    CURRENT_OPERATION
+                        .try_with(|op| {
+                            let mut op = op.borrow_mut();
+                            op.status = OperationStatus::Received;
+                            op.response = Some(Ok(arg.clone()));
+                        })
+                        .ok();
                     return Ok((arg, cert));
                 }
 
                 RequestStatusResponse::Rejected(response) => {
-                    CURRENT_OPERATION.try_with(|op| {
-                        let mut op = op.borrow_mut();
-                        op.status = OperationStatus::Received;
-                        op.response = Some(Err(response.clone()))
-                    });
+                    CURRENT_OPERATION
+                        .try_with(|op| {
+                            let mut op = op.borrow_mut();
+                            op.status = OperationStatus::Received;
+                            op.response = Some(Err(response.clone()))
+                        })
+                        .ok();
                     return Err(ErrorCode::CertifiedReject {
                         reject: response,
                         operation,
@@ -915,7 +919,8 @@ impl Agent {
 
                 RequestStatusResponse::Done => {
                     CURRENT_OPERATION
-                        .try_with(|op| op.borrow_mut().status = OperationStatus::Received);
+                        .try_with(|op| op.borrow_mut().status = OperationStatus::Received)
+                        .ok();
                     return Err(ErrorCode::RequestStatusDoneNoReply(String::from(
                         *request_id,
                     )))
@@ -1081,7 +1086,7 @@ impl Agent {
 
         ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
             .map_err(|_| ErrorCode::CertificateVerificationFailed)
-            .context(Trust);
+            .context(Trust)?;
         Ok(())
     }
 
@@ -1378,12 +1383,14 @@ impl Agent {
             Ok(http_request)
         };
 
-        CURRENT_OPERATION.try_with(|op| {
-            let mut op = op.borrow_mut();
-            if op.status == OperationStatus::NotSent {
-                op.status = OperationStatus::MaybeReceived;
-            }
-        });
+        CURRENT_OPERATION
+            .try_with(|op| {
+                let mut op = op.borrow_mut();
+                if op.status == OperationStatus::NotSent {
+                    op.status = OperationStatus::MaybeReceived;
+                }
+            })
+            .ok();
         let response = self
             .client
             .call(
