@@ -123,13 +123,13 @@ where
     /// Calls the forwarded canister call on the wallet canister. Equivalent to `.build().call()`.
     pub fn call(self) -> impl Future<Output = Result<CallResponse<Out>, WalletError>> + 'agent {
         let call = self.build();
-        async { Ok(call?.call().await?) }
+        async { call?.call().await }
     }
 
     /// Calls the forwarded canister call on the wallet canister, and waits for the result. Equivalent to `.build().call_and_wait()`.
     pub fn call_and_wait(self) -> impl Future<Output = Result<Out, WalletError>> + 'agent {
         let call = self.build();
-        async { Ok(call?.call_and_wait().await?) }
+        async { call?.call_and_wait().await }
     }
 }
 

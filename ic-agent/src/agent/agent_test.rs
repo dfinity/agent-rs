@@ -2,10 +2,7 @@ use self::mock::{
     assert_mock, assert_single_mock, assert_single_mock_count, mock, mock_additional,
 };
 use crate::{
-    agent::{Operation, OperationStatus, Status},
-    agent_error::ErrorKind,
-    export::Principal,
-    Agent, AgentError, Certificate,
+    agent::Status, agent_error::ErrorKind, export::Principal, Agent, AgentError, Certificate,
 };
 use candid::{Encode, Nat};
 use futures_util::FutureExt;

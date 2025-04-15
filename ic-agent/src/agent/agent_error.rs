@@ -11,8 +11,12 @@ use thiserror::Error;
 
 use super::{status::Status, Operation, OperationInfo, CURRENT_OPERATION};
 
-#[derive(Debug)]
 pub struct AgentError {
+    inner: Box<AgentErrorInner>,
+}
+
+#[derive(Debug)]
+struct AgentErrorInner {
     source: Option<Box<dyn Error + Send + Sync>>,
     kind: ErrorKind,
     operation_info: Option<OperationInfo>,
@@ -32,10 +36,10 @@ pub enum ErrorKind {
 
 impl AgentError {
     pub fn kind(&self) -> ErrorKind {
-        self.kind
+        self.inner.kind
     }
     pub fn operation_info(&self) -> Option<&OperationInfo> {
-        self.operation_info.as_ref()
+        self.inner.operation_info.as_ref()
     }
     pub fn new_tool_error_in_context(message: String) -> Self {
         todo!()
@@ -47,11 +51,19 @@ impl AgentError {
         match inner.downcast::<AgentError>() {
             Ok(agent_err) => *agent_err,
             Err(source) => AgentError {
-                kind,
-                operation_info: CURRENT_OPERATION.try_with(|op| (*op.borrow()).clone()).ok(),
-                source: Some(source),
+                inner: Box::new(AgentErrorInner {
+                    kind,
+                    operation_info: CURRENT_OPERATION.try_with(|op| (*op.borrow()).clone()).ok(),
+                    source: Some(source),
+                }),
             },
         }
+    }
+}
+
+impl Debug for AgentError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self.inner, f)
     }
 }
 
@@ -185,10 +197,6 @@ pub(crate) enum ErrorCode {
     #[error("The status response did not contain a root key.  Status: {0}")]
     NoRootKeyInStatus(Status),
 
-    /// The wallet canister must be upgraded. See [`dfx wallet upgrade`](https://internetcomputer.org/docs/current/references/cli-reference/dfx-wallet)
-    #[error("The wallet canister must be upgraded: {0}")]
-    WalletUpgradeRequired(String),
-
     /// The response size exceeded the provided limit.
     #[error("Response size exceeded limit.")]
     ResponseSizeExceededLimit,
@@ -215,7 +223,7 @@ pub(crate) enum ErrorCode {
 
 impl Error for AgentError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        self.source.as_ref().map(|s| &**s as _)
+        self.inner.source.as_ref().map(|s| &**s as _)
     }
 }
 

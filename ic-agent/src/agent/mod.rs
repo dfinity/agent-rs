@@ -402,22 +402,30 @@ impl Agent {
             canister: canister_id,
             method: method_name.clone(),
         };
-        let content = self.query_content(
-            canister_id,
-            method_name,
-            arg,
-            ingress_expiry_datetime,
-            use_nonce,
-        )?;
-        let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
-        self.query_inner(
-            effective_canister_id,
-            serialized_bytes,
-            content.to_request_id(),
-            explicit_verify_query_signatures,
-            operation,
-        )
-        .await
+        let expiry = ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date());
+        CURRENT_OPERATION
+            .scope(
+                RefCell::new(OperationInfo {
+                    status: OperationStatus::NotSent,
+                    operation: operation.clone(),
+                    expiry,
+                    response: None,
+                }),
+                async {
+                    let content =
+                        self.query_content(canister_id, method_name, arg, expiry, use_nonce)?;
+                    let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
+                    self.query_inner(
+                        effective_canister_id,
+                        serialized_bytes,
+                        content.to_request_id(),
+                        explicit_verify_query_signatures,
+                        operation,
+                    )
+                    .await
+                },
+            )
+            .await
     }
 
     /// Send the signed query to the network. Will return a byte vector.
@@ -432,6 +440,7 @@ impl Agent {
         let EnvelopeContent::Query {
             canister_id,
             method_name,
+            ingress_expiry,
             ..
         } = &*envelope.content
         else {
@@ -451,14 +460,26 @@ impl Agent {
             canister: *canister_id,
             method: method_name.clone(),
         };
-        self.query_inner(
-            effective_canister_id,
-            signed_query,
-            envelope.content.to_request_id(),
-            None,
-            operation,
-        )
-        .await
+        CURRENT_OPERATION
+            .scope(
+                RefCell::new(OperationInfo {
+                    status: OperationStatus::NotSent,
+                    operation: operation.clone(),
+                    expiry: *ingress_expiry,
+                    response: None,
+                }),
+                async {
+                    self.query_inner(
+                        effective_canister_id,
+                        signed_query,
+                        envelope.content.to_request_id(),
+                        None,
+                        operation,
+                    )
+                    .await
+                },
+            )
+            .await
     }
 
     /// Helper function for performing both the query call and possibly a `read_state` to check the subnet node keys.
@@ -566,7 +587,7 @@ impl Agent {
         canister_id: Principal,
         method_name: String,
         arg: Vec<u8>,
-        ingress_expiry_datetime: Option<u64>,
+        ingress_expiry: u64,
         use_nonce: bool,
     ) -> Result<EnvelopeContent, AgentError> {
         Ok(EnvelopeContent::Query {
@@ -578,7 +599,7 @@ impl Agent {
             canister_id,
             method_name,
             arg,
-            ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
+            ingress_expiry,
             nonce: use_nonce.then(|| self.nonce_factory.generate()).flatten(),
         })
     }
@@ -917,16 +938,33 @@ impl Agent {
         paths: Vec<Vec<Label>>,
         effective_canister_id: Principal,
     ) -> Result<Certificate, AgentError> {
-        let content = self.read_state_content(paths)?;
-        let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
+        let expiry = self.get_expiry_date();
+        CURRENT_OPERATION
+            .scope(
+                RefCell::new(OperationInfo {
+                    status: OperationStatus::NotSent,
+                    operation: Operation::ReadState {
+                        paths: paths.clone(),
+                        canister: effective_canister_id,
+                    },
+                    expiry,
+                    response: None,
+                }),
+                async {
+                    let content = self.read_state_content(paths, expiry)?;
+                    let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
 
-        let read_state_response: ReadStateResponse = self
-            .read_state_endpoint(effective_canister_id, serialized_bytes)
-            .await?;
-        let cert: Certificate =
-            serde_cbor::from_slice(&read_state_response.certificate).context(Protocol)?;
-        self.verify(&cert, effective_canister_id)?;
-        Ok(cert)
+                    let read_state_response: ReadStateResponse = self
+                        .read_state_endpoint(effective_canister_id, serialized_bytes)
+                        .await?;
+                    let cert: Certificate =
+                        serde_cbor::from_slice(&read_state_response.certificate)
+                            .context(Protocol)?;
+                    self.verify(&cert, effective_canister_id)?;
+                    Ok(cert)
+                },
+            )
+            .await
     }
 
     /// Request the raw state tree directly, under a subnet ID.
@@ -936,19 +974,40 @@ impl Agent {
         paths: Vec<Vec<Label>>,
         subnet_id: Principal,
     ) -> Result<Certificate, AgentError> {
-        let content = self.read_state_content(paths)?;
-        let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
+        let expiry = self.get_expiry_date();
+        CURRENT_OPERATION
+            .scope(
+                RefCell::new(OperationInfo {
+                    status: OperationStatus::NotSent,
+                    operation: Operation::ReadSubnetState {
+                        paths: paths.clone(),
+                        subnet: subnet_id,
+                    },
+                    expiry,
+                    response: None,
+                }),
+                async {
+                    let content = self.read_state_content(paths, expiry)?;
+                    let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
 
-        let read_state_response: ReadStateResponse = self
-            .read_subnet_state_endpoint(subnet_id, serialized_bytes)
-            .await?;
-        let cert: Certificate =
-            serde_cbor::from_slice(&read_state_response.certificate).context(Protocol)?;
-        self.verify_for_subnet(&cert, subnet_id)?;
-        Ok(cert)
+                    let read_state_response: ReadStateResponse = self
+                        .read_subnet_state_endpoint(subnet_id, serialized_bytes)
+                        .await?;
+                    let cert: Certificate =
+                        serde_cbor::from_slice(&read_state_response.certificate)
+                            .context(Protocol)?;
+                    self.verify_for_subnet(&cert, subnet_id)?;
+                    Ok(cert)
+                },
+            )
+            .await
     }
 
-    fn read_state_content(&self, paths: Vec<Vec<Label>>) -> Result<EnvelopeContent, AgentError> {
+    fn read_state_content(
+        &self,
+        paths: Vec<Vec<Label>>,
+        ingress_expiry: u64,
+    ) -> Result<EnvelopeContent, AgentError> {
         Ok(EnvelopeContent::ReadState {
             sender: self
                 .identity
@@ -956,7 +1015,7 @@ impl Agent {
                 .map_err(ErrorCode::SigningError)
                 .context(External)?,
             paths,
-            ingress_expiry: self.get_expiry_date(),
+            ingress_expiry,
         })
     }
 
@@ -1234,7 +1293,8 @@ impl Agent {
     ) -> Result<SignedRequestStatus, AgentError> {
         let paths: Vec<Vec<Label>> =
             vec![vec!["request_status".into(), request_id.to_vec().into()]];
-        let read_state_content = self.read_state_content(paths)?;
+        let expiry = self.get_expiry_date();
+        let read_state_content = self.read_state_content(paths, expiry)?;
         let signed_request_status = sign_envelope(&read_state_content, self.identity.clone())?;
         let ingress_expiry = read_state_content.ingress_expiry();
         let sender = *read_state_content.sender();
@@ -1886,7 +1946,8 @@ impl<'agent> QueryBuilder<'agent> {
             self.canister_id,
             self.method_name,
             self.arg,
-            self.ingress_expiry_datetime,
+            self.ingress_expiry_datetime
+                .unwrap_or_else(|| self.agent.get_expiry_date()),
             self.use_nonce,
         )
     }
@@ -2222,14 +2283,14 @@ pub enum Operation {
     /// A read of the state tree, in the context of a canister. This will *not* be returned for request polling.
     ReadState {
         /// The requested paths within the state tree.
-        paths: Vec<Vec<String>>,
+        paths: Vec<Vec<Label>>,
         /// The canister the read request was made in the context of.
         canister: Principal,
     },
     /// A read of the state tree, in the context of a subnet.
     ReadSubnetState {
         /// The requested paths within the state tree.
-        paths: Vec<Vec<String>>,
+        paths: Vec<Vec<Label>>,
         /// The subnet the read request was made in the context of.
         subnet: Principal,
     },

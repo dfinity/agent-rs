@@ -391,7 +391,7 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AndThenAsyncCaller")
-            .field("inner", &self.inner)
+            .field("inner", &self.inner as &dyn fmt::Debug)
             .field("and_then", &self.and_then)
             .field("_out", &self._out)
             .field("_out2", &self._out2)
@@ -535,7 +535,7 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("MappedAsyncCaller")
-            .field("inner", &self.inner)
+            .field("inner", &self.inner as &dyn fmt::Debug)
             .field("map", &self.map)
             .field("_out", &self._out)
             .field("_out2", &self._out2)
