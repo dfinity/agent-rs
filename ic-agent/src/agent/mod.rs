@@ -2290,19 +2290,31 @@ impl HttpService for Retry429Logic {
     }
 }
 
+/// The status of an [`Operation`].
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum OperationStatus {
+    /// The operation has not been sent to the IC.
     NotSent,
+    /// The operation may or may not have been sent to the IC, and the IC may or may not have received it.
     MaybeReceived,
+    /// The IC has definitely received the request, and any further information is certified.
+    /// This is never returned for query calls.
     Received,
 }
 
+/// Info about an agent operation. Can be obtained from [`AgentError`].
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct OperationInfo {
+    /// The known status of the operation. Only set to [`Received`] if this is *guaranteed* to be true.
     pub status: OperationStatus,
+    /// The operation being attempted.
     pub operation: Operation,
+    /// The expiry timestamp of the operation, in Unix nanoseconds.
     pub expiry: u64,
+    /// The response to the operation, if it has been completed. The result is `Ok` for responses and `Err` for rejects.
+    ///
+    /// This information is reliable if-and-only-if `status` is set to [`Received`].
     pub response: Option<Result<Vec<u8>, RejectResponse>>,
 }
 
@@ -2323,7 +2335,7 @@ pub enum Operation {
         /// The name of the method.
         method: String,
     },
-    /// A read of the state tree, in the context of a canister. This will *not* be returned for request polling.
+    /// A read of the state tree, in the context of a canister. This will *not* be the active operation during request polling.
     ReadState {
         /// The requested paths within the state tree.
         paths: Vec<Vec<Label>>,

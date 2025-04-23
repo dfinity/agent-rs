@@ -11,6 +11,11 @@ use thiserror::Error;
 
 use super::{status::Status, Operation, OperationInfo, CURRENT_OPERATION};
 
+/// An error that can occur when using an `Agent`. Includes partial operation info.
+/// 
+/// If (say) a deserialization hiccup occurred after a call returned, you can call the
+/// [`operation_info()`](Self::operation_info) method to learn whether the call failed or succeeded,
+/// and (if possible) what the response was.
 pub struct AgentError {
     inner: Box<AgentErrorInner>,
 }
@@ -22,25 +27,40 @@ struct AgentErrorInner {
     operation_info: Option<OperationInfo>,
 }
 
+/// What category of error occurred.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum ErrorKind {
+    /// Errors relating to certificate and signature verification. Plausibly due to malicious nodes,
+    /// but far more likely due to running mainnet-targeting code against a dev instance.
     Trust,
+    /// Errors relating to the IC protocol as defined by the specification (e.g. CBOR decoding).
     Protocol,
+    /// Reject messages provided by the IC. Note that unless the [`OperationStatus`](super::OperationStatus)
+    /// is `Received`, a reject cannot necessarily be trusted.
     Reject,
+    /// Errors relating to the HTTP transport (e.g. TCP errors).
     Transport,
+    /// Errors from a pluggable interface (e.g. [`Identity`](super::Identity)).
     External,
+    /// Errors caused by hitting a user-provided limit (e.g. response body size).
     Limit,
+    /// Errors caused by invalid input to a function.
     Input,
+    /// Uncategorizable errors.
     Unknown,
 }
 
 impl AgentError {
+    /// Returns what kind of error occurred.
     pub fn kind(&self) -> ErrorKind {
         self.inner.kind
     }
+    /// Returns details on whatever operation was ongoing, or `None` if there wasn't one.
     pub fn operation_info(&self) -> Option<&OperationInfo> {
         self.inner.operation_info.as_ref()
     }
+    /// Creates a new error for use in the [`RouteProvider`](super::RouteProvider) interface.
+    /// `operation_info` will return `None` initially, this will be inserted by the agent.
     pub fn new_route_provider_error_without_context(message: String) -> Self {
         Self {
             inner: Box::new(AgentErrorInner {
@@ -65,6 +85,7 @@ impl AgentError {
             },
         }
     }
+    /// If this error is an HTTP error, retrieve the the payload. Equivalent to downcasting [`source()`](Error::source).
     pub fn as_http_error(&self) -> Option<&HttpErrorPayload> {
         self.inner.source.as_ref().and_then(|source| source.downcast_ref())
     }
@@ -300,6 +321,7 @@ impl AsRef<AgentError> for AgentError {
     }
 }
 
+/// Errors produced by the `inspect_*` family of [`Agent`] methods.
 #[derive(Debug)]
 pub enum InspectionError {
     /// A field did not match.
