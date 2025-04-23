@@ -39,6 +39,7 @@ use route_provider::{
 use time::OffsetDateTime;
 use tokio::task_local;
 use tower_service::Service;
+use url::Url;
 
 #[cfg(test)]
 mod agent_test;
@@ -1417,6 +1418,16 @@ impl Agent {
         Ok(subnet)
     }
 
+    fn route(&self) -> Result<Url, AgentError> {
+        match self.route_provider.route() {
+            Ok(route) => Ok(route),
+            Err(mut err) => {
+                err.add_context();
+                Err(err)
+            }
+        }
+    }
+
     async fn request(
         &self,
         method: Method,
@@ -1424,7 +1435,7 @@ impl Agent {
         body: Option<Vec<u8>>,
     ) -> Result<(StatusCode, HeaderMap, Vec<u8>), AgentError> {
         let create_request_with_generated_url = || -> Result<Request, AgentError> {
-            let url = self.route_provider.route()?.join(endpoint).context(Input)?;
+            let url = self.route()?.join(endpoint).context(Input)?;
             let mut http_request = Request::new(method.clone(), url);
             http_request
                 .headers_mut()

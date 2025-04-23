@@ -85,6 +85,9 @@ impl AgentError {
             },
         }
     }
+    pub(crate) fn add_context(&mut self) {
+        self.inner.operation_info = CURRENT_OPERATION.try_with(|op| (*op.borrow()).clone()).ok();
+    }
     /// If this error is an HTTP error, retrieve the the payload. Equivalent to downcasting [`source()`](Error::source).
     pub fn as_http_error(&self) -> Option<&HttpErrorPayload> {
         self.inner.source.as_ref().and_then(|source| source.downcast_ref())
