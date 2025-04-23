@@ -1161,7 +1161,6 @@ dependencies = [
  "sha2 0.10.8",
  "simple_asn1",
  "stop-token",
- "task-local-extensions",
  "thiserror 2.0.3",
  "time",
  "tokio",
@@ -2885,15 +2884,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.87",
-]
-
-[[package]]
-name = "task-local-extensions"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba323866e5d033818e3240feeb9f7db2c4296674e4d9e16b97b7bf8f490434e8"
-dependencies = [
- "pin-utils",
 ]
 
 [[package]]
