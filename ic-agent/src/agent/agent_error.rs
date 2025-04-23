@@ -97,6 +97,29 @@ impl AgentError {
             .as_ref()
             .and_then(|source| source.downcast_ref())
     }
+
+    /// If this error is/contains a reject (whether certified or not), returns it.
+    pub fn as_reject(&self) -> Option<&RejectResponse> {
+        if let Some(Err(reject)) = self
+            .inner
+            .operation_info
+            .as_ref()
+            .and_then(|op| op.response())
+        {
+            Some(reject)
+        } else if let Some(
+            ErrorCode::CertifiedReject { reject } | ErrorCode::UncertifiedReject { reject },
+        ) = self
+            .inner
+            .source
+            .as_ref()
+            .and_then(|source| source.downcast_ref::<ErrorCode>())
+        {
+            Some(reject)
+        } else {
+            None
+        }
+    }
 }
 
 impl Debug for AgentError {
