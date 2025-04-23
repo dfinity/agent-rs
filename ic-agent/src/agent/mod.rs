@@ -1228,8 +1228,7 @@ impl Agent {
         let blob = self
             .read_state_canister_info(canister_id, "controllers")
             .await?;
-        let controllers: Vec<Principal> =
-            serde_cbor::from_slice(&blob).map_err(AgentError::InvalidCborData)?;
+        let controllers: Vec<Principal> = serde_cbor::from_slice(&blob).context(Protocol)?;
         Ok(controllers)
     }
 
