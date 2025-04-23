@@ -339,14 +339,11 @@ impl Agent {
     }
 
     /// Make sure to set `CURRENT_OPERATION` before calling this.
-    async fn read_state_endpoint<A>(
+    async fn read_state_endpoint(
         &self,
         effective_canister_id: Principal,
         serialized_bytes: Vec<u8>,
-    ) -> Result<A, AgentError>
-    where
-        A: serde::de::DeserializeOwned,
-    {
+    ) -> Result<ReadStateResponse, AgentError> {
         let _permit = self.concurrent_requests_semaphore.acquire().await;
         let endpoint = format!(
             "api/v2/canister/{}/read_state",
@@ -408,16 +405,15 @@ impl Agent {
         use_nonce: bool,
         explicit_verify_query_signatures: Option<bool>,
     ) -> Result<Vec<u8>, AgentError> {
-        let operation = Operation::Query {
-            canister: canister_id,
-            method: method_name.clone(),
-        };
         let expiry = ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date());
         CURRENT_OPERATION
             .scope(
                 RefCell::new(OperationInfo {
                     status: OperationStatus::NotSent,
-                    operation: operation.clone(),
+                    operation: Operation::Query {
+                        canister: canister_id,
+                        method: method_name.clone(),
+                    },
                     expiry,
                     response: None,
                 }),
@@ -430,7 +426,6 @@ impl Agent {
                         serialized_bytes,
                         content.to_request_id(),
                         explicit_verify_query_signatures,
-                        operation,
                     )
                     .await
                 },
@@ -465,15 +460,14 @@ impl Agent {
             })
             .context(Input);
         };
-        let operation = Operation::Query {
-            canister: *canister_id,
-            method: method_name.clone(),
-        };
         CURRENT_OPERATION
             .scope(
                 RefCell::new(OperationInfo {
                     status: OperationStatus::NotSent,
-                    operation: operation.clone(),
+                    operation: Operation::Query {
+                        canister: *canister_id,
+                        method: method_name.clone(),
+                    },
                     expiry: *ingress_expiry,
                     response: None,
                 }),
@@ -483,7 +477,6 @@ impl Agent {
                         signed_query,
                         envelope.content.to_request_id(),
                         None,
-                        operation,
                     )
                     .await
                 },
@@ -502,7 +495,6 @@ impl Agent {
         signed_query: Vec<u8>,
         request_id: RequestId,
         explicit_verify_query_signatures: Option<bool>,
-        operation: Operation,
     ) -> Result<Vec<u8>, AgentError> {
         let response = if explicit_verify_query_signatures.unwrap_or(self.verify_query_signatures) {
             let (response, mut subnet) = futures_util::try_join!(
@@ -585,11 +577,9 @@ impl Agent {
 
         match response {
             QueryResponse::Replied { reply, .. } => Ok(reply.arg),
-            QueryResponse::Rejected { reject, .. } => Err(ErrorCode::UncertifiedReject {
-                reject,
-                operation: Some(operation),
-            })
-            .context(Reject),
+            QueryResponse::Rejected { reject, .. } => {
+                Err(ErrorCode::UncertifiedReject { reject }).context(Reject)
+            }
         }
     }
 
@@ -624,15 +614,14 @@ impl Agent {
         arg: Vec<u8>,
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<CallResponse<(Vec<u8>, Certificate)>, AgentError> {
-        let operation = Operation::Update {
-            canister: canister_id,
-            method: method_name.clone(),
-        };
         let expiry = ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date());
         CURRENT_OPERATION
             .scope(
                 RefCell::new(OperationInfo {
-                    operation: operation.clone(),
+                    operation: Operation::Update {
+                        canister: canister_id,
+                        method: method_name.clone(),
+                    },
                     expiry,
                     response: None,
                     status: OperationStatus::NotSent,
@@ -680,7 +669,6 @@ impl Agent {
                                         .ok();
                                     Err(ErrorCode::CertifiedReject {
                                         reject: reject_response,
-                                        operation: Some(operation),
                                     })
                                     .context(Reject)?
                                 }
@@ -701,7 +689,6 @@ impl Agent {
                                 .ok();
                             Err(ErrorCode::UncertifiedReject {
                                 reject: reject_response,
-                                operation: Some(operation),
                             })
                             .context(Reject)
                         }
@@ -738,14 +725,13 @@ impl Agent {
             })
             .context(Input);
         };
-        let operation = Operation::Update {
-            canister: *canister_id,
-            method: method_name.clone(),
-        };
         CURRENT_OPERATION
             .scope(
                 RefCell::new(OperationInfo {
-                    operation: operation.clone(),
+                    operation: Operation::Update {
+                        canister: *canister_id,
+                        method: method_name.clone(),
+                    },
                     expiry: *ingress_expiry,
                     status: OperationStatus::NotSent,
                     response: None,
@@ -782,7 +768,6 @@ impl Agent {
                                         .ok();
                                     Err(ErrorCode::CertifiedReject {
                                         reject: reject_response,
-                                        operation: Some(operation),
                                     })
                                     .context(Reject)?
                                 }
@@ -803,7 +788,6 @@ impl Agent {
                                 .ok();
                             Err(ErrorCode::UncertifiedReject {
                                 reject: reject_response,
-                                operation: Some(operation),
                             })
                             .context(Reject)
                         }
@@ -877,11 +861,7 @@ impl Agent {
                 }
 
                 RequestStatusResponse::Rejected(response) => {
-                    return Err(ErrorCode::CertifiedReject {
-                        reject: response,
-                        operation: None,
-                    })
-                    .context(Reject)
+                    return Err(ErrorCode::CertifiedReject { reject: response }).context(Reject)
                 }
 
                 RequestStatusResponse::Done => {
@@ -906,15 +886,13 @@ impl Agent {
         request_id: &RequestId,
         effective_canister_id: Principal,
     ) -> Result<(Vec<u8>, Certificate), AgentError> {
-        self.wait_inner(request_id, effective_canister_id, None)
-            .await
+        self.wait_inner(request_id, effective_canister_id).await
     }
 
     async fn wait_inner(
         &self,
         request_id: &RequestId,
         effective_canister_id: Principal,
-        operation: Option<Operation>,
     ) -> Result<(Vec<u8>, Certificate), AgentError> {
         let mut retry_policy = self.get_retry_policy();
 
@@ -959,11 +937,7 @@ impl Agent {
                             op.response = Some(Err(response.clone()))
                         })
                         .ok();
-                    return Err(ErrorCode::CertifiedReject {
-                        reject: response,
-                        operation,
-                    })
-                    .context(Reject);
+                    return Err(ErrorCode::CertifiedReject { reject: response }).context(Reject);
                 }
 
                 RequestStatusResponse::Done => {
@@ -1009,13 +983,16 @@ impl Agent {
                     let content = self.read_state_content(paths, expiry)?;
                     let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
 
-                    let read_state_response: ReadStateResponse = self
+                    let read_state_response = self
                         .read_state_endpoint(effective_canister_id, serialized_bytes)
                         .await?;
                     let cert: Certificate =
                         serde_cbor::from_slice(&read_state_response.certificate)
                             .context(Protocol)?;
                     self.verify(&cert, effective_canister_id)?;
+                    CURRENT_OPERATION
+                        .try_with(|op| op.borrow_mut().status = OperationStatus::Received)
+                        .ok();
                     Ok(cert)
                 },
             )
@@ -1053,6 +1030,9 @@ impl Agent {
                         serde_cbor::from_slice(&read_state_response.certificate)
                             .context(Protocol)?;
                     self.verify_for_subnet(&cert, subnet_id)?;
+                    CURRENT_OPERATION
+                        .try_with(|op| op.borrow_mut().status = OperationStatus::Received)
+                        .ok();
                     Ok(cert)
                 },
             )
@@ -2021,8 +2001,6 @@ pub struct UpdateCall<'agent> {
     agent: &'agent Agent,
     response_future: AgentFuture<'agent, CallResponse<(Vec<u8>, Certificate)>>,
     effective_canister_id: Principal,
-    canister_id: Principal,
-    method_name: String,
 }
 
 impl fmt::Debug for UpdateCall<'_> {
@@ -2050,14 +2028,7 @@ impl<'a> UpdateCall<'a> {
             CallResponse::Response(response) => Ok(response),
             CallResponse::Poll(request_id) => {
                 self.agent
-                    .wait_inner(
-                        &request_id,
-                        self.effective_canister_id,
-                        Some(Operation::Update {
-                            canister: self.canister_id,
-                            method: self.method_name,
-                        }),
-                    )
+                    .wait_inner(&request_id, self.effective_canister_id)
                     .await
             }
         }
@@ -2132,7 +2103,6 @@ impl<'agent> UpdateBuilder<'agent> {
     /// Make an update call. This will return a `RequestId`.
     /// The `RequestId` should then be used for `request_status` (most likely in a loop).
     pub fn call(self) -> UpdateCall<'agent> {
-        let method_name = self.method_name.clone();
         let response_future = async move {
             self.agent
                 .update_raw(
@@ -2148,8 +2118,6 @@ impl<'agent> UpdateBuilder<'agent> {
             agent: self.agent,
             response_future: Box::pin(response_future),
             effective_canister_id: self.effective_canister_id,
-            canister_id: self.canister_id,
-            method_name,
         }
     }
 

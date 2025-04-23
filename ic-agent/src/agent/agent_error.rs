@@ -9,7 +9,7 @@ use std::{
 };
 use thiserror::Error;
 
-use super::{status::Status, Operation, OperationInfo, CURRENT_OPERATION};
+use super::{status::Status, OperationInfo, CURRENT_OPERATION};
 
 /// An error that can occur when using an `Agent`. Includes partial operation info.
 /// 
@@ -116,8 +116,6 @@ pub(crate) enum ErrorCode {
     CertifiedReject {
         /// The rejection returned by the replica.
         reject: RejectResponse,
-        /// The operation that was rejected. Not always available.
-        operation: Option<Operation>,
     },
 
     /// The subnet may have rejected the message. This rejection cannot be verified as authentic.
@@ -125,8 +123,6 @@ pub(crate) enum ErrorCode {
     UncertifiedReject {
         /// The rejection returned by the boundary node.
         reject: RejectResponse,
-        /// The operation that was rejected. Not always available.
-        operation: Option<Operation>,
     },
 
     /// The status endpoint returned an invalid status.
