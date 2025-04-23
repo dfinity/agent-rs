@@ -2,7 +2,7 @@ use crate::call::{AsyncCaller, SyncCaller};
 use crate::error::{BaseError, CanisterError};
 use candid::utils::ArgumentEncoder;
 use candid::{ser::IDLBuilder, types::value::IDLValue, utils::ArgumentDecoder, CandidType, Encode};
-use ic_agent::{export::Principal, Agent, AgentError, RequestId};
+use ic_agent::{export::Principal, Agent, RequestId};
 use std::convert::TryInto;
 use std::marker::PhantomData;
 use thiserror::Error;
@@ -138,11 +138,12 @@ impl<'agent> Canister<'agent> {
     pub async fn wait<'canister>(
         &'canister self,
         request_id: &RequestId,
-    ) -> Result<Vec<u8>, AgentError> {
-        self.agent
+    ) -> Result<Vec<u8>, BaseError> {
+        Ok(self
+            .agent
             .wait(request_id, self.canister_id)
             .await
-            .map(|x| x.0)
+            .map(|x| x.0)?)
     }
 
     /// Creates a copy of this canister, changing the canister ID to the provided principal.
