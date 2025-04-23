@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* BREAKING: `AgentError` is now an opaque error type which reveals only the general category of error that occurred.
+* `AgentError` now contains information about the ongoing operation the error occurred in the context of. This allows you to see
+  if a call successfully went through even if there was for example an error Candid-decoding the response.
+
 ## [0.40.0] - 2025-03-17
 
 * BREAKING: Added data about the rejected call to CertifiedReject/UncertifiedReject.
