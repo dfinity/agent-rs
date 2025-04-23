@@ -10,7 +10,7 @@ use super::attributes::{
 };
 use super::{ChunkHash, LogVisibility, ManagementCanister};
 use crate::call::CallFuture;
-use crate::error::BaseError;
+use crate::error::{impl_canister_error, BaseError};
 use crate::{
     call::AsyncCall, canister::Argument, interfaces::management_canister::MgmtMethod, Canister,
 };
@@ -519,6 +519,8 @@ pub enum CanisterManagementError {
     #[error(transparent)]
     Conversion(#[from] AttributeConversionError),
 }
+
+impl_canister_error!(CanisterManagementError);
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Hash, CandidType, Copy)]
 /// Wasm main memory retention on upgrades.
@@ -1341,17 +1343,17 @@ type BoxStream<'a, T> = Pin<Box<dyn Stream<Item = T> + 'a>>;
 #[derive(Debug, Error)]
 pub enum AttributeConversionError {
     #[error(transparent)]
-    FreezingThreshold(FreezingThresholdError),
+    FreezingThreshold(#[from] FreezingThresholdError),
     #[error(transparent)]
-    ComputeAllocation(ComputeAllocationError),
+    ComputeAllocation(#[from] ComputeAllocationError),
     #[error(transparent)]
-    MemoryAllocation(MemoryAllocationError),
+    MemoryAllocation(#[from] MemoryAllocationError),
     #[error(transparent)]
-    ReservedCyclesLimit(ReservedCyclesLimitError),
+    ReservedCyclesLimit(#[from] ReservedCyclesLimitError),
     #[error(transparent)]
-    WasmMemoryLimit(WasmMemoryLimitError),
+    WasmMemoryLimit(#[from] WasmMemoryLimitError),
     #[error(transparent)]
-    Principal(PrincipalError),
+    Principal(#[from] PrincipalError),
 }
 
 impl From<Infallible> for AttributeConversionError {

@@ -11,7 +11,7 @@ use std::{
 use crate::{
     call::{AsyncCall, CallFuture, SyncCall},
     canister::Argument,
-    error::BaseError,
+    error::{impl_canister_error, BaseError},
     interfaces::management_canister::{
         attributes::{ComputeAllocation, FreezingThreshold, MemoryAllocation},
         builders::CanisterSettings,
@@ -1239,6 +1239,8 @@ pub enum WalletError {
     WalletError(String),
 }
 
+impl_canister_error!(WalletError);
+
 /// The reason for [`WalletError::WalletUpgradeRequired`].
 #[derive(Debug, Eq, PartialEq)]
 pub enum UpgradeReason {
@@ -1257,15 +1259,6 @@ impl Display for UpgradeReason {
             Self::MultiController => {
                 f.write_str("the installed wallet does not support multiple controllers")
             }
-        }
-    }
-}
-
-impl From<BaseError> for WalletError {
-    fn from(value: BaseError) -> Self {
-        match value {
-            BaseError::Agent(a) => Self::Agent(a),
-            BaseError::Candid(c) => Self::Candid(c),
         }
     }
 }

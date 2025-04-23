@@ -13,7 +13,7 @@ pub mod status;
 
 pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
-use agent_error::{ErrorCode, ErrorKind::*, HttpErrorPayload, ResultExt};
+use agent_error::{ErrorCode, ErrorKind::*, HttpErrorPayload, InspectionError, ResultExt};
 use async_lock::Semaphore;
 use async_trait::async_trait;
 pub use builder::AgentBuilder;
@@ -310,14 +310,12 @@ impl Agent {
         self.identity.sender()
     }
 
-    async fn query_endpoint<A>(
+    /// This function should only be entered from `query_inner`.
+    async fn query_endpoint(
         &self,
         effective_canister_id: Principal,
         serialized_bytes: Vec<u8>,
-    ) -> Result<A, AgentError>
-    where
-        A: serde::de::DeserializeOwned,
-    {
+    ) -> Result<QueryResponse, AgentError> {
         let _permit = self.concurrent_requests_semaphore.acquire().await;
         let bytes = self
             .execute(
@@ -327,9 +325,19 @@ impl Agent {
             )
             .await?
             .1;
-        serde_cbor::from_slice(&bytes).context(Protocol)
+        let resp = serde_cbor::from_slice(&bytes).context(Protocol)?;
+        CURRENT_OPERATION
+            .try_with(|op| {
+                op.borrow_mut().response = Some(match &resp {
+                    QueryResponse::Replied { reply, .. } => Ok(reply.arg.clone()),
+                    QueryResponse::Rejected { reject, .. } => Err(reject.clone()),
+                })
+            })
+            .ok();
+        Ok(resp)
     }
 
+    /// Make sure to set `CURRENT_OPERATION` before calling this.
     async fn read_state_endpoint<A>(
         &self,
         effective_canister_id: Principal,
@@ -350,6 +358,7 @@ impl Agent {
         serde_cbor::from_slice(&bytes).context(Protocol)
     }
 
+    /// Make sure to set `CURRENT_OPERATION` before calling this.
     async fn read_subnet_state_endpoint<A>(
         &self,
         subnet_id: Principal,
@@ -367,6 +376,7 @@ impl Agent {
         serde_cbor::from_slice(&bytes).context(Protocol)
     }
 
+    /// Make sure to set `CURRENT_OPERATION` before calling this.
     async fn call_endpoint(
         &self,
         effective_canister_id: Principal,
@@ -385,8 +395,7 @@ impl Agent {
         serde_cbor::from_slice(&response_body).context(Protocol)
     }
 
-    /// The simplest way to do a query call; sends a byte array and will return a byte vector.
-    /// The encoding is left as an exercise to the user.
+    /// All query functions except `query_signed` should route through this method.
     #[allow(clippy::too_many_arguments)]
     async fn query_raw(
         &self,
@@ -444,10 +453,9 @@ impl Agent {
             ..
         } = &*envelope.content
         else {
-            return Err(ErrorCode::CallDataMismatch {
-                field: "request_type".to_string(),
-                value_arg: "query".to_string(),
-                value_cbor: if matches!(*envelope.content, EnvelopeContent::Call { .. }) {
+            return Err(ErrorCode::WrongRequestType {
+                expected: "query".to_string(),
+                found: if matches!(*envelope.content, EnvelopeContent::Call { .. }) {
                     "update"
                 } else {
                     "read_state"
@@ -456,7 +464,7 @@ impl Agent {
             })
             .context(Input);
         };
-        let operation = Operation::Update {
+        let operation = Operation::Query {
             canister: *canister_id,
             method: method_name.clone(),
         };
@@ -485,6 +493,8 @@ impl Agent {
     /// Helper function for performing both the query call and possibly a `read_state` to check the subnet node keys.
     ///
     /// This should be used instead of `query_endpoint`. No validation is performed on `signed_query`.
+    ///
+    /// Make sure to set `CURRENT_OPERATION` before calling this.
     async fn query_inner(
         &self,
         effective_canister_id: Principal,
@@ -495,7 +505,7 @@ impl Agent {
     ) -> Result<Vec<u8>, AgentError> {
         let response = if explicit_verify_query_signatures.unwrap_or(self.verify_query_signatures) {
             let (response, mut subnet) = futures_util::try_join!(
-                self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query),
+                self.query_endpoint(effective_canister_id, signed_query),
                 self.get_subnet_by_canister(&effective_canister_id)
             )?;
             if response.signatures().is_empty() {
@@ -568,7 +578,7 @@ impl Agent {
             }
             response
         } else {
-            self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query)
+            self.query_endpoint(effective_canister_id, signed_query)
                 .await?
         };
 
@@ -604,7 +614,7 @@ impl Agent {
         })
     }
 
-    /// The simplest way to do an update call; sends a byte array and will return a response, [`CallResponse`], from the replica.
+    /// All update functions except `update_signed` should route through this method.
     async fn update_raw(
         &self,
         canister_id: Principal,
@@ -648,15 +658,25 @@ impl Agent {
                             let certificate =
                                 serde_cbor::from_slice(&certificate).context(Protocol)?;
 
-                            self.verify(&certificate, effective_canister_id)?;
                             let status = lookup_request_status(&certificate, &request_id)
                                 .context(Protocol)?;
 
-                            match status {
+                            let tentative_response = match status {
                                 RequestStatusResponse::Replied(reply) => {
-                                    Ok(CallResponse::Response((reply.arg, certificate)))
+                                    CURRENT_OPERATION
+                                        .try_with(|op| {
+                                            op.borrow_mut().response = Some(Ok(reply.arg.clone()))
+                                        })
+                                        .ok();
+                                    Ok(CallResponse::Response((reply.arg, certificate.clone())))
                                 }
                                 RequestStatusResponse::Rejected(reject_response) => {
+                                    CURRENT_OPERATION
+                                        .try_with(|op| {
+                                            op.borrow_mut().response =
+                                                Some(Err(reject_response.clone()))
+                                        })
+                                        .ok();
                                     Err(ErrorCode::CertifiedReject {
                                         reject: reject_response,
                                         operation: Some(operation),
@@ -664,10 +684,20 @@ impl Agent {
                                     .context(Reject)?
                                 }
                                 _ => Ok(CallResponse::Poll(request_id)),
-                            }
+                            };
+                            self.verify(&certificate, effective_canister_id)?;
+                            CURRENT_OPERATION
+                                .try_with(|op| op.borrow_mut().status = OperationStatus::Received)
+                                .ok();
+                            tentative_response
                         }
                         TransportCallResponse::Accepted => Ok(CallResponse::Poll(request_id)),
                         TransportCallResponse::NonReplicatedRejection(reject_response) => {
+                            CURRENT_OPERATION
+                                .try_with(|op| {
+                                    op.borrow_mut().response = Some(Err(reject_response.clone()))
+                                })
+                                .ok();
                             Err(ErrorCode::UncertifiedReject {
                                 reject: reject_response,
                                 operation: Some(operation),
@@ -696,10 +726,9 @@ impl Agent {
             ..
         } = &*envelope.content
         else {
-            return Err(ErrorCode::CallDataMismatch {
-                field: "request_type".to_string(),
-                value_arg: "update".to_string(),
-                value_cbor: if matches!(*envelope.content, EnvelopeContent::Query { .. }) {
+            return Err(ErrorCode::WrongRequestType {
+                expected: "update".to_string(),
+                found: if matches!(*envelope.content, EnvelopeContent::Query { .. }) {
                     "query"
                 } else {
                     "read_state"
@@ -731,16 +760,25 @@ impl Agent {
                         TransportCallResponse::Replied { certificate } => {
                             let certificate =
                                 serde_cbor::from_slice(&certificate).context(Protocol)?;
-
-                            self.verify(&certificate, effective_canister_id)?;
                             let status = lookup_request_status(&certificate, &request_id)
                                 .context(Protocol)?;
 
-                            match status {
+                            let tentative_response = match status {
                                 RequestStatusResponse::Replied(reply) => {
+                                    CURRENT_OPERATION
+                                        .try_with(|op| {
+                                            op.borrow_mut().response = Some(Ok(reply.arg.clone()))
+                                        })
+                                        .ok();
                                     Ok(CallResponse::Response(reply.arg))
                                 }
                                 RequestStatusResponse::Rejected(reject_response) => {
+                                    CURRENT_OPERATION
+                                        .try_with(|op| {
+                                            op.borrow_mut().response =
+                                                Some(Err(reject_response.clone()))
+                                        })
+                                        .ok();
                                     Err(ErrorCode::CertifiedReject {
                                         reject: reject_response,
                                         operation: Some(operation),
@@ -748,10 +786,20 @@ impl Agent {
                                     .context(Reject)?
                                 }
                                 _ => Ok(CallResponse::Poll(request_id)),
-                            }
+                            };
+                            self.verify(&certificate, effective_canister_id)?;
+                            CURRENT_OPERATION
+                                .try_with(|op| op.borrow_mut().status = OperationStatus::Received)
+                                .ok();
+                            tentative_response
                         }
                         TransportCallResponse::Accepted => Ok(CallResponse::Poll(request_id)),
                         TransportCallResponse::NonReplicatedRejection(reject_response) => {
+                            CURRENT_OPERATION
+                                .try_with(|op| {
+                                    op.borrow_mut().response = Some(Err(reject_response.clone()))
+                                })
+                                .ok();
                             Err(ErrorCode::UncertifiedReject {
                                 reject: reject_response,
                                 operation: Some(operation),
@@ -931,7 +979,7 @@ impl Agent {
             match retry_policy.next_backoff() {
                 Some(duration) => crate::util::sleep(duration).await,
 
-                None => return Err(ErrorCode::TimeoutWaitingForResponse).context(Limit),
+                None => return Err(ErrorCode::TimeoutWaitingForResponse).context(Protocol),
             }
         }
     }
@@ -943,6 +991,7 @@ impl Agent {
         paths: Vec<Vec<Label>>,
         effective_canister_id: Principal,
     ) -> Result<Certificate, AgentError> {
+        // All read_state calls besides request_status_signed should go through this method.
         let expiry = self.get_expiry_date();
         CURRENT_OPERATION
             .scope(
@@ -979,6 +1028,7 @@ impl Agent {
         paths: Vec<Vec<Label>>,
         subnet_id: Principal,
     ) -> Result<Certificate, AgentError> {
+        // All read_subnet_state calls should go through this method.
         let expiry = self.get_expiry_date();
         CURRENT_OPERATION
             .scope(
@@ -1446,14 +1496,14 @@ impl Agent {
         let body = request_result.2;
 
         if status.is_client_error() || status.is_server_error() {
-            Err(ErrorCode::HttpError(HttpErrorPayload {
+            Err(HttpErrorPayload {
                 status: status.into(),
                 content_type: headers
                     .get(CONTENT_TYPE)
                     .and_then(|value| value.to_str().ok())
                     .map(str::to_string),
                 content: body,
-            }))
+            })
             .context(Protocol)
         } else if !(status == StatusCode::OK || status == StatusCode::ACCEPTED) {
             Err(ErrorCode::InvalidHttpResponse(format!(
@@ -1502,8 +1552,10 @@ pub fn signed_query_inspect(
     arg: &[u8],
     ingress_expiry: u64,
     signed_query: Vec<u8>,
-) -> Result<(), AgentError> {
-    let envelope: Envelope = serde_cbor::from_slice(&signed_query).context(Input)?;
+) -> Result<(), InspectionError> {
+    let envelope: Envelope = serde_cbor::from_slice(&signed_query)
+        .context(Input)
+        .map_err(InspectionError::Other)?;
     match envelope.content.as_ref() {
         EnvelopeContent::Query {
             ingress_expiry: ingress_expiry_cbor,
@@ -1514,61 +1566,54 @@ pub fn signed_query_inspect(
             nonce: _nonce,
         } => {
             if ingress_expiry != *ingress_expiry_cbor {
-                return Err(ErrorCode::CallDataMismatch {
+                return Err(InspectionError::CallDataMismatch {
                     field: "ingress_expiry".to_string(),
                     value_arg: ingress_expiry.to_string(),
                     value_cbor: ingress_expiry_cbor.to_string(),
-                })
-                .context(Input);
+                });
             }
             if sender != *sender_cbor {
-                return Err(ErrorCode::CallDataMismatch {
+                return Err(InspectionError::CallDataMismatch {
                     field: "sender".to_string(),
                     value_arg: sender.to_string(),
                     value_cbor: sender_cbor.to_string(),
-                })
-                .context(Input);
+                });
             }
             if canister_id != *canister_id_cbor {
-                return Err(ErrorCode::CallDataMismatch {
+                return Err(InspectionError::CallDataMismatch {
                     field: "canister_id".to_string(),
                     value_arg: canister_id.to_string(),
                     value_cbor: canister_id_cbor.to_string(),
-                })
-                .context(Input);
+                });
             }
             if method_name != *method_name_cbor {
-                return Err(ErrorCode::CallDataMismatch {
+                return Err(InspectionError::CallDataMismatch {
                     field: "method_name".to_string(),
                     value_arg: method_name.to_string(),
                     value_cbor: method_name_cbor.clone(),
-                })
-                .context(Input);
+                });
             }
             if arg != *arg_cbor {
-                return Err(ErrorCode::CallDataMismatch {
+                return Err(InspectionError::CallDataMismatch {
                     field: "arg".to_string(),
                     value_arg: format!("{arg:?}"),
                     value_cbor: format!("{arg_cbor:?}"),
-                })
-                .context(Input);
+                });
             }
         }
         EnvelopeContent::Call { .. } => {
-            return Err(ErrorCode::CallDataMismatch {
+            return Err(InspectionError::CallDataMismatch {
                 field: "request_type".to_string(),
                 value_arg: "query".to_string(),
                 value_cbor: "call".to_string(),
-            })
-            .context(Input)
+            });
         }
         EnvelopeContent::ReadState { .. } => {
-            return Err(ErrorCode::CallDataMismatch {
+            return Err(InspectionError::CallDataMismatch {
                 field: "request_type".to_string(),
                 value_arg: "query".to_string(),
                 value_cbor: "read_state".to_string(),
-            })
-            .context(Input)
+            });
         }
     }
     Ok(())
@@ -1583,8 +1628,10 @@ pub fn signed_update_inspect(
     arg: &[u8],
     ingress_expiry: u64,
     signed_update: Vec<u8>,
-) -> Result<(), AgentError> {
-    let envelope: Envelope = serde_cbor::from_slice(&signed_update).context(Input)?;
+) -> Result<(), InspectionError> {
+    let envelope: Envelope = serde_cbor::from_slice(&signed_update)
+        .context(Input)
+        .map_err(InspectionError::Other)?;
     match envelope.content.as_ref() {
         EnvelopeContent::Call {
             nonce: _nonce,
@@ -1595,61 +1642,54 @@ pub fn signed_update_inspect(
             arg: arg_cbor,
         } => {
             if ingress_expiry != *ingress_expiry_cbor {
-                return Err(ErrorCode::CallDataMismatch {
+                return Err(InspectionError::CallDataMismatch {
                     field: "ingress_expiry".to_string(),
                     value_arg: ingress_expiry.to_string(),
                     value_cbor: ingress_expiry_cbor.to_string(),
-                })
-                .context(Input);
+                });
             }
             if sender != *sender_cbor {
-                return Err(ErrorCode::CallDataMismatch {
+                return Err(InspectionError::CallDataMismatch {
                     field: "sender".to_string(),
                     value_arg: sender.to_string(),
                     value_cbor: sender_cbor.to_string(),
-                })
-                .context(Input);
+                });
             }
             if canister_id != *canister_id_cbor {
-                return Err(ErrorCode::CallDataMismatch {
+                return Err(InspectionError::CallDataMismatch {
                     field: "canister_id".to_string(),
                     value_arg: canister_id.to_string(),
                     value_cbor: canister_id_cbor.to_string(),
-                })
-                .context(Input);
+                });
             }
             if method_name != *method_name_cbor {
-                return Err(ErrorCode::CallDataMismatch {
+                return Err(InspectionError::CallDataMismatch {
                     field: "method_name".to_string(),
                     value_arg: method_name.to_string(),
                     value_cbor: method_name_cbor.clone(),
-                })
-                .context(Input);
+                });
             }
             if arg != *arg_cbor {
-                return Err(ErrorCode::CallDataMismatch {
+                return Err(InspectionError::CallDataMismatch {
                     field: "arg".to_string(),
                     value_arg: format!("{arg:?}"),
                     value_cbor: format!("{arg_cbor:?}"),
-                })
-                .context(Input);
+                });
             }
         }
         EnvelopeContent::ReadState { .. } => {
-            return Err(ErrorCode::CallDataMismatch {
+            return Err(InspectionError::CallDataMismatch {
                 field: "request_type".to_string(),
                 value_arg: "call".to_string(),
                 value_cbor: "read_state".to_string(),
-            })
-            .context(Input)
+            });
         }
         EnvelopeContent::Query { .. } => {
-            return Err(ErrorCode::CallDataMismatch {
+            return Err(InspectionError::CallDataMismatch {
                 field: "request_type".to_string(),
                 value_arg: "call".to_string(),
                 value_cbor: "query".to_string(),
-            })
-            .context(Input)
+            });
         }
     }
     Ok(())
@@ -1662,9 +1702,11 @@ pub fn signed_request_status_inspect(
     request_id: &RequestId,
     ingress_expiry: u64,
     signed_request_status: Vec<u8>,
-) -> Result<(), AgentError> {
+) -> Result<(), InspectionError> {
     let paths: Vec<Vec<Label>> = vec![vec!["request_status".into(), request_id.to_vec().into()]];
-    let envelope: Envelope = serde_cbor::from_slice(&signed_request_status).context(Input)?;
+    let envelope: Envelope = serde_cbor::from_slice(&signed_request_status)
+        .context(Input)
+        .map_err(InspectionError::Other)?;
     match envelope.content.as_ref() {
         EnvelopeContent::ReadState {
             ingress_expiry: ingress_expiry_cbor,
@@ -1672,46 +1714,41 @@ pub fn signed_request_status_inspect(
             paths: paths_cbor,
         } => {
             if ingress_expiry != *ingress_expiry_cbor {
-                return Err(ErrorCode::CallDataMismatch {
+                return Err(InspectionError::CallDataMismatch {
                     field: "ingress_expiry".to_string(),
                     value_arg: ingress_expiry.to_string(),
                     value_cbor: ingress_expiry_cbor.to_string(),
-                })
-                .context(Input);
+                });
             }
             if sender != *sender_cbor {
-                return Err(ErrorCode::CallDataMismatch {
+                return Err(InspectionError::CallDataMismatch {
                     field: "sender".to_string(),
                     value_arg: sender.to_string(),
                     value_cbor: sender_cbor.to_string(),
-                })
-                .context(Input);
+                });
             }
 
             if paths != *paths_cbor {
-                return Err(ErrorCode::CallDataMismatch {
+                return Err(InspectionError::CallDataMismatch {
                     field: "paths".to_string(),
                     value_arg: format!("{paths:?}"),
                     value_cbor: format!("{paths_cbor:?}"),
-                })
-                .context(Input);
+                });
             }
         }
         EnvelopeContent::Query { .. } => {
-            return Err(ErrorCode::CallDataMismatch {
+            return Err(InspectionError::CallDataMismatch {
                 field: "request_type".to_string(),
                 value_arg: "read_state".to_string(),
                 value_cbor: "query".to_string(),
-            })
-            .context(Input)
+            });
         }
         EnvelopeContent::Call { .. } => {
-            return Err(ErrorCode::CallDataMismatch {
+            return Err(InspectionError::CallDataMismatch {
                 field: "request_type".to_string(),
                 value_arg: "read_state".to_string(),
                 value_cbor: "call".to_string(),
-            })
-            .context(Input)
+            });
         }
     }
     Ok(())
@@ -2255,7 +2292,6 @@ impl HttpService for Retry429Logic {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum OperationStatus {
-    NoOperation,
     NotSent,
     MaybeReceived,
     Received,

@@ -474,7 +474,7 @@ where
     Out: for<'de> ArgumentDecoder<'de> + Send + 'a,
     Out2: for<'de> ArgumentDecoder<'de> + Send + 'a,
     Err: CanisterError,
-    Inner: AsyncCall<Value = Out> + Send + 'a,
+    Inner: AsyncCall<Value = Out, Error = Err> + Send + 'a,
     R: Future<Output = Result<Out2, Err>> + Send + 'a,
     AndThen: Send + Fn(Out) -> R + 'a,
 {
@@ -496,7 +496,7 @@ where
     Out: for<'de> ArgumentDecoder<'de> + Send + 'a,
     Out2: for<'de> ArgumentDecoder<'de> + Send + 'a,
     Err: CanisterError,
-    Inner: AsyncCall<Value = Out> + Send + 'a,
+    Inner: AsyncCall<Value = Out, Error = Err> + Send + 'a,
     R: Future<Output = Result<Out2, Err>> + Send + 'a,
     AndThen: Send + Fn(Out) -> R + 'a,
 {

@@ -6,6 +6,7 @@ use crate::{export::Principal, RequestId};
 use ic_certification::hash_tree::{HashTree, SubtreeLookupResult};
 use ic_certification::{certificate::Certificate, hash_tree::Label, LookupResult};
 use ic_transport_types::{ReplyResponse, SubnetMetrics};
+use itertools::Itertools;
 use rangemap::RangeInclusiveSet;
 use std::{
     collections::{HashMap, HashSet},
@@ -49,7 +50,7 @@ pub(crate) fn lookup_time<Storage: AsRef<[u8]>>(
 ) -> Result<u64, LookupError> {
     let path = ["time".as_bytes()];
     let mut time = lookup_value(&certificate.tree, path)?;
-    Ok(leb128::read::unsigned(&mut time).context_deserialize(path)?)
+    leb128::read::unsigned(&mut time).context_deserialize(path)
 }
 
 pub(crate) fn lookup_canister_info<Storage: AsRef<[u8]>>(
@@ -86,7 +87,7 @@ pub(crate) fn lookup_subnet_metrics<Storage: AsRef<[u8]>>(
 ) -> Result<SubnetMetrics, LookupError> {
     let path_stats = [b"subnet", subnet_id.as_slice(), b"metrics"];
     let metrics = lookup_value(&certificate.tree, path_stats)?;
-    Ok(serde_cbor::from_slice(metrics).context_deserialize(path_stats)?)
+    serde_cbor::from_slice(metrics).context_deserialize(path_stats)
 }
 
 pub(crate) fn lookup_request_status<Storage: AsRef<[u8]>>(
@@ -100,7 +101,7 @@ pub(crate) fn lookup_request_status<Storage: AsRef<[u8]>>(
     ];
     match certificate.tree.lookup_path(&path_status) {
         LookupResult::Absent => Ok(RequestStatusResponse::Unknown),
-        LookupResult::Unknown => Err(LookupError::Unknown {
+        LookupResult::Unknown => Err(LookupError::Unacknowledged {
             path: path_status.to_vec(),
         }),
         LookupResult::Found(status) => {
@@ -116,7 +117,7 @@ pub(crate) fn lookup_request_status<Storage: AsRef<[u8]>>(
                 }),
             }
         }
-        LookupResult::Error => Err(LookupError::Unacknowledged {
+        LookupResult::Error => Err(LookupError::Malformed {
             path: path_status.into_vec(),
         }),
     }
@@ -149,7 +150,7 @@ pub(crate) fn lookup_reject_code<Storage: AsRef<[u8]>>(
     let code = lookup_value(&certificate.tree, path)?;
     let mut readable = code;
     let code_digit = leb128::read::unsigned(&mut readable).context_deserialize(path)?;
-    Ok(RejectCode::try_from(code_digit).context_deserialize(path)?)
+    RejectCode::try_from(code_digit).context_deserialize(path)
 }
 
 pub(crate) fn lookup_reject_message<Storage: AsRef<[u8]>>(
@@ -451,11 +452,11 @@ pub fn lookup_value<P: LookupPath, Storage: AsRef<[u8]>>(
         LookupResult::Absent => Err(LookupError::Absent {
             path: path.into_vec(),
         }),
-        LookupResult::Unknown => Err(LookupError::Unknown {
+        LookupResult::Unknown => Err(LookupError::Unacknowledged {
             path: path.into_vec(),
         }),
         LookupResult::Found(value) => Ok(value),
-        LookupResult::Error => Err(LookupError::Unacknowledged {
+        LookupResult::Error => Err(LookupError::Malformed {
             path: path.into_vec(),
         }),
     }
@@ -472,7 +473,7 @@ pub fn lookup_tree<P: LookupPath, Storage: AsRef<[u8]> + Clone>(
         SubtreeLookupResult::Absent => Err(LookupError::Absent {
             path: path.into_vec(),
         }),
-        SubtreeLookupResult::Unknown => Err(LookupError::Unknown {
+        SubtreeLookupResult::Unknown => Err(LookupError::Unacknowledged {
             path: path.into_vec(),
         }),
         SubtreeLookupResult::Found(value) => Ok(value),
@@ -484,10 +485,10 @@ pub enum LookupError {
     Absent {
         path: Vec<Label<Vec<u8>>>,
     },
-    Unknown {
+    Unacknowledged {
         path: Vec<Label<Vec<u8>>>,
     },
-    Unacknowledged {
+    Malformed {
         path: Vec<Label<Vec<u8>>>,
     },
     Deserialize {
@@ -498,7 +499,20 @@ pub enum LookupError {
 
 impl Display for LookupError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        match self {
+            Self::Absent { path } => write!(f, "path `{}` doesn't exist", path.iter().format("/")),
+            Self::Malformed { path } => {
+                write!(f, "path `{}` was malformed", path.iter().format("/"))
+            }
+            Self::Unacknowledged { path } => {
+                write!(f, "path `{}` wasn't described", path.iter().format("/"))
+            }
+            Self::Deserialize { path, source } => write!(
+                f,
+                "error deserializing at path {}: {source}",
+                path.iter().format("/")
+            ),
+        }
     }
 }
 

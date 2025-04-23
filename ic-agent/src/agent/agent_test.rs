@@ -554,7 +554,7 @@ async fn no_cert() {
     .await;
     let agent = make_certifying_agent(&url);
     let result = agent.query(&canister, "getVersion").call().await;
-    assert_eq!(result.unwrap_err().kind(), ErrorKind::Protocol);
+    assert_eq!(result.unwrap_err().kind(), ErrorKind::Trust);
     assert_mock(read_mock).await;
 }
 

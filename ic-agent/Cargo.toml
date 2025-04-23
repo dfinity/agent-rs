@@ -33,10 +33,11 @@ futures-util = { workspace = true }
 hex = { workspace = true }
 http = "1.0.0"
 http-body = "1.0.0"
-ic-certification = { workspace = true }
 ic_principal = { workspace = true }
+ic-certification = { workspace = true }
 ic-transport-types = { workspace = true }
 ic-verify-bls-signature = "0.5"
+itertools = "0.14.0"
 k256 = { workspace = true, features = ["pem"] }
 p256 = { workspace = true, features = ["pem"] }
 leb128 = { workspace = true }

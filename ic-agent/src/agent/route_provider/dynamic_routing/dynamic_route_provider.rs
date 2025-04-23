@@ -170,7 +170,9 @@ where
     fn route(&self) -> Result<Url, AgentError> {
         let snapshot = self.routing_snapshot.load();
         let node = snapshot.next_node().ok_or_else(|| {
-            AgentError::new_tool_error_in_context("No healthy API nodes found.".to_string())
+            AgentError::new_route_provider_error_without_context(
+                "No healthy API nodes found.".to_string(),
+            )
         })?;
         Ok(node.to_routing_url())
     }
@@ -179,7 +181,7 @@ where
         let snapshot = self.routing_snapshot.load();
         let nodes = snapshot.next_n_nodes(n);
         if nodes.is_empty() {
-            return Err(AgentError::new_tool_error_in_context(
+            return Err(AgentError::new_route_provider_error_without_context(
                 "No healthy API nodes found.".to_string(),
             ));
         };
@@ -298,7 +300,7 @@ mod tests {
             },
             RouteProvider, RoutesStats,
         },
-        Agent, AgentError,
+        Agent,
     };
 
     static TRACING_INIT: Once = Once::new();

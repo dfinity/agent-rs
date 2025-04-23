@@ -14,15 +14,38 @@ pub enum BaseError {
 pub trait CanisterError: std::error::Error + Send + Sync + 'static {
     fn from_candid(err: candid::Error) -> Self;
     fn from_agent(err: AgentError) -> Self;
+    fn as_agent(&self) -> Option<&AgentError>;
 }
 
-impl<T: Error + From<AgentError> + From<candid::Error> + Send + Sync + 'static> CanisterError
-    for T
-{
-    fn from_agent(err: AgentError) -> Self {
-        Self::from(err)
-    }
-    fn from_candid(err: candid::Error) -> Self {
-        Self::from(err)
-    }
+macro_rules! impl_canister_error {
+    (@ $name:path) => {
+        impl $crate::error::CanisterError for $name {
+            fn from_agent(err: ic_agent::AgentError) -> Self {
+                Self::from(err)
+            }
+            fn from_candid(err: candid::Error) -> Self {
+                Self::from(err)
+            }
+            fn as_agent(&self) -> Option<&ic_agent::AgentError> {
+                match self {
+                    Self::Agent(err) => Some(err),
+                    _ => None,
+                }
+            }
+        }
+    };
+    ($name:path) => {
+        impl From<$crate::error::BaseError> for $name {
+            fn from(base: BaseError) -> Self {
+                match base {
+                    BaseError::Agent(a) => Self::Agent(a),
+                    BaseError::Candid(c) => Self::Candid(c),
+                }
+            }
+        }
+        $crate::error::impl_canister_error!(@ $name);
+    };
 }
+pub(crate) use impl_canister_error;
+
+impl_canister_error!(@ BaseError);

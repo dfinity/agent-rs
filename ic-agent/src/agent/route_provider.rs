@@ -86,7 +86,7 @@ impl RouteProvider for RoundRobinRouteProvider {
     /// Generates a url for the given endpoint.
     fn route(&self) -> Result<Url, AgentError> {
         if self.routes.is_empty() {
-            return Err(AgentError::new_tool_error_in_context(
+            return Err(AgentError::new_route_provider_error_without_context(
                 "No routing urls provided".to_string(),
             ));
         }

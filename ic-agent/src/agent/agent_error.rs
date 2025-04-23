@@ -41,8 +41,14 @@ impl AgentError {
     pub fn operation_info(&self) -> Option<&OperationInfo> {
         self.inner.operation_info.as_ref()
     }
-    pub fn new_tool_error_in_context(message: String) -> Self {
-        todo!()
+    pub fn new_route_provider_error_without_context(message: String) -> Self {
+        Self {
+            inner: Box::new(AgentErrorInner {
+                source: Some(Box::new(ErrorCode::RouteProviderError(message))),
+                kind: ErrorKind::External,
+                operation_info: None,
+            }),
+        }
     }
     pub(crate) fn from_boxed_in_context(
         inner: Box<dyn Error + Send + Sync>,
@@ -59,21 +65,20 @@ impl AgentError {
             },
         }
     }
+    pub fn as_http_error(&self) -> Option<&HttpErrorPayload> {
+        self.inner.source.as_ref().and_then(|source| source.downcast_ref())
+    }
 }
 
 impl Debug for AgentError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(&self.inner, f)
+        f.debug_struct("AgentError").field("source", &self.inner.source).field("kind", &self.inner.kind).field("operation_info", &self.inner.operation_info).finish()
     }
 }
 
 /// An error that occurred when using the agent.
 #[derive(Error, Debug)]
 pub(crate) enum ErrorCode {
-    /// The replica URL was invalid.
-    #[error(r#"Invalid Replica URL: "{0}""#)]
-    InvalidReplicaUrl(String),
-
     /// The request timed out.
     #[error("The request timed out.")]
     TimeoutWaitingForResponse,
@@ -100,10 +105,6 @@ pub(crate) enum ErrorCode {
         operation: Option<Operation>,
     },
 
-    /// The replica returned an HTTP error.
-    #[error("The replica returned an HTTP Error: {0}")]
-    HttpError(HttpErrorPayload),
-
     /// The status endpoint returned an invalid status.
     #[error("Status endpoint returned an invalid status.")]
     InvalidReplicaStatus,
@@ -112,25 +113,9 @@ pub(crate) enum ErrorCode {
     #[error("Call was marked as done but we never saw the reply. Request ID: {0}")]
     RequestStatusDoneNoReply(String),
 
-    /// A string error occurred in an external tool.
-    #[error("A tool returned a string message error: {0}")]
-    MessageError(String),
-
-    /// The lookup path was absent in the certificate.
-    #[error("The lookup path ({0:?}) is absent in the certificate.")]
-    LookupPathAbsent(Vec<Label>),
-
-    /// The lookup path was unknown in the certificate.
-    #[error("The lookup path ({0:?}) is unknown in the certificate.")]
-    LookupPathUnknown(Vec<Label>),
-
     /// The lookup path did not make sense for the certificate.
     #[error("The lookup path ({0:?}) does not make sense for the certificate.")]
     LookupPathError(Vec<Label>),
-
-    /// The request status at the requested path was invalid.
-    #[error("The request status ({1}) at path {0:?} is invalid.")]
-    InvalidRequestStatus(Vec<Label>, String),
 
     /// The certificate verification for a `read_state` call failed.
     #[error("Certificate verification failed.")]
@@ -201,17 +186,6 @@ pub(crate) enum ErrorCode {
     #[error("Response size exceeded limit.")]
     ResponseSizeExceededLimit,
 
-    /// There was a mismatch between the expected and actual CBOR data during inspection.
-    #[error("There is a mismatch between the CBOR encoded call and the arguments: field {field}, value in argument is {value_arg}, value in CBOR is {value_cbor}")]
-    CallDataMismatch {
-        /// The field that was mismatched.
-        field: String,
-        /// The value that was expected to be in the CBOR.
-        value_arg: String,
-        /// The value that was actually in the CBOR.
-        value_cbor: String,
-    },
-
     /// Route provider failed to generate a url for some reason.
     #[error("Route provider failed to generate url: {0}")]
     RouteProviderError(String),
@@ -219,6 +193,10 @@ pub(crate) enum ErrorCode {
     /// Invalid HTTP response.
     #[error("Invalid HTTP response: {0}")]
     InvalidHttpResponse(String),
+
+    /// Wrong envelope type for function.
+    #[error("Wrong request type {found}, expected {expected}")]
+    WrongRequestType { found: String, expected: String }
 }
 
 impl Error for AgentError {
@@ -229,7 +207,27 @@ impl Error for AgentError {
 
 impl Display for AgentError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        match self.inner.kind {
+            ErrorKind::External => {
+                if let Some(source) = &self.inner.source {
+                    write!(f, "{source}")?;
+                } else {
+                    write!(f, "unknown internal module error")?;
+                }
+                return Ok(());
+            }
+            ErrorKind::Input => write!(f, "input precondition failed")?,
+            ErrorKind::Limit => write!(f, "internal limit reached")?,
+            ErrorKind::Protocol => write!(f, "IC protocol error")?,
+            ErrorKind::Reject => write!(f, "call rejected")?,
+            ErrorKind::Transport => write!(f, "HTTP transport error")?,
+            ErrorKind::Trust => write!(f, "trust error")?,
+            ErrorKind::Unknown => write!(f, "internal error")?,
+        }
+        if let Some(source) = &self.inner.source {
+            write!(f, ": {source}")?;
+        }
+        Ok(())
     }
 }
 
@@ -263,19 +261,21 @@ pub struct HttpErrorPayload {
 
 impl HttpErrorPayload {
     fn fmt_human_readable(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        // No matter content_type is TEXT or not,
-        // always try to parse it as a String.
-        // When fail, print the raw byte array
-        f.write_fmt(format_args!(
-            "Replica HTTP error: status {}, content type {:?}, content: {}",
-            http::StatusCode::from_u16(self.status)
-                .map_or_else(|_| format!("{}", self.status), |code| format!("{code}")),
-            self.content_type.clone().unwrap_or_default(),
-            String::from_utf8(self.content.clone()).unwrap_or_else(|_| format!(
-                "(unable to decode content as UTF-8: {:?})",
-                self.content
-            ))
-        ))?;
+        // No matter whether content_type is text/* or not, always try to parse it as a string.
+        // If this fails, print hex.
+        let status = http::StatusCode::from_u16(self.status)
+            .map_or_else(|_| format!("{}", self.status), |code| format!("{code}"));
+        let content_type = self.content_type.as_deref().unwrap_or("<none>");
+        if let Ok(content) = std::str::from_utf8(&self.content) {
+            f.write_fmt(format_args!(
+                r#"replica HTTP error: {content:?} (HTTP code {status}, content type {content_type:?})"#
+            ))?;
+        } else {
+            f.write_fmt(format_args!(
+                r#"replica HTTP error: 0x{} (non-UTF-8) (HTTP code {status}, content type {content_type:?})"#,
+                hex::encode(&self.content)
+            ))?;
+        }
         Ok(())
     }
 }
@@ -289,6 +289,44 @@ impl Debug for HttpErrorPayload {
 impl Display for HttpErrorPayload {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         self.fmt_human_readable(f)
+    }
+}
+
+impl Error for HttpErrorPayload {}
+
+impl AsRef<AgentError> for AgentError {
+    fn as_ref(&self) -> &AgentError {
+        self
+    }
+}
+
+#[derive(Debug)]
+pub enum InspectionError {
+    /// A field did not match.
+    CallDataMismatch {
+        /// The field that was mismatched.
+        field: String,
+        /// The value that was expected to be in the CBOR.
+        value_arg: String,
+        /// The value that was actually in the CBOR.
+        value_cbor: String,
+    },
+    /// Failed for another reason (e.g. decoding).
+    Other(AgentError)
+}
+
+impl Display for InspectionError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self { 
+            InspectionError::CallDataMismatch { field, value_arg, value_cbor } => write!(f, "mismatch between the CBOR encoded call and the arguments: field {field}, value in argument is {value_arg}, value in CBOR is {value_cbor}"),
+            InspectionError::Other(error) => write!(f, "inspection error: {error}"),
+        }
+    }
+}
+
+impl Error for InspectionError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        if let Self::Other(err) = self { Some(err) } else { None }
     }
 }
 
@@ -306,7 +344,7 @@ mod tests {
 
         assert_eq!(
             format!("{payload}"),
-            r#"Replica HTTP error: status 420 <unknown status code>, content type "", content: hello"#,
+            r#"replica HTTP error: "hello" (HTTP code 420 <unknown status code>, content type "<none>")"#,
         );
     }
 
@@ -317,10 +355,9 @@ mod tests {
             content_type: None,
             content: vec![195, 40],
         };
-
         assert_eq!(
             format!("{payload}"),
-            r#"Replica HTTP rror: status 420 <unknown status code>, content type "", content: (unable to decode content as UTF-8: [195, 40])"#,
+            r#"replica HTTP error: 0xc328 (non-UTF-8) (HTTP code 420 <unknown status code>, content type "<none>")"#,
         );
     }
 
@@ -334,7 +371,7 @@ mod tests {
 
         assert_eq!(
             format!("{payload}"),
-            r#"Replica HTTP error: status 420 <unknown status code>, content type "text/plain", content: hello"#,
+            r#"replica HTTP error: "hello" (HTTP code 420 <unknown status code>, content type "text/plain")"#,
         );
     }
 
@@ -348,7 +385,7 @@ mod tests {
 
         assert_eq!(
             format!("{payload}"),
-            r#"Replica HTTP error: status 420 <unknown status code>, content type "text/plain; charset=utf-8", content: hello"#,
+            r#"replica HTTP error: "hello" (HTTP code 420 <unknown status code>, content type "text/plain; charset=utf-8")"#,
         );
     }
 
@@ -362,7 +399,7 @@ mod tests {
 
         assert_eq!(
             format!("{payload}"),
-            r#"Replica HTTP error: status 420 <unknown status code>, content type "text/html", content: world"#,
+            r#"replica HTTP error: "world" (HTTP code 420 <unknown status code>, content type "text/html")"#,
         );
     }
 }

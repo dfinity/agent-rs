@@ -1139,6 +1139,7 @@ dependencies = [
  "ic-transport-types 0.40.0",
  "ic-verify-bls-signature",
  "ic_principal",
+ "itertools 0.14.0",
  "js-sys",
  "k256",
  "leb128",
@@ -1528,6 +1529,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1565,7 +1575,7 @@ dependencies = [
  "ascii-canvas",
  "bit-set",
  "ena",
- "itertools",
+ "itertools 0.11.0",
  "lalrpop-util",
  "petgraph",
  "pico-args",
@@ -2209,6 +2219,7 @@ version = "0.0.0"
 dependencies = [
  "candid",
  "ed25519-consensus",
+ "hex",
  "ic-agent",
  "ic-certification 3.0.2",
  "ic-identity-hsm",
