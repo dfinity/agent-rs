@@ -2303,6 +2303,17 @@ pub struct OperationInfo {
     pub response: Option<Result<Vec<u8>, RejectResponse>>,
 }
 
+impl OperationInfo {
+    /// Convenience wrapper for borrowing `response`.
+    pub fn response(&self) -> Option<Result<&[u8], &RejectResponse>> {
+        match &self.response {
+            Some(Ok(o)) => Some(Ok(o)),
+            Some(Err(e)) => Some(Err(e)),
+            None => None,
+        }
+    }
+}
+
 /// An operation that can result in a reject.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Operation {
