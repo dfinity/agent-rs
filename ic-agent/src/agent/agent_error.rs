@@ -12,7 +12,7 @@ use thiserror::Error;
 use super::{status::Status, OperationInfo, CURRENT_OPERATION};
 
 /// An error that can occur when using an `Agent`. Includes partial operation info.
-/// 
+///
 /// If (say) a deserialization hiccup occurred after a call returned, you can call the
 /// [`operation_info()`](Self::operation_info) method to learn whether the call failed or succeeded,
 /// and (if possible) what the response was.
@@ -90,13 +90,20 @@ impl AgentError {
     }
     /// If this error is an HTTP error, retrieve the the payload. Equivalent to downcasting [`source()`](Error::source).
     pub fn as_http_error(&self) -> Option<&HttpErrorPayload> {
-        self.inner.source.as_ref().and_then(|source| source.downcast_ref())
+        self.inner
+            .source
+            .as_ref()
+            .and_then(|source| source.downcast_ref())
     }
 }
 
 impl Debug for AgentError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AgentError").field("source", &self.inner.source).field("kind", &self.inner.kind).field("operation_info", &self.inner.operation_info).finish()
+        f.debug_struct("AgentError")
+            .field("source", &self.inner.source)
+            .field("kind", &self.inner.kind)
+            .field("operation_info", &self.inner.operation_info)
+            .finish()
     }
 }
 
@@ -216,7 +223,7 @@ pub(crate) enum ErrorCode {
 
     /// Wrong envelope type for function.
     #[error("Wrong request type {found}, expected {expected}")]
-    WrongRequestType { found: String, expected: String }
+    WrongRequestType { found: String, expected: String },
 }
 
 impl Error for AgentError {
@@ -333,12 +340,12 @@ pub enum InspectionError {
         value_cbor: String,
     },
     /// Failed for another reason (e.g. decoding).
-    Other(AgentError)
+    Other(AgentError),
 }
 
 impl Display for InspectionError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self { 
+        match self {
             InspectionError::CallDataMismatch { field, value_arg, value_cbor } => write!(f, "mismatch between the CBOR encoded call and the arguments: field {field}, value in argument is {value_arg}, value in CBOR is {value_cbor}"),
             InspectionError::Other(error) => write!(f, "inspection error: {error}"),
         }
@@ -347,7 +354,11 @@ impl Display for InspectionError {
 
 impl Error for InspectionError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        if let Self::Other(err) = self { Some(err) } else { None }
+        if let Self::Other(err) = self {
+            Some(err)
+        } else {
+            None
+        }
     }
 }
 
