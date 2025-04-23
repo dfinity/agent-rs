@@ -94,8 +94,10 @@ mod management_canister {
                     .call_and_wait()
                     .await;
 
+                let msg = result.unwrap_err().to_string();
                 assert!(
-                    result.unwrap_err().to_string().contains("Canister 75hes-oqbaa-aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-q does not belong to any subnet.")
+                    msg.contains("Canister 75hes-oqbaa-aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-q does not belong to any subnet.")
+                    || msg.contains("Canister 75hes-oqbaa-aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-q not found")
                 );
 
                 Ok(())
