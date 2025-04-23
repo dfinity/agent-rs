@@ -9,6 +9,8 @@ use std::{
 };
 use thiserror::Error;
 
+use crate::util::try_from_context;
+
 use super::{status::Status, OperationInfo, CURRENT_OPERATION};
 
 /// An error that can occur when using an `Agent`. Includes partial operation info.
@@ -79,14 +81,14 @@ impl AgentError {
             Err(source) => AgentError {
                 inner: Box::new(AgentErrorInner {
                     kind,
-                    operation_info: CURRENT_OPERATION.try_with(|op| (*op.borrow()).clone()).ok(),
+                    operation_info: try_from_context(&CURRENT_OPERATION, |op| op.clone()).ok(),
                     source: Some(source),
                 }),
             },
         }
     }
     pub(crate) fn add_context(&mut self) {
-        self.inner.operation_info = CURRENT_OPERATION.try_with(|op| (*op.borrow()).clone()).ok();
+        self.inner.operation_info = try_from_context(&CURRENT_OPERATION, |op| op.clone()).ok();
     }
     /// If this error is an HTTP error, retrieve the the payload. Equivalent to downcasting [`source()`](Error::source).
     pub fn as_http_error(&self) -> Option<&HttpErrorPayload> {

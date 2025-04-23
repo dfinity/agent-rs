@@ -37,7 +37,6 @@ use route_provider::{
     RouteProvider, UrlUntilReady,
 };
 use time::OffsetDateTime;
-use tokio::task_local;
 use tower_service::Service;
 use url::Url;
 
@@ -51,6 +50,7 @@ use crate::{
     },
     export::Principal,
     identity::Identity,
+    util::{in_context_of, try_from_context},
     RequestId,
 };
 use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
@@ -63,7 +63,6 @@ use ic_transport_types::{
 use status::Status;
 use std::{
     borrow::Cow,
-    cell::RefCell,
     collections::HashMap,
     convert::TryFrom,
     error::Error,
@@ -327,14 +326,13 @@ impl Agent {
             .await?
             .1;
         let resp = serde_cbor::from_slice(&bytes).context(Protocol)?;
-        CURRENT_OPERATION
-            .try_with(|op| {
-                op.borrow_mut().response = Some(match &resp {
-                    QueryResponse::Replied { reply, .. } => Ok(reply.arg.clone()),
-                    QueryResponse::Rejected { reject, .. } => Err(reject.clone()),
-                })
+        try_from_context(&CURRENT_OPERATION, |op| {
+            op.response = Some(match &resp {
+                QueryResponse::Replied { reply, .. } => Ok(reply.arg.clone()),
+                QueryResponse::Rejected { reject, .. } => Err(reject.clone()),
             })
-            .ok();
+        })
+        .ok();
         Ok(resp)
     }
 
@@ -406,31 +404,31 @@ impl Agent {
         explicit_verify_query_signatures: Option<bool>,
     ) -> Result<Vec<u8>, AgentError> {
         let expiry = ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date());
-        CURRENT_OPERATION
-            .scope(
-                RefCell::new(OperationInfo {
-                    status: OperationStatus::NotSent,
-                    operation: Operation::Query {
-                        canister: canister_id,
-                        method: method_name.clone(),
-                    },
-                    expiry,
-                    response: None,
-                }),
-                async {
-                    let content =
-                        self.query_content(canister_id, method_name, arg, expiry, use_nonce)?;
-                    let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
-                    self.query_inner(
-                        effective_canister_id,
-                        serialized_bytes,
-                        content.to_request_id(),
-                        explicit_verify_query_signatures,
-                    )
-                    .await
+        in_context_of(
+            &CURRENT_OPERATION,
+            OperationInfo {
+                status: OperationStatus::NotSent,
+                operation: Operation::Query {
+                    canister: canister_id,
+                    method: method_name.clone(),
                 },
-            )
-            .await
+                expiry,
+                response: None,
+            },
+            async {
+                let content =
+                    self.query_content(canister_id, method_name, arg, expiry, use_nonce)?;
+                let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
+                self.query_inner(
+                    effective_canister_id,
+                    serialized_bytes,
+                    content.to_request_id(),
+                    explicit_verify_query_signatures,
+                )
+                .await
+            },
+        )
+        .await
     }
 
     /// Send the signed query to the network. Will return a byte vector.
@@ -460,28 +458,28 @@ impl Agent {
             })
             .context(Input);
         };
-        CURRENT_OPERATION
-            .scope(
-                RefCell::new(OperationInfo {
-                    status: OperationStatus::NotSent,
-                    operation: Operation::Query {
-                        canister: *canister_id,
-                        method: method_name.clone(),
-                    },
-                    expiry: *ingress_expiry,
-                    response: None,
-                }),
-                async {
-                    self.query_inner(
-                        effective_canister_id,
-                        signed_query,
-                        envelope.content.to_request_id(),
-                        None,
-                    )
-                    .await
+        in_context_of(
+            &CURRENT_OPERATION,
+            OperationInfo {
+                status: OperationStatus::NotSent,
+                operation: Operation::Query {
+                    canister: *canister_id,
+                    method: method_name.clone(),
                 },
-            )
-            .await
+                expiry: *ingress_expiry,
+                response: None,
+            },
+            async {
+                self.query_inner(
+                    effective_canister_id,
+                    signed_query,
+                    envelope.content.to_request_id(),
+                    None,
+                )
+                .await
+            },
+        )
+        .await
     }
 
     /// Helper function for performing both the query call and possibly a `read_state` to check the subnet node keys.
@@ -615,87 +613,83 @@ impl Agent {
         ingress_expiry_datetime: Option<u64>,
     ) -> Result<CallResponse<(Vec<u8>, Certificate)>, AgentError> {
         let expiry = ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date());
-        CURRENT_OPERATION
-            .scope(
-                RefCell::new(OperationInfo {
-                    operation: Operation::Update {
-                        canister: canister_id,
-                        method: method_name.clone(),
-                    },
-                    expiry,
-                    response: None,
-                    status: OperationStatus::NotSent,
-                }),
-                async move {
-                    let nonce = self.nonce_factory.generate();
-                    let content = self.update_content(
-                        canister_id,
-                        method_name.clone(),
-                        arg,
-                        ingress_expiry_datetime,
-                        nonce,
-                    )?;
+        in_context_of(
+            &CURRENT_OPERATION,
+            OperationInfo {
+                operation: Operation::Update {
+                    canister: canister_id,
+                    method: method_name.clone(),
+                },
+                expiry,
+                response: None,
+                status: OperationStatus::NotSent,
+            },
+            async move {
+                let nonce = self.nonce_factory.generate();
+                let content = self.update_content(
+                    canister_id,
+                    method_name.clone(),
+                    arg,
+                    ingress_expiry_datetime,
+                    nonce,
+                )?;
 
-                    let request_id = content.to_request_id();
-                    let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
+                let request_id = content.to_request_id();
+                let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
 
-                    let response_body = self
-                        .call_endpoint(effective_canister_id, serialized_bytes)
-                        .await?;
+                let response_body = self
+                    .call_endpoint(effective_canister_id, serialized_bytes)
+                    .await?;
 
-                    match response_body {
-                        TransportCallResponse::Replied { certificate } => {
-                            let certificate =
-                                serde_cbor::from_slice(&certificate).context(Protocol)?;
+                match response_body {
+                    TransportCallResponse::Replied { certificate } => {
+                        let certificate = serde_cbor::from_slice(&certificate).context(Protocol)?;
 
-                            let status = lookup_request_status(&certificate, &request_id)
-                                .context(Protocol)?;
+                        let status =
+                            lookup_request_status(&certificate, &request_id).context(Protocol)?;
 
-                            let tentative_response = match status {
-                                RequestStatusResponse::Replied(reply) => {
-                                    CURRENT_OPERATION
-                                        .try_with(|op| {
-                                            op.borrow_mut().response = Some(Ok(reply.arg.clone()))
-                                        })
-                                        .ok();
-                                    Ok(CallResponse::Response((reply.arg, certificate.clone())))
-                                }
-                                RequestStatusResponse::Rejected(reject_response) => {
-                                    CURRENT_OPERATION
-                                        .try_with(|op| {
-                                            op.borrow_mut().response =
-                                                Some(Err(reject_response.clone()))
-                                        })
-                                        .ok();
-                                    Err(ErrorCode::CertifiedReject {
-                                        reject: reject_response,
-                                    })
-                                    .context(Reject)?
-                                }
-                                _ => Ok(CallResponse::Poll(request_id)),
-                            };
-                            self.verify(&certificate, effective_canister_id)?;
-                            CURRENT_OPERATION
-                                .try_with(|op| op.borrow_mut().status = OperationStatus::Received)
-                                .ok();
-                            tentative_response
-                        }
-                        TransportCallResponse::Accepted => Ok(CallResponse::Poll(request_id)),
-                        TransportCallResponse::NonReplicatedRejection(reject_response) => {
-                            CURRENT_OPERATION
-                                .try_with(|op| {
-                                    op.borrow_mut().response = Some(Err(reject_response.clone()))
+                        let tentative_response = match status {
+                            RequestStatusResponse::Replied(reply) => {
+                                try_from_context(&CURRENT_OPERATION, |op| {
+                                    op.response = Some(Ok(reply.arg.clone()))
                                 })
                                 .ok();
-                            Err(ErrorCode::UncertifiedReject {
-                                reject: reject_response,
-                            })
-                            .context(Reject)
-                        }
+                                Ok(CallResponse::Response((reply.arg, certificate.clone())))
+                            }
+                            RequestStatusResponse::Rejected(reject_response) => {
+                                try_from_context(&CURRENT_OPERATION, |op| {
+                                    op.response = Some(Err(reject_response.clone()))
+                                })
+                                .ok();
+                                Err(ErrorCode::CertifiedReject {
+                                    reject: reject_response,
+                                })
+                                .context(Reject)?
+                            }
+                            _ => Ok(CallResponse::Poll(request_id)),
+                        };
+                        self.verify(&certificate, effective_canister_id)?;
+                        try_from_context(&CURRENT_OPERATION, |op| {
+                            op.status = OperationStatus::Received
+                        })
+                        .ok();
+                        tentative_response
                     }
-                },
-            )
-            .await
+                    TransportCallResponse::Accepted => Ok(CallResponse::Poll(request_id)),
+                    TransportCallResponse::NonReplicatedRejection(reject_response) => {
+                        try_from_context(&CURRENT_OPERATION, |op| {
+                            op.response = Some(Err(reject_response.clone()))
+                        })
+                        .ok();
+                        Err(ErrorCode::UncertifiedReject {
+                            reject: reject_response,
+                        })
+                        .context(Reject)
+                    }
+                }
+            },
+        )
+        .await
     }
 
     /// Send the signed update to the network. Will return a [`CallResponse<Vec<u8>>`].
@@ -725,76 +719,72 @@ impl Agent {
             })
             .context(Input);
         };
-        CURRENT_OPERATION
-            .scope(
-                RefCell::new(OperationInfo {
-                    operation: Operation::Update {
-                        canister: *canister_id,
-                        method: method_name.clone(),
-                    },
-                    expiry: *ingress_expiry,
-                    status: OperationStatus::NotSent,
-                    response: None,
-                }),
-                async {
-                    let request_id = envelope.content.to_request_id();
+        in_context_of(
+            &CURRENT_OPERATION,
+            OperationInfo {
+                operation: Operation::Update {
+                    canister: *canister_id,
+                    method: method_name.clone(),
+                },
+                expiry: *ingress_expiry,
+                status: OperationStatus::NotSent,
+                response: None,
+            },
+            async {
+                let request_id = envelope.content.to_request_id();
 
-                    let response_body = self
-                        .call_endpoint(effective_canister_id, signed_update)
-                        .await?;
+                let response_body = self
+                    .call_endpoint(effective_canister_id, signed_update)
+                    .await?;
 
-                    match response_body {
-                        TransportCallResponse::Replied { certificate } => {
-                            let certificate =
-                                serde_cbor::from_slice(&certificate).context(Protocol)?;
-                            let status = lookup_request_status(&certificate, &request_id)
-                                .context(Protocol)?;
+                match response_body {
+                    TransportCallResponse::Replied { certificate } => {
+                        let certificate = serde_cbor::from_slice(&certificate).context(Protocol)?;
+                        let status =
+                            lookup_request_status(&certificate, &request_id).context(Protocol)?;
 
-                            let tentative_response = match status {
-                                RequestStatusResponse::Replied(reply) => {
-                                    CURRENT_OPERATION
-                                        .try_with(|op| {
-                                            op.borrow_mut().response = Some(Ok(reply.arg.clone()))
-                                        })
-                                        .ok();
-                                    Ok(CallResponse::Response(reply.arg))
-                                }
-                                RequestStatusResponse::Rejected(reject_response) => {
-                                    CURRENT_OPERATION
-                                        .try_with(|op| {
-                                            op.borrow_mut().response =
-                                                Some(Err(reject_response.clone()))
-                                        })
-                                        .ok();
-                                    Err(ErrorCode::CertifiedReject {
-                                        reject: reject_response,
-                                    })
-                                    .context(Reject)?
-                                }
-                                _ => Ok(CallResponse::Poll(request_id)),
-                            };
-                            self.verify(&certificate, effective_canister_id)?;
-                            CURRENT_OPERATION
-                                .try_with(|op| op.borrow_mut().status = OperationStatus::Received)
-                                .ok();
-                            tentative_response
-                        }
-                        TransportCallResponse::Accepted => Ok(CallResponse::Poll(request_id)),
-                        TransportCallResponse::NonReplicatedRejection(reject_response) => {
-                            CURRENT_OPERATION
-                                .try_with(|op| {
-                                    op.borrow_mut().response = Some(Err(reject_response.clone()))
+                        let tentative_response = match status {
+                            RequestStatusResponse::Replied(reply) => {
+                                try_from_context(&CURRENT_OPERATION, |op| {
+                                    op.response = Some(Ok(reply.arg.clone()))
                                 })
                                 .ok();
-                            Err(ErrorCode::UncertifiedReject {
-                                reject: reject_response,
-                            })
-                            .context(Reject)
-                        }
+                                Ok(CallResponse::Response(reply.arg))
+                            }
+                            RequestStatusResponse::Rejected(reject_response) => {
+                                try_from_context(&CURRENT_OPERATION, |op| {
+                                    op.response = Some(Err(reject_response.clone()))
+                                })
+                                .ok();
+                                Err(ErrorCode::CertifiedReject {
+                                    reject: reject_response,
+                                })
+                                .context(Reject)?
+                            }
+                            _ => Ok(CallResponse::Poll(request_id)),
+                        };
+                        self.verify(&certificate, effective_canister_id)?;
+                        try_from_context(&CURRENT_OPERATION, |op| {
+                            op.status = OperationStatus::Received
+                        })
+                        .ok();
+                        tentative_response
                     }
-                },
-            )
-            .await
+                    TransportCallResponse::Accepted => Ok(CallResponse::Poll(request_id)),
+                    TransportCallResponse::NonReplicatedRejection(reject_response) => {
+                        try_from_context(&CURRENT_OPERATION, |op| {
+                            op.response = Some(Err(reject_response.clone()))
+                        })
+                        .ok();
+                        Err(ErrorCode::UncertifiedReject {
+                            reject: reject_response,
+                        })
+                        .context(Reject)
+                    }
+                }
+            },
+        )
+        .await
     }
 
     fn update_content(
@@ -919,31 +909,28 @@ impl Agent {
                 }
 
                 RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => {
-                    CURRENT_OPERATION
-                        .try_with(|op| {
-                            let mut op = op.borrow_mut();
-                            op.status = OperationStatus::Received;
-                            op.response = Some(Ok(arg.clone()));
-                        })
-                        .ok();
+                    try_from_context(&CURRENT_OPERATION, |op| {
+                        op.status = OperationStatus::Received;
+                        op.response = Some(Ok(arg.clone()));
+                    })
+                    .ok();
                     return Ok((arg, cert));
                 }
 
                 RequestStatusResponse::Rejected(response) => {
-                    CURRENT_OPERATION
-                        .try_with(|op| {
-                            let mut op = op.borrow_mut();
-                            op.status = OperationStatus::Received;
-                            op.response = Some(Err(response.clone()))
-                        })
-                        .ok();
+                    try_from_context(&CURRENT_OPERATION, |op| {
+                        op.status = OperationStatus::Received;
+                        op.response = Some(Err(response.clone()))
+                    })
+                    .ok();
                     return Err(ErrorCode::CertifiedReject { reject: response }).context(Reject);
                 }
 
                 RequestStatusResponse::Done => {
-                    CURRENT_OPERATION
-                        .try_with(|op| op.borrow_mut().status = OperationStatus::Received)
-                        .ok();
+                    try_from_context(&CURRENT_OPERATION, |op| {
+                        op.status = OperationStatus::Received
+                    })
+                    .ok();
                     return Err(ErrorCode::RequestStatusDoneNoReply(String::from(
                         *request_id,
                     )))
@@ -968,35 +955,35 @@ impl Agent {
     ) -> Result<Certificate, AgentError> {
         // All read_state calls besides request_status_signed should go through this method.
         let expiry = self.get_expiry_date();
-        CURRENT_OPERATION
-            .scope(
-                RefCell::new(OperationInfo {
-                    status: OperationStatus::NotSent,
-                    operation: Operation::ReadState {
-                        paths: paths.clone(),
-                        canister: effective_canister_id,
-                    },
-                    expiry,
-                    response: None,
-                }),
-                async {
-                    let content = self.read_state_content(paths, expiry)?;
-                    let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
-
-                    let read_state_response = self
-                        .read_state_endpoint(effective_canister_id, serialized_bytes)
-                        .await?;
-                    let cert: Certificate =
-                        serde_cbor::from_slice(&read_state_response.certificate)
-                            .context(Protocol)?;
-                    self.verify(&cert, effective_canister_id)?;
-                    CURRENT_OPERATION
-                        .try_with(|op| op.borrow_mut().status = OperationStatus::Received)
-                        .ok();
-                    Ok(cert)
+        in_context_of(
+            &CURRENT_OPERATION,
+            OperationInfo {
+                status: OperationStatus::NotSent,
+                operation: Operation::ReadState {
+                    paths: paths.clone(),
+                    canister: effective_canister_id,
                 },
-            )
-            .await
+                expiry,
+                response: None,
+            },
+            async {
+                let content = self.read_state_content(paths, expiry)?;
+                let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
+
+                let read_state_response = self
+                    .read_state_endpoint(effective_canister_id, serialized_bytes)
+                    .await?;
+                let cert: Certificate =
+                    serde_cbor::from_slice(&read_state_response.certificate).context(Protocol)?;
+                self.verify(&cert, effective_canister_id)?;
+                try_from_context(&CURRENT_OPERATION, |op| {
+                    op.status = OperationStatus::Received
+                })
+                .ok();
+                Ok(cert)
+            },
+        )
+        .await
     }
 
     /// Request the raw state tree directly, under a subnet ID.
@@ -1008,35 +995,35 @@ impl Agent {
     ) -> Result<Certificate, AgentError> {
         // All read_subnet_state calls should go through this method.
         let expiry = self.get_expiry_date();
-        CURRENT_OPERATION
-            .scope(
-                RefCell::new(OperationInfo {
-                    status: OperationStatus::NotSent,
-                    operation: Operation::ReadSubnetState {
-                        paths: paths.clone(),
-                        subnet: subnet_id,
-                    },
-                    expiry,
-                    response: None,
-                }),
-                async {
-                    let content = self.read_state_content(paths, expiry)?;
-                    let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
-
-                    let read_state_response: ReadStateResponse = self
-                        .read_subnet_state_endpoint(subnet_id, serialized_bytes)
-                        .await?;
-                    let cert: Certificate =
-                        serde_cbor::from_slice(&read_state_response.certificate)
-                            .context(Protocol)?;
-                    self.verify_for_subnet(&cert, subnet_id)?;
-                    CURRENT_OPERATION
-                        .try_with(|op| op.borrow_mut().status = OperationStatus::Received)
-                        .ok();
-                    Ok(cert)
+        in_context_of(
+            &CURRENT_OPERATION,
+            OperationInfo {
+                status: OperationStatus::NotSent,
+                operation: Operation::ReadSubnetState {
+                    paths: paths.clone(),
+                    subnet: subnet_id,
                 },
-            )
-            .await
+                expiry,
+                response: None,
+            },
+            async {
+                let content = self.read_state_content(paths, expiry)?;
+                let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
+
+                let read_state_response: ReadStateResponse = self
+                    .read_subnet_state_endpoint(subnet_id, serialized_bytes)
+                    .await?;
+                let cert: Certificate =
+                    serde_cbor::from_slice(&read_state_response.certificate).context(Protocol)?;
+                self.verify_for_subnet(&cert, subnet_id)?;
+                try_from_context(&CURRENT_OPERATION, |op| {
+                    op.status = OperationStatus::Received
+                })
+                .ok();
+                Ok(cert)
+            },
+        )
+        .await
     }
 
     fn read_state_content(
@@ -1445,14 +1432,12 @@ impl Agent {
             Ok(http_request)
         };
 
-        CURRENT_OPERATION
-            .try_with(|op| {
-                let mut op = op.borrow_mut();
-                if op.status == OperationStatus::NotSent {
-                    op.status = OperationStatus::MaybeReceived;
-                }
-            })
-            .ok();
+        try_from_context(&CURRENT_OPERATION, |op| {
+            if op.status == OperationStatus::NotSent {
+                op.status = OperationStatus::MaybeReceived;
+            }
+        })
+        .ok();
         let response = self
             .client
             .call(
@@ -2352,7 +2337,7 @@ pub enum Operation {
 }
 
 task_local! {
-    static CURRENT_OPERATION: RefCell<OperationInfo>;
+    static CURRENT_OPERATION: OperationInfo;
 }
 
 #[cfg(all(test, not(target_family = "wasm")))]
