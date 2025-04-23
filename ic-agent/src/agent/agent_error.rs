@@ -1,4 +1,4 @@
-//! Errors that can occur when using the replica agent.
+//! Errors that can occur when using the agent.
 
 use ic_certification::Label;
 use ic_transport_types::RejectResponse;
