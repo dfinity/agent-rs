@@ -68,11 +68,11 @@ macro_rules! task_local {
     };
 }
 
-pub(crate) fn in_context_of<T: 'static, R>(
+pub(crate) fn in_context_of<T: 'static, F: Future>(
     key: &'static LocalKey<TaskLocal<T>>,
     val: T,
-    f: impl Future<Output = R>,
-) -> impl Future<Output = R> {
+    f: F,
+) -> TaskLocalContextFuture<T, F> {
     TaskLocalContextFuture {
         t: Some(val),
         f,
