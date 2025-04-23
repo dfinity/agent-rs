@@ -218,11 +218,18 @@ fn read_state_canister() {
     with_universal_canister(|agent, canister_id| async move {
         let blob = agent
             .read_state_canister_info(canister_id, "module_hash")
-            .await?;
+            .await?
+            .unwrap();
         assert_eq!(blob.len(), 32);
-        let controllers = agent.read_state_canister_controllers(canister_id).await?;
+        let controllers = agent
+            .read_state_canister_controllers(canister_id)
+            .await?
+            .unwrap();
         assert_eq!(controllers.len(), 1);
-        let hash = agent.read_state_canister_module_hash(canister_id).await?;
+        let hash = agent
+            .read_state_canister_module_hash(canister_id)
+            .await?
+            .unwrap();
         assert_eq!(hash.len(), 32);
         Ok(())
     })

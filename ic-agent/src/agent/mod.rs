@@ -29,6 +29,7 @@ pub use ic_transport_types::{
 pub use nonce::{NonceFactory, NonceGenerator};
 use rangemap::{RangeInclusiveMap, RangeInclusiveSet, StepFns};
 use reqwest::{Body, Client, Request, Response};
+use response_authentication::LookupError;
 use route_provider::{
     dynamic_routing::{
         dynamic_route_provider::DynamicRouteProviderBuilder, node::Node,
@@ -1195,7 +1196,7 @@ impl Agent {
         &self,
         canister_id: Principal,
         path: &str,
-    ) -> Result<Vec<u8>, AgentError> {
+    ) -> Result<Option<Vec<u8>>, AgentError> {
         let paths: Vec<Vec<Label>> = vec![vec![
             "canister".into(),
             Label::from_bytes(canister_id.as_slice()),
@@ -1204,36 +1205,44 @@ impl Agent {
 
         let cert = self.read_state_raw(paths, canister_id).await?;
 
-        lookup_canister_info(cert, canister_id, path).context(Protocol)
+        let lookup_res = lookup_canister_info(cert, canister_id, path);
+        if let Err(LookupError::Absent { .. }) = &lookup_res {
+            Ok(None)
+        } else {
+            lookup_res.map(Some).context(Protocol)
+        }
     }
 
-    /// Request the controller list of a given canister.
+    /// Request the controller list of a given canister, or `None` if the canister does not exist.
     pub async fn read_state_canister_controllers(
         &self,
         canister_id: Principal,
-    ) -> Result<Vec<Principal>, AgentError> {
-        let blob = self
+    ) -> Result<Option<Vec<Principal>>, AgentError> {
+        let Some(blob) = self
             .read_state_canister_info(canister_id, "controllers")
-            .await?;
+            .await?
+        else {
+            return Ok(None);
+        };
         let controllers: Vec<Principal> = serde_cbor::from_slice(&blob).context(Protocol)?;
-        Ok(controllers)
+        Ok(Some(controllers))
     }
 
-    /// Request the module hash of a given canister.
+    /// Request the module hash of a given canister, or `None` if the canister is empty or does not exist.
     pub async fn read_state_canister_module_hash(
         &self,
         canister_id: Principal,
-    ) -> Result<Vec<u8>, AgentError> {
+    ) -> Result<Option<Vec<u8>>, AgentError> {
         self.read_state_canister_info(canister_id, "module_hash")
             .await
     }
 
-    /// Request the bytes of the canister's custom section `icp:public <path>` or `icp:private <path>`.
+    /// Request the bytes of the canister's custom section `icp:public <path>` or `icp:private <path>`, or `None` if it does not exist.
     pub async fn read_state_canister_metadata(
         &self,
         canister_id: Principal,
         path: &str,
-    ) -> Result<Vec<u8>, AgentError> {
+    ) -> Result<Option<Vec<u8>>, AgentError> {
         let paths: Vec<Vec<Label>> = vec![vec![
             "canister".into(),
             Label::from_bytes(canister_id.as_slice()),
@@ -1243,7 +1252,12 @@ impl Agent {
 
         let cert = self.read_state_raw(paths, canister_id).await?;
 
-        lookup_canister_metadata(cert, canister_id, path).context(Protocol)
+        let lookup_res = lookup_canister_metadata(cert, canister_id, path);
+        if let Err(LookupError::Absent { .. }) = &lookup_res {
+            Ok(None)
+        } else {
+            lookup_res.map(Some).context(Protocol)
+        }
     }
 
     /// Request a list of metrics about the subnet.
