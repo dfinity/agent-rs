@@ -2,6 +2,7 @@
 
 use crate::{
     call::{AsyncCall, SyncCall},
+    error::BaseError,
     Canister,
 };
 use candid::{
@@ -409,7 +410,7 @@ impl<'agent> HttpRequestCanister<'agent> {
         >,
         body: impl AsRef<[u8]>,
         certificate_version: Option<&u16>,
-    ) -> impl 'agent + SyncCall<Value = (HttpResponse,)> {
+    ) -> impl 'agent + SyncCall<Value = (HttpResponse,), Error = BaseError> {
         self.http_request_custom(
             method.as_ref(),
             url.as_ref(),
@@ -428,7 +429,7 @@ impl<'agent> HttpRequestCanister<'agent> {
         headers: H,
         body: &[u8],
         certificate_version: Option<&u16>,
-    ) -> impl 'agent + SyncCall<Value = (HttpResponse<T, C>,)>
+    ) -> impl 'agent + SyncCall<Value = (HttpResponse<T, C>,), Error = BaseError>
     where
         H: 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
         T: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
@@ -453,7 +454,7 @@ impl<'agent> HttpRequestCanister<'agent> {
         url: impl AsRef<str>,
         headers: impl 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
         body: impl AsRef<[u8]>,
-    ) -> impl 'agent + AsyncCall<Value = (HttpResponse,)> {
+    ) -> impl 'agent + AsyncCall<Value = (HttpResponse,), Error = BaseError> {
         self.http_request_update_custom(method.as_ref(), url.as_ref(), headers, body.as_ref())
     }
 
@@ -466,7 +467,7 @@ impl<'agent> HttpRequestCanister<'agent> {
         url: &str,
         headers: H,
         body: &[u8],
-    ) -> impl 'agent + AsyncCall<Value = (HttpResponse<T, C>,)>
+    ) -> impl 'agent + AsyncCall<Value = (HttpResponse<T, C>,), Error = BaseError>
     where
         H: 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
         T: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
@@ -487,7 +488,7 @@ impl<'agent> HttpRequestCanister<'agent> {
         &'canister self,
         method: impl AsRef<str>,
         token: Token,
-    ) -> impl 'agent + SyncCall<Value = (StreamingCallbackHttpResponse,)> {
+    ) -> impl 'agent + SyncCall<Value = (StreamingCallbackHttpResponse,), Error = BaseError> {
         self.query(method.as_ref()).with_value_arg(token.0).build()
     }
 
@@ -497,7 +498,7 @@ impl<'agent> HttpRequestCanister<'agent> {
         &'canister self,
         method: impl AsRef<str>,
         token: T,
-    ) -> impl 'agent + SyncCall<Value = (StreamingCallbackHttpResponse<T>,)>
+    ) -> impl 'agent + SyncCall<Value = (StreamingCallbackHttpResponse<T>,), Error = BaseError>
     where
         T: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
     {

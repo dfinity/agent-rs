@@ -15,6 +15,8 @@
 pub mod call;
 /// A higher-level canister type for managing various aspects of a canister.
 pub mod canister;
+/// An error interface for canister errors.
+pub mod error;
 /// A few known canister types for use with [`Canister`].
 pub mod interfaces;
 

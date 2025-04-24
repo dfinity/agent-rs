@@ -1,6 +1,6 @@
-use candid::Principal;
 use der::{Decode, SliceReader};
 use ecdsa::signature::Verifier;
+use ic_principal::Principal;
 use k256::Secp256k1;
 use p256::NistP256;
 use pkcs8::{spki::SubjectPublicKeyInfoRef, AssociatedOid, ObjectIdentifier};

@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use candid::Principal;
 use futures_util::FutureExt;
+use ic_principal::Principal;
 use std::{fmt::Debug, sync::Arc, time::Duration};
 use stop_token::StopToken;
 use url::Url;

@@ -30,6 +30,7 @@ ic-utils = { path = "ic-utils", version = "0.40.0" }
 ic-transport-types = { path = "ic-transport-types", version = "0.40.0" }
 
 ic-certification = "3"
+ic_principal = "0.1"
 candid = "0.10.10"
 candid_parser = "0.1.4"
 clap = "4.5.21"

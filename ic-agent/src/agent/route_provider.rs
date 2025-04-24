@@ -19,9 +19,9 @@ use std::{
 };
 use url::Url;
 
-use crate::agent::AgentError;
+use crate::agent::agent_error::{AgentError, ErrorKind::*};
 
-use super::HttpService;
+use super::{agent_error::ResultExt, HttpService};
 #[cfg(not(feature = "_internal_dynamic-routing"))]
 pub(crate) mod dynamic_routing;
 #[cfg(feature = "_internal_dynamic-routing")]
@@ -86,7 +86,7 @@ impl RouteProvider for RoundRobinRouteProvider {
     /// Generates a url for the given endpoint.
     fn route(&self) -> Result<Url, AgentError> {
         if self.routes.is_empty() {
-            return Err(AgentError::RouteProviderError(
+            return Err(AgentError::new_route_provider_error_without_context(
                 "No routing urls provided".to_string(),
             ));
         }
@@ -128,21 +128,23 @@ impl RoundRobinRouteProvider {
         let routes: Result<Vec<Url>, _> = routes
             .into_iter()
             .map(|url| {
-                Url::from_str(url.as_ref()).and_then(|mut url| {
-                    // rewrite *.ic0.app to ic0.app
-                    if let Some(domain) = url.domain() {
-                        if domain.ends_with(IC0_SUB_DOMAIN) {
-                            url.set_host(Some(IC0_DOMAIN))?;
-                        } else if domain.ends_with(ICP0_SUB_DOMAIN) {
-                            url.set_host(Some(ICP0_DOMAIN))?;
-                        } else if domain.ends_with(ICP_API_SUB_DOMAIN) {
-                            url.set_host(Some(ICP_API_DOMAIN))?;
-                        } else if domain.ends_with(LOCALHOST_SUB_DOMAIN) {
-                            url.set_host(Some(LOCALHOST_DOMAIN))?;
+                Url::from_str(url.as_ref())
+                    .and_then(|mut url| {
+                        // rewrite *.ic0.app to ic0.app
+                        if let Some(domain) = url.domain() {
+                            if domain.ends_with(IC0_SUB_DOMAIN) {
+                                url.set_host(Some(IC0_DOMAIN))?;
+                            } else if domain.ends_with(ICP0_SUB_DOMAIN) {
+                                url.set_host(Some(ICP0_DOMAIN))?;
+                            } else if domain.ends_with(ICP_API_SUB_DOMAIN) {
+                                url.set_host(Some(ICP_API_DOMAIN))?;
+                            } else if domain.ends_with(LOCALHOST_SUB_DOMAIN) {
+                                url.set_host(Some(LOCALHOST_DOMAIN))?;
+                            }
                         }
-                    }
-                    Ok(url)
-                })
+                        Ok(url)
+                    })
+                    .context(Input)
             })
             .collect();
         Ok(Self {
@@ -178,20 +180,17 @@ impl DynamicRouteProvider {
         strategy: DynamicRoutingStrategy,
     ) -> Result<Self, AgentError> {
         let seed_nodes: Result<Vec<_>, _> = seed_domains.into_iter().map(Node::new).collect();
+        let seed_nodes = seed_nodes.context(Input)?;
         let boxed = match strategy {
             DynamicRoutingStrategy::ByLatency => Box::new(
-                DynamicRouteProviderBuilder::new(
-                    LatencyRoutingSnapshot::new(),
-                    seed_nodes?,
-                    client,
-                )
-                .build()
-                .await,
+                DynamicRouteProviderBuilder::new(LatencyRoutingSnapshot::new(), seed_nodes, client)
+                    .build()
+                    .await,
             ) as Box<dyn RouteProvider>,
             DynamicRoutingStrategy::RoundRobin => Box::new(
                 DynamicRouteProviderBuilder::new(
                     RoundRobinRoutingSnapshot::new(),
-                    seed_nodes?,
+                    seed_nodes,
                     client,
                 )
                 .build()
@@ -209,22 +208,19 @@ impl DynamicRouteProvider {
         health_check_interval: Duration,
     ) -> Result<Self, AgentError> {
         let seed_nodes: Result<Vec<_>, _> = seed_domains.into_iter().map(Node::new).collect();
+        let seed_nodes = seed_nodes.context(Input)?;
         let boxed = match strategy {
             DynamicRoutingStrategy::ByLatency => Box::new(
-                DynamicRouteProviderBuilder::new(
-                    LatencyRoutingSnapshot::new(),
-                    seed_nodes?,
-                    client,
-                )
-                .with_fetch_period(list_update_interval)
-                .with_check_period(health_check_interval)
-                .build()
-                .await,
+                DynamicRouteProviderBuilder::new(LatencyRoutingSnapshot::new(), seed_nodes, client)
+                    .with_fetch_period(list_update_interval)
+                    .with_check_period(health_check_interval)
+                    .build()
+                    .await,
             ) as Box<dyn RouteProvider>,
             DynamicRoutingStrategy::RoundRobin => Box::new(
                 DynamicRouteProviderBuilder::new(
                     RoundRobinRoutingSnapshot::new(),
-                    seed_nodes?,
+                    seed_nodes,
                     client,
                 )
                 .with_fetch_period(list_update_interval)
@@ -316,10 +312,7 @@ mod tests {
         let provider = RoundRobinRouteProvider::new::<&str>(vec![])
             .expect("failed to create a route provider");
         let result = provider.route().unwrap_err();
-        assert_eq!(
-            result,
-            AgentError::RouteProviderError("No routing urls provided".to_string())
-        );
+        assert!(format!("{result}").contains("No routing urls provided"));
     }
 
     #[test]
