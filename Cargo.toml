@@ -50,4 +50,4 @@ serde_repr = "0.1.19"
 sha2 = "0.10.8"
 thiserror = "2.0.3"
 time = "0.3"
-tokio = { version = "1.41.1", default-features = false }
+tokio = { version = "1.43.1", default-features = false }
