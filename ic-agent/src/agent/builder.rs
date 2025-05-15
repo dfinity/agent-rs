@@ -4,7 +4,7 @@ use crate::{
 };
 use std::sync::Arc;
 
-use super::{route_provider::RouteProvider, HttpService};
+use super::{route_provider::RouteProvider, CloneableBackoff, HttpService};
 
 /// A builder for an [`Agent`].
 #[derive(Default)]
@@ -166,6 +166,20 @@ impl AgentBuilder {
     /// Set the maximum time to wait for a response from the replica.
     pub fn with_max_polling_time(mut self, max_polling_time: std::time::Duration) -> Self {
         self.config.max_polling_time = max_polling_time;
+        self
+    }
+
+    /// Set the retry policy for the agent to use when retrying requests.
+    pub fn with_retry_policy<B>(self, retry_policy: B) -> Self
+    where
+        B: 'static + CloneableBackoff,
+    {
+        self.with_arc_retry_policy(Box::new(retry_policy))
+    }
+
+    /// Same as [`Self::with_retry_policy`], but reuses an existing `Box`
+    pub fn with_arc_retry_policy(mut self, retry_policy: Box<dyn CloneableBackoff>) -> Self {
+        self.config.retry_policy = Some(retry_policy);
         self
     }
 }

@@ -11,7 +11,7 @@ pub(crate) mod response_authentication;
 pub mod route_provider;
 pub mod status;
 
-pub use agent_config::AgentConfig;
+pub use agent_config::{AgentConfig, CloneableBackoff};
 pub use agent_error::AgentError;
 use agent_error::{HttpErrorPayload, Operation};
 use async_lock::Semaphore;
@@ -52,7 +52,6 @@ use crate::{
     to_request_id, RequestId,
 };
 use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
-use backoff::{exponential::ExponentialBackoff, SystemClock};
 use ic_certification::{Certificate, Delegation, Label};
 use ic_transport_types::{
     signed::{SignedQuery, SignedRequestStatus, SignedUpdate},
@@ -161,7 +160,7 @@ pub struct Agent {
     concurrent_requests_semaphore: Arc<Semaphore>,
     verify_query_signatures: bool,
     max_response_body_size: Option<usize>,
-    max_polling_time: Duration,
+    retry_policy: Box<dyn CloneableBackoff>,
     #[allow(dead_code)]
     max_tcp_error_retries: usize,
 }
@@ -236,7 +235,17 @@ impl Agent {
             concurrent_requests_semaphore: Arc::new(Semaphore::new(config.max_concurrent_requests)),
             max_response_body_size: config.max_response_body_size,
             max_tcp_error_retries: config.max_tcp_error_retries,
-            max_polling_time: config.max_polling_time,
+            retry_policy: match config.retry_policy {
+                Some(retry_policy) => retry_policy,
+                None => Box::new(
+                    ExponentialBackoffBuilder::new()
+                        .with_initial_interval(Duration::from_millis(500))
+                        .with_max_interval(Duration::from_secs(1))
+                        .with_multiplier(1.4)
+                        .with_max_elapsed_time(Some(config.max_polling_time))
+                        .build(),
+                ),
+            },
         })
     }
 
@@ -713,13 +722,8 @@ impl Agent {
         })
     }
 
-    fn get_retry_policy(&self) -> ExponentialBackoff<SystemClock> {
-        ExponentialBackoffBuilder::new()
-            .with_initial_interval(Duration::from_millis(500))
-            .with_max_interval(Duration::from_secs(1))
-            .with_multiplier(1.4)
-            .with_max_elapsed_time(Some(self.max_polling_time))
-            .build()
+    fn get_retry_policy(&self) -> Box<dyn CloneableBackoff> {
+        self.retry_policy.clone()
     }
 
     /// Wait for `request_status` to return a Replied response and return the arg.
