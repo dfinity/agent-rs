@@ -1,3 +1,4 @@
+use backoff::backoff::Backoff;
 use reqwest::Client;
 use url::Url;
 
@@ -8,6 +9,27 @@ use crate::{
 use std::{sync::Arc, time::Duration};
 
 use super::{route_provider::RouteProvider, HttpService};
+
+/// A helper trait for cloning backoff policies.
+pub trait CloneableBackoff: Backoff + Send + Sync {
+    /// Clone the backoff policy into a `Box<dyn CloneableBackoff>`.
+    fn clone_box(&self) -> Box<dyn CloneableBackoff>;
+}
+
+impl<T> CloneableBackoff for T
+where
+    T: Backoff + Clone + Send + Sync + 'static,
+{
+    fn clone_box(&self) -> Box<dyn CloneableBackoff> {
+        Box::new(self.clone())
+    }
+}
+
+impl Clone for Box<dyn CloneableBackoff> {
+    fn clone(&self) -> Self {
+        self.clone_box()
+    }
+}
 
 /// A configuration for an agent.
 #[non_exhaustive]
@@ -32,6 +54,8 @@ pub struct AgentConfig {
     pub max_tcp_error_retries: usize,
     /// See [`with_arc_http_middleware`](super::AgentBuilder::with_arc_http_middleware).
     pub http_service: Option<Arc<dyn HttpService>>,
+    /// See [`with_retry_policy`](super::AgentBuilder::with_retry_policy).
+    pub retry_policy: Option<Box<dyn CloneableBackoff>>,
     /// See [`with_max_polling_time`](super::AgentBuilder::with_max_polling_time).
     pub max_polling_time: Duration,
     /// See [`with_background_dynamic_routing`](super::AgentBuilder::with_background_dynamic_routing).
@@ -53,6 +77,7 @@ impl Default for AgentConfig {
             route_provider: None,
             max_response_body_size: None,
             max_tcp_error_retries: 0,
+            retry_policy: None,
             max_polling_time: Duration::from_secs(60 * 5),
             background_dynamic_routing: false,
             url: None,
