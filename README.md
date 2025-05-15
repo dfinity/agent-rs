@@ -19,7 +19,10 @@ the ic-ref tests. In order to run the ic-ref tests, you will need a running loca
 server. If you do not have one, those tests will be ignored.
 
 ## Release
-To release, increase the version number in all crates and run `cargo build` to update the lock file.
+To release:
+- increase the version number in Cargo.toml (`workspace.package` and `workspace.dependencies`)
+- add a header for the version under "## Unreleased" in CHANGELOG.md
+- run `cargo build` to update the lock file
 
 ## Packages
 This repo has multiple packages in its Cargo workspace.
