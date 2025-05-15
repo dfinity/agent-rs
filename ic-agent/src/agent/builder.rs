@@ -174,11 +174,11 @@ impl AgentBuilder {
     where
         B: 'static + CloneableBackoff,
     {
-        self.with_arc_retry_policy(Box::new(retry_policy))
+        self.with_box_retry_policy(Box::new(retry_policy))
     }
 
     /// Same as [`Self::with_retry_policy`], but reuses an existing `Box`
-    pub fn with_arc_retry_policy(mut self, retry_policy: Box<dyn CloneableBackoff>) -> Self {
+    pub fn with_box_retry_policy(mut self, retry_policy: Box<dyn CloneableBackoff>) -> Self {
         self.config.retry_policy = Some(retry_policy);
         self
     }
