@@ -8,9 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-* BREAKING: `AgentError` is now an opaque error type which reveals only the general category of error that occurred.
-* `AgentError` now contains information about the ongoing operation the error occurred in the context of. This allows you to see
-  if a call successfully went through even if there was for example an error Candid-decoding the response.
+* BREAKING: `AgentError` is now an opaque error type which reveals only the general category of error that occurred. `ic-utils` now has its own error types.
+* `AgentError` now contains information about the ongoing operation the error occurred in the context of. This allows you to see if a call successfully went through even if there was for example an error decoding the response.
 * Add `read_state_canister_controllers` and `read_state_canister_module_hash` functions.
 
 ## [0.40.0] - 2025-03-17
