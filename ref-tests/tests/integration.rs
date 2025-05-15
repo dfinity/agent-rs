@@ -6,13 +6,14 @@ use candid::CandidType;
 use ic_agent::{
     agent::{agent_error::HttpErrorPayload, Envelope, EnvelopeContent, RejectCode, RejectResponse},
     export::Principal,
-    AgentError, Identity,
+    Identity,
 };
 use ic_certification::Label;
 use ic_utils::{
     call::{AsyncCall, SyncCall},
     interfaces::{
         management_canister::builders::{CanisterSettings, InstallMode},
+        wallet::WalletError,
         WalletCanister,
     },
     Argument, Canister,
@@ -25,6 +26,7 @@ use ref_tests::{
 use serde::Serialize;
 use std::{
     borrow::Cow,
+    error::Error,
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -53,10 +55,13 @@ fn basic_expiry() {
             .call_and_wait()
             .await;
 
-        match result.unwrap_err() {
-            AgentError::HttpError(HttpErrorPayload { status, .. }) => assert_eq!(status, 400),
-            x => panic!("Was expecting an error, got {:?}", x),
-        }
+        let err = result.unwrap_err();
+        let payload = err
+            .source()
+            .unwrap()
+            .downcast_ref::<HttpErrorPayload>()
+            .unwrap();
+        assert_eq!(payload.status, 400);
 
         let result = agent
             .update(&canister_id, "update")
@@ -184,21 +189,23 @@ fn canister_reject_call() {
             WalletCanister::create(&agent, create_wallet_canister(&agent, None).await?).await?;
 
         let result = alice.wallet_send(*bob.canister_id(), 1_000_000).await;
-
+        let WalletError::Agent(err) = result.unwrap_err() else {
+            panic!("not an agent error")
+        };
         assert!(
             matches!(
-                &result,
-                Err(AgentError::CertifiedReject { reject: RejectResponse {
+                &err.operation_info().unwrap().response,
+                Some(Err(RejectResponse {
                     reject_code: RejectCode::CanisterError,
                     reject_message,
                     error_code: Some(error_code),
                     ..
-                }, .. }) if reject_message.contains(&format!(
+                })) if reject_message.contains(&format!(
                     "Canister {}: Canister has no update method 'wallet_send'",
                     alice.canister_id()
                 )) && error_code == "IC0536"
             ),
-            "wrong error: {result:?}"
+            "wrong error: {err:?}"
         );
 
         Ok(())
@@ -211,11 +218,18 @@ fn read_state_canister() {
     with_universal_canister(|agent, canister_id| async move {
         let blob = agent
             .read_state_canister_info(canister_id, "module_hash")
-            .await?;
+            .await?
+            .unwrap();
         assert_eq!(blob.len(), 32);
-        let controllers = agent.read_state_canister_controllers(canister_id).await?;
+        let controllers = agent
+            .read_state_canister_controllers(canister_id)
+            .await?
+            .unwrap();
         assert_eq!(controllers.len(), 1);
-        let hash = agent.read_state_canister_module_hash(canister_id).await?;
+        let hash = agent
+            .read_state_canister_module_hash(canister_id)
+            .await?
+            .unwrap();
         assert_eq!(hash.len(), 32);
         Ok(())
     })
@@ -572,7 +586,7 @@ mod sign_send {
             signed_query_inspect, signed_request_status_inspect, signed_update_inspect,
             ReplyResponse, RequestStatusResponse,
         },
-        AgentError,
+        agent_error::InspectionError,
     };
     use ref_tests::{universal_canister::payload, with_universal_canister};
     use std::{thread, time};
@@ -680,7 +694,7 @@ mod sign_send {
             );
 
             assert!(matches!(result,
-                    Err(AgentError::CallDataMismatch{field, value_arg, value_cbor})
+                    Err(InspectionError::CallDataMismatch{field, value_arg, value_cbor})
                     if field == *"method_name" && value_arg == *"non_query" && value_cbor == *"query"));
 
             Ok(())

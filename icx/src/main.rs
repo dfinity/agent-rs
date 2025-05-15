@@ -16,7 +16,7 @@ use ic_agent::{
     },
     export::Principal,
     identity::BasicIdentity,
-    Agent, AgentError, Identity,
+    Agent, Identity,
 };
 use ic_utils::interfaces::management_canister::{
     builders::{CanisterInstall, CanisterSettings},
@@ -453,9 +453,10 @@ async fn main() -> Result<()> {
                         let result = tokio::select!(
                             Ok(unreachable) = tokio::spawn(printer) => unreachable,
                             res = tokio::time::timeout(Duration::from_secs(5 * 60), result) => res,
-                        );
+                        )
+                        .context("timed out")?;
                         eprintln!();
-                        result.unwrap_or(Err(AgentError::TimeoutWaitingForResponse()))
+                        result
                     }
                     SubCommand::Query(_) => {
                         fetch_root_key_from_non_ic(&agent, &opts.replica).await?;
@@ -478,35 +479,38 @@ async fn main() -> Result<()> {
                         print_idl_blob(&blob, &t.output, &method_type)
                             .context("Failed to print result blob")?;
                     }
-                    Err(AgentError::TransportError(_)) => return Ok(()),
-                    Err(AgentError::HttpError(HttpErrorPayload {
-                        status,
-                        content_type,
-                        content,
-                    })) => {
-                        let mut error_message =
-                            format!("Server returned an HTTP Error:\n  Code: {status}\n");
-                        match content_type.as_deref() {
-                            None => error_message
-                                .push_str(&format!("  Content: {}\n", hex::encode(content))),
-                            Some("text/plain; charset=UTF-8" | "text/plain") => {
-                                error_message.push_str("  ContentType: text/plain\n");
-                                error_message.push_str(&format!(
-                                    "  Content:     {}\n",
-                                    String::from_utf8_lossy(&content)
-                                ));
+                    Err(e) => {
+                        if let Some(HttpErrorPayload {
+                            content,
+                            content_type,
+                            status,
+                        }) = e.as_http_error()
+                        {
+                            let mut error_message =
+                                format!("Server returned an HTTP Error:\n  Code: {status}\n");
+                            match content_type.as_deref() {
+                                None => error_message
+                                    .push_str(&format!("  Content: {}\n", hex::encode(content))),
+                                Some("text/plain; charset=UTF-8" | "text/plain") => {
+                                    error_message.push_str("  ContentType: text/plain\n");
+                                    error_message.push_str(&format!(
+                                        "  Content:     {}\n",
+                                        String::from_utf8_lossy(content)
+                                    ));
+                                }
+                                Some(x) => {
+                                    error_message.push_str(&format!("  ContentType: {x}\n"));
+                                    error_message.push_str(&format!(
+                                        "  Content:     {}\n",
+                                        hex::encode(content)
+                                    ));
+                                }
                             }
-                            Some(x) => {
-                                error_message.push_str(&format!("  ContentType: {x}\n"));
-                                error_message.push_str(&format!(
-                                    "  Content:     {}\n",
-                                    hex::encode(&content)
-                                ));
-                            }
+                            bail!(error_message);
+                        } else {
+                            return Err(e.into());
                         }
-                        bail!(error_message);
                     }
-                    Err(s) => Err(s).context("Got an error when make the canister call")?,
                 }
             }
         }

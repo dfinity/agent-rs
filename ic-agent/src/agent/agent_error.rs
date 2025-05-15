@@ -1,63 +1,153 @@
-//! Errors that can occur when using the replica agent.
+//! Errors that can occur when using the agent.
 
-use crate::{agent::status::Status, RequestIdError};
-use candid::Principal;
 use ic_certification::Label;
-use ic_transport_types::{InvalidRejectCodeError, RejectResponse};
-use leb128::read;
-use std::time::Duration;
+use ic_transport_types::RejectResponse;
 use std::{
+    error::Error,
     fmt::{Debug, Display, Formatter},
-    str::Utf8Error,
+    time::Duration,
 };
 use thiserror::Error;
 
+use crate::util::try_from_context;
+
+use super::{status::Status, OperationInfo, CURRENT_OPERATION};
+
+/// An error that can occur when using an `Agent`. Includes partial operation info.
+///
+/// If (say) a deserialization hiccup occurred after a call returned, you can call the
+/// [`operation_info()`](Self::operation_info) method to learn whether the call failed or succeeded,
+/// and (if possible) what the response was.
+pub struct AgentError {
+    inner: Box<AgentErrorInner>,
+}
+
+#[derive(Debug)]
+struct AgentErrorInner {
+    source: Option<Box<dyn Error + Send + Sync>>,
+    kind: ErrorKind,
+    operation_info: Option<OperationInfo>,
+}
+
+/// What category of error occurred.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum ErrorKind {
+    /// Errors relating to certificate and signature verification. Plausibly due to malicious nodes,
+    /// but far more likely due to running mainnet-targeting code against a dev instance.
+    Trust,
+    /// Errors relating to the IC protocol as defined by the specification (e.g. CBOR decoding).
+    Protocol,
+    /// Reject messages provided by the IC. Note that unless the [`OperationStatus`](super::OperationStatus)
+    /// is `Received`, a reject cannot necessarily be trusted.
+    Reject,
+    /// Errors relating to the HTTP transport (e.g. TCP errors).
+    Transport,
+    /// Errors from a pluggable interface (e.g. [`Identity`](super::Identity)).
+    External,
+    /// Errors caused by hitting a user-provided limit (e.g. response body size).
+    Limit,
+    /// Errors caused by invalid input to a function.
+    Input,
+    /// Uncategorizable errors.
+    Unknown,
+}
+
+impl AgentError {
+    /// Returns what kind of error occurred.
+    pub fn kind(&self) -> ErrorKind {
+        self.inner.kind
+    }
+    /// Returns details on whatever operation was ongoing, or `None` if there wasn't one.
+    pub fn operation_info(&self) -> Option<&OperationInfo> {
+        self.inner.operation_info.as_ref()
+    }
+    /// Creates a new error for use in the [`RouteProvider`](super::RouteProvider) interface.
+    /// `operation_info` will return `None` initially, this will be inserted by the agent.
+    pub fn new_route_provider_error_without_context(message: String) -> Self {
+        Self {
+            inner: Box::new(AgentErrorInner {
+                source: Some(Box::new(ErrorCode::RouteProviderError(message))),
+                kind: ErrorKind::External,
+                operation_info: None,
+            }),
+        }
+    }
+    pub(crate) fn from_boxed_in_context(
+        inner: Box<dyn Error + Send + Sync>,
+        kind: ErrorKind,
+    ) -> Self {
+        match inner.downcast::<AgentError>() {
+            Ok(agent_err) => *agent_err,
+            Err(source) => AgentError {
+                inner: Box::new(AgentErrorInner {
+                    kind,
+                    operation_info: try_from_context(&CURRENT_OPERATION, |op| op.clone()).ok(),
+                    source: Some(source),
+                }),
+            },
+        }
+    }
+    pub(crate) fn add_context(&mut self) {
+        self.inner.operation_info = try_from_context(&CURRENT_OPERATION, |op| op.clone()).ok();
+    }
+    /// If this error is an HTTP error, retrieve the the payload. Equivalent to downcasting [`source()`](Error::source).
+    pub fn as_http_error(&self) -> Option<&HttpErrorPayload> {
+        self.inner
+            .source
+            .as_ref()
+            .and_then(|source| source.downcast_ref())
+    }
+
+    /// If this error is/contains a reject (whether certified or not), returns it.
+    pub fn as_reject(&self) -> Option<&RejectResponse> {
+        if let Some(Err(reject)) = self
+            .inner
+            .operation_info
+            .as_ref()
+            .and_then(|op| op.response())
+        {
+            Some(reject)
+        } else if let Some(
+            ErrorCode::CertifiedReject { reject } | ErrorCode::UncertifiedReject { reject },
+        ) = self
+            .inner
+            .source
+            .as_ref()
+            .and_then(|source| source.downcast_ref::<ErrorCode>())
+        {
+            Some(reject)
+        } else {
+            None
+        }
+    }
+}
+
+impl Debug for AgentError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AgentError")
+            .field("source", &self.inner.source)
+            .field("kind", &self.inner.kind)
+            .field("operation_info", &self.inner.operation_info)
+            .finish()
+    }
+}
+
 /// An error that occurred when using the agent.
 #[derive(Error, Debug)]
-pub enum AgentError {
-    /// The replica URL was invalid.
-    #[error(r#"Invalid Replica URL: "{0}""#)]
-    InvalidReplicaUrl(String),
-
+pub(crate) enum ErrorCode {
     /// The request timed out.
     #[error("The request timed out.")]
-    TimeoutWaitingForResponse(),
+    TimeoutWaitingForResponse,
 
     /// An error occurred when signing with the identity.
     #[error("Identity had a signing error: {0}")]
     SigningError(String),
-
-    /// The data fetched was invalid CBOR.
-    #[error("Invalid CBOR data, could not deserialize: {0}")]
-    InvalidCborData(#[from] serde_cbor::Error),
-
-    /// There was an error calculating a request ID.
-    #[error("Cannot calculate a RequestID: {0}")]
-    CannotCalculateRequestId(#[from] RequestIdError),
-
-    /// There was an error when de/serializing with Candid.
-    #[error("Candid returned an error: {0}")]
-    CandidError(Box<dyn Send + Sync + std::error::Error>),
-
-    /// There was an error parsing a URL.
-    #[error(r#"Cannot parse url: "{0}""#)]
-    UrlParseError(#[from] url::ParseError),
-
-    /// The HTTP method was invalid.
-    #[error(r#"Invalid method: "{0}""#)]
-    InvalidMethodError(#[from] http::method::InvalidMethod),
-
-    /// The principal string was not a valid principal.
-    #[error("Cannot parse Principal: {0}")]
-    PrincipalError(#[from] crate::export::PrincipalError),
 
     /// The subnet rejected the message.
     #[error("The replica returned a rejection error: reject code {:?}, reject message {}, error code {:?}", .reject.reject_code, .reject.reject_message, .reject.error_code)]
     CertifiedReject {
         /// The rejection returned by the replica.
         reject: RejectResponse,
-        /// The operation that was rejected. Not always available.
-        operation: Option<Operation>,
     },
 
     /// The subnet may have rejected the message. This rejection cannot be verified as authentic.
@@ -65,13 +155,7 @@ pub enum AgentError {
     UncertifiedReject {
         /// The rejection returned by the boundary node.
         reject: RejectResponse,
-        /// The operation that was rejected. Not always available.
-        operation: Option<Operation>,
     },
-
-    /// The replica returned an HTTP error.
-    #[error("The replica returned an HTTP Error: {0}")]
-    HttpError(HttpErrorPayload),
 
     /// The status endpoint returned an invalid status.
     #[error("Status endpoint returned an invalid status.")]
@@ -81,37 +165,13 @@ pub enum AgentError {
     #[error("Call was marked as done but we never saw the reply. Request ID: {0}")]
     RequestStatusDoneNoReply(String),
 
-    /// A string error occurred in an external tool.
-    #[error("A tool returned a string message error: {0}")]
-    MessageError(String),
-
-    /// There was an error reading a LEB128 value.
-    #[error("Error reading LEB128 value: {0}")]
-    Leb128ReadError(#[from] read::Error),
-
-    /// A string was invalid UTF-8.
-    #[error("Error in UTF-8 string: {0}")]
-    Utf8ReadError(#[from] Utf8Error),
-
-    /// The lookup path was absent in the certificate.
-    #[error("The lookup path ({0:?}) is absent in the certificate.")]
-    LookupPathAbsent(Vec<Label>),
-
-    /// The lookup path was unknown in the certificate.
-    #[error("The lookup path ({0:?}) is unknown in the certificate.")]
-    LookupPathUnknown(Vec<Label>),
-
     /// The lookup path did not make sense for the certificate.
     #[error("The lookup path ({0:?}) does not make sense for the certificate.")]
     LookupPathError(Vec<Label>),
 
-    /// The request status at the requested path was invalid.
-    #[error("The request status ({1}) at path {0:?} is invalid.")]
-    InvalidRequestStatus(Vec<Label>, String),
-
     /// The certificate verification for a `read_state` call failed.
     #[error("Certificate verification failed.")]
-    CertificateVerificationFailed(),
+    CertificateVerificationFailed,
 
     /// The signature verification for a query call failed.
     #[error("Query signature verification failed.")]
@@ -119,10 +179,10 @@ pub enum AgentError {
 
     /// The certificate contained a delegation that does not include the `effective_canister_id` in the `canister_ranges` field.
     #[error("Certificate is not authorized to respond to queries for this canister. While developing: Did you forget to set effective_canister_id?")]
-    CertificateNotAuthorized(),
+    CertificateNotAuthorized,
 
     /// The certificate was older than allowed by the `ingress_expiry`.
-    #[error("Certificate is stale (over {0:?}). Is the computer's clock synchronized?")]
+    #[error("Certificate is stale (over {}s). Is the computer's clock synchronized?", .0.as_secs())]
     CertificateOutdated(Duration),
 
     /// The certificate contained more than one delegation.
@@ -174,40 +234,9 @@ pub enum AgentError {
     #[error("The status response did not contain a root key.  Status: {0}")]
     NoRootKeyInStatus(Status),
 
-    /// The invocation to the wallet call forward method failed with an error.
-    #[error("The invocation to the wallet call forward method failed with the error: {0}")]
-    WalletCallFailed(String),
-
-    /// The wallet operation failed.
-    #[error("The  wallet operation failed: {0}")]
-    WalletError(String),
-
-    /// The wallet canister must be upgraded. See [`dfx wallet upgrade`](https://internetcomputer.org/docs/current/references/cli-reference/dfx-wallet)
-    #[error("The wallet canister must be upgraded: {0}")]
-    WalletUpgradeRequired(String),
-
     /// The response size exceeded the provided limit.
     #[error("Response size exceeded limit.")]
-    ResponseSizeExceededLimit(),
-
-    /// An unknown error occurred during communication with the replica.
-    #[error("An error happened during communication with the replica: {0}")]
-    TransportError(#[from] reqwest::Error),
-
-    /// There was a mismatch between the expected and actual CBOR data during inspection.
-    #[error("There is a mismatch between the CBOR encoded call and the arguments: field {field}, value in argument is {value_arg}, value in CBOR is {value_cbor}")]
-    CallDataMismatch {
-        /// The field that was mismatched.
-        field: String,
-        /// The value that was expected to be in the CBOR.
-        value_arg: String,
-        /// The value that was actually in the CBOR.
-        value_cbor: String,
-    },
-
-    /// The rejected call had an invalid reject code (valid range 1..5).
-    #[error(transparent)]
-    InvalidRejectCode(#[from] InvalidRejectCodeError),
+    ResponseSizeExceededLimit,
 
     /// Route provider failed to generate a url for some reason.
     #[error("Route provider failed to generate url: {0}")]
@@ -216,6 +245,42 @@ pub enum AgentError {
     /// Invalid HTTP response.
     #[error("Invalid HTTP response: {0}")]
     InvalidHttpResponse(String),
+
+    /// Wrong envelope type for function.
+    #[error("Wrong request type {found}, expected {expected}")]
+    WrongRequestType { found: String, expected: String },
+}
+
+impl Error for AgentError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.inner.source.as_ref().map(|s| &**s as _)
+    }
+}
+
+impl Display for AgentError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.inner.kind {
+            ErrorKind::External => {
+                if let Some(source) = &self.inner.source {
+                    write!(f, "{source}")?;
+                } else {
+                    write!(f, "unknown internal module error")?;
+                }
+                return Ok(());
+            }
+            ErrorKind::Input => write!(f, "input precondition failed")?,
+            ErrorKind::Limit => write!(f, "internal limit reached")?,
+            ErrorKind::Protocol => write!(f, "IC protocol error")?,
+            ErrorKind::Reject => write!(f, "call rejected")?,
+            ErrorKind::Transport => write!(f, "HTTP transport error")?,
+            ErrorKind::Trust => write!(f, "trust error")?,
+            ErrorKind::Unknown => write!(f, "internal error")?,
+        }
+        if let Some(source) = &self.inner.source {
+            write!(f, ": {source}")?;
+        }
+        Ok(())
+    }
 }
 
 impl PartialEq for AgentError {
@@ -226,9 +291,13 @@ impl PartialEq for AgentError {
     }
 }
 
-impl From<candid::Error> for AgentError {
-    fn from(e: candid::Error) -> AgentError {
-        AgentError::CandidError(e.into())
+pub(crate) trait ResultExt<T> {
+    fn context(self, kind: ErrorKind) -> Result<T, AgentError>;
+}
+
+impl<T, E: Error + Send + Sync + 'static> ResultExt<T> for Result<T, E> {
+    fn context(self, kind: ErrorKind) -> Result<T, AgentError> {
+        self.map_err(|e| AgentError::from_boxed_in_context(Box::new(e), kind))
     }
 }
 
@@ -244,19 +313,21 @@ pub struct HttpErrorPayload {
 
 impl HttpErrorPayload {
     fn fmt_human_readable(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        // No matter content_type is TEXT or not,
-        // always try to parse it as a String.
-        // When fail, print the raw byte array
-        f.write_fmt(format_args!(
-            "Http Error: status {}, content type {:?}, content: {}",
-            http::StatusCode::from_u16(self.status)
-                .map_or_else(|_| format!("{}", self.status), |code| format!("{code}")),
-            self.content_type.clone().unwrap_or_default(),
-            String::from_utf8(self.content.clone()).unwrap_or_else(|_| format!(
-                "(unable to decode content as UTF-8: {:?})",
-                self.content
-            ))
-        ))?;
+        // No matter whether content_type is text/* or not, always try to parse it as a string.
+        // If this fails, print hex.
+        let status = http::StatusCode::from_u16(self.status)
+            .map_or_else(|_| format!("{}", self.status), |code| format!("{code}"));
+        let content_type = self.content_type.as_deref().unwrap_or("<none>");
+        if let Ok(content) = std::str::from_utf8(&self.content) {
+            f.write_fmt(format_args!(
+                r#"replica HTTP error: {content:?} (HTTP code {status}, content type {content_type:?})"#
+            ))?;
+        } else {
+            f.write_fmt(format_args!(
+                r#"replica HTTP error: 0x{} (non-UTF-8) (HTTP code {status}, content type {content_type:?})"#,
+                hex::encode(&self.content)
+            ))?;
+        }
         Ok(())
     }
 }
@@ -273,36 +344,52 @@ impl Display for HttpErrorPayload {
     }
 }
 
-/// An operation that can result in a reject.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum Operation {
-    /// A call to a canister method.
-    Call {
-        /// The canister whose method was called.
-        canister: Principal,
-        /// The name of the method.
-        method: String,
+impl Error for HttpErrorPayload {}
+
+impl AsRef<AgentError> for AgentError {
+    fn as_ref(&self) -> &AgentError {
+        self
+    }
+}
+
+/// Errors produced by the `inspect_*` family of [`Agent`] methods.
+#[derive(Debug)]
+pub enum InspectionError {
+    /// A field did not match.
+    CallDataMismatch {
+        /// The field that was mismatched.
+        field: String,
+        /// The value that was expected to be in the CBOR.
+        value_arg: String,
+        /// The value that was actually in the CBOR.
+        value_cbor: String,
     },
-    /// A read of the state tree, in the context of a canister. This will *not* be returned for request polling.
-    ReadState {
-        /// The requested paths within the state tree.
-        paths: Vec<Vec<String>>,
-        /// The canister the read request was made in the context of.
-        canister: Principal,
-    },
-    /// A read of the state tree, in the context of a subnet.
-    ReadSubnetState {
-        /// The requested paths within the state tree.
-        paths: Vec<Vec<String>>,
-        /// The subnet the read request was made in the context of.
-        subnet: Principal,
-    },
+    /// Failed for another reason (e.g. decoding).
+    Other(AgentError),
+}
+
+impl Display for InspectionError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InspectionError::CallDataMismatch { field, value_arg, value_cbor } => write!(f, "mismatch between the CBOR encoded call and the arguments: field {field}, value in argument is {value_arg}, value in CBOR is {value_cbor}"),
+            InspectionError::Other(error) => write!(f, "inspection error: {error}"),
+        }
+    }
+}
+
+impl Error for InspectionError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        if let Self::Other(err) = self {
+            Some(err)
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::HttpErrorPayload;
-    use crate::AgentError;
 
     #[test]
     fn content_type_none_valid_utf8() {
@@ -313,8 +400,8 @@ mod tests {
         };
 
         assert_eq!(
-            format!("{}", AgentError::HttpError(payload)),
-            r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "", content: hello"#,
+            format!("{payload}"),
+            r#"replica HTTP error: "hello" (HTTP code 420 <unknown status code>, content type "<none>")"#,
         );
     }
 
@@ -325,10 +412,9 @@ mod tests {
             content_type: None,
             content: vec![195, 40],
         };
-
         assert_eq!(
-            format!("{}", AgentError::HttpError(payload)),
-            r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "", content: (unable to decode content as UTF-8: [195, 40])"#,
+            format!("{payload}"),
+            r#"replica HTTP error: 0xc328 (non-UTF-8) (HTTP code 420 <unknown status code>, content type "<none>")"#,
         );
     }
 
@@ -341,8 +427,8 @@ mod tests {
         };
 
         assert_eq!(
-            format!("{}", AgentError::HttpError(payload)),
-            r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "text/plain", content: hello"#,
+            format!("{payload}"),
+            r#"replica HTTP error: "hello" (HTTP code 420 <unknown status code>, content type "text/plain")"#,
         );
     }
 
@@ -355,8 +441,8 @@ mod tests {
         };
 
         assert_eq!(
-            format!("{}", AgentError::HttpError(payload)),
-            r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "text/plain; charset=utf-8", content: hello"#,
+            format!("{payload}"),
+            r#"replica HTTP error: "hello" (HTTP code 420 <unknown status code>, content type "text/plain; charset=utf-8")"#,
         );
     }
 
@@ -369,8 +455,8 @@ mod tests {
         };
 
         assert_eq!(
-            format!("{}", AgentError::HttpError(payload)),
-            r#"The replica returned an HTTP Error: Http Error: status 420 <unknown status code>, content type "text/html", content: world"#,
+            format!("{payload}"),
+            r#"replica HTTP error: "world" (HTTP code 420 <unknown status code>, content type "text/html")"#,
         );
     }
 }

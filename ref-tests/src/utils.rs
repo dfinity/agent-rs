@@ -1,9 +1,14 @@
+use candid::IDLArgs;
 use ed25519_consensus::SigningKey;
+use ic_agent::agent::RejectResponse;
 use ic_agent::identity::{Prime256v1Identity, Secp256k1Identity};
+use ic_agent::AgentError;
 use ic_agent::{export::Principal, identity::BasicIdentity, Agent, Identity};
 use ic_identity_hsm::HardwareIdentity;
+use ic_utils::error::CanisterError;
 use ic_utils::interfaces::{management_canister::builders::MemoryAllocation, ManagementCanister};
 use rand::thread_rng;
+use std::fmt::Debug;
 use std::{convert::TryFrom, error::Error, future::Future, path::Path};
 
 const HSM_PKCS11_LIBRARY_PATH: &str = "HSM_PKCS11_LIBRARY_PATH";
@@ -242,4 +247,46 @@ where
         let canister_id = create_wallet_canister(&agent, cycles).await?;
         f(agent, canister_id).await
     })
+}
+
+#[track_caller]
+pub fn assert_reject2<T: Debug, E: CanisterError>(res: &Result<T, E>) -> &RejectResponse {
+    match res {
+        Ok(o) => panic!("expected Err, got Ok({o:?})"),
+        Err(e) => match e.as_agent() {
+            Some(err) => assert_reject_err(err),
+            None => panic!("expected agent error, got {e}"),
+        },
+    }
+}
+
+#[track_caller]
+pub fn assert_reject<T: Debug>(res: &Result<T, AgentError>) -> &RejectResponse {
+    match res {
+        Ok(o) => panic!("expected Err, got Ok({o:?})"),
+        Err(e) => assert_reject_err(e),
+    }
+}
+
+#[track_caller]
+pub fn assert_reject_err(e: &AgentError) -> &RejectResponse {
+    match e.operation_info() {
+        None => panic!("error did not come with operation info. error: {e}"),
+        Some(info) => match &info.response {
+            None => {
+                panic!("operation info did not come with response. info: {info:?}, error: {e}")
+            }
+            Some(resp) => match resp {
+                Ok(resp) => panic!(
+                    "expected error, got success: {}",
+                    if let Ok(val) = IDLArgs::from_bytes(resp) {
+                        format!("{val:?}")
+                    } else {
+                        hex::encode(resp)
+                    }
+                ),
+                Err(err) => err,
+            },
+        },
+    }
 }
