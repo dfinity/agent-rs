@@ -193,11 +193,11 @@ pub(super) struct HealthManagerActor<S> {
     routing_snapshot: AtomicSwap<S>,
     /// The receiver channel to listen to the fetched nodes messages.
     fetch_receiver: ReceiverWatch<FetchedNodes>,
-    /// The sender channel to send the health status of the nodes back to HealthManagerActor.
+    /// The sender channel to send the health status of the nodes back to `HealthManagerActor`.
     check_sender: SenderMpsc<NodeHealthState>,
     /// The receiver channel to receive the health status of the nodes from the `HealthCheckActor/s`.
     check_receiver: ReceiverMpsc<NodeHealthState>,
-    /// The sender channel to send the initialization status to DynamicRouteProvider (used only once in the init phase).
+    /// The sender channel to send the initialization status to `DynamicRouteProvider` (used only once in the init phase).
     init_sender: SenderMpsc<bool>,
     /// The cancellation token of the actor.
     token: StopToken,

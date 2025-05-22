@@ -1,6 +1,6 @@
 //! A crate to manage identities related to HSM (Hardware Security Module),
 //! allowing users to sign Internet Computer messages with their hardware key.
-//! Also supports SoftHSM.
+//! Also supports `SoftHSM`.
 //!
 //! # Example
 //!

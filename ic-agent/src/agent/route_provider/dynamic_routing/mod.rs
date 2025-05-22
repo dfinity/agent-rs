@@ -1,6 +1,6 @@
 //! A dynamic routing provider for the Internet Computer (IC) Agent. It enables resilient and adaptive request routing via API boundary nodes.
 //!
-//! The `DynamicRouteProvider` is an implementation of the [RouteProvider](super::RouteProvider) trait. It dynamically discovers and monitors API boundary nodes, filters out unhealthy nodes, and routes API calls across healthy nodes using configurable strategies such as round-robin or latency-based routing.
+//! The `DynamicRouteProvider` is an implementation of the [`RouteProvider`](super::RouteProvider) trait. It dynamically discovers and monitors API boundary nodes, filters out unhealthy nodes, and routes API calls across healthy nodes using configurable strategies such as round-robin or latency-based routing.
 //! This ensures robust and performant interactions with the IC network by adapting to changes in node availability and topology.
 //!
 //! # Overview
@@ -9,20 +9,20 @@
 //! 2. **API boundary nodes**: part of the ICP.
 //! 3. **HTTP Gateways**: Third-party services that proxy requests to API boundary nodes, e.g., gateways hosted on the `ic0.app` domain.
 //!
-//! The Agent uses the [RouteProvider](super::RouteProvider) trait, namely its [route()](super::RouteProvider::route()) method to determine the destination endpoint for each call.
-//! For example this trait is implemented for [Url](https://docs.rs/url/latest/url/) and [RoundRobinRouteProvider](super::RoundRobinRouteProvider).
+//! The Agent uses the [`RouteProvider`](super::RouteProvider) trait, namely its [`route()`](super::RouteProvider::route()) method to determine the destination endpoint for each call.
+//! For example this trait is implemented for [`Url`](https://docs.rs/url/latest/url/) and [`RoundRobinRouteProvider`](super::RoundRobinRouteProvider).
 //! The `DynamicRouteProvider` is a more complex implementation, which is intended to be used only for option (2), it provides:
 //! - **Automatic API Node Discovery**: periodically fetches the latest API boundary node topology.
 //! - **Health Monitoring**: Continuously checks health of all nodes in the topology.
 //! - **Flexible Routing**: Directs requests to healthy nodes using built-in or custom strategies:
-//!   - [RoundRobinRoutingSnapshot](snapshot::round_robin_routing::RoundRobinRoutingSnapshot): Evenly distributes requests across healthy nodes.
-//!   - [LatencyRoutingSnapshot](snapshot::latency_based_routing::LatencyRoutingSnapshot): Prioritizes low-latency nodes via weighted round-robin, with optional penalties if nodes are unavailable within a sliding time window.
+//!   - [`RoundRobinRoutingSnapshot`](snapshot::round_robin_routing::RoundRobinRoutingSnapshot): Evenly distributes requests across healthy nodes.
+//!   - [`LatencyRoutingSnapshot`](snapshot::latency_based_routing::LatencyRoutingSnapshot): Prioritizes low-latency nodes via weighted round-robin, with optional penalties if nodes are unavailable within a sliding time window.
 //! - **Customizability**: Supports custom node fetchers, health checkers, and routing logic.
 //! # Usage
 //! The `DynamicRouteProvider` can be used standalone or injected into the agent to enable dynamic routing. There are several ways to instantiate it:
 //! 1. **Via high-Level Agent API**: Initializes the agent with built-in dynamic routing. This method is user-friendly but provides limited customization options.
-//! 2. **Via [DynamicRouteProviderBuilder](dynamic_route_provider::DynamicRouteProviderBuilder)**: Creates a customized `DynamicRouteProvider` with a specific routing strategy and parameters.
-//! This instance can be used standalone or integrated into the agent via [AgentBuilder::with_route_provider()](super::super::AgentBuilder::with_route_provider).
+//! 2. **Via [`DynamicRouteProviderBuilder`](dynamic_route_provider::DynamicRouteProviderBuilder)**: Creates a customized `DynamicRouteProvider` with a specific routing strategy and parameters.
+//! This instance can be used standalone or integrated into the agent via [`AgentBuilder::with_route_provider()`](super::super::AgentBuilder::with_route_provider).
 //! ## Example: High-Level Agent API
 //! ```rust
 //! use anyhow::Result;
@@ -119,25 +119,25 @@
 //! ```
 //! # Implementation Details
 //! The `DynamicRouteProvider` spawns two background services:
-//! 1. [NodesFetchActor](nodes_fetch::NodesFetchActor): Periodically fetches the latest API boundary node topology and sends updates to the `HealthManagerActor`.
-//! 2. [HealthManagerActor](health_check::HealthManagerActor): Manages health checks for nodes, starts and stops `HealthCheckActor`s and updates the routing table (routing snapshot) with health information.
+//! 1. [`NodesFetchActor`](nodes_fetch::NodesFetchActor): Periodically fetches the latest API boundary node topology and sends updates to the `HealthManagerActor`.
+//! 2. [`HealthManagerActor`](health_check::HealthManagerActor): Manages health checks for nodes, starts and stops `HealthCheckActor`s and updates the routing table (routing snapshot) with health information.
 //!
 //! These background services ensure the routing table remains up-to-date.
 //! # Configuration
-//! The [DynamicRouteProviderBuilder](dynamic_route_provider::DynamicRouteProviderBuilder) allows customized instantiation of `DynamicRouteProvider`:
+//! The [`DynamicRouteProviderBuilder`](dynamic_route_provider::DynamicRouteProviderBuilder) allows customized instantiation of `DynamicRouteProvider`:
 //! - **Fetch Period**: How often to fetch node topology (default: 5 seconds).
 //! - **Health Check Period**: How often to check node health (default: 1 second).
-//! - **Nodes Fetcher**: Custom implementation of the [Fetch](nodes_fetch::Fetch) trait for node discovery.
-//! - **Health Checker**: Custom implementation of the [HealthCheck](health_check::HealthCheck) trait for health monitoring.
-//! - **Routing Strategy**: Custom implementation of the [RoutingSnapshot](snapshot::routing_snapshot::RoutingSnapshot) trait for routing logic.
-//! Two built-in strategies are available: [LatencyRoutingSnapshot](snapshot::latency_based_routing::LatencyRoutingSnapshot) and [RoundRobinRoutingSnapshot](snapshot::round_robin_routing::RoundRobinRoutingSnapshot).
+//! - **Nodes Fetcher**: Custom implementation of the [`Fetch`](nodes_fetch::Fetch) trait for node discovery.
+//! - **Health Checker**: Custom implementation of the [`HealthCheck`](health_check::HealthCheck) trait for health monitoring.
+//! - **Routing Strategy**: Custom implementation of the [`RoutingSnapshot`](snapshot::routing_snapshot::RoutingSnapshot) trait for routing logic.
+//! Two built-in strategies are available: [`LatencyRoutingSnapshot`](snapshot::latency_based_routing::LatencyRoutingSnapshot) and [`RoundRobinRoutingSnapshot`](snapshot::round_robin_routing::RoundRobinRoutingSnapshot).
 //!
 //! # Error Handling
-//! Errors during node fetching or health checking are encapsulated in the [DynamicRouteProviderError](dynamic_route_provider::DynamicRouteProviderError) enum:
+//! Errors during node fetching or health checking are encapsulated in the [`DynamicRouteProviderError`](dynamic_route_provider::DynamicRouteProviderError) enum:
 //! - `NodesFetchError`: Occurs when fetching the topology fails.
 //! - `HealthCheckError`: Occurs when node health checks fail.
 //! These errors are not propagated to the caller. Instead, they are logged internally using the `tracing` crate. To capture these errors, configure a `tracing` subscriber in your application.
-//! If no healthy nodes are available, the [route()](super::RouteProvider::route()) method returns an [AgentError::RouteProviderError](super::super::agent_error::AgentError::RouteProviderError).
+//! If no healthy nodes are available, the [`route()`](super::RouteProvider::route()) method returns an [`AgentError::RouteProviderError`](super::super::agent_error::AgentError::RouteProviderError).
 //! # Testing
 //! The module includes comprehensive tests covering:
 //! - Mainnet integration with dynamic node discovery.

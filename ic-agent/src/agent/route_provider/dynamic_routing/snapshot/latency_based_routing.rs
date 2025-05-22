@@ -179,7 +179,7 @@ fn compute_score(
 /// Summary of the routing strategy:
 /// - Uses sliding windows for storing latencies and availabilities of each node
 /// - Latency and availability scores are first computed separately from the sliding windows using an additional array of weights, allowing prioritization of more recent observations. By default, exponentially decaying weights are used.
-/// - The final overall score of each node is computed as a product of latency and availability scores, namely score = score_l * score_a
+/// - The final overall score of each node is computed as a product of latency and availability scores, namely `score = score_l * score_a`
 /// - Nodes pre-selection phase for routing candidate pool (snapshot):
 ///   - Criteria: if k-top-nodes setting is enabled, then only k nodes with highest scores are filtered into the routing candidate pool (snapshot), otherwise all healthy nodes are used
 ///   - Trigger conditions: topology updates, node health check status updates
@@ -205,9 +205,9 @@ pub struct LatencyRoutingSnapshot {
     use_availability_penalty: bool,
 }
 
-/// Implementation of the LatencyRoutingSnapshot.
+/// Implementation of the `LatencyRoutingSnapshot`.
 impl LatencyRoutingSnapshot {
-    /// Creates a new LatencyRoutingSnapshot with default configuration.
+    /// Creates a new `LatencyRoutingSnapshot` with default configuration.
     pub fn new() -> Self {
         // Weights are ordered from left to right, where the leftmost weight is for the most recent health check.
         let window_weights = generate_exp_decaying_weights(WINDOW_SIZE, LAMBDA_DECAY);
@@ -247,7 +247,7 @@ impl LatencyRoutingSnapshot {
         self
     }
 
-    /// Atomically updates the routing_candidates
+    /// Atomically updates the `routing_candidates`
     fn publish_routing_candidates(&self) {
         let mut routing_candidates: Vec<RoutingCandidateNode> = self
             .existing_nodes
