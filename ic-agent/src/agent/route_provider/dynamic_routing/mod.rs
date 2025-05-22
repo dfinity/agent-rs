@@ -119,8 +119,8 @@
 //! ```
 //! # Implementation Details
 //! The `DynamicRouteProvider` spawns two background services:
-//! 1. [`NodesFetchActor`](nodes_fetch::NodesFetchActor): Periodically fetches the latest API boundary node topology and sends updates to the `HealthManagerActor`.
-//! 2. [`HealthManagerActor`](health_check::HealthManagerActor): Manages health checks for nodes, starts and stops `HealthCheckActor`s and updates the routing table (routing snapshot) with health information.
+//! 1. `NodesFetchActor`: Periodically fetches the latest API boundary node topology and sends updates to the `HealthManagerActor`.
+//! 2. `HealthManagerActor`: Manages health checks for nodes, starts and stops `HealthCheckActor`s and updates the routing table (routing snapshot) with health information.
 //!
 //! These background services ensure the routing table remains up-to-date.
 //! # Configuration
