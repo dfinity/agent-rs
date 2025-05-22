@@ -1,4 +1,4 @@
-//! A dynamic routing provider for the Internet Computer (IC) Agent. It enables resilient and adaptive request routing via API boundary nodes.
+//! A dynamic routing provider for the Internet Computer (IC) Agent that enables resilient, adaptive request routing through API boundary nodes.
 //!
 //! The `DynamicRouteProvider` is an implementation of the [`RouteProvider`](super::RouteProvider) trait. It dynamically discovers and monitors API boundary nodes, filters out unhealthy nodes, and routes API calls across healthy nodes using configurable strategies such as round-robin or latency-based routing.
 //! This ensures robust and performant interactions with the IC network by adapting to changes in node availability and topology.
