@@ -69,7 +69,7 @@ pub struct DynamicRouteProvider<S> {
     token: StopSource,
 }
 
-/// An error that occurred when the DynamicRouteProvider service was running.
+/// An error that occurred when the `DynamicRouteProvider` service was running.
 #[derive(Error, Debug)]
 pub enum DynamicRouteProviderError {
     /// An error when fetching topology of the API nodes.
@@ -198,11 +198,11 @@ where
     S: RoutingSnapshot + 'static,
 {
     /// Starts two background tasks:
-    /// - Task1: NodesFetchActor
-    ///   - Periodically fetches existing API nodes (gets latest nodes topology) and sends discovered nodes to HealthManagerActor.
-    /// - Task2: HealthManagerActor:
-    ///   - Listens to the fetched nodes messages from the NodesFetchActor.
-    ///   - Starts/stops health check tasks (HealthCheckActors) based on the newly added/removed nodes.
+    /// - Task1: `NodesFetchActor`
+    ///   - Periodically fetches existing API nodes (gets latest nodes topology) and sends discovered nodes to `HealthManagerActor`.
+    /// - Task2: `HealthManagerActor`:
+    ///   - Listens to the fetched nodes messages from the `NodesFetchActor`.
+    ///   - Starts/stops health check tasks (`HealthCheckActors`) based on the newly added/removed nodes.
     ///   - These spawned health check tasks periodically update the snapshot with the latest node health info.
     pub async fn run(&self) {
         log!(info, "{DYNAMIC_ROUTE_PROVIDER}: started ...");
