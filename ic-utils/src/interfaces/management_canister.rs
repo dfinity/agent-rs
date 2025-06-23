@@ -77,6 +77,8 @@ pub enum MgmtMethod {
     ListCanisterSnapshots,
     /// See [`ManagementCanister::delete_canister_snapshot`].
     DeleteCanisterSnapshot,
+    /// See [`ManagementCanister::read_canister_snapshot_metadata`].
+    ReadCanisterSnapshotMetadata,
     /// There is no corresponding agent function as only canisters can call it.
     EcdsaPublicKey,
     /// There is no corresponding agent function as only canisters can call it.
@@ -260,6 +262,89 @@ pub struct Snapshot {
     pub taken_at_timestamp: u64,
     /// The size of the snapshot in bytes.
     pub total_size: u64,
+}
+
+/// The source of a snapshot.
+#[derive(Debug, Clone, CandidType, Deserialize)]
+pub enum SnapshotSource {
+    /// The snapshot was taken from a canister.
+    #[serde(rename = "taken_from_canister")]
+    TakenFromCanister,
+    /// The snapshot was created by uploading metadata.
+    #[serde(rename = "metadata_upload")]
+    MetadataUpload,
+}
+
+/// An exported global variable.
+#[derive(Debug, Clone, CandidType, Deserialize)]
+pub enum ExportedGlobal {
+    /// A 32-bit integer.
+    #[serde(rename = "i32")]
+    I32(i32),
+    /// A 64-bit integer.
+    #[serde(rename = "i64")]
+    I64(i64),
+    /// A 32-bit floating point number.
+    #[serde(rename = "f32")]
+    F32(f32),
+    /// A 64-bit floating point number.
+    #[serde(rename = "f64")]
+    F64(f64),
+    /// A 128-bit integer.
+    #[serde(rename = "v128")]
+    V128(Nat),
+}
+
+/// The status of a global timer.
+#[derive(Debug, Clone, CandidType, Deserialize)]
+pub enum GlobalTimer {
+    /// The global timer is inactive.
+    #[serde(rename = "inactive")]
+    Inactive,
+    /// The global timer is active.
+    #[serde(rename = "active")]
+    Active(u64),
+}
+
+/// The status of a low wasm memory hook.
+#[derive(Debug, Clone, CandidType, Deserialize)]
+pub enum OnLowWasmMemoryHookStatus {
+    /// The condition for the  low wasm memory hook is not satisfied.
+    #[serde(rename = "condition_not_satisfied")]
+    ConditionNotSatisfied,
+    /// The low wasm memory hook is ready to be executed.
+    #[serde(rename = "ready")]
+    Ready,
+    /// The low wasm memory hook has been executed.
+    #[serde(rename = "executed")]
+    Executed,
+}
+
+/// Return type of [`ManagementCanister::read_canister_snapshot_metadata`].
+#[derive(Debug, Clone, CandidType, Deserialize)]
+pub struct SnapshotMetadataResult {
+    /// The source of the snapshot.
+    pub source: SnapshotSource,
+    /// The Unix nanosecond timestamp the snapshot was taken at.
+    pub taken_at_timestamp: u64,
+    /// The size of the Wasm module.
+    pub wasm_module_size: u64,
+    /// The exported globals.
+    pub exported_globals: Vec<ExportedGlobal>,
+    /// The size of the Wasm memory.
+    pub wasm_memory_size: u64,
+    /// The size of the stable memory.
+    pub stable_memory_size: u64,
+    /// The chunk store of the Wasm module.
+    pub wasm_chunk_store: StoreChunksResult,
+    /// The version of the canister.
+    pub canister_version: u64,
+    /// The certified data.
+    pub certified_data: Vec<u8>,
+    /// The status of the global timer.
+    pub global_timer: Option<GlobalTimer>,
+    /// The status of the low wasm memory hook.
+    pub on_low_wasm_memory_hook_status: Option<OnLowWasmMemoryHookStatus>,
 }
 
 impl<'agent> ManagementCanister<'agent> {
@@ -591,6 +676,26 @@ impl<'agent> ManagementCanister<'agent> {
                 canister_id: *canister_id,
                 snapshot_id,
             })
+            .build()
+    }
+
+    /// Reads the metadata of a recorded canister snapshot by canister ID and snapshot ID.
+    pub fn read_canister_snapshot_metadata(
+        &self,
+        canister_id: &Principal,
+        snapshot_id: &[u8],
+    ) -> impl 'agent + AsyncCall<Value = (SnapshotMetadataResult,)> {
+        #[derive(CandidType)]
+        struct In<'a> {
+            canister_id: Principal,
+            snapshot_id: &'a [u8],
+        }
+        self.update(MgmtMethod::ReadCanisterSnapshotMetadata.as_ref())
+            .with_arg(In {
+                canister_id: *canister_id,
+                snapshot_id,
+            })
+            .with_effective_canister_id(*canister_id)
             .build()
     }
 }
