@@ -8,6 +8,7 @@ use crate::{
 };
 use candid::{CandidType, Deserialize, Nat};
 use ic_agent::{export::Principal, Agent};
+use serde::Serialize;
 use std::{convert::AsRef, ops::Deref};
 use strum_macros::{AsRefStr, Display, EnumString};
 
@@ -239,7 +240,9 @@ pub struct FetchCanisterLogsResponse {
 }
 
 /// Chunk hash.
-#[derive(CandidType, Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+#[derive(
+    CandidType, Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Serialize,
+)]
 pub struct ChunkHash {
     /// The hash of an uploaded chunk
     #[serde(with = "serde_bytes")]
@@ -265,7 +268,7 @@ pub struct Snapshot {
 }
 
 /// The source of a snapshot.
-#[derive(Debug, Clone, CandidType, Deserialize)]
+#[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
 pub enum SnapshotSource {
     /// The snapshot was taken from a canister.
     TakenFromCanister,
@@ -274,7 +277,7 @@ pub enum SnapshotSource {
 }
 
 /// An exported global variable.
-#[derive(Debug, Clone, CandidType, Deserialize)]
+#[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
 pub enum ExportedGlobal {
     /// A 32-bit integer.
     I32(i32),
@@ -289,7 +292,7 @@ pub enum ExportedGlobal {
 }
 
 /// The status of a global timer.
-#[derive(Debug, Clone, CandidType, Deserialize)]
+#[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
 pub enum CanisterTimer {
     /// The global timer is inactive.
     Inactive,
@@ -298,7 +301,7 @@ pub enum CanisterTimer {
 }
 
 /// The status of a low wasm memory hook.
-#[derive(Debug, Clone, CandidType, Deserialize)]
+#[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
 pub enum OnLowWasmMemoryHookStatus {
     /// The condition for the  low wasm memory hook is not satisfied.
     ConditionNotSatisfied,
@@ -309,7 +312,7 @@ pub enum OnLowWasmMemoryHookStatus {
 }
 
 /// Return type of [`ManagementCanister::read_canister_snapshot_metadata`].
-#[derive(Debug, Clone, CandidType, Deserialize)]
+#[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
 pub struct SnapshotMetadataResult {
     /// The source of the snapshot.
     pub source: SnapshotSource,
@@ -328,6 +331,7 @@ pub struct SnapshotMetadataResult {
     /// The version of the canister.
     pub canister_version: u64,
     /// The certified data.
+    #[serde(with = "serde_bytes")]
     pub certified_data: Vec<u8>,
     /// The status of the global timer.
     pub global_timer: Option<CanisterTimer>,
