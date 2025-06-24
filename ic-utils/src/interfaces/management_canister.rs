@@ -80,6 +80,8 @@ pub enum MgmtMethod {
     DeleteCanisterSnapshot,
     /// See [`ManagementCanister::read_canister_snapshot_metadata`].
     ReadCanisterSnapshotMetadata,
+    /// See [`ManagementCanister::read_canister_snapshot_data`].
+    ReadCanisterSnapshotData,
     /// There is no corresponding agent function as only canisters can call it.
     EcdsaPublicKey,
     /// There is no corresponding agent function as only canisters can call it.
@@ -337,6 +339,42 @@ pub struct SnapshotMetadataResult {
     pub global_timer: Option<CanisterTimer>,
     /// The status of the low wasm memory hook.
     pub on_low_wasm_memory_hook_status: Option<OnLowWasmMemoryHookStatus>,
+}
+
+/// Snapshot data kind.
+#[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
+pub enum SnapshotDataKind {
+    /// Wasm module.
+    WasmModule {
+        /// Offset in bytes.
+        offset: u64,
+        /// Size of the data in bytes.
+        size: u64,
+    },
+    /// Main memory
+    MainMemory {
+        /// Offset in bytes.
+        offset: u64,
+        /// Size of the data in bytes.
+        size: u64,
+    },
+    /// Stable memory.
+    StableMemory {
+        /// Offset in bytes.
+        offset: u64,
+        /// Size of the data in bytes.
+        size: u64,
+    },
+    /// Chunk hash.
+    ChunkHash,
+}
+
+/// Snapshot reading result.
+#[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
+pub struct SnapshotDataResult {
+    /// The returned chunk of data.
+    #[serde(with = "serde_bytes")]
+    pub chunk: Vec<u8>,
 }
 
 impl<'agent> ManagementCanister<'agent> {
@@ -686,6 +724,29 @@ impl<'agent> ManagementCanister<'agent> {
             .with_arg(In {
                 canister_id: *canister_id,
                 snapshot_id,
+            })
+            .with_effective_canister_id(*canister_id)
+            .build()
+    }
+
+    /// Reads the metadata of a recorded canister snapshot by canister ID and snapshot ID.
+    pub fn read_canister_snapshot_data(
+        &self,
+        canister_id: &Principal,
+        snapshot_id: &[u8],
+        kind: &SnapshotDataKind,
+    ) -> impl 'agent + AsyncCall<Value = (SnapshotDataResult,)> {
+        #[derive(CandidType)]
+        struct In<'a> {
+            canister_id: Principal,
+            snapshot_id: &'a [u8],
+            kind: &'a SnapshotDataKind,
+        }
+        self.update(MgmtMethod::ReadCanisterSnapshotData.as_ref())
+            .with_arg(In {
+                canister_id: *canister_id,
+                snapshot_id,
+                kind,
             })
             .with_effective_canister_id(*canister_id)
             .build()
