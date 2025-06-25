@@ -366,7 +366,11 @@ pub enum SnapshotDataKind {
         size: u64,
     },
     /// Chunk hash.
-    ChunkHash,
+    WasmChunk {
+        /// The hash of the chunk.
+        #[serde(with = "serde_bytes")]
+        hash: Vec<u8>,
+    },
 }
 
 /// Snapshot reading result.
