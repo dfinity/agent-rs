@@ -82,6 +82,8 @@ pub enum MgmtMethod {
     ReadCanisterSnapshotMetadata,
     /// See [`ManagementCanister::read_canister_snapshot_data`].
     ReadCanisterSnapshotData,
+    /// See [`ManagementCanister::upload_canister_snapshot_metadata`].
+    UploadCanisterSnapshotMetadata,
     /// There is no corresponding agent function as only canisters can call it.
     EcdsaPublicKey,
     /// There is no corresponding agent function as only canisters can call it.
@@ -379,6 +381,30 @@ pub struct SnapshotDataResult {
     /// The returned chunk of data.
     #[serde(with = "serde_bytes")]
     pub chunk: Vec<u8>,
+}
+
+/// The upload metadata of a canister snapshot.
+#[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
+pub struct UploadSnapshotMetadata {
+    /// The ID of the canister.
+    pub canister_id: Principal,
+    /// The ID of the snapshot to replace.
+    pub replace_snapshot: Option<Vec<u8>>,
+    /// The size of the Wasm module.
+    pub wasm_module_size: u64,
+    /// The exported globals.
+    pub exported_globals: Vec<ExportedGlobal>,
+    /// The size of the Wasm memory.
+    pub wasm_memory_size: u64,
+    /// The size of the stable memory.
+    pub stable_memory_size: u64,
+    /// The certified data.
+    #[serde(with = "serde_bytes")]
+    pub certified_data: Vec<u8>,
+    /// The status of the global timer.
+    pub global_timer: Option<CanisterTimer>,
+    /// The status of the low wasm memory hook.
+    pub on_low_wasm_memory_hook_status: Option<OnLowWasmMemoryHookStatus>,
 }
 
 impl<'agent> ManagementCanister<'agent> {
@@ -751,6 +777,26 @@ impl<'agent> ManagementCanister<'agent> {
                 canister_id: *canister_id,
                 snapshot_id,
                 kind,
+            })
+            .with_effective_canister_id(*canister_id)
+            .build()
+    }
+
+    /// Uploads the metadata of a canister snapshot.
+    pub fn upload_canister_snapshot_metadata(
+        &self,
+        canister_id: &Principal,
+        metadata: &UploadSnapshotMetadata,
+    ) -> impl 'agent + AsyncCall<Value = (Snapshot,)> {
+        #[derive(CandidType)]
+        struct In<'a> {
+            canister_id: Principal,
+            metadata: &'a UploadSnapshotMetadata,
+        }
+        self.update(MgmtMethod::UploadCanisterSnapshotMetadata.as_ref())
+            .with_arg(In {
+                canister_id: *canister_id,
+                metadata,
             })
             .with_effective_canister_id(*canister_id)
             .build()
