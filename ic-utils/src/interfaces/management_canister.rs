@@ -317,7 +317,7 @@ pub enum OnLowWasmMemoryHookStatus {
 
 /// Return type of [`ManagementCanister::read_canister_snapshot_metadata`].
 #[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
-pub struct SnapshotMetadataResult {
+pub struct SnapshotMetadata {
     /// The source of the snapshot.
     pub source: SnapshotSource,
     /// The Unix nanosecond timestamp the snapshot was taken at.
@@ -383,28 +383,12 @@ pub struct SnapshotDataResult {
     pub chunk: Vec<u8>,
 }
 
-/// The upload metadata of a canister snapshot.
+/// The ID of a snapshot.
 #[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
-pub struct UploadSnapshotMetadata {
-    /// The ID of the canister.
-    pub canister_id: Principal,
-    /// The ID of the snapshot to replace.
-    pub replace_snapshot: Option<Vec<u8>>,
-    /// The size of the Wasm module.
-    pub wasm_module_size: u64,
-    /// The exported globals.
-    pub exported_globals: Vec<ExportedGlobal>,
-    /// The size of the Wasm memory.
-    pub wasm_memory_size: u64,
-    /// The size of the stable memory.
-    pub stable_memory_size: u64,
-    /// The certified data.
+pub struct CanisterSnapshotId {
+    /// The ID of the snapshot.
     #[serde(with = "serde_bytes")]
-    pub certified_data: Vec<u8>,
-    /// The status of the global timer.
-    pub global_timer: Option<CanisterTimer>,
-    /// The status of the low wasm memory hook.
-    pub on_low_wasm_memory_hook_status: Option<OnLowWasmMemoryHookStatus>,
+    pub snapshot_id: Vec<u8>,
 }
 
 impl<'agent> ManagementCanister<'agent> {
@@ -744,7 +728,7 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
         snapshot_id: &[u8],
-    ) -> impl 'agent + AsyncCall<Value = (SnapshotMetadataResult,)> {
+    ) -> impl 'agent + AsyncCall<Value = (SnapshotMetadata,)> {
         #[derive(CandidType)]
         struct In<'a> {
             canister_id: Principal,
@@ -786,17 +770,32 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn upload_canister_snapshot_metadata(
         &self,
         canister_id: &Principal,
-        metadata: &UploadSnapshotMetadata,
-    ) -> impl 'agent + AsyncCall<Value = (Snapshot,)> {
+        replace_snapshot: Option<&[u8]>,
+        metadata: &SnapshotMetadata,
+    ) -> impl 'agent + AsyncCall<Value = (CanisterSnapshotId,)> {
         #[derive(CandidType)]
         struct In<'a> {
             canister_id: Principal,
-            metadata: &'a UploadSnapshotMetadata,
+            replace_snapshot: Option<&'a [u8]>,
+            wasm_module_size: u64,
+            exported_globals: &'a Vec<ExportedGlobal>,
+            wasm_memory_size: u64,
+            stable_memory_size: u64,
+            certified_data: &'a Vec<u8>,
+            global_timer: Option<&'a CanisterTimer>,
+            on_low_wasm_memory_hook_status: Option<&'a OnLowWasmMemoryHookStatus>,
         }
         self.update(MgmtMethod::UploadCanisterSnapshotMetadata.as_ref())
             .with_arg(In {
                 canister_id: *canister_id,
-                metadata,
+                replace_snapshot,
+                wasm_module_size: metadata.wasm_module_size,
+                exported_globals: &metadata.exported_globals,
+                wasm_memory_size: metadata.wasm_memory_size,
+                stable_memory_size: metadata.stable_memory_size,
+                certified_data: &metadata.certified_data,
+                global_timer: metadata.global_timer.as_ref(),
+                on_low_wasm_memory_hook_status: metadata.on_low_wasm_memory_hook_status.as_ref(),
             })
             .with_effective_canister_id(*canister_id)
             .build()
