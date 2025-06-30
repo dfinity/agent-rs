@@ -72,7 +72,7 @@ impl BasicIdentity {
         let key_len = decoded_key.as_bytes().len();
         if key_len != 32 {
             Err(PemError::InvalidPrivateKey(format!(
-                "Ed25519 expects a 32 octets PRivate Key, but got {key_len} octets",
+                "Ed25519 expects a 32 octets private key, but got {key_len} octets",
             )))
         } else {
             let raw_key: [u8; 32] = decoded_key.as_bytes().try_into().unwrap();
@@ -80,7 +80,7 @@ impl BasicIdentity {
         }
     }
 
-    /// Create a `BasicIdentity` from a raw 32-byte Private Key as described in RFC 8032 5.1.5.
+    /// Create a `BasicIdentity` from a raw 32-byte private key as described in RFC 8032 5.1.5.
     pub fn from_raw_key(key: &[u8; 32]) -> Self {
         let private_key = PrivateKey::deserialize_raw_32(key);
         let public_key = private_key.public_key();

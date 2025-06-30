@@ -23,8 +23,8 @@ pub enum PemError {
     #[error("An error occurred while reading the file: {0}")]
     DerError(#[from] der::Error),
 
-    /// The Private Key is invalid.
-    #[error("Invalid Private Key: {0}")]
+    /// The private key is invalid.
+    #[error("Invalid private key: {0}")]
     InvalidPrivateKey(String),
 
     /// The key was rejected by k256.
