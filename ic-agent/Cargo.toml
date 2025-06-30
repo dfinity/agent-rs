@@ -29,13 +29,13 @@ candid = { workspace = true }
 der = "0.7"
 ecdsa = "0.16"
 ed25519-consensus = { workspace = true }
-ic-ed25519 = "0.2"
 elliptic-curve = "0.13"
 futures-util = { workspace = true }
 hex = { workspace = true }
 http = "1.0.0"
 http-body = "1.0.0"
 ic-certification = { workspace = true }
+ic-ed25519 = { workspace = true }
 ic-transport-types = { workspace = true }
 ic-verify-bls-signature = "0.5"
 k256 = { workspace = true, features = ["pem"] }

@@ -26,13 +26,12 @@ anyhow = { version = "1.0", features = ["backtrace"] }
 candid = { workspace = true, features = ["value"] }
 candid_parser = { workspace = true }
 clap = { workspace = true, features = ["derive", "cargo", "color"] }
-ed25519-consensus = { workspace = true }
+ic-ed25519 = { workspace = true }
 hex = { workspace = true }
 humantime = "2.0.1"
 ic-agent = { workspace = true, default-features = true }
 ic-utils = { workspace = true }
 pocket-ic = { workspace = true }
-rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
