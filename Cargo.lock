@@ -1333,12 +1333,11 @@ version = "0.40.1"
 dependencies = [
  "async-trait",
  "candid",
- "ed25519-consensus",
  "futures-util",
  "ic-agent",
+ "ic-ed25519",
  "once_cell",
  "pocket-ic",
- "rand",
  "semver",
  "serde",
  "serde_bytes",
