@@ -2322,9 +2322,9 @@ name = "ref-tests"
 version = "0.0.0"
 dependencies = [
  "candid",
- "ed25519-consensus",
  "ic-agent",
  "ic-certification 3.0.2",
+ "ic-ed25519",
  "ic-identity-hsm",
  "ic-utils",
  "k256",
