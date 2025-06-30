@@ -1228,7 +1228,6 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "sha2 0.10.8",
- "simple_asn1",
  "stop-token",
  "thiserror 2.0.3",
  "time",

@@ -4,10 +4,6 @@ use crate::{agent::EnvelopeContent, export::Principal, Identity, Signature};
 use crate::identity::error::PemError;
 
 use ic_ed25519::PrivateKey;
-use simple_asn1::{
-    oid, to_der,
-    ASN1Block::{BitString, ObjectIdentifier, Sequence},
-};
 
 use std::fmt;
 
@@ -109,8 +105,12 @@ impl BasicIdentity {
     /// Create a `BasicIdentity` from an `Ed25519KeyPair` from `ring`.
     #[cfg(feature = "ring")]
     pub fn from_key_pair(key_pair: ring::signature::Ed25519KeyPair) -> Self {
+        use ic_ed25519::PublicKey;
         use ring::signature::KeyPair;
-        let der_encoded_public_key = der_encode_public_key(key_pair.public_key().as_ref().to_vec());
+        let raw_public_key = key_pair.public_key().as_ref().to_vec();
+        // Unwrap safe: we trust that the public key is valid, as it comes from a valid key pair.
+        let public_key = PublicKey::deserialize_raw(&raw_public_key).unwrap();
+        let der_encoded_public_key = public_key.serialize_rfc8410_der();
         Self {
             private_key: KeyCompat::Ring(key_pair),
             der_encoded_public_key,
@@ -160,14 +160,4 @@ impl Identity for BasicIdentity {
             delegations: None,
         })
     }
-}
-
-fn der_encode_public_key(public_key: Vec<u8>) -> Vec<u8> {
-    // see Section 4 "SubjectPublicKeyInfo" in https://tools.ietf.org/html/rfc8410
-
-    let id_ed25519 = oid!(1, 3, 101, 112);
-    let algorithm = Sequence(0, vec![ObjectIdentifier(0, id_ed25519)]);
-    let subject_public_key = BitString(0, public_key.len() * 8, public_key);
-    let subject_public_key_info = Sequence(0, vec![algorithm, subject_public_key]);
-    to_der(&subject_public_key_info).unwrap()
 }

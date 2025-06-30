@@ -51,7 +51,6 @@ serde_bytes = { workspace = true }
 serde_cbor = { workspace = true }
 serde_repr = { workspace = true }
 sha2 = { workspace = true }
-simple_asn1 = "0.6.1"
 stop-token = "0.7"
 thiserror = { workspace = true }
 time = { workspace = true }
