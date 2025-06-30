@@ -80,7 +80,7 @@ impl BasicIdentity {
         }
     }
 
-    /// Create a `BasicIdentity` from a raw 32-byte Private Key
+    /// Create a `BasicIdentity` from a raw 32-byte Private Key as described in RFC 8032 5.1.5.
     pub fn from_raw_key(key: &[u8; 32]) -> Self {
         let private_key = PrivateKey::deserialize_raw_32(key);
         let public_key = private_key.public_key();
@@ -97,6 +97,7 @@ impl BasicIdentity {
     ///
     /// This constructor is kept for backwards compatibility.
     /// The signing won't use `ed25519-consensus` anymore.
+    #[deprecated(since = "0.41.0", note = "use BasicIdentity::from_raw_key instead")]
     pub fn from_signing_key(key: ed25519_consensus::SigningKey) -> Self {
         let raw_key = key.to_bytes();
         Self::from_raw_key(&raw_key)
