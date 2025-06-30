@@ -3,7 +3,7 @@ use crate::{agent::EnvelopeContent, export::Principal, Identity, Signature};
 #[cfg(feature = "pem")]
 use crate::identity::error::PemError;
 
-use ed25519_consensus::SigningKey;
+use ic_ed25519::PrivateKey;
 use simple_asn1::{
     oid, to_der,
     ASN1Block::{BitString, ObjectIdentifier, Sequence},
@@ -73,19 +73,37 @@ impl BasicIdentity {
             }
         };
         let decoded_key = OctetString::from_der(pki.private_key)?; // ed25519 uses an octet string within another octet string
-        let private_key = SigningKey::try_from(decoded_key.as_bytes())?;
-        Ok(BasicIdentity::from_signing_key(private_key))
+        let key_len = decoded_key.as_bytes().len();
+        if key_len != 32 {
+            Err(PemError::InvalidPrivateKey(format!(
+                "Ed25519 expects a 32 octets PRivate Key, but got {key_len} octets",
+            )))
+        } else {
+            let raw_key: [u8; 32] = decoded_key.as_bytes().try_into().unwrap();
+            Ok(Self::from_raw_key(&raw_key))
+        }
+    }
+
+    /// Create a `BasicIdentity` from a raw 32-byte Private Key
+    pub fn from_raw_key(key: &[u8; 32]) -> Self {
+        let private_key = PrivateKey::deserialize_raw_32(key);
+        let public_key = private_key.public_key();
+        let der_encoded_public_key = public_key.serialize_rfc8410_der();
+        Self {
+            private_key: KeyCompat::Standard(private_key),
+            der_encoded_public_key,
+        }
     }
 
     /// Create a `BasicIdentity` from a `SigningKey` from `ed25519-consensus`.
-    pub fn from_signing_key(key: SigningKey) -> Self {
-        let public_key = key.verification_key();
-        let der_encoded_public_key = der_encode_public_key(public_key.as_bytes().to_vec());
-
-        Self {
-            private_key: KeyCompat::Standard(key),
-            der_encoded_public_key,
-        }
+    ///
+    /// # Note
+    ///
+    /// This constructor is kept for backwards compatibility.
+    /// The signing won't use `ed25519-consensus` anymore.
+    pub fn from_signing_key(key: ed25519_consensus::SigningKey) -> Self {
+        let raw_key = key.to_bytes();
+        Self::from_raw_key(&raw_key)
     }
 
     /// Create a `BasicIdentity` from an `Ed25519KeyPair` from `ring`.
@@ -101,7 +119,8 @@ impl BasicIdentity {
 }
 
 enum KeyCompat {
-    Standard(SigningKey),
+    /// ic_ed25519::PrivateKey
+    Standard(PrivateKey),
     #[cfg(feature = "ring")]
     Ring(ring::signature::Ed25519KeyPair),
 }
@@ -109,7 +128,7 @@ enum KeyCompat {
 impl KeyCompat {
     fn sign(&self, payload: &[u8]) -> Vec<u8> {
         match self {
-            Self::Standard(k) => k.sign(payload).to_bytes().to_vec(),
+            Self::Standard(k) => k.sign_message(payload).to_vec(),
             #[cfg(feature = "ring")]
             Self::Ring(k) => k.sign(payload).as_ref().to_vec(),
         }

@@ -29,6 +29,7 @@ candid = { workspace = true }
 der = "0.7"
 ecdsa = "0.16"
 ed25519-consensus = { workspace = true }
+ic-ed25519 = "0.2"
 elliptic-curve = "0.13"
 futures-util = { workspace = true }
 hex = { workspace = true }
