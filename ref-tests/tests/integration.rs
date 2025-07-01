@@ -88,7 +88,7 @@ fn wait_signed() {
             + Duration::from_secs(120))
         .as_nanos() as u64;
 
-        let agent_identity = Arc::new(create_basic_identity().unwrap());
+        let agent_identity = Arc::new(create_basic_identity());
         agent.set_arc_identity(agent_identity.clone());
 
         let call_envelope_content = EnvelopeContent::Call {
@@ -300,7 +300,7 @@ fn wallet_create_and_set_controller() {
             .await?;
 
         // controller
-        let other_agent_identity = create_basic_identity()?;
+        let other_agent_identity = create_basic_identity();
         let other_agent_principal = other_agent_identity.sender()?;
         let other_agent = create_agent(other_agent_identity).await?;
         other_agent.fetch_root_key().await?;
@@ -530,7 +530,7 @@ fn wallet_helper_functions() {
         assert_eq!(name, Some(wallet_name));
 
         // controller
-        let other_agent_identity = create_basic_identity()?;
+        let other_agent_identity = create_basic_identity();
         let other_agent_principal = other_agent_identity.sender()?;
         let other_agent = create_agent(other_agent_identity).await?;
         other_agent.fetch_root_key().await?;
@@ -690,23 +690,21 @@ mod sign_send {
 
 mod identity {
     use candid::Principal;
-    use ed25519_consensus::SigningKey;
     use ic_agent::{
         identity::{
-            BasicIdentity, DelegatedIdentity, Delegation, Prime256v1Identity, Secp256k1Identity,
-            SignedDelegation,
+            DelegatedIdentity, Delegation, Prime256v1Identity, Secp256k1Identity, SignedDelegation,
         },
         Identity,
     };
     use rand::thread_rng;
+    use ref_tests::utils::create_basic_identity;
     use ref_tests::{universal_canister::payload, with_universal_canister_as};
 
     #[ignore]
     #[test]
     fn delegated_eddsa_identity() {
-        let mut random = thread_rng();
-        let sending_identity = BasicIdentity::from_signing_key(SigningKey::new(&mut random));
-        let signing_identity = BasicIdentity::from_signing_key(SigningKey::new(&mut random));
+        let sending_identity = create_basic_identity();
+        let signing_identity = create_basic_identity();
         let delegation = Delegation {
             expiration: i64::MAX as u64,
             pubkey: signing_identity.public_key().unwrap(),

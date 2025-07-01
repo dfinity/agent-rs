@@ -28,13 +28,18 @@ cached = { version = "0.52", features = ["ahash"], default-features = false }
 candid = { workspace = true }
 der = "0.7"
 ecdsa = "0.16"
-ed25519-consensus = { workspace = true }
+# Note
+# ed25519-consensus is kept as a dependency for backward compatibility.
+# It is only used in the identity constructor `BasicIdentity::from_signing_key`.
+# The actual signing and verification is done using `ic-ed25519`.
+ed25519-consensus = "2.1.0"
 elliptic-curve = "0.13"
 futures-util = { workspace = true }
 hex = { workspace = true }
 http = "1.0.0"
 http-body = "1.0.0"
 ic-certification = { workspace = true }
+ic-ed25519 = { workspace = true }
 ic-transport-types = { workspace = true }
 ic-verify-bls-signature = "0.5"
 k256 = { workspace = true, features = ["pem"] }
@@ -50,7 +55,6 @@ serde_bytes = { workspace = true }
 serde_cbor = { workspace = true }
 serde_repr = { workspace = true }
 sha2 = { workspace = true }
-simple_asn1 = "0.6.1"
 stop-token = "0.7"
 thiserror = { workspace = true }
 time = { workspace = true }
