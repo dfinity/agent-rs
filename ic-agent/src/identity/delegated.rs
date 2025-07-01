@@ -71,13 +71,10 @@ impl DelegatedIdentity {
                     return Err(DelegationError::UnknownAlgorithm);
                 }
             } else if spki.algorithm.oid == ObjectIdentifier::new_unwrap("1.3.101.112") {
-                let vk = ed25519_consensus::VerificationKey::try_from(
-                    spki.subject_public_key.raw_bytes(),
-                )
-                .map_err(|_| DelegationError::Parse)?;
-                let sig = ed25519_consensus::Signature::try_from(&delegation.signature[..])
-                    .map_err(|_| DelegationError::Parse)?;
-                vk.verify(&sig, &delegation.delegation.signable())
+                let vk =
+                    ic_ed25519::PublicKey::deserialize_raw(spki.subject_public_key.raw_bytes())
+                        .map_err(|_| DelegationError::Parse)?;
+                vk.verify_signature(&delegation.delegation.signable(), &delegation.signature[..])
                     .map_err(|_| DelegationError::BrokenChain {
                         from: last_verified.clone(),
                         to: Some(delegation.delegation.clone()),

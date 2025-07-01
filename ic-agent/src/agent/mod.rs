@@ -18,9 +18,9 @@ use async_lock::Semaphore;
 use async_trait::async_trait;
 pub use builder::AgentBuilder;
 use cached::{Cached, TimedCache};
-use ed25519_consensus::{Error as Ed25519Error, Signature, VerificationKey};
 use futures_util::StreamExt;
 use http::{header::CONTENT_TYPE, HeaderMap, Method, StatusCode};
+use ic_ed25519::{PublicKey, SignatureError};
 #[doc(inline)]
 pub use ic_transport_types::{
     signed, CallResponse, Envelope, EnvelopeContent, RejectCode, RejectResponse, ReplyResponse,
@@ -104,10 +104,8 @@ type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + '
 /// }
 ///
 /// # fn create_identity() -> impl ic_agent::Identity {
-/// #
-/// #     ic_agent::identity::BasicIdentity::from_signing_key(
-/// #         ed25519_consensus::SigningKey::new(rand::thread_rng())
-/// #     )
+/// #     // In real code, the raw key should be either read from a pem file or generated with randomness.
+/// #     ic_agent::identity::BasicIdentity::from_raw_key(&[0u8;32])
 /// # }
 /// #
 /// async fn create_a_canister() -> Result<Principal, Box<dyn std::error::Error>> {
@@ -515,25 +513,17 @@ impl Agent {
                         actual: node_key[..12].to_vec(),
                     });
                 }
-                let pubkey =
-                    VerificationKey::try_from(<[u8; 32]>::try_from(&node_key[12..]).unwrap())
-                        .map_err(|_| AgentError::MalformedPublicKey)?;
-                let sig = Signature::from(
-                    <[u8; 64]>::try_from(&signature.signature[..])
-                        .map_err(|_| AgentError::MalformedSignature)?,
-                );
+                let pubkey = PublicKey::deserialize_raw(&node_key[12..])
+                    .map_err(|_| AgentError::MalformedPublicKey)?;
 
-                match pubkey.verify(&sig, &signable) {
-                    Err(Ed25519Error::InvalidSignature) => {
+                match pubkey.verify_signature(&signable, &signature.signature[..]) {
+                    Ok(()) => (),
+                    Err(SignatureError::InvalidSignature) => {
                         return Err(AgentError::QuerySignatureVerificationFailed)
                     }
-                    Err(Ed25519Error::InvalidSliceLength) => {
+                    Err(SignatureError::InvalidLength) => {
                         return Err(AgentError::MalformedSignature)
                     }
-                    Err(Ed25519Error::MalformedPublicKey) => {
-                        return Err(AgentError::MalformedPublicKey)
-                    }
-                    Ok(()) => (),
                     _ => unreachable!(),
                 }
             }
