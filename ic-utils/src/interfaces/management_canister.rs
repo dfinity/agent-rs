@@ -84,6 +84,8 @@ pub enum MgmtMethod {
     ReadCanisterSnapshotData,
     /// See [`ManagementCanister::upload_canister_snapshot_metadata`].
     UploadCanisterSnapshotMetadata,
+    /// See [`ManagementCanister::upload_canister_snapshot_data`].
+    UploadCanisterSnapshotData,
     /// There is no corresponding agent function as only canisters can call it.
     EcdsaPublicKey,
     /// There is no corresponding agent function as only canisters can call it.
@@ -353,7 +355,7 @@ pub enum SnapshotDataKind {
         /// Size of the data in bytes.
         size: u64,
     },
-    /// Main memory
+    /// Main memory.
     MainMemory {
         /// Offset in bytes.
         offset: u64,
@@ -389,6 +391,28 @@ pub struct CanisterSnapshotId {
     /// The ID of the snapshot.
     #[serde(with = "serde_bytes")]
     pub snapshot_id: Vec<u8>,
+}
+
+/// Snapshot data offset.
+#[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
+pub enum SnapshotDataOffset {
+    /// Wasm module.
+    WasmModule {
+        /// Offset in bytes.
+        offset: u64,
+    },
+    /// Main memory.
+    MainMemory {
+        /// Offset in bytes.
+        offset: u64,
+    },
+    /// Stable memory.
+    StableMemory {
+        /// Offset in bytes.
+        offset: u64,
+    },
+    /// Wasm chunk.
+    WasmChunk,
 }
 
 impl<'agent> ManagementCanister<'agent> {
@@ -743,7 +767,7 @@ impl<'agent> ManagementCanister<'agent> {
             .build()
     }
 
-    /// Reads the metadata of a recorded canister snapshot by canister ID and snapshot ID.
+    /// Reads the data of a recorded canister snapshot by canister ID and snapshot ID.
     pub fn read_canister_snapshot_data(
         &self,
         canister_id: &Principal,
@@ -766,7 +790,7 @@ impl<'agent> ManagementCanister<'agent> {
             .build()
     }
 
-    /// Uploads the metadata of a canister snapshot.
+    /// Uploads the metadata of a canister snapshot by canister ID.
     pub fn upload_canister_snapshot_metadata(
         &self,
         canister_id: &Principal,
@@ -796,6 +820,32 @@ impl<'agent> ManagementCanister<'agent> {
                 certified_data: &metadata.certified_data,
                 global_timer: metadata.global_timer.as_ref(),
                 on_low_wasm_memory_hook_status: metadata.on_low_wasm_memory_hook_status.as_ref(),
+            })
+            .with_effective_canister_id(*canister_id)
+            .build()
+    }
+
+    /// Uploads the data of a canister snapshot by canister ID and snapshot ID..
+    pub fn upload_canister_snapshot_data(
+        &self,
+        canister_id: &Principal,
+        snapshot_id: &[u8],
+        kind: &SnapshotDataOffset,
+        chunk: &[u8],
+    ) -> impl 'agent + AsyncCall<Value = ()> {
+        #[derive(CandidType)]
+        struct In<'a> {
+            canister_id: Principal,
+            snapshot_id: &'a [u8],
+            kind: &'a SnapshotDataOffset,
+            chunk: &'a [u8],
+        }
+        self.update(MgmtMethod::UploadCanisterSnapshotData.as_ref())
+            .with_arg(In {
+                canister_id: *canister_id,
+                snapshot_id,
+                kind,
+                chunk,
             })
             .with_effective_canister_id(*canister_id)
             .build()
