@@ -72,9 +72,7 @@ pub trait AsyncCall: CallIntoFuture<Output = Result<Self::Value, AgentError>> {
     /// async fn create_a_canister() -> Result<Principal, Box<dyn std::error::Error>> {
     /// # let canister_wasm = b"\0asm\x01\0\0\0";
     /// # fn create_identity() -> impl Identity {
-    /// #     BasicIdentity::from_signing_key(
-    /// #         ed25519_consensus::SigningKey::new(rand::thread_rng()),
-    /// #     )
+    /// #     BasicIdentity::from_raw_key(&[0u8;32])
     /// # }
     /// #
     /// # let url = format!("http://localhost:{}", option_env!("IC_REF_PORT").unwrap_or("4943"));

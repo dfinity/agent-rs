@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 candid = { workspace = true }
-ed25519-consensus = { workspace = true }
+ic-ed25519 = { workspace = true }
 ic-agent = { path = "../ic-agent" }
 ic-identity-hsm = { path = "../ic-identity-hsm" }
 ic-utils = { path = "../ic-utils", features = ["raw"] }
