@@ -8,11 +8,17 @@ pub async fn sleep(d: Duration) {
     tokio::time::sleep(d).await;
     #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
     wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |rs, rj| {
-        if let Err(e) = web_sys::window()
-            .expect("global window unavailable")
-            .set_timeout_with_callback_and_timeout_and_arguments_0(&rs, d.as_millis() as _)
-        {
-            use wasm_bindgen::UnwrapThrowExt;
+        use wasm_bindgen::{JsCast, UnwrapThrowExt};
+
+        let global = js_sys::global();
+        let res = if let Some(window) = global.dyn_ref::<web_sys::Window>() {
+            window.set_timeout_with_callback_and_timeout_and_arguments_0(&rs, d.as_millis() as _)
+        } else if let Some(worker) = global.dyn_ref::<web_sys::WorkerGlobalScope>() {
+            worker.set_timeout_with_callback_and_timeout_and_arguments_0(&rs, d.as_millis() as _)
+        } else {
+            panic!("global window or worker unavailable");
+        };
+        if let Err(e) = res {
             rj.call1(&rj, &e).unwrap_throw();
         }
     }))
