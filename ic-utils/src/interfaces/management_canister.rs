@@ -277,8 +277,10 @@ pub struct Snapshot {
 #[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
 pub enum SnapshotSource {
     /// The snapshot was taken from a canister.
+    #[serde(rename = "taken_from_canister")]
     TakenFromCanister,
     /// The snapshot was created by uploading metadata.
+    #[serde(rename = "metadata_upload")]
     MetadataUpload,
 }
 
@@ -286,19 +288,19 @@ pub enum SnapshotSource {
 #[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
 pub enum ExportedGlobal {
     /// A 32-bit integer.
-    #[serde(rename = "I32")]
+    #[serde(rename = "i32")]
     I32(i32),
     /// A 64-bit integer.
-    #[serde(rename = "I64")]
+    #[serde(rename = "i64")]
     I64(i64),
     /// A 32-bit floating point number.
-    #[serde(rename = "F32")]
+    #[serde(rename = "f32")]
     F32(f32),
     /// A 64-bit floating point number.
-    #[serde(rename = "F64")]
+    #[serde(rename = "f64")]
     F64(f64),
     /// A 128-bit integer.
-    #[serde(rename = "V128")]
+    #[serde(rename = "v128")]
     V128(Nat),
 }
 
@@ -306,8 +308,10 @@ pub enum ExportedGlobal {
 #[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
 pub enum CanisterTimer {
     /// The global timer is inactive.
+    #[serde(rename = "inactive")]
     Inactive,
     /// The global timer is active.
+    #[serde(rename = "active")]
     Active(u64),
 }
 
@@ -315,10 +319,13 @@ pub enum CanisterTimer {
 #[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
 pub enum OnLowWasmMemoryHookStatus {
     /// The condition for the  low wasm memory hook is not satisfied.
+    #[serde(rename = "condition_not_satisfied")]
     ConditionNotSatisfied,
     /// The low wasm memory hook is ready to be executed.
+    #[serde(rename = "ready")]
     Ready,
     /// The low wasm memory hook has been executed.
+    #[serde(rename = "executed")]
     Executed,
 }
 
@@ -354,6 +361,7 @@ pub struct SnapshotMetadata {
 #[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
 pub enum SnapshotDataKind {
     /// Wasm module.
+    #[serde(rename = "wasm_module")]
     WasmModule {
         /// Offset in bytes.
         offset: u64,
@@ -361,6 +369,7 @@ pub enum SnapshotDataKind {
         size: u64,
     },
     /// Main memory.
+    #[serde(rename = "main_memory")]
     MainMemory {
         /// Offset in bytes.
         offset: u64,
@@ -368,6 +377,7 @@ pub enum SnapshotDataKind {
         size: u64,
     },
     /// Stable memory.
+    #[serde(rename = "stable_memory")]
     StableMemory {
         /// Offset in bytes.
         offset: u64,
@@ -375,6 +385,7 @@ pub enum SnapshotDataKind {
         size: u64,
     },
     /// Chunk hash.
+    #[serde(rename = "wasm_chunk")]
     WasmChunk {
         /// The hash of the chunk.
         #[serde(with = "serde_bytes")]
@@ -402,21 +413,25 @@ pub struct CanisterSnapshotId {
 #[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
 pub enum SnapshotDataOffset {
     /// Wasm module.
+    #[serde(rename = "wasm_module")]
     WasmModule {
         /// Offset in bytes.
         offset: u64,
     },
     /// Main memory.
+    #[serde(rename = "main_memory")]
     MainMemory {
         /// Offset in bytes.
         offset: u64,
     },
     /// Stable memory.
+    #[serde(rename = "stable_memory")]
     StableMemory {
         /// Offset in bytes.
         offset: u64,
     },
     /// Wasm chunk.
+    #[serde(rename = "wasm_chunk")]
     WasmChunk,
 }
 
