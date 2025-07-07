@@ -1,7 +1,9 @@
+use ed25519_consensus::SigningKey;
 use ic_agent::identity::{Prime256v1Identity, Secp256k1Identity};
 use ic_agent::{export::Principal, identity::BasicIdentity, Agent, Identity};
 use ic_identity_hsm::HardwareIdentity;
 use ic_utils::interfaces::{management_canister::builders::MemoryAllocation, ManagementCanister};
+use rand::thread_rng;
 use std::{convert::TryFrom, error::Error, future::Future, path::Path};
 
 const HSM_PKCS11_LIBRARY_PATH: &str = "HSM_PKCS11_LIBRARY_PATH";
@@ -26,7 +28,7 @@ pub fn create_identity() -> Result<Box<dyn Identity>, String> {
     if std::env::var(HSM_PKCS11_LIBRARY_PATH).is_ok() {
         create_hsm_identity().map(|x| Box::new(x) as _)
     } else {
-        Ok(Box::new(create_basic_identity()))
+        create_basic_identity().map(|x| Box::new(x) as _)
     }
 }
 
@@ -56,8 +58,10 @@ fn get_hsm_pin() -> Result<String, String> {
 // To avoid this, we use a basic identity for any second identity in tests.
 //
 // A shared container of Ctx objects might be possible instead, but my rust-fu is inadequate.
-pub fn create_basic_identity() -> BasicIdentity {
-    BasicIdentity::from_raw_key(&ic_ed25519::PrivateKey::generate().serialize_raw())
+pub fn create_basic_identity() -> Result<BasicIdentity, String> {
+    let sk = SigningKey::new(thread_rng());
+
+    Ok(BasicIdentity::from_signing_key(sk))
 }
 
 /// Create a secp256k1identity, which unfortunately will always be the same one

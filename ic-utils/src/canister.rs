@@ -388,7 +388,9 @@ mod tests {
     use super::super::interfaces::ManagementCanister;
     use crate::call::AsyncCall;
     use candid::Principal;
+    use ed25519_consensus::SigningKey;
     use ic_agent::identity::BasicIdentity;
+    use rand::thread_rng;
 
     const POCKET_IC: &str = "POCKET_IC";
 
@@ -409,8 +411,7 @@ mod tests {
     async fn simple() {
         use super::Canister;
 
-        let identity =
-            BasicIdentity::from_raw_key(&ic_ed25519::PrivateKey::generate().serialize_raw());
+        let identity = BasicIdentity::from_signing_key(SigningKey::new(thread_rng()));
 
         let port = std::env::var("IC_REF_PORT").unwrap_or_else(|_| "4943".into());
 

@@ -3,7 +3,11 @@ use crate::{agent::EnvelopeContent, export::Principal, Identity, Signature};
 #[cfg(feature = "pem")]
 use crate::identity::error::PemError;
 
-use ic_ed25519::PrivateKey;
+use ed25519_consensus::SigningKey;
+use simple_asn1::{
+    oid, to_der,
+    ASN1Block::{BitString, ObjectIdentifier, Sequence},
+};
 
 use std::fmt;
 
@@ -69,49 +73,26 @@ impl BasicIdentity {
             }
         };
         let decoded_key = OctetString::from_der(pki.private_key)?; // ed25519 uses an octet string within another octet string
-        let key_len = decoded_key.as_bytes().len();
-        if key_len != 32 {
-            Err(PemError::InvalidPrivateKey(format!(
-                "Ed25519 expects a 32 octets private key, but got {key_len} octets",
-            )))
-        } else {
-            let raw_key: [u8; 32] = decoded_key.as_bytes().try_into().unwrap();
-            Ok(Self::from_raw_key(&raw_key))
-        }
-    }
-
-    /// Create a `BasicIdentity` from a raw 32-byte private key as described in RFC 8032 5.1.5.
-    pub fn from_raw_key(key: &[u8; 32]) -> Self {
-        let private_key = PrivateKey::deserialize_raw_32(key);
-        let public_key = private_key.public_key();
-        let der_encoded_public_key = public_key.serialize_rfc8410_der();
-        Self {
-            private_key: KeyCompat::Standard(private_key),
-            der_encoded_public_key,
-        }
+        let private_key = SigningKey::try_from(decoded_key.as_bytes())?;
+        Ok(BasicIdentity::from_signing_key(private_key))
     }
 
     /// Create a `BasicIdentity` from a `SigningKey` from `ed25519-consensus`.
-    ///
-    /// # Note
-    ///
-    /// This constructor is kept for backwards compatibility.
-    /// The signing won't use `ed25519-consensus` anymore.
-    #[deprecated(since = "0.41.0", note = "use BasicIdentity::from_raw_key instead")]
-    pub fn from_signing_key(key: ed25519_consensus::SigningKey) -> Self {
-        let raw_key = key.to_bytes();
-        Self::from_raw_key(&raw_key)
+    pub fn from_signing_key(key: SigningKey) -> Self {
+        let public_key = key.verification_key();
+        let der_encoded_public_key = der_encode_public_key(public_key.as_bytes().to_vec());
+
+        Self {
+            private_key: KeyCompat::Standard(key),
+            der_encoded_public_key,
+        }
     }
 
     /// Create a `BasicIdentity` from an `Ed25519KeyPair` from `ring`.
     #[cfg(feature = "ring")]
     pub fn from_key_pair(key_pair: ring::signature::Ed25519KeyPair) -> Self {
-        use ic_ed25519::PublicKey;
         use ring::signature::KeyPair;
-        let raw_public_key = key_pair.public_key().as_ref().to_vec();
-        // Unwrap safe: we trust that the public key is valid, as it comes from a valid key pair.
-        let public_key = PublicKey::deserialize_raw(&raw_public_key).unwrap();
-        let der_encoded_public_key = public_key.serialize_rfc8410_der();
+        let der_encoded_public_key = der_encode_public_key(key_pair.public_key().as_ref().to_vec());
         Self {
             private_key: KeyCompat::Ring(key_pair),
             der_encoded_public_key,
@@ -120,8 +101,7 @@ impl BasicIdentity {
 }
 
 enum KeyCompat {
-    /// ic_ed25519::PrivateKey
-    Standard(PrivateKey),
+    Standard(SigningKey),
     #[cfg(feature = "ring")]
     Ring(ring::signature::Ed25519KeyPair),
 }
@@ -129,7 +109,7 @@ enum KeyCompat {
 impl KeyCompat {
     fn sign(&self, payload: &[u8]) -> Vec<u8> {
         match self {
-            Self::Standard(k) => k.sign_message(payload).to_vec(),
+            Self::Standard(k) => k.sign(payload).to_bytes().to_vec(),
             #[cfg(feature = "ring")]
             Self::Ring(k) => k.sign(payload).as_ref().to_vec(),
         }
@@ -161,4 +141,14 @@ impl Identity for BasicIdentity {
             delegations: None,
         })
     }
+}
+
+fn der_encode_public_key(public_key: Vec<u8>) -> Vec<u8> {
+    // see Section 4 "SubjectPublicKeyInfo" in https://tools.ietf.org/html/rfc8410
+
+    let id_ed25519 = oid!(1, 3, 101, 112);
+    let algorithm = Sequence(0, vec![ObjectIdentifier(0, id_ed25519)]);
+    let subject_public_key = BitString(0, public_key.len() * 8, public_key);
+    let subject_public_key_info = Sequence(0, vec![algorithm, subject_public_key]);
+    to_der(&subject_public_key_info).unwrap()
 }

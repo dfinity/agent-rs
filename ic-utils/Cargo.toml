@@ -34,9 +34,10 @@ semver = "1.0.7"
 once_cell = "1.10.0"
 
 [dev-dependencies]
-ic-ed25519 = { workspace = true }
+ed25519-consensus = { workspace = true }
 ic-agent = { workspace = true, default-features = true }
 pocket-ic = { workspace = true }
+rand = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
 [features]
