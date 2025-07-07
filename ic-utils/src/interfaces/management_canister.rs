@@ -286,14 +286,19 @@ pub enum SnapshotSource {
 #[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
 pub enum ExportedGlobal {
     /// A 32-bit integer.
+    #[serde(rename = "I32")]
     I32(i32),
     /// A 64-bit integer.
+    #[serde(rename = "I64")]
     I64(i64),
     /// A 32-bit floating point number.
+    #[serde(rename = "F32")]
     F32(f32),
     /// A 64-bit floating point number.
+    #[serde(rename = "F64")]
     F64(f64),
     /// A 128-bit integer.
+    #[serde(rename = "V128")]
     V128(Nat),
 }
 
