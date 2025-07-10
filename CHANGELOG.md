@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Add canister snapshot download and upload methods to `ManagementCanister`.
+
 ## [0.40.1] - 2025-05-15
 
 * Add `read_state_canister_controllers` and `read_state_canister_module_hash` functions.
