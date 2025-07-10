@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.41.1] - 2025-07-10
+
 * Add canister snapshot download and upload methods to `ManagementCanister`.
 
 ## [0.40.1] - 2025-05-15
