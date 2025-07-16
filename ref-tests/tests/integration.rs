@@ -443,6 +443,7 @@ fn wallet_create_wallet() {
                 wasm_memory_limit: None,
                 wasm_memory_threshold: None,
                 log_visibility: None,
+                environment: None,
             },
         };
         let args = Argument::from_candid((create_args,));

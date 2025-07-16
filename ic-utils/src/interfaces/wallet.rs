@@ -677,6 +677,7 @@ impl<'agent> WalletCanister<'agent> {
             wasm_memory_limit: None,
             wasm_memory_threshold: None,
             log_visibility: None,
+            environment: None,
         };
 
         self.update("wallet_create_canister")
@@ -709,6 +710,7 @@ impl<'agent> WalletCanister<'agent> {
             wasm_memory_limit: None,
             wasm_memory_threshold: None,
             log_visibility: None,
+            environment: None,
         };
 
         self.update("wallet_create_canister128")
@@ -839,6 +841,7 @@ impl<'agent> WalletCanister<'agent> {
             wasm_memory_limit: None,
             wasm_memory_threshold: None,
             log_visibility: None,
+            environment: None,
         };
 
         self.update("wallet_create_wallet")
@@ -871,6 +874,7 @@ impl<'agent> WalletCanister<'agent> {
             wasm_memory_limit: None,
             wasm_memory_threshold: None,
             log_visibility: None,
+            environment: None,
         };
 
         self.update("wallet_create_wallet128")
