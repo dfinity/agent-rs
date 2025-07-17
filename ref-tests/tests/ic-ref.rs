@@ -740,7 +740,7 @@ mod management_canister {
                     wasm_memory_limit: None,
                     wasm_memory_threshold: None,
                     log_visibility: None,
-                    environment: None,
+                    environment_variables: None,
                 },
             };
 
