@@ -176,6 +176,16 @@ pub enum LogVisibility {
     AllowedViewers(Vec<Principal>),
 }
 
+/// A generic environment variable struct defining a key-value pair, meant to be used for defining a canister environment
+#[derive(Debug, Clone, CandidType, Deserialize, PartialEq)]
+pub struct EnvironmentVariable {
+    /// Variable key/name
+    pub key: String,
+
+    /// Variable value
+    pub value: String,
+}
+
 /// The concrete settings of a canister.
 #[derive(Clone, Debug, Deserialize, CandidType)]
 pub struct DefiniteCanisterSettings {
@@ -197,6 +207,8 @@ pub struct DefiniteCanisterSettings {
     pub wasm_memory_threshold: Option<Nat>,
     /// The canister log visibility. Defines which principals are allowed to fetch logs.
     pub log_visibility: LogVisibility,
+    /// A set of dynamically-configurable environment variables for a canister
+    pub environment_variables: Vec<EnvironmentVariable>,
 }
 
 impl std::fmt::Display for StatusCallResult {
@@ -686,7 +698,7 @@ impl<'agent> ManagementCanister<'agent> {
     }
 
     /// Creates a canister snapshot, optionally replacing an existing snapshot.
-    ///  
+    ///
     /// <div class="warning">Canisters should be stopped before running this method!</div>
     pub fn take_canister_snapshot(
         &self,
