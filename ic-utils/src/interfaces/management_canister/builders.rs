@@ -6,6 +6,7 @@ pub use super::attributes::{
 };
 use super::{ChunkHash, LogVisibility, ManagementCanister};
 use crate::call::CallFuture;
+use crate::interfaces::management_canister::EnvironmentVariable;
 use crate::{
     call::AsyncCall, canister::Argument, interfaces::management_canister::MgmtMethod, Canister,
 };
@@ -25,13 +26,6 @@ use std::{
     pin::Pin,
     str::FromStr,
 };
-
-/// A generic variable struct defining a key-value pair, meant to be used for defining a canister environment
-#[derive(Debug, Clone, CandidType, Deserialize)]
-pub struct EnvironmentVariable {
-    key: String,
-    value: String,
-}
 
 /// The set of possible canister settings. Similar to [`DefiniteCanisterSettings`](super::DefiniteCanisterSettings),
 /// but all the fields are optional.

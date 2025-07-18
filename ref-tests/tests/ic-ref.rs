@@ -1034,6 +1034,7 @@ mod simple_calls {
 }
 
 mod extras {
+
     use candid::Nat;
     use ic_agent::{
         agent::{RejectCode, RejectResponse},
@@ -1043,7 +1044,9 @@ mod extras {
     use ic_utils::{
         call::AsyncCall,
         interfaces::{
-            management_canister::{builders::ComputeAllocation, LogVisibility},
+            management_canister::{
+                builders::ComputeAllocation, EnvironmentVariable, LogVisibility,
+            },
             ManagementCanister,
         },
     };
@@ -1409,6 +1412,128 @@ mod extras {
 
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(result.0.settings.log_visibility, LogVisibility::Public);
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn create_with_environment_variables() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_environment_variables(vec![EnvironmentVariable {
+                    key: "key-1".to_string(),
+                    value: "value-1".to_string(),
+                }])
+                .call_and_wait()
+                .await
+                .unwrap();
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+
+            // Assert environment variables
+            assert_eq!(
+                result.0.settings.environment_variables,
+                vec![EnvironmentVariable {
+                    key: "key-1".to_string(),
+                    value: "value-1".to_string(),
+                }],
+            );
+
+            Ok(())
+        })
+    }
+
+    #[ignore]
+    #[test]
+    fn update_environment_variables() {
+        with_agent(|agent| async move {
+            let ic00 = ManagementCanister::create(&agent);
+
+            // Create with Controllers.
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
+                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_environment_variables(vec![EnvironmentVariable {
+                    key: "key-1".to_string(),
+                    value: "value-1".to_string(),
+                }])
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+
+            // Assert environment variables
+            assert_eq!(
+                result.0.settings.environment_variables,
+                vec![EnvironmentVariable {
+                    key: "key-1".to_string(),
+                    value: "value-1".to_string(),
+                }],
+            );
+
+            // Add an environment variable.
+            ic00.update_settings(&canister_id)
+                .with_environment_variables(vec![
+                    EnvironmentVariable {
+                        key: "key-1".to_string(),
+                        value: "value-1".to_string(),
+                    },
+                    EnvironmentVariable {
+                        key: "key-2".to_string(),
+                        value: "value-2".to_string(),
+                    },
+                ])
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+
+            // Assert environment variables
+            assert_eq!(
+                result.0.settings.environment_variables,
+                vec![
+                    EnvironmentVariable {
+                        key: "key-1".to_string(),
+                        value: "value-1".to_string(),
+                    },
+                    EnvironmentVariable {
+                        key: "key-2".to_string(),
+                        value: "value-2".to_string(),
+                    }
+                ],
+            );
+
+            // Update with no change.
+            let no_change: Option<Vec<EnvironmentVariable>> = None;
+            ic00.update_settings(&canister_id)
+                .with_optional_environment_variables(no_change)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+
+            // Assert environment variables
+            assert_eq!(
+                result.0.settings.environment_variables,
+                vec![
+                    EnvironmentVariable {
+                        key: "key-1".to_string(),
+                        value: "value-1".to_string(),
+                    },
+                    EnvironmentVariable {
+                        key: "key-2".to_string(),
+                        value: "value-2".to_string(),
+                    }
+                ],
+            );
 
             Ok(())
         })
