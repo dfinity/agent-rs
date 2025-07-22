@@ -36,7 +36,7 @@ mod management_canister {
                 builders::{
                     CanisterSettings, CanisterUpgradeOptions, InstallMode, WasmMemoryPersistence,
                 },
-                CanisterStatus, StatusCallResult,
+                CanisterStatusResult, CanisterStatusType,
             },
             wallet::CreateResult,
             ManagementCanister, WalletCanister,
@@ -240,7 +240,7 @@ mod management_canister {
                 .canister_status(&canister_id_3)
                 .call_and_wait()
                 .await?;
-            assert_eq!(result.0.status, CanisterStatus::Running);
+            assert_eq!(result.0.status, CanisterStatusType::Running);
             assert_eq!(result.0.settings.controllers.len(), 1);
             assert_eq!(result.0.settings.controllers[0], other_agent_principal);
             assert_eq!(result.0.module_hash, None);
@@ -449,14 +449,14 @@ mod management_canister {
 
             // A newly installed canister should be running
             let result = ic00.canister_status(&canister_id).call_and_wait().await;
-            assert_eq!(result?.0.status, CanisterStatus::Running);
+            assert_eq!(result?.0.status, CanisterStatusType::Running);
 
             // Stop should succeed.
             ic00.stop_canister(&canister_id).call_and_wait().await?;
 
             // Canister should be stopped
             let result = ic00.canister_status(&canister_id).call_and_wait().await;
-            assert_eq!(result?.0.status, CanisterStatus::Stopped);
+            assert_eq!(result?.0.status, CanisterStatusType::Stopped);
 
             // Another stop is a noop
             ic00.stop_canister(&canister_id).call_and_wait().await?;
@@ -505,7 +505,7 @@ mod management_canister {
 
             // Canister should be running
             let result = ic00.canister_status(&canister_id).call_and_wait().await;
-            assert_eq!(result?.0.status, CanisterStatus::Running);
+            assert_eq!(result?.0.status, CanisterStatusType::Running);
 
             // Can call update
             let result = agent.update(&canister_id, "update").call_and_wait().await;
@@ -765,7 +765,7 @@ mod management_canister {
             let status_args = In { canister_id };
             let args = Argument::from_candid((status_args,));
 
-            let (result,): (StatusCallResult,) = wallet
+            let (result,): (CanisterStatusResult,) = wallet
                 .call(Principal::management_canister(), "canister_status", args, 0)
                 .call_and_wait()
                 .await?;
@@ -1077,7 +1077,7 @@ mod extras {
             );
             assert_eq!(
                 result.0.settings.reserved_cycles_limit,
-                Some(Nat::from(2_500_800_000_000u128))
+                Nat::from(2_500_800_000_000u128)
             );
 
             Ok(())
@@ -1174,7 +1174,7 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(
                 result.0.settings.reserved_cycles_limit,
-                Some(Nat::from(2u128.pow(70)))
+                Nat::from(2u128.pow(70))
             );
 
             Ok(())
@@ -1198,7 +1198,7 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(
                 result.0.settings.reserved_cycles_limit,
-                Some(Nat::from(2_500_800_000_000u128))
+                Nat::from(2_500_800_000_000u128)
             );
 
             ic00.update_settings(&canister_id)
@@ -1209,7 +1209,7 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(
                 result.0.settings.reserved_cycles_limit,
-                Some(Nat::from(3_400_200_000_000u128))
+                Nat::from(3_400_200_000_000u128)
             );
 
             let no_change: Option<u128> = None;
@@ -1221,7 +1221,7 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(
                 result.0.settings.reserved_cycles_limit,
-                Some(Nat::from(3_400_200_000_000u128))
+                Nat::from(3_400_200_000_000u128)
             );
 
             Ok(())
@@ -1296,7 +1296,7 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(
                 result.0.settings.wasm_memory_limit,
-                Some(Nat::from(1_000_000_000_u64))
+                Nat::from(1_000_000_000_u64)
             );
 
             Ok(())
@@ -1320,7 +1320,7 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(
                 result.0.settings.wasm_memory_limit,
-                Some(Nat::from(1_000_000_000_u64))
+                Nat::from(1_000_000_000_u64)
             );
 
             ic00.update_settings(&canister_id)
@@ -1331,7 +1331,7 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(
                 result.0.settings.wasm_memory_limit,
-                Some(Nat::from(3_000_000_000_u64))
+                Nat::from(3_000_000_000_u64)
             );
 
             let no_change: Option<u64> = None;
@@ -1343,7 +1343,7 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(
                 result.0.settings.wasm_memory_limit,
-                Some(Nat::from(3_000_000_000_u64))
+                Nat::from(3_000_000_000_u64)
             );
 
             Ok(())

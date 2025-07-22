@@ -9,7 +9,9 @@ use crate::{
 use candid::{CandidType, Deserialize, Nat};
 use ic_agent::{export::Principal, Agent};
 pub use ic_management_canister_types::{
-    ChunkHash, LogVisibility, QueryStats, Snapshot, StoredChunksResult, UploadChunkResult,
+    CanisterLogRecord, CanisterStatusResult, CanisterStatusType, ChunkHash,
+    DefiniteCanisterSettings, FetchCanisterLogsResult, LogVisibility, QueryStats, Snapshot,
+    StoredChunksResult, UploadChunkResult,
 };
 use serde::Serialize;
 use std::{convert::AsRef, ops::Deref};
@@ -127,98 +129,17 @@ impl<'agent> ManagementCanister<'agent> {
     }
 }
 
-/// The complete canister status information of a canister. This includes
-/// the `CanisterStatus`, a hash of the module installed on the canister (None if nothing installed),
-/// the controller of the canister, the canister's memory size, and its balance in cycles.
-#[derive(Clone, Debug, Deserialize, CandidType)]
-pub struct StatusCallResult {
-    /// The status of the canister.
-    pub status: CanisterStatus,
-    /// The canister's settings.
-    pub settings: DefiniteCanisterSettings,
-    /// The SHA-256 hash of the canister's installed code, if any.
-    pub module_hash: Option<Vec<u8>>,
-    /// The total size, in bytes, of the memory the canister is using.
-    pub memory_size: Nat,
-    /// The canister's cycle balance.
-    pub cycles: Nat,
-    /// The canister's reserved cycles balance.
-    pub reserved_cycles: Nat,
-    /// The cycles burned by the canister in one day for its resource usage
-    /// (compute and memory allocation and memory usage).
-    pub idle_cycles_burned_per_day: Nat,
-    /// Additional information relating to query calls.
-    pub query_stats: QueryStats,
-}
+#[doc(hidden)]
+#[deprecated(since = "0.42.0", note = "Please use CanisterStatusResult instead")]
+pub type StatusCallResult = CanisterStatusResult;
 
-/// The concrete settings of a canister.
-#[derive(Clone, Debug, Deserialize, CandidType)]
-pub struct DefiniteCanisterSettings {
-    /// The set of canister controllers. Controllers can update the canister via the management canister.
-    pub controllers: Vec<Principal>,
-    /// The allocation percentage (between 0 and 100 inclusive) for *guaranteed* compute capacity.
-    pub compute_allocation: Nat,
-    /// The allocation, in bytes (up to 256 TiB) that the canister is allowed to use for storage.
-    pub memory_allocation: Nat,
-    /// The IC will freeze a canister protectively if it will likely run out of cycles before this amount of time,
-    /// in seconds (up to `u64::MAX`), has passed.
-    pub freezing_threshold: Nat,
-    /// The upper limit of the canister's reserved cycles balance.
-    pub reserved_cycles_limit: Option<Nat>,
-    /// A soft limit on the Wasm memory usage of the canister in bytes (up to 256TiB).
-    pub wasm_memory_limit: Option<Nat>,
-    /// A threshold on the Wasm memory usage of the canister as a distance in bytes from `wasm_memory_limit`,
-    /// at which the canister's `on_low_wasm_memory` hook will be called (up to 256TiB)
-    pub wasm_memory_threshold: Option<Nat>,
-    /// The canister log visibility. Defines which principals are allowed to fetch logs.
-    pub log_visibility: LogVisibility,
-}
+#[doc(hidden)]
+#[deprecated(since = "0.42.0", note = "Please use CanisterStatusType instead")]
+pub type CanisterStatus = CanisterStatusType;
 
-impl std::fmt::Display for StatusCallResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(self, f)
-    }
-}
-
-/// The status of a Canister, whether it's running, in the process of stopping, or
-/// stopped.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, CandidType)]
-pub enum CanisterStatus {
-    /// The canister is currently running.
-    #[serde(rename = "running")]
-    Running,
-    /// The canister is in the process of stopping.
-    #[serde(rename = "stopping")]
-    Stopping,
-    /// The canister is stopped.
-    #[serde(rename = "stopped")]
-    Stopped,
-}
-
-impl std::fmt::Display for CanisterStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(self, f)
-    }
-}
-
-/// A log record of a canister.
-#[derive(Default, Clone, CandidType, Deserialize, Debug, PartialEq, Eq)]
-pub struct CanisterLogRecord {
-    /// The index of the log record.
-    pub idx: u64,
-    /// The timestamp of the log record.
-    pub timestamp_nanos: u64,
-    /// The content of the log record.
-    #[serde(with = "serde_bytes")]
-    pub content: Vec<u8>,
-}
-
-/// The result of a [`ManagementCanister::fetch_canister_logs`] call.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, CandidType)]
-pub struct FetchCanisterLogsResponse {
-    /// The logs of the canister.
-    pub canister_log_records: Vec<CanisterLogRecord>,
-}
+#[doc(hidden)]
+#[deprecated(since = "0.42.0", note = "Please use FetchCanisterLogsResult instead")]
+pub type FetchCanisterLogsResponse = FetchCanisterLogsResult;
 
 #[doc(hidden)]
 #[deprecated(since = "0.42.0", note = "Please use StoredChunksResult instead")]
@@ -391,7 +312,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn canister_status(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<Value = (StatusCallResult,)> {
+    ) -> impl 'agent + AsyncCall<Value = (CanisterStatusResult,)> {
         #[derive(CandidType)]
         struct In {
             canister_id: Principal,
@@ -403,7 +324,7 @@ impl<'agent> ManagementCanister<'agent> {
             })
             .with_effective_canister_id(canister_id.to_owned())
             .build()
-            .map(|result: (StatusCallResult,)| (result.0,))
+            .map(|result: (CanisterStatusResult,)| (result.0,))
     }
 
     /// Create a canister.
@@ -621,7 +542,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn fetch_canister_logs(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + SyncCall<Value = (FetchCanisterLogsResponse,)> {
+    ) -> impl 'agent + SyncCall<Value = (FetchCanisterLogsResult,)> {
         #[derive(CandidType)]
         struct In {
             canister_id: Principal,
