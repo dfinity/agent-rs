@@ -1039,10 +1039,12 @@ mod extras {
         export::Principal,
         AgentError,
     };
-    use ic_management_canister_types::LogVisibility;
     use ic_utils::{
         call::AsyncCall,
-        interfaces::{management_canister::builders::ComputeAllocation, ManagementCanister},
+        interfaces::{
+            management_canister::{builders::ComputeAllocation, LogVisibility},
+            ManagementCanister,
+        },
     };
     use ref_tests::{get_effective_canister_id, with_agent};
 

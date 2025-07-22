@@ -8,7 +8,7 @@ use crate::{
 };
 use candid::{CandidType, Deserialize, Nat};
 use ic_agent::{export::Principal, Agent};
-use ic_management_canister_types::{
+pub use ic_management_canister_types::{
     ChunkHash, LogVisibility, QueryStats, Snapshot, StoredChunksResult, UploadChunkResult,
 };
 use serde::Serialize;
@@ -220,7 +220,8 @@ pub struct FetchCanisterLogsResponse {
     pub canister_log_records: Vec<CanisterLogRecord>,
 }
 
-/// Return type of [`ManagementCanister::stored_chunks`].
+#[doc(hidden)]
+#[deprecated(since = "0.42.0", note = "Please use StoredChunksResult instead")]
 pub type StoreChunksResult = StoredChunksResult;
 
 /// The source of a snapshot.
@@ -295,7 +296,7 @@ pub struct SnapshotMetadata {
     /// The size of the stable memory.
     pub stable_memory_size: u64,
     /// The chunk store of the Wasm module.
-    pub wasm_chunk_store: StoreChunksResult,
+    pub wasm_chunk_store: StoredChunksResult,
     /// The version of the canister.
     pub canister_version: u64,
     /// The certified data.
@@ -583,7 +584,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn stored_chunks(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<Value = (StoreChunksResult,)> {
+    ) -> impl 'agent + AsyncCall<Value = (StoredChunksResult,)> {
         #[derive(CandidType)]
         struct Argument<'a> {
             canister_id: &'a Principal,
