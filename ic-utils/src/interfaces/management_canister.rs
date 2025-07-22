@@ -8,6 +8,9 @@ use crate::{
 };
 use candid::{CandidType, Deserialize, Nat};
 use ic_agent::{export::Principal, Agent};
+use ic_management_canister_types::{
+    ChunkHash, LogVisibility, QueryStats, Snapshot, StoredChunksResult, UploadChunkResult,
+};
 use serde::Serialize;
 use std::{convert::AsRef, ops::Deref};
 use strum_macros::{AsRefStr, Display, EnumString};
@@ -148,34 +151,6 @@ pub struct StatusCallResult {
     pub query_stats: QueryStats,
 }
 
-/// Statistics relating to query calls.
-#[derive(Clone, Debug, Deserialize, CandidType)]
-pub struct QueryStats {
-    /// The total number of query calls this canister has performed.
-    pub num_calls_total: Nat,
-    /// The total number of instructions this canister has executed during query calls.
-    pub num_instructions_total: Nat,
-    /// The total number of bytes in request payloads sent to this canister's query calls.
-    pub request_payload_bytes_total: Nat,
-    /// The total number of bytes in response payloads returned from this canister's query calls.
-    pub response_payload_bytes_total: Nat,
-}
-
-/// Log visibility for a canister.
-#[derive(Default, Clone, CandidType, Deserialize, Debug, PartialEq, Eq)]
-pub enum LogVisibility {
-    #[default]
-    #[serde(rename = "controllers")]
-    /// Canister logs are visible to controllers only.
-    Controllers,
-    #[serde(rename = "public")]
-    /// Canister logs are visible to everyone.
-    Public,
-    #[serde(rename = "allowed_viewers")]
-    /// Canister logs are visible to a set of principals.
-    AllowedViewers(Vec<Principal>),
-}
-
 /// The concrete settings of a canister.
 #[derive(Clone, Debug, Deserialize, CandidType)]
 pub struct DefiniteCanisterSettings {
@@ -245,33 +220,8 @@ pub struct FetchCanisterLogsResponse {
     pub canister_log_records: Vec<CanisterLogRecord>,
 }
 
-/// Chunk hash.
-#[derive(
-    CandidType, Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Serialize,
-)]
-pub struct ChunkHash {
-    /// The hash of an uploaded chunk
-    #[serde(with = "serde_bytes")]
-    pub hash: Vec<u8>,
-}
-
 /// Return type of [`ManagementCanister::stored_chunks`].
-pub type StoreChunksResult = Vec<ChunkHash>;
-
-/// Return type of [`ManagementCanister::upload_chunk`].
-pub type UploadChunkResult = ChunkHash;
-
-/// A recorded snapshot of a canister. Can be restored with [`ManagementCanister::load_canister_snapshot`].
-#[derive(Debug, Clone, CandidType, Deserialize)]
-pub struct Snapshot {
-    /// The ID of the snapshot.
-    #[serde(with = "serde_bytes")]
-    pub id: Vec<u8>,
-    /// The Unix nanosecond timestamp the snapshot was taken at.
-    pub taken_at_timestamp: u64,
-    /// The size of the snapshot in bytes.
-    pub total_size: u64,
-}
+pub type StoreChunksResult = StoredChunksResult;
 
 /// The source of a snapshot.
 #[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
