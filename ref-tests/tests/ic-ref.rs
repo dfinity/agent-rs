@@ -485,7 +485,7 @@ mod management_canister {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
-                    }, .. }) if *reject_message == format!("IC0508: Canister {canister_id} is stopped and therefore does not have a CallContextManager")
+                    }, .. }) if *reject_message == format!("Canister {canister_id} is stopped and therefore does not have a CallContextManager")
                         && error_code == "IC0508"
                 ),
                 "wrong error: {result:?}"
@@ -570,7 +570,7 @@ mod management_canister {
                         reject_code: RejectCode::DestinationInvalid,
                         reject_message,
                         error_code: Some(error_code),
-                    }, .. }) if *reject_message == format!("IC0301: Canister {} not found", canister_id)
+                    }, .. }) if *reject_message == format!("Canister {} not found", canister_id)
                         && error_code == "IC0301"
                 ),
                 "wrong error: {result:?}"

@@ -29,7 +29,7 @@ jobs:
       - name: Install dfx
         uses: dfinity/setup-dfx@main
         with:
-          dfx-version: "0.24.3"
+          dfx-version: "0.26.1"
 
       - name: Cargo cache
         uses: actions/cache@v4
@@ -56,9 +56,9 @@ jobs:
           set -ex
           if [[ "${{ matrix.pocket-ic }}" == "replica" ]]
           then
-            dfx start --background --clean
+            dfx start --background --clean --replica
           else
-            dfx start --background --clean --pocketic
+            dfx start --background --clean
           fi
           sleep 1
           export IC_REF_PORT=$(dfx info webserver-port)
