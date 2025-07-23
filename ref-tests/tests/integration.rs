@@ -4,7 +4,7 @@
 //! integration tests with a running IC-Ref.
 use candid::CandidType;
 use ic_agent::{
-    agent::{agent_error::HttpErrorPayload, Envelope, EnvelopeContent, RejectCode, RejectResponse},
+    agent::{Envelope, EnvelopeContent, RejectCode, RejectResponse},
     export::Principal,
     AgentError, Identity,
 };
@@ -54,7 +54,7 @@ fn basic_expiry() {
             .await;
 
         match result.unwrap_err() {
-            AgentError::HttpError(HttpErrorPayload { status, .. }) => assert_eq!(status, 400),
+            AgentError::TimeoutWaitingForResponse() => (),
             x => panic!("Was expecting an error, got {:?}", x),
         }
 

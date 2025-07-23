@@ -443,7 +443,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(format!("{}", status.status), "Running");
+        assert_eq!(format!("{:?}", status.status), "Running");
 
         let canister_wasm = b"\0asm\x01\0\0\0";
         management_canister

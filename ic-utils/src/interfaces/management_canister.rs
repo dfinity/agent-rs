@@ -6,9 +6,14 @@ use crate::{
     call::{AsyncCall, SyncCall},
     Canister,
 };
-use candid::{CandidType, Deserialize, Nat};
+use candid::{CandidType, Deserialize};
 use ic_agent::{export::Principal, Agent};
-use serde::Serialize;
+pub use ic_management_canister_types::{
+    CanisterLogRecord, CanisterSnapshotId, CanisterStatusResult, CanisterStatusType, CanisterTimer,
+    ChunkHash, DefiniteCanisterSettings, ExportedGlobal, FetchCanisterLogsResult, LogVisibility,
+    OnLowWasmMemoryHookStatus, QueryStats, Snapshot, SnapshotDataKind, SnapshotDataOffset,
+    SnapshotDataResult, SnapshotMetadata, SnapshotSource, StoredChunksResult, UploadChunkResult,
+};
 use std::{convert::AsRef, ops::Deref};
 use strum_macros::{AsRefStr, Display, EnumString};
 
@@ -124,323 +129,28 @@ impl<'agent> ManagementCanister<'agent> {
     }
 }
 
-/// The complete canister status information of a canister. This includes
-/// the `CanisterStatus`, a hash of the module installed on the canister (None if nothing installed),
-/// the controller of the canister, the canister's memory size, and its balance in cycles.
-#[derive(Clone, Debug, Deserialize, CandidType)]
-pub struct StatusCallResult {
-    /// The status of the canister.
-    pub status: CanisterStatus,
-    /// The canister's settings.
-    pub settings: DefiniteCanisterSettings,
-    /// The SHA-256 hash of the canister's installed code, if any.
-    pub module_hash: Option<Vec<u8>>,
-    /// The total size, in bytes, of the memory the canister is using.
-    pub memory_size: Nat,
-    /// The canister's cycle balance.
-    pub cycles: Nat,
-    /// The canister's reserved cycles balance.
-    pub reserved_cycles: Nat,
-    /// The cycles burned by the canister in one day for its resource usage
-    /// (compute and memory allocation and memory usage).
-    pub idle_cycles_burned_per_day: Nat,
-    /// Additional information relating to query calls.
-    pub query_stats: QueryStats,
-}
+#[doc(hidden)]
+#[deprecated(since = "0.42.0", note = "Please use CanisterStatusResult instead")]
+pub type StatusCallResult = CanisterStatusResult;
 
-/// Statistics relating to query calls.
-#[derive(Clone, Debug, Deserialize, CandidType)]
-pub struct QueryStats {
-    /// The total number of query calls this canister has performed.
-    pub num_calls_total: Nat,
-    /// The total number of instructions this canister has executed during query calls.
-    pub num_instructions_total: Nat,
-    /// The total number of bytes in request payloads sent to this canister's query calls.
-    pub request_payload_bytes_total: Nat,
-    /// The total number of bytes in response payloads returned from this canister's query calls.
-    pub response_payload_bytes_total: Nat,
-}
+#[doc(hidden)]
+#[deprecated(since = "0.42.0", note = "Please use CanisterStatusType instead")]
+pub type CanisterStatus = CanisterStatusType;
 
-/// Log visibility for a canister.
-#[derive(Default, Clone, CandidType, Deserialize, Debug, PartialEq, Eq)]
-pub enum LogVisibility {
-    #[default]
-    #[serde(rename = "controllers")]
-    /// Canister logs are visible to controllers only.
-    Controllers,
-    #[serde(rename = "public")]
-    /// Canister logs are visible to everyone.
-    Public,
-    #[serde(rename = "allowed_viewers")]
-    /// Canister logs are visible to a set of principals.
-    AllowedViewers(Vec<Principal>),
-}
+#[doc(hidden)]
+#[deprecated(since = "0.42.0", note = "Please use FetchCanisterLogsResult instead")]
+pub type FetchCanisterLogsResponse = FetchCanisterLogsResult;
 
-/// The concrete settings of a canister.
-#[derive(Clone, Debug, Deserialize, CandidType)]
-pub struct DefiniteCanisterSettings {
-    /// The set of canister controllers. Controllers can update the canister via the management canister.
-    pub controllers: Vec<Principal>,
-    /// The allocation percentage (between 0 and 100 inclusive) for *guaranteed* compute capacity.
-    pub compute_allocation: Nat,
-    /// The allocation, in bytes (up to 256 TiB) that the canister is allowed to use for storage.
-    pub memory_allocation: Nat,
-    /// The IC will freeze a canister protectively if it will likely run out of cycles before this amount of time,
-    /// in seconds (up to `u64::MAX`), has passed.
-    pub freezing_threshold: Nat,
-    /// The upper limit of the canister's reserved cycles balance.
-    pub reserved_cycles_limit: Option<Nat>,
-    /// A soft limit on the Wasm memory usage of the canister in bytes (up to 256TiB).
-    pub wasm_memory_limit: Option<Nat>,
-    /// A threshold on the Wasm memory usage of the canister as a distance in bytes from `wasm_memory_limit`,
-    /// at which the canister's `on_low_wasm_memory` hook will be called (up to 256TiB)
-    pub wasm_memory_threshold: Option<Nat>,
-    /// The canister log visibility. Defines which principals are allowed to fetch logs.
-    pub log_visibility: LogVisibility,
-}
-
-impl std::fmt::Display for StatusCallResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(self, f)
-    }
-}
-
-/// The status of a Canister, whether it's running, in the process of stopping, or
-/// stopped.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, CandidType)]
-pub enum CanisterStatus {
-    /// The canister is currently running.
-    #[serde(rename = "running")]
-    Running,
-    /// The canister is in the process of stopping.
-    #[serde(rename = "stopping")]
-    Stopping,
-    /// The canister is stopped.
-    #[serde(rename = "stopped")]
-    Stopped,
-}
-
-impl std::fmt::Display for CanisterStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(self, f)
-    }
-}
-
-/// A log record of a canister.
-#[derive(Default, Clone, CandidType, Deserialize, Debug, PartialEq, Eq)]
-pub struct CanisterLogRecord {
-    /// The index of the log record.
-    pub idx: u64,
-    /// The timestamp of the log record.
-    pub timestamp_nanos: u64,
-    /// The content of the log record.
-    #[serde(with = "serde_bytes")]
-    pub content: Vec<u8>,
-}
-
-/// The result of a [`ManagementCanister::fetch_canister_logs`] call.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, CandidType)]
-pub struct FetchCanisterLogsResponse {
-    /// The logs of the canister.
-    pub canister_log_records: Vec<CanisterLogRecord>,
-}
-
-/// Chunk hash.
-#[derive(
-    CandidType, Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Serialize,
-)]
-pub struct ChunkHash {
-    /// The hash of an uploaded chunk
-    #[serde(with = "serde_bytes")]
-    pub hash: Vec<u8>,
-}
-
-/// Return type of [`ManagementCanister::stored_chunks`].
-pub type StoreChunksResult = Vec<ChunkHash>;
-
-/// Return type of [`ManagementCanister::upload_chunk`].
-pub type UploadChunkResult = ChunkHash;
-
-/// A recorded snapshot of a canister. Can be restored with [`ManagementCanister::load_canister_snapshot`].
-#[derive(Debug, Clone, CandidType, Deserialize)]
-pub struct Snapshot {
-    /// The ID of the snapshot.
-    #[serde(with = "serde_bytes")]
-    pub id: Vec<u8>,
-    /// The Unix nanosecond timestamp the snapshot was taken at.
-    pub taken_at_timestamp: u64,
-    /// The size of the snapshot in bytes.
-    pub total_size: u64,
-}
-
-/// The source of a snapshot.
-#[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
-pub enum SnapshotSource {
-    /// The snapshot was taken from a canister.
-    #[serde(rename = "taken_from_canister")]
-    TakenFromCanister,
-    /// The snapshot was created by uploading metadata.
-    #[serde(rename = "metadata_upload")]
-    MetadataUpload,
-}
-
-/// An exported global variable.
-#[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
-pub enum ExportedGlobal {
-    /// A 32-bit integer.
-    #[serde(rename = "i32")]
-    I32(i32),
-    /// A 64-bit integer.
-    #[serde(rename = "i64")]
-    I64(i64),
-    /// A 32-bit floating point number.
-    #[serde(rename = "f32")]
-    F32(f32),
-    /// A 64-bit floating point number.
-    #[serde(rename = "f64")]
-    F64(f64),
-    /// A 128-bit integer.
-    #[serde(rename = "v128")]
-    V128(Nat),
-}
-
-/// The status of a global timer.
-#[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
-pub enum CanisterTimer {
-    /// The global timer is inactive.
-    #[serde(rename = "inactive")]
-    Inactive,
-    /// The global timer is active.
-    #[serde(rename = "active")]
-    Active(u64),
-}
-
-/// The status of a low wasm memory hook.
-#[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
-pub enum OnLowWasmMemoryHookStatus {
-    /// The condition for the  low wasm memory hook is not satisfied.
-    #[serde(rename = "condition_not_satisfied")]
-    ConditionNotSatisfied,
-    /// The low wasm memory hook is ready to be executed.
-    #[serde(rename = "ready")]
-    Ready,
-    /// The low wasm memory hook has been executed.
-    #[serde(rename = "executed")]
-    Executed,
-}
-
-/// Return type of [`ManagementCanister::read_canister_snapshot_metadata`].
-#[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
-pub struct SnapshotMetadata {
-    /// The source of the snapshot.
-    pub source: SnapshotSource,
-    /// The Unix nanosecond timestamp the snapshot was taken at.
-    pub taken_at_timestamp: u64,
-    /// The size of the Wasm module.
-    pub wasm_module_size: u64,
-    /// The exported globals.
-    pub exported_globals: Vec<ExportedGlobal>,
-    /// The size of the Wasm memory.
-    pub wasm_memory_size: u64,
-    /// The size of the stable memory.
-    pub stable_memory_size: u64,
-    /// The chunk store of the Wasm module.
-    pub wasm_chunk_store: StoreChunksResult,
-    /// The version of the canister.
-    pub canister_version: u64,
-    /// The certified data.
-    #[serde(with = "serde_bytes")]
-    pub certified_data: Vec<u8>,
-    /// The status of the global timer.
-    pub global_timer: Option<CanisterTimer>,
-    /// The status of the low wasm memory hook.
-    pub on_low_wasm_memory_hook_status: Option<OnLowWasmMemoryHookStatus>,
-}
-
-/// Snapshot data kind.
-#[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
-pub enum SnapshotDataKind {
-    /// Wasm module.
-    #[serde(rename = "wasm_module")]
-    WasmModule {
-        /// Offset in bytes.
-        offset: u64,
-        /// Size of the data in bytes.
-        size: u64,
-    },
-    /// Main memory.
-    #[serde(rename = "main_memory")]
-    MainMemory {
-        /// Offset in bytes.
-        offset: u64,
-        /// Size of the data in bytes.
-        size: u64,
-    },
-    /// Stable memory.
-    #[serde(rename = "stable_memory")]
-    StableMemory {
-        /// Offset in bytes.
-        offset: u64,
-        /// Size of the data in bytes.
-        size: u64,
-    },
-    /// Chunk hash.
-    #[serde(rename = "wasm_chunk")]
-    WasmChunk {
-        /// The hash of the chunk.
-        #[serde(with = "serde_bytes")]
-        hash: Vec<u8>,
-    },
-}
-
-/// Snapshot reading result.
-#[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
-pub struct SnapshotDataResult {
-    /// The returned chunk of data.
-    #[serde(with = "serde_bytes")]
-    pub chunk: Vec<u8>,
-}
-
-/// The ID of a snapshot.
-#[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
-pub struct CanisterSnapshotId {
-    /// The ID of the snapshot.
-    #[serde(with = "serde_bytes")]
-    pub snapshot_id: Vec<u8>,
-}
-
-/// Snapshot data offset.
-#[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
-pub enum SnapshotDataOffset {
-    /// Wasm module.
-    #[serde(rename = "wasm_module")]
-    WasmModule {
-        /// Offset in bytes.
-        offset: u64,
-    },
-    /// Main memory.
-    #[serde(rename = "main_memory")]
-    MainMemory {
-        /// Offset in bytes.
-        offset: u64,
-    },
-    /// Stable memory.
-    #[serde(rename = "stable_memory")]
-    StableMemory {
-        /// Offset in bytes.
-        offset: u64,
-    },
-    /// Wasm chunk.
-    #[serde(rename = "wasm_chunk")]
-    WasmChunk,
-}
+#[doc(hidden)]
+#[deprecated(since = "0.42.0", note = "Please use StoredChunksResult instead")]
+pub type StoreChunksResult = StoredChunksResult;
 
 impl<'agent> ManagementCanister<'agent> {
     /// Get the status of a canister.
     pub fn canister_status(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<Value = (StatusCallResult,)> {
+    ) -> impl 'agent + AsyncCall<Value = (CanisterStatusResult,)> {
         #[derive(CandidType)]
         struct In {
             canister_id: Principal,
@@ -452,7 +162,7 @@ impl<'agent> ManagementCanister<'agent> {
             })
             .with_effective_canister_id(canister_id.to_owned())
             .build()
-            .map(|result: (StatusCallResult,)| (result.0,))
+            .map(|result: (CanisterStatusResult,)| (result.0,))
     }
 
     /// Create a canister.
@@ -633,7 +343,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn stored_chunks(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<Value = (StoreChunksResult,)> {
+    ) -> impl 'agent + AsyncCall<Value = (StoredChunksResult,)> {
         #[derive(CandidType)]
         struct Argument<'a> {
             canister_id: &'a Principal,
@@ -670,7 +380,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn fetch_canister_logs(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + SyncCall<Value = (FetchCanisterLogsResponse,)> {
+    ) -> impl 'agent + SyncCall<Value = (FetchCanisterLogsResult,)> {
         #[derive(CandidType)]
         struct In {
             canister_id: Principal,
