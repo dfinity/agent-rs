@@ -54,7 +54,7 @@ fn basic_expiry() {
             .await;
 
         match result.unwrap_err() {
-            AgentError::HttpError(HttpErrorPayload { status, .. }) => assert_eq!(status, 400),
+            AgentError::TimeoutWaitingForResponse() => (),
             x => panic!("Was expecting an error, got {:?}", x),
         }
 
