@@ -51,4 +51,4 @@ sha2 = "0.10.8"
 thiserror = "2.0.3"
 time = "0.3"
 tokio = { version = "1.41.1", default-features = false }
-ic-management-canister-types = { version = "0.3.1", git = "https://github.com/dfinity/cdk-rs", rev = "3e937bb0930e22430528dd4eb831fb8573afa75d" }
+ic-management-canister-types = { version = "0.3.1", git = "https://github.com/dfinity/cdk-rs", rev = "ca391781300ffe78857e0bd3c14c2fabf7375d8a" }

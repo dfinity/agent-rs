@@ -1296,7 +1296,7 @@ dependencies = [
 [[package]]
 name = "ic-management-canister-types"
 version = "0.3.1"
-source = "git+https://github.com/dfinity/cdk-rs?rev=3e937bb0930e22430528dd4eb831fb8573afa75d#3e937bb0930e22430528dd4eb831fb8573afa75d"
+source = "git+https://github.com/dfinity/cdk-rs?rev=ca391781300ffe78857e0bd3c14c2fabf7375d8a#ca391781300ffe78857e0bd3c14c2fabf7375d8a"
 dependencies = [
  "candid",
  "serde",
