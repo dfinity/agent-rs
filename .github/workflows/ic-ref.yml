@@ -12,7 +12,6 @@ jobs:
     strategy:
       matrix:
         build: [linux-stable]
-        pocket-ic: ["replica", "pocketic"]
         include:
           - build: linux-stable
             ic-hs-ref: "3d71032e"
@@ -29,7 +28,7 @@ jobs:
       - name: Install dfx
         uses: dfinity/setup-dfx@main
         with:
-          dfx-version: "0.26.1"
+          dfx-version: "0.27.0"
 
       - name: Cargo cache
         uses: actions/cache@v4
@@ -54,20 +53,12 @@ jobs:
       - name: Run Integration Tests
         run: |
           set -ex
-          if [[ "${{ matrix.pocket-ic }}" == "replica" ]]
-          then
-            dfx start --background --clean --replica
-          else
-            dfx start --background --clean
-          fi
+          dfx start --background --clean
           sleep 1
           export IC_REF_PORT=$(dfx info webserver-port)
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
           export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
-          if [[ "${{ matrix.pocket-ic }}" == "pocketic" ]]
-          then
-            export POCKET_IC="http://localhost:${IC_REF_PORT}"
-          fi
+          export POCKET_IC="http://localhost:${IC_REF_PORT}"
           cargo test --all-features -- --ignored
           dfx stop
         env:
@@ -89,20 +80,12 @@ jobs:
           # create key:
           pkcs11-tool -k --module $HSM_PKCS11_LIBRARY_PATH --login --slot-index $HSM_SLOT_INDEX -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
 
-          if [[ "${{ matrix.pocket-ic }}" == "replica" ]]
-          then
-            dfx start --background --clean
-          else
-            dfx start --background --clean --pocketic
-          fi
+          dfx start --background --clean
           sleep 1
           export IC_REF_PORT=$(dfx info webserver-port)
           export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
           export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
-          if [[ "${{ matrix.pocket-ic }}" == "pocketic" ]]
-          then
-            export POCKET_IC="http://localhost:${IC_REF_PORT}"
-          fi
+          export POCKET_IC="http://localhost:${IC_REF_PORT}"
           cd ref-tests
           cargo test --all-features -- --ignored --nocapture --test-threads=1
           dfx stop
@@ -117,18 +100,10 @@ jobs:
       - name: Run Doc Tests
         run: |
           set -ex
-          if [[ "${{ matrix.pocket-ic }}" == "replica" ]]
-          then
-            dfx start --background --clean
-          else
-            dfx start --background --clean --pocketic
-          fi
+          dfx start --background --clean
           sleep 1
           export IC_REF_PORT=$(dfx info webserver-port)
-          if [[ "${{ matrix.pocket-ic }}" == "pocketic" ]]
-          then
-            export POCKET_IC="http://localhost:${IC_REF_PORT}"
-          fi
+          export POCKET_IC="http://localhost:${IC_REF_PORT}"
           cargo test --all-features --doc -- --ignored
           dfx stop
         env:
