@@ -4,7 +4,7 @@
 //! integration tests with a running IC-Ref.
 use candid::CandidType;
 use ic_agent::{
-    agent::{agent_error::HttpErrorPayload, Envelope, EnvelopeContent, RejectCode, RejectResponse},
+    agent::{Envelope, EnvelopeContent, RejectCode, RejectResponse},
     export::Principal,
     AgentError, Identity,
 };
