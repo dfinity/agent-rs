@@ -6,6 +6,7 @@ pub use super::attributes::{
 };
 use super::{ChunkHash, LogVisibility, ManagementCanister};
 use crate::call::CallFuture;
+use crate::interfaces::management_canister::EnvironmentVariable;
 use crate::{
     call::AsyncCall, canister::Argument, interfaces::management_canister::MgmtMethod, Canister,
 };
@@ -89,6 +90,9 @@ pub struct CanisterSettings {
     ///
     /// If unspecified and a canister is being created with these settings, defaults to `Controllers`, i.e. private by default.
     pub log_visibility: Option<LogVisibility>,
+
+    /// A set of dynamically-configurable environment variables for a canister
+    pub environment_variables: Option<Vec<EnvironmentVariable>>,
 }
 
 /// A builder for a `create_canister` call.
@@ -104,6 +108,7 @@ pub struct CreateCanisterBuilder<'agent, 'canister: 'agent> {
     wasm_memory_limit: Option<Result<WasmMemoryLimit, AgentError>>,
     wasm_memory_threshold: Option<Result<WasmMemoryLimit, AgentError>>,
     log_visibility: Option<Result<LogVisibility, AgentError>>,
+    environment_variables: Option<Result<Vec<EnvironmentVariable>, AgentError>>,
     is_provisional_create: bool,
     amount: Option<u128>,
     specified_id: Option<Principal>,
@@ -123,6 +128,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             wasm_memory_limit: None,
             wasm_memory_threshold: None,
             log_visibility: None,
+            environment_variables: None,
             is_provisional_create: false,
             amount: None,
             specified_id: None,
@@ -389,6 +395,31 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         }
     }
 
+    /// Pass in a set of environment variables for the canister.
+    pub fn with_environment_variables<C, E>(self, environment_variables: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<Vec<EnvironmentVariable>, Error = E>,
+    {
+        self.with_optional_environment_variables(Some(environment_variables))
+    }
+
+    /// Pass in a set of optional environment variables for the canister. If this is [`None`],
+    /// it will revert the environment variables to default.
+    pub fn with_optional_environment_variables<E, C>(self, environment_variables: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<Vec<EnvironmentVariable>, Error = E>,
+    {
+        Self {
+            environment_variables: environment_variables.map(|vs| {
+                vs.try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}")))
+            }),
+            ..self
+        }
+    }
+
     /// Create an [`AsyncCall`] implementation that, when called, will create a
     /// canister.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = (Principal,)>, AgentError> {
@@ -432,6 +463,11 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             Some(Ok(x)) => Some(x),
             None => None,
         };
+        let environment_variables = match self.environment_variables {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(x),
+            None => None,
+        };
 
         #[derive(Deserialize, CandidType)]
         struct Out {
@@ -456,6 +492,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     wasm_memory_limit,
                     wasm_memory_threshold,
                     log_visibility,
+                    environment_variables,
                 },
                 specified_id: self.specified_id,
             };
@@ -475,6 +512,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     wasm_memory_limit,
                     wasm_memory_threshold,
                     log_visibility,
+                    environment_variables,
                 })
                 .with_effective_canister_id(self.effective_canister_id)
         };
@@ -1004,6 +1042,7 @@ pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent> {
     wasm_memory_limit: Option<Result<WasmMemoryLimit, AgentError>>,
     wasm_memory_threshold: Option<Result<WasmMemoryLimit, AgentError>>,
     log_visibility: Option<Result<LogVisibility, AgentError>>,
+    environment_variables: Option<Result<Vec<EnvironmentVariable>, AgentError>>,
 }
 
 impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
@@ -1020,6 +1059,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             wasm_memory_limit: None,
             wasm_memory_threshold: None,
             log_visibility: None,
+            environment_variables: None,
         }
     }
 
@@ -1240,6 +1280,31 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         }
     }
 
+    /// Pass in a set of environment variables for the canister.
+    pub fn with_environment_variables<C, E>(self, environment_variables: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<Vec<EnvironmentVariable>, Error = E>,
+    {
+        self.with_optional_environment_variables(Some(environment_variables))
+    }
+
+    /// Pass in a set of optional environment variables for the canister. If this is [`None`],
+    /// it will revert the environment variables to default.
+    pub fn with_optional_environment_variables<E, C>(self, environment_variables: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<Vec<EnvironmentVariable>, Error = E>,
+    {
+        Self {
+            environment_variables: environment_variables.map(|vs| {
+                vs.try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}")))
+            }),
+            ..self
+        }
+    }
+
     /// Create an [`AsyncCall`] implementation that, when called, will update a
     /// canisters settings.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = ()>, AgentError> {
@@ -1289,6 +1354,11 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             Some(Ok(x)) => Some(x),
             None => None,
         };
+        let environment_variables = match self.environment_variables {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(x),
+            None => None,
+        };
 
         Ok(self
             .canister
@@ -1304,6 +1374,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
                     wasm_memory_limit,
                     wasm_memory_threshold,
                     log_visibility,
+                    environment_variables,
                 },
             })
             .with_effective_canister_id(self.canister_id)
