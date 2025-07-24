@@ -179,8 +179,8 @@ pub enum LogVisibility {
 /// A generic environment variable struct defining a key-value pair, meant to be used for defining a canister environment
 #[derive(Debug, Clone, CandidType, Deserialize, PartialEq)]
 pub struct EnvironmentVariable {
-    /// Variable key/name
-    pub key: String,
+    /// Variable name
+    pub name: String,
 
     /// Variable value
     pub value: String,

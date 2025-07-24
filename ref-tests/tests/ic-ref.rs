@@ -1428,7 +1428,7 @@ mod extras {
                 .as_provisional_create_with_amount(None)
                 .with_effective_canister_id(get_effective_canister_id().await)
                 .with_environment_variables(vec![EnvironmentVariable {
-                    key: "key-1".to_string(),
+                    name: "name-1".to_string(),
                     value: "value-1".to_string(),
                 }])
                 .call_and_wait()
@@ -1441,7 +1441,7 @@ mod extras {
             assert_eq!(
                 result.0.settings.environment_variables,
                 vec![EnvironmentVariable {
-                    key: "key-1".to_string(),
+                    name: "name-1".to_string(),
                     value: "value-1".to_string(),
                 }],
             );
@@ -1462,7 +1462,7 @@ mod extras {
                 .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
                 .with_effective_canister_id(get_effective_canister_id().await)
                 .with_environment_variables(vec![EnvironmentVariable {
-                    key: "key-1".to_string(),
+                    name: "name-1".to_string(),
                     value: "value-1".to_string(),
                 }])
                 .call_and_wait()
@@ -1474,7 +1474,7 @@ mod extras {
             assert_eq!(
                 result.0.settings.environment_variables,
                 vec![EnvironmentVariable {
-                    key: "key-1".to_string(),
+                    name: "name-1".to_string(),
                     value: "value-1".to_string(),
                 }],
             );
@@ -1483,11 +1483,11 @@ mod extras {
             ic00.update_settings(&canister_id)
                 .with_environment_variables(vec![
                     EnvironmentVariable {
-                        key: "key-1".to_string(),
+                        name: "name-1".to_string(),
                         value: "value-1".to_string(),
                     },
                     EnvironmentVariable {
-                        key: "key-2".to_string(),
+                        name: "name-2".to_string(),
                         value: "value-2".to_string(),
                     },
                 ])
@@ -1501,11 +1501,11 @@ mod extras {
                 result.0.settings.environment_variables,
                 vec![
                     EnvironmentVariable {
-                        key: "key-1".to_string(),
+                        name: "name-1".to_string(),
                         value: "value-1".to_string(),
                     },
                     EnvironmentVariable {
-                        key: "key-2".to_string(),
+                        name: "name-2".to_string(),
                         value: "value-2".to_string(),
                     }
                 ],
@@ -1525,11 +1525,11 @@ mod extras {
                 result.0.settings.environment_variables,
                 vec![
                     EnvironmentVariable {
-                        key: "key-1".to_string(),
+                        name: "name-1".to_string(),
                         value: "value-1".to_string(),
                     },
                     EnvironmentVariable {
-                        key: "key-2".to_string(),
+                        name: "name-2".to_string(),
                         value: "value-2".to_string(),
                     }
                 ],
