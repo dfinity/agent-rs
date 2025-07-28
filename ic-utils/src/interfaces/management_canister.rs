@@ -9,10 +9,13 @@ use crate::{
 use candid::{CandidType, Deserialize};
 use ic_agent::{export::Principal, Agent};
 pub use ic_management_canister_types::{
-    CanisterLogRecord, CanisterSnapshotId, CanisterStatusResult, CanisterStatusType, CanisterTimer,
-    ChunkHash, DefiniteCanisterSettings, ExportedGlobal, FetchCanisterLogsResult, LogVisibility,
-    OnLowWasmMemoryHookStatus, QueryStats, Snapshot, SnapshotDataKind, SnapshotDataOffset,
-    SnapshotDataResult, SnapshotMetadata, SnapshotSource, StoredChunksResult, UploadChunkResult,
+    CanisterLogRecord, CanisterStatusResult, CanisterStatusType, CanisterTimer, ChunkHash,
+    DefiniteCanisterSettings, ExportedGlobal, FetchCanisterLogsResult, LogVisibility,
+    OnLowWasmMemoryHookStatus, QueryStats, ReadCanisterSnapshotDataArgs,
+    ReadCanisterSnapshotDataResult, ReadCanisterSnapshotMetadataArgs,
+    ReadCanisterSnapshotMetadataResult, Snapshot, SnapshotDataKind, SnapshotDataOffset,
+    SnapshotSource, StoredChunksResult, UploadCanisterSnapshotDataArgs,
+    UploadCanisterSnapshotMetadataArgs, UploadCanisterSnapshotMetadataResult, UploadChunkResult,
 };
 use std::{convert::AsRef, ops::Deref};
 use strum_macros::{AsRefStr, Display, EnumString};
@@ -144,6 +147,27 @@ pub type FetchCanisterLogsResponse = FetchCanisterLogsResult;
 #[doc(hidden)]
 #[deprecated(since = "0.42.0", note = "Please use StoredChunksResult instead")]
 pub type StoreChunksResult = StoredChunksResult;
+
+#[doc(hidden)]
+#[deprecated(
+    since = "0.42.0",
+    note = "Please use ReadCanisterSnapshotMetadataResult instead"
+)]
+pub type SnapshotMetadata = ReadCanisterSnapshotMetadataResult;
+
+#[doc(hidden)]
+#[deprecated(
+    since = "0.42.0",
+    note = "Please use ReadCanisterSnapshotDataResult instead"
+)]
+pub type SnapshotDataResult = ReadCanisterSnapshotDataResult;
+
+#[doc(hidden)]
+#[deprecated(
+    since = "0.42.0",
+    note = "Please use UploadCanisterSnapshotMetadataResult instead"
+)]
+pub type CanisterSnapshotId = UploadCanisterSnapshotMetadataResult;
 
 impl<'agent> ManagementCanister<'agent> {
     /// Get the status of a canister.
@@ -481,18 +505,10 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn read_canister_snapshot_metadata(
         &self,
         canister_id: &Principal,
-        snapshot_id: &[u8],
-    ) -> impl 'agent + AsyncCall<Value = (SnapshotMetadata,)> {
-        #[derive(CandidType)]
-        struct In<'a> {
-            canister_id: Principal,
-            snapshot_id: &'a [u8],
-        }
+        metadata_args: &ReadCanisterSnapshotMetadataArgs,
+    ) -> impl 'agent + AsyncCall<Value = (ReadCanisterSnapshotMetadataResult,)> {
         self.update(MgmtMethod::ReadCanisterSnapshotMetadata.as_ref())
-            .with_arg(In {
-                canister_id: *canister_id,
-                snapshot_id,
-            })
+            .with_arg(metadata_args)
             .with_effective_canister_id(*canister_id)
             .build()
     }
@@ -501,21 +517,10 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn read_canister_snapshot_data(
         &self,
         canister_id: &Principal,
-        snapshot_id: &[u8],
-        kind: &SnapshotDataKind,
-    ) -> impl 'agent + AsyncCall<Value = (SnapshotDataResult,)> {
-        #[derive(CandidType)]
-        struct In<'a> {
-            canister_id: Principal,
-            snapshot_id: &'a [u8],
-            kind: &'a SnapshotDataKind,
-        }
+        data_args: &ReadCanisterSnapshotDataArgs,
+    ) -> impl 'agent + AsyncCall<Value = (ReadCanisterSnapshotDataResult,)> {
         self.update(MgmtMethod::ReadCanisterSnapshotData.as_ref())
-            .with_arg(In {
-                canister_id: *canister_id,
-                snapshot_id,
-                kind,
-            })
+            .with_arg(data_args)
             .with_effective_canister_id(*canister_id)
             .build()
     }
@@ -524,33 +529,10 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn upload_canister_snapshot_metadata(
         &self,
         canister_id: &Principal,
-        replace_snapshot: Option<&[u8]>,
-        metadata: &SnapshotMetadata,
-    ) -> impl 'agent + AsyncCall<Value = (CanisterSnapshotId,)> {
-        #[derive(CandidType)]
-        struct In<'a> {
-            canister_id: Principal,
-            replace_snapshot: Option<&'a [u8]>,
-            wasm_module_size: u64,
-            exported_globals: &'a Vec<ExportedGlobal>,
-            wasm_memory_size: u64,
-            stable_memory_size: u64,
-            certified_data: &'a Vec<u8>,
-            global_timer: Option<&'a CanisterTimer>,
-            on_low_wasm_memory_hook_status: Option<&'a OnLowWasmMemoryHookStatus>,
-        }
+        metadata_args: &UploadCanisterSnapshotMetadataArgs,
+    ) -> impl 'agent + AsyncCall<Value = (UploadCanisterSnapshotMetadataResult,)> {
         self.update(MgmtMethod::UploadCanisterSnapshotMetadata.as_ref())
-            .with_arg(In {
-                canister_id: *canister_id,
-                replace_snapshot,
-                wasm_module_size: metadata.wasm_module_size,
-                exported_globals: &metadata.exported_globals,
-                wasm_memory_size: metadata.wasm_memory_size,
-                stable_memory_size: metadata.stable_memory_size,
-                certified_data: &metadata.certified_data,
-                global_timer: metadata.global_timer.as_ref(),
-                on_low_wasm_memory_hook_status: metadata.on_low_wasm_memory_hook_status.as_ref(),
-            })
+            .with_arg(metadata_args)
             .with_effective_canister_id(*canister_id)
             .build()
     }
@@ -559,24 +541,10 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn upload_canister_snapshot_data(
         &self,
         canister_id: &Principal,
-        snapshot_id: &[u8],
-        kind: &SnapshotDataOffset,
-        chunk: &[u8],
+        data_args: &UploadCanisterSnapshotDataArgs,
     ) -> impl 'agent + AsyncCall<Value = ()> {
-        #[derive(CandidType)]
-        struct In<'a> {
-            canister_id: Principal,
-            snapshot_id: &'a [u8],
-            kind: &'a SnapshotDataOffset,
-            chunk: &'a [u8],
-        }
         self.update(MgmtMethod::UploadCanisterSnapshotData.as_ref())
-            .with_arg(In {
-                canister_id: *canister_id,
-                snapshot_id,
-                kind,
-                chunk,
-            })
+            .with_arg(data_args)
             .with_effective_canister_id(*canister_id)
             .build()
     }

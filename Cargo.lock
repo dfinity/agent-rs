@@ -1295,8 +1295,9 @@ dependencies = [
 
 [[package]]
 name = "ic-management-canister-types"
-version = "0.3.1"
-source = "git+https://github.com/dfinity/cdk-rs?rev=a357be916ce5703d504d65ec0a8a17fa91e77e66#a357be916ce5703d504d65ec0a8a17fa91e77e66"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95f3af3543f6d0cbdecd2dcdfd4737ada2bd42d935cc787eec22090c96492c76"
 dependencies = [
  "candid",
  "serde",
