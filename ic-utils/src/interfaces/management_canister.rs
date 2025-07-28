@@ -10,11 +10,11 @@ use candid::{CandidType, Deserialize};
 use ic_agent::{export::Principal, Agent};
 pub use ic_management_canister_types::{
     CanisterLogRecord, CanisterStatusResult, CanisterStatusType, CanisterTimer, ChunkHash,
-    DefiniteCanisterSettings, ExportedGlobal, FetchCanisterLogsResult, LogVisibility,
-    OnLowWasmMemoryHookStatus, QueryStats, ReadCanisterSnapshotDataArgs,
-    ReadCanisterSnapshotDataResult, ReadCanisterSnapshotMetadataArgs,
+    DefiniteCanisterSettings, DeleteCanisterSnapshotArgs, ExportedGlobal, FetchCanisterLogsResult,
+    LoadCanisterSnapshotArgs, LogVisibility, OnLowWasmMemoryHookStatus, QueryStats,
+    ReadCanisterSnapshotDataArgs, ReadCanisterSnapshotDataResult, ReadCanisterSnapshotMetadataArgs,
     ReadCanisterSnapshotMetadataResult, Snapshot, SnapshotDataKind, SnapshotDataOffset,
-    SnapshotSource, StoredChunksResult, UploadCanisterSnapshotDataArgs,
+    SnapshotSource, StoredChunksResult, TakeCanisterSnapshotArgs, UploadCanisterSnapshotDataArgs,
     UploadCanisterSnapshotMetadataArgs, UploadCanisterSnapshotMetadataResult, UploadChunkResult,
 };
 use std::{convert::AsRef, ops::Deref};
@@ -425,18 +425,10 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn take_canister_snapshot(
         &self,
         canister_id: &Principal,
-        replace_snapshot: Option<&[u8]>,
+        take_args: &TakeCanisterSnapshotArgs,
     ) -> impl 'agent + AsyncCall<Value = (Snapshot,)> {
-        #[derive(CandidType)]
-        struct In<'a> {
-            canister_id: Principal,
-            replace_snapshot: Option<&'a [u8]>,
-        }
         self.update(MgmtMethod::TakeCanisterSnapshot.as_ref())
-            .with_arg(In {
-                canister_id: *canister_id,
-                replace_snapshot,
-            })
+            .with_arg(take_args)
             .with_effective_canister_id(*canister_id)
             .build()
     }
@@ -447,20 +439,10 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn load_canister_snapshot(
         &self,
         canister_id: &Principal,
-        snapshot_id: &[u8],
+        load_args: &LoadCanisterSnapshotArgs,
     ) -> impl 'agent + AsyncCall<Value = ()> {
-        #[derive(CandidType)]
-        struct In<'a> {
-            canister_id: Principal,
-            snapshot_id: &'a [u8],
-            sender_canister_version: Option<u64>,
-        }
         self.update(MgmtMethod::LoadCanisterSnapshot.as_ref())
-            .with_arg(In {
-                canister_id: *canister_id,
-                snapshot_id,
-                sender_canister_version: None,
-            })
+            .with_arg(load_args)
             .with_effective_canister_id(*canister_id)
             .build()
     }
@@ -486,18 +468,11 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn delete_canister_snapshot(
         &self,
         canister_id: &Principal,
-        snapshot_id: &[u8],
+        delete_args: &DeleteCanisterSnapshotArgs,
     ) -> impl 'agent + AsyncCall<Value = ()> {
-        #[derive(CandidType)]
-        struct In<'a> {
-            canister_id: Principal,
-            snapshot_id: &'a [u8],
-        }
         self.update(MgmtMethod::DeleteCanisterSnapshot.as_ref())
-            .with_arg(In {
-                canister_id: *canister_id,
-                snapshot_id,
-            })
+            .with_arg(delete_args)
+            .with_effective_canister_id(*canister_id)
             .build()
     }
 
