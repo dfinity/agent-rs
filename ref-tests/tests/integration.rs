@@ -12,7 +12,7 @@ use ic_certification::Label;
 use ic_utils::{
     call::{AsyncCall, SyncCall},
     interfaces::{
-        management_canister::builders::{CanisterSettings, InstallMode},
+        management_canister::builders::{CanisterInstallMode, CanisterSettings},
         WalletCanister,
     },
     Argument, Canister,
@@ -261,14 +261,14 @@ fn wallet_canister_create_and_install() {
 
         #[derive(CandidType)]
         struct CanisterInstall {
-            mode: InstallMode,
+            mode: CanisterInstallMode,
             canister_id: Principal,
             wasm_module: Vec<u8>,
             arg: Vec<u8>,
         }
 
         let install_config = CanisterInstall {
-            mode: InstallMode::Install,
+            mode: CanisterInstallMode::Install,
             canister_id: create_result.canister_id,
             wasm_module: b"\0asm\x01\0\0\0".to_vec(),
             arg: Argument::default().serialize()?,
