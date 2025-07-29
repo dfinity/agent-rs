@@ -937,7 +937,10 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
                         upload_chunks_stream.push(async move {
                             let (_res,) = self
                                 .canister
-                                .upload_chunk(&self.canister_id, chunk)
+                                .upload_chunk(&self.canister_id, &ic_management_canister_types::UploadChunkArgs {
+                                    canister_id: self.canister_id,
+                                    chunk: chunk.to_vec(),
+                                })
                                 .call_and_wait()
                                 .await?;
                             Ok(())

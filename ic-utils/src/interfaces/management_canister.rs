@@ -6,16 +6,20 @@ use crate::{
     call::{AsyncCall, SyncCall},
     Canister,
 };
-use candid::{CandidType, Deserialize};
 use ic_agent::{export::Principal, Agent};
+use ic_management_canister_types::{
+    CanisterIdRecord, DeleteCanisterSnapshotArgs, LoadCanisterSnapshotArgs,
+    ProvisionalTopUpCanisterArgs, ReadCanisterSnapshotDataArgs, ReadCanisterSnapshotMetadataArgs,
+    TakeCanisterSnapshotArgs, UploadCanisterSnapshotDataArgs, UploadCanisterSnapshotMetadataArgs,
+    UploadChunkArgs,
+};
+// Re-export the types that are used be defined in this file.
 pub use ic_management_canister_types::{
     CanisterLogRecord, CanisterStatusResult, CanisterStatusType, CanisterTimer, ChunkHash,
-    DefiniteCanisterSettings, DeleteCanisterSnapshotArgs, ExportedGlobal, FetchCanisterLogsResult,
-    LoadCanisterSnapshotArgs, LogVisibility, OnLowWasmMemoryHookStatus, QueryStats,
-    ReadCanisterSnapshotDataArgs, ReadCanisterSnapshotDataResult, ReadCanisterSnapshotMetadataArgs,
+    DefiniteCanisterSettings, ExportedGlobal, FetchCanisterLogsResult, LogVisibility,
+    OnLowWasmMemoryHookStatus, QueryStats, ReadCanisterSnapshotDataResult,
     ReadCanisterSnapshotMetadataResult, Snapshot, SnapshotDataKind, SnapshotDataOffset,
-    SnapshotSource, StoredChunksResult, TakeCanisterSnapshotArgs, UploadCanisterSnapshotDataArgs,
-    UploadCanisterSnapshotMetadataArgs, UploadCanisterSnapshotMetadataResult, UploadChunkResult,
+    SnapshotSource, StoredChunksResult, UploadCanisterSnapshotMetadataResult, UploadChunkResult,
 };
 use std::{convert::AsRef, ops::Deref};
 use strum_macros::{AsRefStr, Display, EnumString};
@@ -175,13 +179,8 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
     ) -> impl 'agent + AsyncCall<Value = (CanisterStatusResult,)> {
-        #[derive(CandidType)]
-        struct In {
-            canister_id: Principal,
-        }
-
         self.update(MgmtMethod::CanisterStatus.as_ref())
-            .with_arg(In {
+            .with_arg(CanisterIdRecord {
                 canister_id: *canister_id,
             })
             .with_effective_canister_id(canister_id.to_owned())
@@ -197,13 +196,8 @@ impl<'agent> ManagementCanister<'agent> {
     /// This method deposits the cycles included in this call into the specified canister.
     /// Only the controller of the canister can deposit cycles.
     pub fn deposit_cycles(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
-        #[derive(CandidType)]
-        struct Argument {
-            canister_id: Principal,
-        }
-
         self.update(MgmtMethod::DepositCycles.as_ref())
-            .with_arg(Argument {
+            .with_arg(CanisterIdRecord {
                 canister_id: *canister_id,
             })
             .with_effective_canister_id(canister_id.to_owned())
@@ -212,13 +206,8 @@ impl<'agent> ManagementCanister<'agent> {
 
     /// Deletes a canister.
     pub fn delete_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
-        #[derive(CandidType)]
-        struct Argument {
-            canister_id: Principal,
-        }
-
         self.update(MgmtMethod::DeleteCanister.as_ref())
-            .with_arg(Argument {
+            .with_arg(CanisterIdRecord {
                 canister_id: *canister_id,
             })
             .with_effective_canister_id(canister_id.to_owned())
@@ -232,19 +221,10 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn provisional_top_up_canister(
         &self,
         canister_id: &Principal,
-        amount: u64,
+        top_up_args: &ProvisionalTopUpCanisterArgs,
     ) -> impl 'agent + AsyncCall<Value = ()> {
-        #[derive(CandidType)]
-        struct Argument {
-            canister_id: Principal,
-            amount: u64,
-        }
-
         self.update(MgmtMethod::ProvisionalTopUpCanister.as_ref())
-            .with_arg(Argument {
-                canister_id: *canister_id,
-                amount,
-            })
+            .with_arg(top_up_args)
             .with_effective_canister_id(canister_id.to_owned())
             .build()
     }
@@ -260,13 +240,8 @@ impl<'agent> ManagementCanister<'agent> {
 
     /// Starts a canister.
     pub fn start_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
-        #[derive(CandidType)]
-        struct Argument {
-            canister_id: Principal,
-        }
-
         self.update(MgmtMethod::StartCanister.as_ref())
-            .with_arg(Argument {
+            .with_arg(CanisterIdRecord {
                 canister_id: *canister_id,
             })
             .with_effective_canister_id(canister_id.to_owned())
@@ -275,13 +250,8 @@ impl<'agent> ManagementCanister<'agent> {
 
     /// Stop a canister.
     pub fn stop_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
-        #[derive(CandidType)]
-        struct Argument {
-            canister_id: Principal,
-        }
-
         self.update(MgmtMethod::StopCanister.as_ref())
-            .with_arg(Argument {
+            .with_arg(CanisterIdRecord {
                 canister_id: *canister_id,
             })
             .with_effective_canister_id(canister_id.to_owned())
@@ -296,13 +266,8 @@ impl<'agent> ManagementCanister<'agent> {
     /// The canister is now empty. In particular, any incoming or queued calls will be rejected.
     //// A canister after uninstalling retains its cycles balance, controller, status, and allocations.
     pub fn uninstall_code(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
-        #[derive(CandidType)]
-        struct Argument {
-            canister_id: Principal,
-        }
-
         self.update(MgmtMethod::UninstallCode.as_ref())
-            .with_arg(Argument {
+            .with_arg(CanisterIdRecord {
                 canister_id: *canister_id,
             })
             .with_effective_canister_id(canister_id.to_owned())
@@ -330,20 +295,10 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn upload_chunk(
         &self,
         canister_id: &Principal,
-        chunk: &[u8],
+        upload_chunk_args: &UploadChunkArgs,
     ) -> impl 'agent + AsyncCall<Value = (UploadChunkResult,)> {
-        #[derive(CandidType, Deserialize)]
-        struct Argument<'a> {
-            canister_id: Principal,
-            #[serde(with = "serde_bytes")]
-            chunk: &'a [u8],
-        }
-
         self.update(MgmtMethod::UploadChunk.as_ref())
-            .with_arg(Argument {
-                canister_id: *canister_id,
-                chunk,
-            })
+            .with_arg(upload_chunk_args)
             .with_effective_canister_id(*canister_id)
             .build()
     }
@@ -353,12 +308,10 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
     ) -> impl 'agent + AsyncCall<Value = ()> {
-        #[derive(CandidType)]
-        struct Argument<'a> {
-            canister_id: &'a Principal,
-        }
         self.update(MgmtMethod::ClearChunkStore.as_ref())
-            .with_arg(Argument { canister_id })
+            .with_arg(CanisterIdRecord {
+                canister_id: *canister_id,
+            })
             .with_effective_canister_id(*canister_id)
             .build()
     }
@@ -368,12 +321,10 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
     ) -> impl 'agent + AsyncCall<Value = (StoredChunksResult,)> {
-        #[derive(CandidType)]
-        struct Argument<'a> {
-            canister_id: &'a Principal,
-        }
         self.update(MgmtMethod::StoredChunks.as_ref())
-            .with_arg(Argument { canister_id })
+            .with_arg(CanisterIdRecord {
+                canister_id: *canister_id,
+            })
             .with_effective_canister_id(*canister_id)
             .build()
     }
@@ -405,14 +356,9 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
     ) -> impl 'agent + SyncCall<Value = (FetchCanisterLogsResult,)> {
-        #[derive(CandidType)]
-        struct In {
-            canister_id: Principal,
-        }
-
         // `fetch_canister_logs` is only supported in non-replicated mode.
         self.query(MgmtMethod::FetchCanisterLogs.as_ref())
-            .with_arg(In {
+            .with_arg(CanisterIdRecord {
                 canister_id: *canister_id,
             })
             .with_effective_canister_id(*canister_id)
@@ -452,12 +398,8 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
     ) -> impl 'agent + AsyncCall<Value = (Vec<Snapshot>,)> {
-        #[derive(CandidType)]
-        struct In {
-            canister_id: Principal,
-        }
         self.update(MgmtMethod::ListCanisterSnapshots.as_ref())
-            .with_arg(In {
+            .with_arg(CanisterIdRecord {
                 canister_id: *canister_id,
             })
             .with_effective_canister_id(*canister_id)
