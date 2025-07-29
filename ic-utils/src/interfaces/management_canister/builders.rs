@@ -17,79 +17,16 @@ use futures_util::{
     FutureExt, Stream, StreamExt, TryStreamExt,
 };
 use ic_agent::{agent::CallResponse, export::Principal, AgentError};
+pub use ic_management_canister_types::{
+    CanisterInstallMode, CanisterSettings, InstallCodeArgs, UpgradeFlags, WasmMemoryPersistence,
+};
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeSet,
     convert::{From, TryInto},
     future::IntoFuture,
     pin::Pin,
-    str::FromStr,
 };
-
-/// The set of possible canister settings. Similar to [`DefiniteCanisterSettings`](super::DefiniteCanisterSettings),
-/// but all the fields are optional.
-#[derive(Debug, Clone, CandidType, Deserialize)]
-pub struct CanisterSettings {
-    /// The set of canister controllers. Controllers can update the canister via the management canister.
-    ///
-    /// If unspecified and a canister is being created with these settings, defaults to the caller.
-    pub controllers: Option<Vec<Principal>>,
-    /// The allocation percentage (between 0 and 100 inclusive) for *guaranteed* compute capacity.
-    ///
-    /// The settings update will be rejected if the IC can't commit to allocating this much compute capacity.
-    ///
-    /// If unspecified and a canister is being created with these settings, defaults to 0, i.e. best-effort.
-    pub compute_allocation: Option<Nat>,
-    /// The allocation, in bytes (up to 256 TiB) that the canister is allowed to use for storage.
-    ///
-    /// The settings update will be rejected if the IC can't commit to allocating this much storage.
-    ///
-    /// If unspecified and a canister is being created with these settings, defaults to 0, i.e. best-effort.
-    pub memory_allocation: Option<Nat>,
-
-    /// The IC will freeze a canister protectively if it will run out of cycles before this amount of time, in seconds (up to `u64::MAX`), has passed.
-    ///
-    /// If unspecified and a canister is being created with these settings, defaults to 2592000, i.e. ~30 days.
-    pub freezing_threshold: Option<Nat>,
-
-    /// The upper limit of `reserved_cycles` for the canister.
-    ///
-    /// Reserved cycles are cycles that the system sets aside for future use by the canister.
-    /// If a subnet's storage exceeds 450 GiB, then every time a canister allocates new storage bytes,
-    /// the system sets aside some amount of cycles from the main balance of the canister.
-    /// These reserved cycles will be used to cover future payments for the newly allocated bytes.
-    /// The reserved cycles are not transferable and the amount of reserved cycles depends on how full the subnet is.
-    ///
-    /// If unspecified and a canister is being created with these settings, defaults to 5T cycles.
-    ///
-    /// If set to 0, disables the reservation mechanism for the canister.
-    /// Doing so will cause the canister to trap when it tries to allocate storage, if the subnet's usage exceeds 450 GiB.
-    pub reserved_cycles_limit: Option<Nat>,
-
-    /// A soft limit on the Wasm memory usage of the canister.
-    ///
-    /// Update calls, timers, heartbeats, install, and post-upgrade fail if the
-    /// Wasm memory usage exceeds this limit. The main purpose of this field is
-    /// to protect against the case when the canister reaches the hard 4GiB
-    /// limit.
-    ///
-    /// Must be a number between 0 and 2^48^ (i.e 256TB), inclusively.
-    pub wasm_memory_limit: Option<Nat>,
-
-    /// A threshold on the Wasm memory usage of the canister, as a distance from
-    /// `wasm_memory_limit`.
-    ///
-    /// When the remaining memory before the limit drops below this threshold, its
-    /// `on_low_wasm_memory` hook will be invoked. This enables it to self-optimize,
-    /// or raise an alert, or otherwise attempt to prevent itself from reaching
-    /// `wasm_memory_limit`.
-    pub wasm_memory_threshold: Option<Nat>,
-
-    /// The canister log visibility of the canister.
-    ///
-    /// If unspecified and a canister is being created with these settings, defaults to `Controllers`, i.e. private by default.
-    pub log_visibility: Option<LogVisibility>,
-}
 
 /// A builder for a `create_canister` call.
 #[derive(Debug)]
@@ -518,72 +455,17 @@ impl<'agent, 'canister: 'agent> IntoFuture for CreateCanisterBuilder<'agent, 'ca
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Hash, CandidType, Copy)]
-/// Wasm main memory retention on upgrades.
-/// Currently used to specify the persistence of Wasm main memory.
-pub enum WasmMemoryPersistence {
-    /// Retain the main memory across upgrades.
-    /// Used for enhanced orthogonal persistence, as implemented in Motoko
-    #[serde(rename = "keep")]
-    Keep,
-    /// Reinitialize the main memory on upgrade.
-    /// Default behavior without enhanced orthogonal persistence.
-    #[serde(rename = "replace")]
-    Replace,
-}
+#[doc(hidden)]
+#[deprecated(since = "0.42.0", note = "Please use UpgradeFlags instead")]
+pub type CanisterUpgradeOptions = UpgradeFlags;
 
-#[derive(Debug, Copy, Clone, CandidType, Deserialize, Eq, PartialEq)]
-/// Upgrade options.
-pub struct CanisterUpgradeOptions {
-    /// Skip pre-upgrade hook. Only for exceptional cases, see the IC documentation. Not useful for Motoko.
-    pub skip_pre_upgrade: Option<bool>,
-    /// Support for enhanced orthogonal persistence: Retain the main memory on upgrade.
-    pub wasm_memory_persistence: Option<WasmMemoryPersistence>,
-}
+#[doc(hidden)]
+#[deprecated(since = "0.42.0", note = "Please use CanisterInstallMode instead")]
+pub type InstallMode = CanisterInstallMode;
 
-/// The install mode of the canister to install. If a canister is already installed,
-/// using [`InstallMode::Install`] will be an error. [`InstallMode::Reinstall`] overwrites
-/// the module, and [`InstallMode::Upgrade`] performs an Upgrade step.
-#[derive(Debug, Copy, Clone, CandidType, Deserialize, Eq, PartialEq)]
-pub enum InstallMode {
-    /// Install the module into the empty canister.
-    #[serde(rename = "install")]
-    Install,
-    /// Overwrite the canister with this module.
-    #[serde(rename = "reinstall")]
-    Reinstall,
-    /// Upgrade the canister with this module and some options.
-    #[serde(rename = "upgrade")]
-    Upgrade(Option<CanisterUpgradeOptions>),
-}
-
-/// A prepared call to `install_code`.
-#[derive(Debug, Clone, CandidType, Deserialize)]
-pub struct CanisterInstall {
-    /// The installation mode to install the module with.
-    pub mode: InstallMode,
-    /// The ID of the canister to install the module into.
-    pub canister_id: Principal,
-    /// The WebAssembly code blob to install.
-    #[serde(with = "serde_bytes")]
-    pub wasm_module: Vec<u8>,
-    /// The encoded argument to pass to the module's constructor.
-    #[serde(with = "serde_bytes")]
-    pub arg: Vec<u8>,
-}
-
-impl FromStr for InstallMode {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "install" => Ok(InstallMode::Install),
-            "reinstall" => Ok(InstallMode::Reinstall),
-            "upgrade" => Ok(InstallMode::Upgrade(None)),
-            &_ => Err(format!("Invalid install mode: {s}")),
-        }
-    }
-}
+#[doc(hidden)]
+#[deprecated(since = "0.42.0", note = "Please use InstallCodeArgs instead")]
+pub type CanisterInstall = InstallCodeArgs;
 
 /// A builder for an `install_code` call.
 #[derive(Debug)]
@@ -592,7 +474,7 @@ pub struct InstallCodeBuilder<'agent, 'canister: 'agent> {
     canister_id: Principal,
     wasm: &'canister [u8],
     arg: Argument,
-    mode: Option<InstallMode>,
+    mode: Option<CanisterInstallMode>,
 }
 
 impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
@@ -633,8 +515,8 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
         self
     }
 
-    /// Pass in the [`InstallMode`].
-    pub fn with_mode(self, mode: InstallMode) -> Self {
+    /// Pass in the [`CanisterInstallMode`].
+    pub fn with_mode(self, mode: CanisterInstallMode) -> Self {
         Self {
             mode: Some(mode),
             ..self
@@ -647,11 +529,12 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
         Ok(self
             .canister
             .update(MgmtMethod::InstallCode.as_ref())
-            .with_arg(CanisterInstall {
-                mode: self.mode.unwrap_or(InstallMode::Install),
+            .with_arg(InstallCodeArgs {
+                mode: self.mode.unwrap_or(CanisterInstallMode::Install),
                 canister_id: self.canister_id,
                 wasm_module: self.wasm.to_owned(),
                 arg: self.arg.serialize()?,
+                sender_canister_version: None,
             })
             .with_effective_canister_id(self.canister_id)
             .build())
@@ -700,7 +583,7 @@ pub struct InstallChunkedCodeBuilder<'agent, 'canister> {
     chunk_hashes_list: Vec<ChunkHash>,
     wasm_module_hash: Vec<u8>,
     arg: Argument,
-    mode: InstallMode,
+    mode: CanisterInstallMode,
 }
 
 impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> {
@@ -717,7 +600,7 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
             store_canister: None,
             chunk_hashes_list: vec![],
             arg: Argument::new(),
-            mode: InstallMode::Install,
+            mode: CanisterInstallMode::Install,
         }
     }
 
@@ -754,8 +637,8 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
         self
     }
 
-    /// Set the [`InstallMode`].
-    pub fn with_install_mode(mut self, mode: InstallMode) -> Self {
+    /// Set the [`CanisterInstallMode`].
+    pub fn with_install_mode(mut self, mode: CanisterInstallMode) -> Self {
         self.mode = mode;
         self
     }
@@ -764,7 +647,7 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
     pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = ()>, AgentError> {
         #[derive(CandidType)]
         struct In {
-            mode: InstallMode,
+            mode: CanisterInstallMode,
             target_canister: Principal,
             store_canister: Option<Principal>,
             chunk_hashes_list: Vec<ChunkHash>,
@@ -844,7 +727,7 @@ pub struct InstallBuilder<'agent, 'canister, 'builder> {
     // because `wasm` may be memory-mapped which is tricky to lifetime
     wasm: &'builder [u8],
     arg: Argument,
-    mode: InstallMode,
+    mode: CanisterInstallMode,
 }
 
 impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'canister, 'builder> {
@@ -863,7 +746,7 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
             canister_id: *canister_id,
             wasm,
             arg: Default::default(),
-            mode: InstallMode::Install,
+            mode: CanisterInstallMode::Install,
         }
     }
 
@@ -886,8 +769,8 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
         self
     }
 
-    /// Pass in the [`InstallMode`].
-    pub fn with_mode(self, mode: InstallMode) -> Self {
+    /// Pass in the [`CanisterInstallMode`].
+    pub fn with_mode(self, mode: CanisterInstallMode) -> Self {
         Self { mode, ..self }
     }
 
@@ -937,7 +820,10 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
                         upload_chunks_stream.push(async move {
                             let (_res,) = self
                                 .canister
-                                .upload_chunk(&self.canister_id, chunk)
+                                .upload_chunk(&self.canister_id, &ic_management_canister_types::UploadChunkArgs {
+                                    canister_id: self.canister_id,
+                                    chunk: chunk.to_vec(),
+                                })
                                 .call_and_wait()
                                 .await?;
                             Ok(())

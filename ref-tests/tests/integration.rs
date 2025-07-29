@@ -4,7 +4,7 @@
 //! integration tests with a running IC-Ref.
 use candid::CandidType;
 use ic_agent::{
-    agent::{agent_error::HttpErrorPayload, Envelope, EnvelopeContent, RejectCode, RejectResponse},
+    agent::{Envelope, EnvelopeContent, RejectCode, RejectResponse},
     export::Principal,
     AgentError, Identity,
 };
@@ -12,7 +12,7 @@ use ic_certification::Label;
 use ic_utils::{
     call::{AsyncCall, SyncCall},
     interfaces::{
-        management_canister::builders::{CanisterSettings, InstallMode},
+        management_canister::builders::{CanisterInstallMode, CanisterSettings},
         WalletCanister,
     },
     Argument, Canister,
@@ -54,7 +54,7 @@ fn basic_expiry() {
             .await;
 
         match result.unwrap_err() {
-            AgentError::HttpError(HttpErrorPayload { status, .. }) => assert_eq!(status, 400),
+            AgentError::TimeoutWaitingForResponse() => (),
             x => panic!("Was expecting an error, got {:?}", x),
         }
 
@@ -261,14 +261,14 @@ fn wallet_canister_create_and_install() {
 
         #[derive(CandidType)]
         struct CanisterInstall {
-            mode: InstallMode,
+            mode: CanisterInstallMode,
             canister_id: Principal,
             wasm_module: Vec<u8>,
             arg: Vec<u8>,
         }
 
         let install_config = CanisterInstall {
-            mode: InstallMode::Install,
+            mode: CanisterInstallMode::Install,
             canister_id: create_result.canister_id,
             wasm_module: b"\0asm\x01\0\0\0".to_vec(),
             arg: Argument::default().serialize()?,

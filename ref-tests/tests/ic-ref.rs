@@ -34,9 +34,9 @@ mod management_canister {
         interfaces::{
             management_canister::{
                 builders::{
-                    CanisterSettings, CanisterUpgradeOptions, InstallMode, WasmMemoryPersistence,
+                    CanisterInstallMode, CanisterSettings, UpgradeFlags, WasmMemoryPersistence,
                 },
-                CanisterStatus, StatusCallResult,
+                CanisterStatusResult, CanisterStatusType,
             },
             wallet::CreateResult,
             ManagementCanister, WalletCanister,
@@ -131,14 +131,14 @@ mod management_canister {
 
             // Install once.
             ic00.install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Install)
+                .with_mode(CanisterInstallMode::Install)
                 .call_and_wait()
                 .await?;
 
             // Re-install should fail.
             let result = ic00
                 .install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Install)
+                .with_mode(CanisterInstallMode::Install)
                 .call_and_wait()
                 .await;
 
@@ -146,7 +146,7 @@ mod management_canister {
 
             // Reinstall should succeed.
             ic00.install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Reinstall)
+                .with_mode(CanisterInstallMode::Reinstall)
                 .call_and_wait()
                 .await?;
 
@@ -160,14 +160,14 @@ mod management_canister {
             // Reinstall with another agent should fail.
             let result = other_ic00
                 .install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Reinstall)
+                .with_mode(CanisterInstallMode::Reinstall)
                 .call_and_wait()
                 .await;
             assert!(matches!(result, Err(AgentError::UncertifiedReject { .. })));
 
             // Upgrade should succeed.
             ic00.install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Upgrade(Some(CanisterUpgradeOptions {
+                .with_mode(CanisterInstallMode::Upgrade(Some(UpgradeFlags {
                     skip_pre_upgrade: Some(true),
                     wasm_memory_persistence: None,
                 })))
@@ -177,7 +177,7 @@ mod management_canister {
             // Upgrade with another agent should fail.
             let result = other_ic00
                 .install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Upgrade(Some(CanisterUpgradeOptions {
+                .with_mode(CanisterInstallMode::Upgrade(Some(UpgradeFlags {
                     skip_pre_upgrade: None,
                     wasm_memory_persistence: Some(WasmMemoryPersistence::Keep),
                 })))
@@ -209,7 +209,7 @@ mod management_canister {
             // Reinstall as new controller
             other_ic00
                 .install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Reinstall)
+                .with_mode(CanisterInstallMode::Reinstall)
                 .call_and_wait()
                 .await?;
 
@@ -223,7 +223,7 @@ mod management_canister {
 
             // Reinstall over empty canister
             ic00.install_code(&canister_id_2, &canister_wasm)
-                .with_mode(InstallMode::Reinstall)
+                .with_mode(CanisterInstallMode::Reinstall)
                 .call_and_wait()
                 .await?;
 
@@ -240,7 +240,7 @@ mod management_canister {
                 .canister_status(&canister_id_3)
                 .call_and_wait()
                 .await?;
-            assert_eq!(result.0.status, CanisterStatus::Running);
+            assert_eq!(result.0.status, CanisterStatusType::Running);
             assert_eq!(result.0.settings.controllers.len(), 1);
             assert_eq!(result.0.settings.controllers[0], other_agent_principal);
             assert_eq!(result.0.module_hash, None);
@@ -248,7 +248,7 @@ mod management_canister {
             // Install wasm.
             other_ic00
                 .install_code(&canister_id_3, &canister_wasm)
-                .with_mode(InstallMode::Install)
+                .with_mode(CanisterInstallMode::Install)
                 .call_and_wait()
                 .await?;
 
@@ -443,20 +443,20 @@ mod management_canister {
 
             // Install once.
             ic00.install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Install)
+                .with_mode(CanisterInstallMode::Install)
                 .call_and_wait()
                 .await?;
 
             // A newly installed canister should be running
             let result = ic00.canister_status(&canister_id).call_and_wait().await;
-            assert_eq!(result?.0.status, CanisterStatus::Running);
+            assert_eq!(result?.0.status, CanisterStatusType::Running);
 
             // Stop should succeed.
             ic00.stop_canister(&canister_id).call_and_wait().await?;
 
             // Canister should be stopped
             let result = ic00.canister_status(&canister_id).call_and_wait().await;
-            assert_eq!(result?.0.status, CanisterStatus::Stopped);
+            assert_eq!(result?.0.status, CanisterStatusType::Stopped);
 
             // Another stop is a noop
             ic00.stop_canister(&canister_id).call_and_wait().await?;
@@ -485,7 +485,7 @@ mod management_canister {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
-                    }, .. }) if *reject_message == format!("IC0508: Canister {canister_id} is stopped and therefore does not have a CallContextManager")
+                    }, .. }) if *reject_message == format!("Canister {canister_id} is stopped and therefore does not have a CallContextManager")
                         && error_code == "IC0508"
                 ),
                 "wrong error: {result:?}"
@@ -493,7 +493,7 @@ mod management_canister {
 
             // Upgrade should succeed
             ic00.install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Upgrade(Some(CanisterUpgradeOptions {
+                .with_mode(CanisterInstallMode::Upgrade(Some(UpgradeFlags {
                     skip_pre_upgrade: None,
                     wasm_memory_persistence: Some(WasmMemoryPersistence::Replace),
                 })))
@@ -505,7 +505,7 @@ mod management_canister {
 
             // Canister should be running
             let result = ic00.canister_status(&canister_id).call_and_wait().await;
-            assert_eq!(result?.0.status, CanisterStatus::Running);
+            assert_eq!(result?.0.status, CanisterStatusType::Running);
 
             // Can call update
             let result = agent.update(&canister_id, "update").call_and_wait().await;
@@ -570,7 +570,7 @@ mod management_canister {
                         reject_code: RejectCode::DestinationInvalid,
                         reject_message,
                         error_code: Some(error_code),
-                    }, .. }) if *reject_message == format!("IC0301: Canister {} not found", canister_id)
+                    }, .. }) if *reject_message == format!("Canister {} not found", canister_id)
                         && error_code == "IC0301"
                 ),
                 "wrong error: {result:?}"
@@ -632,7 +632,7 @@ mod management_canister {
 
             // Install once.
             ic00.install_code(&canister_id, &canister_wasm)
-                .with_mode(InstallMode::Install)
+                .with_mode(CanisterInstallMode::Install)
                 .call_and_wait()
                 .await?;
 
@@ -765,7 +765,7 @@ mod management_canister {
             let status_args = In { canister_id };
             let args = Argument::from_candid((status_args,));
 
-            let (result,): (StatusCallResult,) = wallet
+            let (result,): (CanisterStatusResult,) = wallet
                 .call(Principal::management_canister(), "canister_status", args, 0)
                 .call_and_wait()
                 .await?;
@@ -860,6 +860,7 @@ mod management_canister {
     #[ignore]
     #[test]
     fn chunked_wasm() {
+        use ic_management_canister_types::UploadChunkArgs;
         with_agent(|agent| async move {
             let wasm = b"\0asm\x01\0\0\0";
             let wasm_hash = Sha256::digest(wasm).to_vec();
@@ -871,11 +872,23 @@ mod management_canister {
                 .call_and_wait()
                 .await?;
             let (pt1,) = mgmt
-                .upload_chunk(&canister_id, &wasm[0..4])
+                .upload_chunk(
+                    &canister_id,
+                    &UploadChunkArgs {
+                        canister_id,
+                        chunk: wasm[0..4].to_vec(),
+                    },
+                )
                 .call_and_wait()
                 .await?;
             let (pt2,) = mgmt
-                .upload_chunk(&canister_id, &wasm[4..8])
+                .upload_chunk(
+                    &canister_id,
+                    &UploadChunkArgs {
+                        canister_id,
+                        chunk: wasm[4..8].to_vec(),
+                    },
+                )
                 .call_and_wait()
                 .await?;
             mgmt.install_chunked_code(&canister_id, &wasm_hash)
@@ -1077,7 +1090,7 @@ mod extras {
             );
             assert_eq!(
                 result.0.settings.reserved_cycles_limit,
-                Some(Nat::from(2_500_800_000_000u128))
+                Nat::from(2_500_800_000_000u128)
             );
 
             Ok(())
@@ -1174,7 +1187,7 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(
                 result.0.settings.reserved_cycles_limit,
-                Some(Nat::from(2u128.pow(70)))
+                Nat::from(2u128.pow(70))
             );
 
             Ok(())
@@ -1198,7 +1211,7 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(
                 result.0.settings.reserved_cycles_limit,
-                Some(Nat::from(2_500_800_000_000u128))
+                Nat::from(2_500_800_000_000u128)
             );
 
             ic00.update_settings(&canister_id)
@@ -1209,7 +1222,7 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(
                 result.0.settings.reserved_cycles_limit,
-                Some(Nat::from(3_400_200_000_000u128))
+                Nat::from(3_400_200_000_000u128)
             );
 
             let no_change: Option<u128> = None;
@@ -1221,7 +1234,7 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(
                 result.0.settings.reserved_cycles_limit,
-                Some(Nat::from(3_400_200_000_000u128))
+                Nat::from(3_400_200_000_000u128)
             );
 
             Ok(())
@@ -1296,7 +1309,7 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(
                 result.0.settings.wasm_memory_limit,
-                Some(Nat::from(1_000_000_000_u64))
+                Nat::from(1_000_000_000_u64)
             );
 
             Ok(())
@@ -1320,7 +1333,7 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(
                 result.0.settings.wasm_memory_limit,
-                Some(Nat::from(1_000_000_000_u64))
+                Nat::from(1_000_000_000_u64)
             );
 
             ic00.update_settings(&canister_id)
@@ -1331,7 +1344,7 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(
                 result.0.settings.wasm_memory_limit,
-                Some(Nat::from(3_000_000_000_u64))
+                Nat::from(3_000_000_000_u64)
             );
 
             let no_change: Option<u64> = None;
@@ -1343,7 +1356,7 @@ mod extras {
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(
                 result.0.settings.wasm_memory_limit,
-                Some(Nat::from(3_000_000_000_u64))
+                Nat::from(3_000_000_000_u64)
             );
 
             Ok(())

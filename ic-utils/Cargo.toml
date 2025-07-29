@@ -32,6 +32,7 @@ time = { workspace = true }
 tokio = { workspace = true }
 semver = "1.0.7"
 once_cell = "1.10.0"
+ic-management-canister-types = { workspace = true }
 
 [dev-dependencies]
 ic-ed25519 = { workspace = true }
