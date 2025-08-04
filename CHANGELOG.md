@@ -6,14 +6,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [0.42.0] - 2025-08-04
 
 * Use [ic-management-canister-types](https://crates.io/crates/ic-management-canister-types/0.3.2) in [ic-utils](./ic-utils/README.md).
   - This change introduces some breaking changes in `ic-utils` due to the type-inconsistency. For example, the `StatusCallResult` defined in `ic-utils` is not consistent to  the `CanisterStatusResult` defined in `ic-management-canister-types`.
   - The legacy types defined in `ic-utils` are marked as deprecated with messages.
   - Some APIs are updated to use the types defined in `ic-management-canister-types`, e.g. `upload_canister_snapshot_metadata`, `upload_canister_snapshot_data`.
 
-## [0.41.1] - 2025-07-10
+## [0.41.0] - 2025-07-10
 
 * Add canister snapshot download and upload methods to `ManagementCanister`.
 
