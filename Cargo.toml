@@ -18,7 +18,7 @@ repository = "https://github.com/dfinity/agent-rs"
 # MSRV
 # Avoid updating this field unless we use new Rust features
 # Sync rust-version in rust-toolchain.toml
-rust-version = "1.78.0"
+rust-version = "1.85.0"
 license = "Apache-2.0"
 
 [workspace.lints.clippy]
@@ -30,7 +30,6 @@ ic-utils = { path = "ic-utils", version = "0.42.0" }
 ic-transport-types = { path = "ic-transport-types", version = "0.42.0" }
 
 ic-certification = "3"
-base64ct = "1.6.0"
 candid = "0.10.10"
 candid_parser = "0.1.4"
 clap = "4.5.21"

@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The legacy types defined in `ic-utils` are marked as deprecated with messages.
   - Some APIs are updated to use the types defined in `ic-management-canister-types`, e.g. `upload_canister_snapshot_metadata`, `upload_canister_snapshot_data`.
 
+* Bump MSRV from `1.78.0` to `1.85.0`.
+
 ## [0.41.0] - 2025-07-10
 
 * Add canister snapshot download and upload methods to `ManagementCanister`.
