@@ -289,7 +289,10 @@ pub trait LookupPath {
 
 impl<'b, const N: usize> LookupPath for [&'b [u8]; N] {
     type Item = &'b [u8];
-    type Iter<'a> = std::slice::Iter<'a, &'b [u8]> where Self: 'a;
+    type Iter<'a>
+        = std::slice::Iter<'a, &'b [u8]>
+    where
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         self.as_slice().iter()
     }
@@ -299,7 +302,10 @@ impl<'b, const N: usize> LookupPath for [&'b [u8]; N] {
 }
 impl<'b, 'c> LookupPath for &'c [&'b [u8]] {
     type Item = &'b [u8];
-    type Iter<'a> = std::slice::Iter<'a, &'b [u8]> where Self: 'a;
+    type Iter<'a>
+        = std::slice::Iter<'a, &'b [u8]>
+    where
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         <[_]>::iter(self)
     }
@@ -309,7 +315,10 @@ impl<'b, 'c> LookupPath for &'c [&'b [u8]] {
 }
 impl<'b> LookupPath for Vec<&'b [u8]> {
     type Item = &'b [u8];
-    type Iter<'a> = std::slice::Iter<'a, &'b [u8]> where Self: 'a;
+    type Iter<'a>
+        = std::slice::Iter<'a, &'b [u8]>
+    where
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         <[_]>::iter(self.as_slice())
     }
@@ -320,7 +329,10 @@ impl<'b> LookupPath for Vec<&'b [u8]> {
 
 impl<const N: usize> LookupPath for [Vec<u8>; N] {
     type Item = Vec<u8>;
-    type Iter<'a> = std::slice::Iter<'a, Vec<u8>> where Self: 'a;
+    type Iter<'a>
+        = std::slice::Iter<'a, Vec<u8>>
+    where
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         self.as_slice().iter()
     }
@@ -330,7 +342,10 @@ impl<const N: usize> LookupPath for [Vec<u8>; N] {
 }
 impl<'c> LookupPath for &'c [Vec<u8>] {
     type Item = Vec<u8>;
-    type Iter<'a> = std::slice::Iter<'a, Vec<u8>> where Self: 'a;
+    type Iter<'a>
+        = std::slice::Iter<'a, Vec<u8>>
+    where
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         <[_]>::iter(self)
     }
@@ -340,7 +355,10 @@ impl<'c> LookupPath for &'c [Vec<u8>] {
 }
 impl LookupPath for Vec<Vec<u8>> {
     type Item = Vec<u8>;
-    type Iter<'a> = std::slice::Iter<'a, Vec<u8>> where Self: 'a;
+    type Iter<'a>
+        = std::slice::Iter<'a, Vec<u8>>
+    where
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         <[_]>::iter(self.as_slice())
     }
@@ -351,7 +369,10 @@ impl LookupPath for Vec<Vec<u8>> {
 
 impl<Storage: AsRef<[u8]> + Into<Vec<u8>>, const N: usize> LookupPath for [Label<Storage>; N] {
     type Item = Label<Storage>;
-    type Iter<'a> = std::slice::Iter<'a, Label<Storage>> where Self: 'a;
+    type Iter<'a>
+        = std::slice::Iter<'a, Label<Storage>>
+    where
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         self.as_slice().iter()
     }
@@ -361,7 +382,10 @@ impl<Storage: AsRef<[u8]> + Into<Vec<u8>>, const N: usize> LookupPath for [Label
 }
 impl<'c, Storage: AsRef<[u8]> + Into<Vec<u8>>> LookupPath for &'c [Label<Storage>] {
     type Item = Label<Storage>;
-    type Iter<'a> = std::slice::Iter<'a, Label<Storage>> where Self: 'a;
+    type Iter<'a>
+        = std::slice::Iter<'a, Label<Storage>>
+    where
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         <[_]>::iter(self)
     }
@@ -373,7 +397,10 @@ impl<'c, Storage: AsRef<[u8]> + Into<Vec<u8>>> LookupPath for &'c [Label<Storage
 }
 impl LookupPath for Vec<Label<Vec<u8>>> {
     type Item = Label<Vec<u8>>;
-    type Iter<'a> = std::slice::Iter<'a, Label<Vec<u8>>> where Self: 'a;
+    type Iter<'a>
+        = std::slice::Iter<'a, Label<Vec<u8>>>
+    where
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         <[_]>::iter(self.as_slice())
     }

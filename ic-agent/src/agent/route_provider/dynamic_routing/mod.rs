@@ -22,6 +22,7 @@
 //! The `DynamicRouteProvider` can be used standalone or injected into the agent to enable dynamic routing. There are several ways to instantiate it:
 //! 1. **Via high-Level Agent API**: Initializes the agent with built-in dynamic routing. This method is user-friendly but provides limited customization options.
 //! 2. **Via [`DynamicRouteProviderBuilder`](dynamic_route_provider::DynamicRouteProviderBuilder)**: Creates a customized `DynamicRouteProvider` with a specific routing strategy and parameters.
+//!
 //! This instance can be used standalone or integrated into the agent via [`AgentBuilder::with_route_provider()`](super::super::AgentBuilder::with_route_provider).
 //! ## Example: High-Level Agent API
 //! ```rust
@@ -130,12 +131,14 @@
 //! - **Nodes Fetcher**: Custom implementation of the [`Fetch`](nodes_fetch::Fetch) trait for node discovery.
 //! - **Health Checker**: Custom implementation of the [`HealthCheck`](health_check::HealthCheck) trait for health monitoring.
 //! - **Routing Strategy**: Custom implementation of the [`RoutingSnapshot`](snapshot::routing_snapshot::RoutingSnapshot) trait for routing logic.
+//!
 //! Two built-in strategies are available: [`LatencyRoutingSnapshot`](snapshot::latency_based_routing::LatencyRoutingSnapshot) and [`RoundRobinRoutingSnapshot`](snapshot::round_robin_routing::RoundRobinRoutingSnapshot).
 //!
 //! # Error Handling
 //! Errors during node fetching or health checking are encapsulated in the [`DynamicRouteProviderError`](dynamic_route_provider::DynamicRouteProviderError) enum:
 //! - `NodesFetchError`: Occurs when fetching the topology fails.
 //! - `HealthCheckError`: Occurs when node health checks fail.
+//!
 //! These errors are not propagated to the caller. Instead, they are logged internally using the `tracing` crate. To capture these errors, configure a `tracing` subscriber in your application.
 //! If no healthy nodes are available, the [`route()`](super::RouteProvider::route()) method returns an [`AgentError::RouteProviderError`](super::super::agent_error::AgentError::RouteProviderError).
 //! # Testing
