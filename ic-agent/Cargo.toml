@@ -61,6 +61,7 @@ time = { workspace = true }
 tower-service = "0.3"
 tracing = { version = "0.1", optional = true }
 url = "2.1.0"
+base64ct = { workspace = true }
 
 [dependencies.reqwest]
 workspace = true
