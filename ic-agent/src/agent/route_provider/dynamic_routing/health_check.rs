@@ -9,7 +9,6 @@ use std::{
     time::{Duration, Instant},
 };
 use stop_token::{StopSource, StopToken};
-use tokio::time::timeout;
 
 use crate::agent::{
     route_provider::dynamic_routing::{
@@ -94,15 +93,19 @@ impl HealthCheck for HealthChecker {
             .unwrap();
 
         let start = Instant::now();
-        let response = timeout(
+        #[cfg(not(target_family = "wasm"))]
+        let response = tokio::time::timeout(
             self.timeout,
             self.http_client.call(&|| Ok(request.clone()), 1, None),
         )
         .await
         .map_err(|_| {
             DynamicRouteProviderError::HealthCheckError(format!("GET request to {uri} timed out"))
-        })?
-        .map_err(|err| {
+        })?;
+        #[cfg(target_family = "wasm")]
+        let response = self.http_client.call(&|| Ok(request.clone()), 1, None);
+
+        let response = response.map_err(|err| {
             DynamicRouteProviderError::HealthCheckError(format!(
                 "Failed to execute GET request to {uri}: {err}"
             ))

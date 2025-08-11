@@ -28,7 +28,7 @@ pub use ic_transport_types::{
 };
 pub use nonce::{NonceFactory, NonceGenerator};
 use rangemap::{RangeInclusiveMap, RangeInclusiveSet, StepFns};
-use reqwest::{Body, Client, Request, Response};
+use reqwest::{Client, Request, Response};
 use route_provider::{
     dynamic_routing::{
         dynamic_route_provider::DynamicRouteProviderBuilder, node::Node,
@@ -1982,7 +1982,7 @@ impl<'agent> IntoFuture for UpdateBuilder<'agent> {
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub trait HttpService: Send + Sync + Debug {
-    /// Perform a HTTP request. Any retry logic should call `req` again, instead of `Request::try_clone`.
+    /// Perform a HTTP request. Any retry logic should call `req` again to get a new request.
     async fn call<'a>(
         &'a self,
         req: &'a (dyn Fn() -> Result<http::Request<Bytes>, AgentError> + Send + Sync),
@@ -1990,6 +1990,7 @@ pub trait HttpService: Send + Sync + Debug {
         size_limit: Option<usize>,
     ) -> Result<http::Response<Bytes>, AgentError>;
 }
+
 #[cfg(not(target_family = "wasm"))]
 #[async_trait]
 impl<T> HttpService for T
@@ -2011,7 +2012,7 @@ where
 
             // Convert into Reqwest Request
             let (parts, body) = req()?.into_parts();
-            let body = Body::from(body);
+            let body = reqwest::Body::from(body);
             // I think it can never fail since it converts from `Url` to `Uri` and `Url` is a subset of `Uri`,
             // but just to be safe let's handle it.
             let request = http::Request::from_parts(parts, body)
@@ -2032,7 +2033,7 @@ where
                     // Convert to http::Response
                     use http_body_util::Limited;
 
-                    let resp: http::Response<Body> = resp.into();
+                    let resp: http::Response<reqwest::Body> = resp.into();
                     let (parts, body) = resp.into_parts();
                     let body = Limited::new(body, size_limit.unwrap_or(usize::MAX));
                     let body = body
@@ -2064,9 +2065,11 @@ where
     async fn call<'a>(
         mut self: &'a Self,
         req: &'a (dyn Fn() -> Result<Request, AgentError> + Send + Sync),
-        _: usize,
+        _retries: usize,
+        _size_limit: Option<usize>,
     ) -> Result<Response, AgentError> {
-        Ok(Service::call(&mut self, req()?).await?)
+        Ok(Service::call(&mut self, req()?)
+            .map_err(|e| AgentError::TransportError(e.to_string()).await?))
     }
 }
 
@@ -2086,11 +2089,8 @@ impl HttpService for Retry429Logic {
     ) -> Result<http::Response<Bytes>, AgentError> {
         let mut retries = 0;
         loop {
-            #[cfg(not(target_family = "wasm"))]
             let resp = self.client.call(req, _max_tcp_retries, _size_limit).await?;
-            // Client inconveniently does not implement Service on wasm
-            #[cfg(target_family = "wasm")]
-            let resp = self.client.execute(req()?).await?;
+
             if resp.status() == StatusCode::TOO_MANY_REQUESTS {
                 if retries == 6 {
                     break Ok(resp);
