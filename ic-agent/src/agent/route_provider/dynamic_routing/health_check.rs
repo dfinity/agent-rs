@@ -1,14 +1,15 @@
 use async_trait::async_trait;
+use bytes::Bytes;
 use futures_util::FutureExt;
-use http::{Method, StatusCode};
-use reqwest::Request;
+use http::{Method, Request, StatusCode, Uri};
 use std::{
     fmt::Debug,
+    str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
 };
 use stop_token::{StopSource, StopToken};
-use url::Url;
+use tokio::time::timeout;
 
 use crate::agent::{
     route_provider::dynamic_routing::{
@@ -84,29 +85,33 @@ impl HealthCheck for HealthChecker {
     #[allow(unused_mut)]
     async fn check(&self, node: &Node) -> Result<HealthCheckStatus, DynamicRouteProviderError> {
         // API boundary node exposes /health endpoint and should respond with 204 (No Content) if it's healthy.
-        let url = Url::parse(&format!("https://{}/health", node.domain())).unwrap();
+        let uri = Uri::from_str(&format!("https://{}/health", node.domain())).unwrap();
 
-        let mut request = Request::new(Method::GET, url.clone());
-        #[cfg(not(target_family = "wasm"))]
-        {
-            *request.timeout_mut() = Some(self.timeout);
-        }
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri(uri.clone())
+            .body(Bytes::new())
+            .unwrap();
 
         let start = Instant::now();
-        let response = self
-            .http_client
-            .call(&|| Ok(request.try_clone().unwrap()), 1)
-            .await
-            .map_err(|err| {
-                DynamicRouteProviderError::HealthCheckError(format!(
-                    "Failed to execute GET request to {url}: {err}"
-                ))
-            })?;
+        let response = timeout(
+            self.timeout,
+            self.http_client.call(&|| Ok(request.clone()), 1, None),
+        )
+        .await
+        .map_err(|_| {
+            DynamicRouteProviderError::HealthCheckError(format!("GET request to {uri} timed out"))
+        })?
+        .map_err(|err| {
+            DynamicRouteProviderError::HealthCheckError(format!(
+                "Failed to execute GET request to {uri}: {err}"
+            ))
+        })?;
         let latency = start.elapsed();
 
         if response.status() != StatusCode::NO_CONTENT {
             let err_msg = format!(
-                "{HEALTH_CHECKER}: Unexpected http status code {} for url={url} received",
+                "{HEALTH_CHECKER}: Unexpected http status code {} for url={uri} received",
                 response.status()
             );
             log!(error, err_msg);

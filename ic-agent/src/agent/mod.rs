@@ -17,9 +17,9 @@ use agent_error::{HttpErrorPayload, Operation};
 use async_lock::Semaphore;
 use async_trait::async_trait;
 pub use builder::AgentBuilder;
+use bytes::Bytes;
 use cached::{Cached, TimedCache};
-use futures_util::StreamExt;
-use http::{header::CONTENT_TYPE, HeaderMap, Method, StatusCode};
+use http::{header::CONTENT_TYPE, HeaderMap, Method, StatusCode, Uri};
 use ic_ed25519::{PublicKey, SignatureError};
 #[doc(inline)]
 pub use ic_transport_types::{
@@ -67,6 +67,7 @@ use std::{
     fmt::{self, Debug},
     future::{Future, IntoFuture},
     pin::Pin,
+    str::FromStr,
     sync::{Arc, Mutex, RwLock},
     task::{Context, Poll},
     time::Duration,
@@ -1236,14 +1237,23 @@ impl Agent {
         endpoint: &str,
         body: Option<Vec<u8>>,
     ) -> Result<(StatusCode, HeaderMap, Vec<u8>), AgentError> {
-        let create_request_with_generated_url = || -> Result<Request, AgentError> {
+        let body = body.map(Bytes::from);
+
+        let create_request_with_generated_url = || -> Result<http::Request<Bytes>, AgentError> {
             let url = self.route_provider.route()?.join(endpoint)?;
-            let mut http_request = Request::new(method.clone(), url);
-            http_request
-                .headers_mut()
-                .insert(CONTENT_TYPE, "application/cbor".parse().unwrap());
-            *http_request.body_mut() = body.clone().map(Body::from);
-            Ok(http_request)
+            let uri = Uri::from_str(url.as_str())
+                .map_err(|e| AgentError::InvalidReplicaUrl(e.to_string()))?;
+            let body = body.clone().unwrap_or_default();
+            let request = http::Request::builder()
+                .method(method.clone())
+                .uri(uri)
+                .header(CONTENT_TYPE, "application/cbor")
+                .body(body)
+                .map_err(|e| {
+                    AgentError::TransportError(format!("unable to create request: {e:#}"))
+                })?;
+
+            Ok(request)
         };
 
         let response = self
@@ -1251,40 +1261,13 @@ impl Agent {
             .call(
                 &create_request_with_generated_url,
                 self.max_tcp_error_retries,
+                self.max_response_body_size,
             )
             .await?;
 
-        let http_status = response.status();
-        let response_headers = response.headers().clone();
+        let (parts, body) = response.into_parts();
 
-        // Size Check (Content-Length)
-        if matches!(self
-            .max_response_body_size
-            .zip(response.content_length()), Some((size_limit, content_length)) if content_length > size_limit as u64)
-        {
-            return Err(AgentError::ResponseSizeExceededLimit());
-        }
-
-        let mut body: Vec<u8> = response
-            .content_length()
-            .map_or_else(Vec::new, |n| Vec::with_capacity(n as usize));
-
-        let mut stream = response.bytes_stream();
-
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk?;
-
-            // Size Check (Body Size)
-            if matches!(self
-                .max_response_body_size, Some(size_limit) if body.len() + chunk.len() > size_limit)
-            {
-                return Err(AgentError::ResponseSizeExceededLimit());
-            }
-
-            body.extend_from_slice(chunk.as_ref());
-        }
-
-        Ok((http_status, response_headers, body))
+        Ok((parts.status, parts.headers, body.to_vec()))
     }
 
     async fn execute(
@@ -2002,9 +1985,10 @@ pub trait HttpService: Send + Sync + Debug {
     /// Perform a HTTP request. Any retry logic should call `req` again, instead of `Request::try_clone`.
     async fn call<'a>(
         &'a self,
-        req: &'a (dyn Fn() -> Result<Request, AgentError> + Send + Sync),
+        req: &'a (dyn Fn() -> Result<http::Request<Bytes>, AgentError> + Send + Sync),
         max_retries: usize,
-    ) -> Result<Response, AgentError>;
+        size_limit: Option<usize>,
+    ) -> Result<http::Response<Bytes>, AgentError>;
 }
 #[cfg(not(target_family = "wasm"))]
 #[async_trait]
@@ -2017,22 +2001,53 @@ where
     #[allow(clippy::needless_arbitrary_self_type)]
     async fn call<'a>(
         mut self: &'a Self,
-        req: &'a (dyn Fn() -> Result<Request, AgentError> + Send + Sync),
+        req: &'a (dyn Fn() -> Result<http::Request<Bytes>, AgentError> + Send + Sync),
         max_retries: usize,
-    ) -> Result<Response, AgentError> {
+        size_limit: Option<usize>,
+    ) -> Result<http::Response<Bytes>, AgentError> {
         let mut retry_count = 0;
         loop {
-            match Service::call(&mut self, req()?).await {
+            use http_body_util::BodyExt;
+
+            // Convert into Reqwest Request
+            let (parts, body) = req()?.into_parts();
+            let body = Body::from(body);
+            // I think it can never fail since it converts from `Url` to `Uri` and `Url` is a subset of `Uri`,
+            // but just to be safe let's handle it.
+            let request = http::Request::from_parts(parts, body)
+                .try_into()
+                .map_err(|e: reqwest::Error| AgentError::InvalidReplicaUrl(e.to_string()))?;
+
+            match Service::call(&mut self, request).await {
                 Err(err) => {
                     // Network-related errors can be retried.
                     if err.is_connect() {
                         if retry_count >= max_retries {
-                            return Err(AgentError::TransportError(err));
+                            return Err(AgentError::TransportError(err.to_string()));
                         }
                         retry_count += 1;
                     }
                 }
-                Ok(resp) => return Ok(resp),
+                Ok(resp) => {
+                    // Convert to http::Response
+                    use http_body_util::Limited;
+
+                    let resp: http::Response<Body> = resp.into();
+                    let (parts, body) = resp.into_parts();
+                    let body = Limited::new(body, size_limit.unwrap_or(usize::MAX));
+                    let body = body
+                        .collect()
+                        .await
+                        .map_err(|e| {
+                            AgentError::TransportError(format!(
+                                "unable to read response body: {e:#}"
+                            ))
+                        })?
+                        .to_bytes();
+                    let resp = http::Response::from_parts(parts, body);
+
+                    return Ok(resp);
+                }
             }
         }
     }
@@ -2065,13 +2080,14 @@ struct Retry429Logic {
 impl HttpService for Retry429Logic {
     async fn call<'a>(
         &'a self,
-        req: &'a (dyn Fn() -> Result<Request, AgentError> + Send + Sync),
+        req: &'a (dyn Fn() -> Result<http::Request<Bytes>, AgentError> + Send + Sync),
         _max_tcp_retries: usize,
-    ) -> Result<Response, AgentError> {
+        _size_limit: Option<usize>,
+    ) -> Result<http::Response<Bytes>, AgentError> {
         let mut retries = 0;
         loop {
             #[cfg(not(target_family = "wasm"))]
-            let resp = self.client.call(req, _max_tcp_retries).await?;
+            let resp = self.client.call(req, _max_tcp_retries, _size_limit).await?;
             // Client inconveniently does not implement Service on wasm
             #[cfg(target_family = "wasm")]
             let resp = self.client.execute(req()?).await?;
