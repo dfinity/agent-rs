@@ -47,6 +47,7 @@ use crate::{
         extract_der, lookup_canister_info, lookup_canister_metadata, lookup_request_status,
         lookup_subnet, lookup_subnet_metrics, lookup_time, lookup_value,
     },
+    agent_error::TransportError,
     export::Principal,
     identity::Identity,
     to_request_id, RequestId,
@@ -1250,7 +1251,9 @@ impl Agent {
                 .header(CONTENT_TYPE, "application/cbor")
                 .body(body)
                 .map_err(|e| {
-                    AgentError::TransportError(format!("unable to create request: {e:#}"))
+                    AgentError::TransportError(TransportError::Generic(format!(
+                        "unable to create request: {e:#}"
+                    )))
                 })?;
 
             Ok(request)
@@ -2018,15 +2021,19 @@ async fn to_http_response(
     let body = body
         .collect()
         .await
-        .map_err(|e| AgentError::TransportError(format!("unable to read response body: {e:#}")))?
+        .map_err(|e| {
+            AgentError::TransportError(TransportError::Generic(format!(
+                "unable to read response body: {e:#}"
+            )))
+        })?
         .to_bytes();
     let resp = http::Response::from_parts(parts, body);
 
     Ok(resp)
 }
 
-/// Convert from reqwests's Response to http one
-/// WASM in reqwest doesn't have direct conversion for http::Response,
+/// Convert from reqwests's Response to http one.
+/// WASM Response in reqwest doesn't have direct conversion for http::Response,
 /// so we have to hack around using streams.
 #[cfg(target_family = "wasm")]
 async fn to_http_response(
@@ -2047,7 +2054,11 @@ async fn to_http_response(
     let body = Limited::new(body, size_limit.unwrap_or(usize::MAX));
     let body = http_body_util::BodyExt::collect(body)
         .await
-        .map_err(|e| AgentError::TransportError(format!("unable to read response body: {e:#}")))?
+        .map_err(|e| {
+            AgentError::TransportError(TransportError::Generic(format!(
+                "unable to read response body: {e:#}"
+            )))
+        })?
         .to_bytes();
 
     let mut resp = http::Response::new(body);
@@ -2081,7 +2092,7 @@ where
                     // Network-related errors can be retried.
                     if err.is_connect() {
                         if retry_count >= max_retries {
-                            return Err(AgentError::TransportError(err.to_string()));
+                            return Err(AgentError::TransportError(TransportError::Reqwest(err)));
                         }
                         retry_count += 1;
                     }
@@ -2113,7 +2124,7 @@ where
         let request = from_http_request(req()?)?;
         let response = Service::call(&mut self, request)
             .await
-            .map_err(|e| AgentError::TransportError(e.to_string()))?;
+            .map_err(|e| AgentError::TransportError(TransportError::Reqwest(e)))?;
 
         to_http_response(response, _size_limit).await
     }
@@ -2145,7 +2156,8 @@ impl HttpService for Retry429Logic {
                     .client
                     .execute(request)
                     .await
-                    .map_err(|e| AgentError::TransportError(e.to_string()))?;
+                    .map_err(|e| AgentError::TransportError(TransportError::Reqwest(e)))?;
+
                 to_http_response(resp, _size_limit).await?
             };
 
