@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Change `HttpService` trait to use normal `http` crate `Request` and `Response` types with `Bytes` as a body instead of `reqwest` ones and add `size_limit` argument.
+* Change `AgentError::TransportError` enum variant to hold a generic string instead of `reqwest::Error`.
+
 ## [0.42.0] - 2025-08-04
 
 * Use [ic-management-canister-types](https://crates.io/crates/ic-management-canister-types/0.3.2) in [ic-utils](./ic-utils/README.md).
