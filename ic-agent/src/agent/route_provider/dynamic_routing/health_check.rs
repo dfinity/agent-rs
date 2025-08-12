@@ -103,7 +103,10 @@ impl HealthCheck for HealthChecker {
             DynamicRouteProviderError::HealthCheckError(format!("GET request to {uri} timed out"))
         })?;
         #[cfg(target_family = "wasm")]
-        let response = self.http_client.call(&|| Ok(request.clone()), 1, None);
+        let response = self
+            .http_client
+            .call(&|| Ok(request.clone()), 1, None)
+            .await;
 
         let response = response.map_err(|err| {
             DynamicRouteProviderError::HealthCheckError(format!(

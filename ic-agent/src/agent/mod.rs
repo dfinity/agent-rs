@@ -1991,6 +1991,39 @@ pub trait HttpService: Send + Sync + Debug {
     ) -> Result<http::Response<Bytes>, AgentError>;
 }
 
+/// Convert from http Request to reqwest's one
+fn from_http_request(req: http::Request<Bytes>) -> Result<Request, AgentError> {
+    let (parts, body) = req.into_parts();
+    let body = reqwest::Body::from(body);
+    // I think it can never fail since it converts from `Url` to `Uri` and `Url` is a subset of `Uri`,
+    // but just to be safe let's handle it.
+    let request = http::Request::from_parts(parts, body)
+        .try_into()
+        .map_err(|e: reqwest::Error| AgentError::InvalidReplicaUrl(e.to_string()))?;
+
+    Ok(request)
+}
+
+/// Convert from reqwests's Response to http one
+async fn to_http_response(
+    resp: Response,
+    size_limit: Option<usize>,
+) -> Result<http::Response<Bytes>, AgentError> {
+    use http_body_util::{BodyExt, Limited};
+
+    let resp: http::Response<reqwest::Body> = resp.into();
+    let (parts, body) = resp.into_parts();
+    let body = Limited::new(body, size_limit.unwrap_or(usize::MAX));
+    let body = body
+        .collect()
+        .await
+        .map_err(|e| AgentError::TransportError(format!("unable to read response body: {e:#}")))?
+        .to_bytes();
+    let resp = http::Response::from_parts(parts, body);
+
+    Ok(resp)
+}
+
 #[cfg(not(target_family = "wasm"))]
 #[async_trait]
 impl<T> HttpService for T
@@ -2008,16 +2041,7 @@ where
     ) -> Result<http::Response<Bytes>, AgentError> {
         let mut retry_count = 0;
         loop {
-            use http_body_util::BodyExt;
-
-            // Convert into Reqwest Request
-            let (parts, body) = req()?.into_parts();
-            let body = reqwest::Body::from(body);
-            // I think it can never fail since it converts from `Url` to `Uri` and `Url` is a subset of `Uri`,
-            // but just to be safe let's handle it.
-            let request = http::Request::from_parts(parts, body)
-                .try_into()
-                .map_err(|e: reqwest::Error| AgentError::InvalidReplicaUrl(e.to_string()))?;
+            let request = from_http_request(req()?)?;
 
             match Service::call(&mut self, request).await {
                 Err(err) => {
@@ -2030,23 +2054,7 @@ where
                     }
                 }
                 Ok(resp) => {
-                    // Convert to http::Response
-                    use http_body_util::Limited;
-
-                    let resp: http::Response<reqwest::Body> = resp.into();
-                    let (parts, body) = resp.into_parts();
-                    let body = Limited::new(body, size_limit.unwrap_or(usize::MAX));
-                    let body = body
-                        .collect()
-                        .await
-                        .map_err(|e| {
-                            AgentError::TransportError(format!(
-                                "unable to read response body: {e:#}"
-                            ))
-                        })?
-                        .to_bytes();
-                    let resp = http::Response::from_parts(parts, body);
-
+                    let resp = to_http_response(resp, size_limit).await?;
                     return Ok(resp);
                 }
             }
@@ -2064,12 +2072,13 @@ where
     #[allow(clippy::needless_arbitrary_self_type)]
     async fn call<'a>(
         mut self: &'a Self,
-        req: &'a (dyn Fn() -> Result<Request, AgentError> + Send + Sync),
+        req: &'a (dyn Fn() -> Result<http::Request<Bytes>, AgentError> + Send + Sync),
         _retries: usize,
         _size_limit: Option<usize>,
-    ) -> Result<Response, AgentError> {
+    ) -> Result<http::Response<Bytes>, AgentError> {
         Ok(Service::call(&mut self, req()?)
-            .map_err(|e| AgentError::TransportError(e.to_string()).await?))
+            .await
+            .map_err(|e| AgentError::TransportError(e.to_string()))?)
     }
 }
 
@@ -2089,7 +2098,19 @@ impl HttpService for Retry429Logic {
     ) -> Result<http::Response<Bytes>, AgentError> {
         let mut retries = 0;
         loop {
+            #[cfg(not(target_family = "wasm"))]
             let resp = self.client.call(req, _max_tcp_retries, _size_limit).await?;
+            // Client inconveniently does not implement Service on wasm
+            #[cfg(target_family = "wasm")]
+            let resp = {
+                let request = from_http_request(req()?)?;
+                let resp = self
+                    .client
+                    .execute(request)
+                    .await
+                    .map_err(|e| AgentError::TransportError(e.to_string()))?;
+                to_http_response(resp, _size_limit).await?
+            };
 
             if resp.status() == StatusCode::TOO_MANY_REQUESTS {
                 if retries == 6 {
