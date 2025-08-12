@@ -19,10 +19,7 @@ use async_trait::async_trait;
 pub use builder::AgentBuilder;
 use bytes::Bytes;
 use cached::{Cached, TimedCache};
-use futures_util::StreamExt;
 use http::{header::CONTENT_TYPE, HeaderMap, Method, StatusCode, Uri};
-use http_body::Frame;
-use http_body_util::StreamBody;
 use ic_ed25519::{PublicKey, SignatureError};
 #[doc(inline)]
 pub use ic_transport_types::{
@@ -2036,7 +2033,9 @@ async fn to_http_response(
     resp: Response,
     size_limit: Option<usize>,
 ) -> Result<http::Response<Bytes>, AgentError> {
-    use http_body_util::Limited;
+    use futures_util::StreamExt;
+    use http_body::Frame;
+    use http_body_util::{Limited, StreamBody};
 
     // Save headers
     let status = resp.status();
@@ -2087,6 +2086,7 @@ where
                         retry_count += 1;
                     }
                 }
+
                 Ok(resp) => {
                     let resp = to_http_response(resp, size_limit).await?;
                     return Ok(resp);
