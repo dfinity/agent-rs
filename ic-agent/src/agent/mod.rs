@@ -2110,9 +2110,12 @@ where
         _retries: usize,
         _size_limit: Option<usize>,
     ) -> Result<http::Response<Bytes>, AgentError> {
-        Ok(Service::call(&mut self, req()?)
+        let request = from_http_request(req()?)?;
+        let response = Service::call(&mut self, request)
             .await
-            .map_err(|e| AgentError::TransportError(e.to_string()))?)
+            .map_err(|e| AgentError::TransportError(e.to_string()))?;
+
+        to_http_response(response, _size_limit).await
     }
 }
 
