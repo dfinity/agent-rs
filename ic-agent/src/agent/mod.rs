@@ -19,7 +19,10 @@ use async_trait::async_trait;
 pub use builder::AgentBuilder;
 use bytes::Bytes;
 use cached::{Cached, TimedCache};
+use futures_util::StreamExt;
 use http::{header::CONTENT_TYPE, HeaderMap, Method, StatusCode, Uri};
+use http_body::Frame;
+use http_body_util::StreamBody;
 use ic_ed25519::{PublicKey, SignatureError};
 #[doc(inline)]
 pub use ic_transport_types::{
@@ -2005,6 +2008,7 @@ fn from_http_request(req: http::Request<Bytes>) -> Result<Request, AgentError> {
 }
 
 /// Convert from reqwests's Response to http one
+#[cfg(not(target_family = "wasm"))]
 async fn to_http_response(
     resp: Response,
     size_limit: Option<usize>,
@@ -2020,6 +2024,36 @@ async fn to_http_response(
         .map_err(|e| AgentError::TransportError(format!("unable to read response body: {e:#}")))?
         .to_bytes();
     let resp = http::Response::from_parts(parts, body);
+
+    Ok(resp)
+}
+
+/// Convert from reqwests's Response to http one
+/// WASM in reqwest doesn't have direct conversion for http::Response,
+/// so we have to hack around using streams.
+#[cfg(target_family = "wasm")]
+async fn to_http_response(
+    resp: Response,
+    size_limit: Option<usize>,
+) -> Result<http::Response<Bytes>, AgentError> {
+    use http_body_util::Limited;
+
+    // Save headers
+    let status = resp.status();
+    let headers = resp.headers().clone();
+
+    // Convert body
+    let stream = resp.bytes_stream().map(|x| x.map(Frame::data));
+    let body = StreamBody::new(stream);
+    let body = Limited::new(body, size_limit.unwrap_or(usize::MAX));
+    let body = http_body_util::BodyExt::collect(body)
+        .await
+        .map_err(|e| AgentError::TransportError(format!("unable to read response body: {e:#}")))?
+        .to_bytes();
+
+    let mut resp = http::Response::new(body);
+    *resp.status_mut() = status;
+    *resp.headers_mut() = headers;
 
     Ok(resp)
 }
