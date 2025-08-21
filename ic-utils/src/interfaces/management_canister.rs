@@ -16,7 +16,7 @@ use ic_management_canister_types::{
 // Re-export the types that are used be defined in this file.
 pub use ic_management_canister_types::{
     CanisterLogRecord, CanisterStatusResult, CanisterStatusType, CanisterTimer, ChunkHash,
-    DefiniteCanisterSettings, ExportedGlobal, FetchCanisterLogsResult, LogVisibility,
+    DefiniteCanisterSettings, SnapshotMetadataGlobal, FetchCanisterLogsResult, LogVisibility,
     OnLowWasmMemoryHookStatus, QueryStats, ReadCanisterSnapshotDataResult,
     ReadCanisterSnapshotMetadataResult, Snapshot, SnapshotDataKind, SnapshotDataOffset,
     SnapshotSource, StoredChunksResult, UploadCanisterSnapshotMetadataResult, UploadChunkResult,
