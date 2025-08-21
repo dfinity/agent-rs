@@ -16,10 +16,10 @@ use ic_management_canister_types::{
 // Re-export the types that are used be defined in this file.
 pub use ic_management_canister_types::{
     CanisterLogRecord, CanisterStatusResult, CanisterStatusType, CanisterTimer, ChunkHash,
-    DefiniteCanisterSettings, SnapshotMetadataGlobal, FetchCanisterLogsResult, LogVisibility,
-    OnLowWasmMemoryHookStatus, QueryStats, ReadCanisterSnapshotDataResult,
-    ReadCanisterSnapshotMetadataResult, Snapshot, SnapshotDataKind, SnapshotDataOffset,
-    SnapshotSource, StoredChunksResult, UploadCanisterSnapshotMetadataResult, UploadChunkResult,
+    DefiniteCanisterSettings, FetchCanisterLogsResult, LogVisibility, OnLowWasmMemoryHookStatus,
+    QueryStats, ReadCanisterSnapshotDataResult, ReadCanisterSnapshotMetadataResult, Snapshot,
+    SnapshotDataKind, SnapshotDataOffset, SnapshotMetadataGlobal, SnapshotSource,
+    StoredChunksResult, UploadCanisterSnapshotMetadataResult, UploadChunkResult,
 };
 use std::{convert::AsRef, ops::Deref};
 use strum_macros::{AsRefStr, Display, EnumString};
