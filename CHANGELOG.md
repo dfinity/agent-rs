@@ -8,8 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-* Change `HttpService` trait to use normal `http` crate `Request` and `Response` types with `Bytes` as a body instead of `reqwest` ones and add `size_limit` argument.
-* Change `AgentError::TransportError` enum variant to hold a generic string instead of `reqwest::Error`.
+## [0.43.0] - 2025-08-25
+
+* BREAKING: Change `HttpService` trait to use normal `http` crate `Request` and `Response` types with `Bytes` as a body instead of `reqwest` ones and add `size_limit` argument.
+* BREAKING: Change `AgentError::TransportError` enum variant to hold a generic string instead of `reqwest::Error`.
+* `ic-utils`: Bump `ic-management-canister-types` to v0.3.3 which changes snapshot upload/download types.
 
 ## [0.42.0] - 2025-08-04
 
