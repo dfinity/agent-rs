@@ -46,7 +46,7 @@ jobs:
 
       - name: Download universal-canister
         run: |
-          wget https://download.dfinity.systems/ic/{{ matrix.universal-canister-rev }}/canisters/universal_canister.wasm.gz
+          wget https://download.dfinity.systems/ic/${{ matrix.universal-canister-rev }}/canisters/universal_canister.wasm.gz
           mv universal_canister.wasm.gz $HOME/universal_canister.wasm.gz
 
       - name: Run Integration Tests
