@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* BREAKING: Bump `ic-management-canister-types` to v0.4.0.
+  * The `CanisterSettings` types contains a new field `environment_variables`. 
+
 ## [0.43.0] - 2025-08-25
 
 * BREAKING: Change `HttpService` trait to use normal `http` crate `Request` and `Response` types with `Bytes` as a body instead of `reqwest` ones and add `size_limit` argument.

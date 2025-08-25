@@ -14,7 +14,7 @@ jobs:
         build: [linux-stable]
         include:
           - build: linux-stable
-            ic-hs-ref: "3d71032e"
+            universal-canister-rev: "537b0fd6530ab5d2bc73181abdb031b7dbefb336" # Picked from dfinity/ic master branch on 2025-08-25
             wallet-tag: "20230308"
             os: ubuntu-latest
 
@@ -28,7 +28,7 @@ jobs:
       - name: Install dfx
         uses: dfinity/setup-dfx@main
         with:
-          dfx-version: "0.27.0"
+          dfx-version: "0.29.0"
 
       - name: Cargo cache
         uses: actions/cache@v4
@@ -46,9 +46,8 @@ jobs:
 
       - name: Download universal-canister
         run: |
-          wget https://download.dfinity.systems/ic-ref/ic-ref-test-0.0.1-${{ matrix.ic-hs-ref }}-x86_64-linux.tar.gz
-          tar -xvf ic-ref-test-0.0.1-${{ matrix.ic-hs-ref }}-x86_64-linux.tar.gz test-data/universal-canister.wasm
-          mv test-data/universal-canister.wasm $HOME/canister.wasm
+          wget https://download.dfinity.systems/ic/${{ matrix.universal-canister-rev }}/canisters/universal_canister.wasm.gz
+          mv universal_canister.wasm.gz $HOME/universal_canister.wasm.gz
 
       - name: Run Integration Tests
         run: |
@@ -56,7 +55,7 @@ jobs:
           dfx start --background --clean
           sleep 1
           export IC_REF_PORT=$(dfx info webserver-port)
-          export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
+          export IC_UNIVERSAL_CANISTER_PATH=$HOME/universal_canister.wasm.gz
           export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
           export POCKET_IC="http://localhost:${IC_REF_PORT}"
           cargo test --all-features -- --ignored
@@ -83,7 +82,7 @@ jobs:
           dfx start --background --clean
           sleep 1
           export IC_REF_PORT=$(dfx info webserver-port)
-          export IC_UNIVERSAL_CANISTER_PATH=$HOME/canister.wasm
+          export IC_UNIVERSAL_CANISTER_PATH=$HOME/universal_canister.wasm.gz
           export IC_WALLET_CANISTER_PATH=$HOME/wallet.wasm
           export POCKET_IC="http://localhost:${IC_REF_PORT}"
           cd ref-tests
