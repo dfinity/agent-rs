@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Added `read_state_subnet_canister_ranges` which can query the canister id ranges for a given subnet.
+
 ## [0.44.0] - 2025-08-25
 
 * BREAKING: Bump `ic-management-canister-types` to v0.4.0.

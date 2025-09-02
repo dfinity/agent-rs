@@ -77,6 +77,15 @@ pub(crate) fn lookup_subnet_metrics<Storage: AsRef<[u8]>>(
     Ok(serde_cbor::from_slice(metrics)?)
 }
 
+pub(crate) fn lookup_subnet_canister_ranges<Storage: AsRef<[u8]>>(
+    certificate: Certificate<Storage>,
+    subnet_id: Principal,
+) -> Result<Vec<(Principal, Principal)>, AgentError> {
+    let path_ranges = [b"subnet", subnet_id.as_slice(), b"canister_ranges"];
+    let ranges = lookup_value(&certificate.tree, path_ranges)?;
+    Ok(serde_cbor::from_slice(ranges)?)
+}
+
 pub(crate) fn lookup_request_status<Storage: AsRef<[u8]>>(
     certificate: &Certificate<Storage>,
     request_id: &RequestId,

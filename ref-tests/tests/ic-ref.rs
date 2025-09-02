@@ -938,6 +938,24 @@ mod management_canister {
             Ok(())
         })
     }
+
+    #[ignore]
+    #[test]
+    fn subnet_canister_ranges() {
+        with_agent(|agent| async move {
+            // fetch root subnet canister ranges
+            let ranges = agent
+                .read_state_subnet_canister_ranges(Principal::self_authenticating(
+                    agent.read_root_key(),
+                ))
+                .await?;
+            assert!(
+                !ranges.is_empty(),
+                "expected at least one canister range on the root subnet"
+            );
+            Ok(())
+        })
+    }
 }
 
 mod simple_calls {
