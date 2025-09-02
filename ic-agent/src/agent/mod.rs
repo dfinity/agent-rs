@@ -45,7 +45,8 @@ mod agent_test;
 use crate::{
     agent::response_authentication::{
         extract_der, lookup_canister_info, lookup_canister_metadata, lookup_request_status,
-        lookup_subnet, lookup_subnet_metrics, lookup_time, lookup_value,
+        lookup_subnet, lookup_subnet_canister_ranges, lookup_subnet_metrics, lookup_time,
+        lookup_value,
     },
     agent_error::TransportError,
     export::Principal,
@@ -1091,6 +1092,20 @@ impl Agent {
         ]];
         let cert = self.read_subnet_state_raw(paths, subnet_id).await?;
         lookup_subnet_metrics(cert, subnet_id)
+    }
+
+    /// Request a list of metrics about the subnet.
+    pub async fn read_state_subnet_canister_ranges(
+        &self,
+        subnet_id: Principal,
+    ) -> Result<Vec<(Principal, Principal)>, AgentError> {
+        let paths = vec![vec![
+            "subnet".into(),
+            Label::from_bytes(subnet_id.as_slice()),
+            "canister_ranges".into(),
+        ]];
+        let cert = self.read_subnet_state_raw(paths, subnet_id).await?;
+        lookup_subnet_canister_ranges(cert, subnet_id)
     }
 
     /// Fetches the status of a particular request by its ID.
