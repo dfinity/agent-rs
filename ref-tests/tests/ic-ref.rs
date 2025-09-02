@@ -950,7 +950,7 @@ mod management_canister {
                 ))
                 .await?;
             assert!(
-                ranges.len() >= 1,
+                !ranges.is_empty(),
                 "expected at least one canister range on the root subnet"
             );
             Ok(())
