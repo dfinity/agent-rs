@@ -338,6 +338,8 @@ pub struct StreamingCallbackHttpResponse<Token = self::Token> {
     pub body: Vec<u8>,
     /// The new stream continuation token.
     pub token: Option<Token>,
+    /// chunk witness tree.
+    pub chunk_tree: Option<Vec<u8>>,
 }
 
 /// A token for continuing a callback streaming strategy. This type cannot be serialized despite implementing `CandidType`
@@ -664,6 +666,7 @@ mod test {
                 index: 42u8.into(),
                 sha256: None,
             }),
+            chunk_tree: None,
         })
         .unwrap();
 
@@ -714,6 +717,7 @@ mod test {
         let bytes: Vec<u8> = Encode!(&StreamingCallbackHttpResponse {
             body: b"this is a body".as_ref().into(),
             token: Option::<pre_update_legacy::Token>::None,
+            chunk_tree: None,
         })
         .unwrap();
 
