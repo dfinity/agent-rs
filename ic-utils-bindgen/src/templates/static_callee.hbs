@@ -1,0 +1,36 @@
+use {{candid_crate}}::{CandidType, Deserialize, Principal};
+use ic_agent::Agent;
+use ic_utils::{Canister, call::AsyncCall};
+// START -- Types
+{{type_defs}}
+// END   -- Types
+/// Canister ID: `{{canister_id}}`
+pub const CANISTER_ID : Principal = Principal::from_slice(&[{{principal_slice canister_id}}]);
+pub struct Service<'agent> {
+    canister: Canister<'agent>,
+}
+impl<'agent> Service<'agent> {
+    pub fn new(agent: &'agent Agent) -> Self {
+        Self {
+            canister: Canister::builder()
+                .with_agent(agent)
+                .with_canister_id(CANISTER_ID)
+                .build()
+                .unwrap(),
+        }
+    }
+}
+// START -- Methods
+{{#if methods}}
+impl<'agent> Service<'agent> {
+{{#each methods}}
+{{#each this.docs}}
+{{../../doc_comment_prefix}}{{this}}
+{{/each}}
+    pub fn {{this.name}}(&self, {{#each this.args}}{{this.0}}: &{{this.1}}, {{/each}}) -> impl 'agent + AsyncCall<Value = ({{#each this.rets}}{{this}},{{/each}})> {
+        self.canister.update("{{escape_debug this.original_name}}"){{#if (eq (len this.args) 0)}}{{else}}{{#if (eq (len this.args) 1)}}.with_arg({{this.args.0.0}}){{else}}.with_args(&({{#each this.args}}{{this.0}}{{#unless @last}}, {{/unless}}{{/each}})){{/if}}{{/if}}.build()
+    }
+{{/each}}
+}
+{{/if}}
+// END   -- Methods
