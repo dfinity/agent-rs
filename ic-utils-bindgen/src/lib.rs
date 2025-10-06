@@ -1,5 +1,4 @@
 #![allow(clippy::needless_doctest_main)]
-#![doc = include_str!("../README.md")]
 
 use candid::Principal;
 use candid_parser::bindings::rust::{
@@ -20,7 +19,6 @@ use std::str::FromStr;
 /// The bindgen has following modes:
 /// - Types only: Only the types definition will be generated. This is the default behavior with [`Self::new`].
 /// - Static callee: The canister ID is known at compile time. Call [`Self::static_callee`] to set it.
-/// - Dynamic callee: The canister ID is determined at runtime via ICP environment variable. Call [`Self::dynamic_callee`] to set it.
 ///
 /// # Generate Bindings
 ///
