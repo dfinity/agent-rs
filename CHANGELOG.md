@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.44.2] - 2025-10-07
+
 * Fix `HttpService call` retry behavior such that only network errors are retried.
 
 ## [0.44.1] - 2025-09-15
