@@ -32,7 +32,7 @@ ic-transport-types = { path = "ic-transport-types", version = "0.44.1" }
 
 ic-certification = "3"
 candid = "0.10.10"
-candid_parser = "0.2.0"
+candid_parser = "0.2.2"
 clap = "4.5.21"
 futures-util = "0.3.31"
 hex = "0.4.3"
