@@ -2,7 +2,7 @@
 
 use candid::Principal;
 use candid_parser::bindings::rust::{
-    Config as BindgenConfig, ExternalConfig, emit_bindgen, output_handlebar,
+    emit_bindgen, output_handlebar, Config as BindgenConfig, ExternalConfig,
 };
 use candid_parser::configs::Configs;
 use candid_parser::pretty_check_file;
