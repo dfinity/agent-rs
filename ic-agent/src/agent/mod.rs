@@ -2111,6 +2111,10 @@ where
                         }
                         retry_count += 1;
                     }
+                    // All other errors return immediately.
+                    else {
+                        return Err(AgentError::TransportError(TransportError::Reqwest(err)));
+                    }
                 }
 
                 Ok(resp) => {
