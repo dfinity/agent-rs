@@ -6,6 +6,7 @@ use candid_parser::bindings::rust::{
 };
 use candid_parser::configs::Configs;
 use candid_parser::pretty_check_file;
+use heck::ToPascalCase;
 
 use std::fs;
 use std::io::Write;
@@ -103,18 +104,25 @@ impl Config {
     /// located at `$OUT_DIR/my_canister.rs`.
     pub fn generate(&self) {
         // 0. Load type selector config if provided
-        let type_selector_configs_str = match &self.type_selector_config_path {
+        let (type_selector_configs_str, service_name) = match &self.type_selector_config_path {
             Some(p) => {
                 println!("cargo:rerun-if-changed={}", p.display());
-                fs::read_to_string(p).unwrap_or_else(|e| {
+                let contents = fs::read_to_string(p).unwrap_or_else(|e| {
                     panic!(
                         "failed to read the type selector config file ({}): {}",
                         p.display(),
                         e
                     )
-                })
+                });
+                let filename = p.file_stem().unwrap().to_string_lossy();
+                let real_basename = if let Some(stem) = filename.strip_suffix(".did") {
+                    stem
+                } else {
+                    &filename
+                };
+                (contents, Some(real_basename.to_pascal_case()))
             }
-            None => "".to_string(),
+            None => ("".to_string(), None),
         };
         let type_selector_configs = Configs::from_str(&type_selector_configs_str)
             .unwrap_or_else(|e| panic!("failed to parse the type selector config: {}", e));
@@ -135,6 +143,10 @@ impl Config {
 
         // 2. Generate the Rust bindings using the Handlebars template
         let mut external = ExternalConfig::default();
+        external.0.insert(
+            "service_name".to_string(),
+            service_name.unwrap_or_else(|| "Service".to_string()),
+        );
         let content = match &self.mode {
             Mode::StaticCallee { canister_id } => {
                 let template = include_str!("templates/static_callee.hbs");

@@ -1454,6 +1454,7 @@ version = "0.1.0"
 dependencies = [
  "candid",
  "candid_parser",
+ "heck",
  "thiserror 2.0.3",
 ]
 
