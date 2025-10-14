@@ -17,9 +17,10 @@ use std::str::FromStr;
 ///
 /// # Choose Bindgen Modes
 ///
-/// The bindgen has following modes:
+/// The bindgen has the following modes:
 /// - Types only: Only the types definition will be generated. This is the default behavior with [`Self::new`].
 /// - Static callee: The canister ID is known at compile time. Call [`Self::static_callee`] to set it.
+/// - Runtime callee: The canister ID is provided at runtime. Call [`Self::runtime_callee`] to set it.
 ///
 /// # Generate Bindings
 ///
@@ -38,6 +39,7 @@ pub struct Config {
 enum Mode {
     TypesOnly,
     StaticCallee { canister_id: Principal },
+    RuntimeCallee,
 }
 
 impl Config {
@@ -79,6 +81,15 @@ impl Config {
         self.mode = Mode::StaticCallee {
             canister_id: canister_id.into(),
         };
+        self
+    }
+
+    /// Changes the bindgen mode to "Runtime callee", where the canister ID is provided at runtime.
+    pub fn runtime_callee(&mut self) -> &mut Self {
+        if !matches!(self.mode, Mode::TypesOnly) {
+            panic!("The bindgen mode has already been set.");
+        }
+        self.mode = Mode::RuntimeCallee;
         self
     }
 
@@ -153,6 +164,10 @@ impl Config {
                 external
                     .0
                     .insert("canister_id".to_string(), canister_id.to_string());
+                output_handlebar(output, external, template)
+            }
+            Mode::RuntimeCallee => {
+                let template = include_str!("templates/runtime_callee.hbs");
                 output_handlebar(output, external, template)
             }
             Mode::TypesOnly => {
