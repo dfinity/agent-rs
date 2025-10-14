@@ -6,10 +6,10 @@ use ic_utils::{Canister, call::AsyncCall};
 // END   -- Types
 /// Canister ID: `{{canister_id}}`
 pub const CANISTER_ID : Principal = Principal::from_slice(&[{{principal_slice canister_id}}]);
-pub struct Service<'agent> {
+pub struct {{service_name}}<'agent> {
     canister: Canister<'agent>,
 }
-impl<'agent> Service<'agent> {
+impl<'agent> {{service_name}}<'agent> {
     pub fn new(agent: &'agent Agent) -> Self {
         Self {
             canister: Canister::builder()
@@ -22,7 +22,7 @@ impl<'agent> Service<'agent> {
 }
 // START -- Methods
 {{#if methods}}
-impl<'agent> Service<'agent> {
+impl<'agent> {{service_name}}<'agent> {
 {{#each methods}}
 {{#each this.docs}}
 {{../../doc_comment_prefix}}{{this}}
