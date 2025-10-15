@@ -45,4 +45,4 @@ raw = []
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
-features = ["raw"]
+features = ["raw", "ic-agent/wasm-bindgen"]
