@@ -106,9 +106,7 @@ web-sys = { version = "0.3", features = [
 default = ["pem"]
 pem = ["dep:pem"]
 ring = ["dep:ring"]
-ic_ref_tests = [
-    "default",
-] # Used to separate integration tests for ic-ref which need a server running.
+ic_ref_tests = ["default"] # Used to separate integration tests for ic-ref which need a server running.
 wasm-bindgen = [
     "dep:js-sys",
     "dep:wasm-bindgen",
@@ -124,5 +122,4 @@ tracing = ["dep:tracing"] # Does very little right now.
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
-rustdoc-args = ["--cfg=docsrs"]
-features = []
+features = ["wasm-bindgen"]
