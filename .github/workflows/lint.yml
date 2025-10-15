@@ -40,9 +40,11 @@ jobs:
 
       - name: Check docs.rs build
         run: |
+          rustup update nightly
+          rustup target add wasm32-unknown-unknown --toolchain nightly
           for package in $(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.publish == null and (.targets | any(.kind == ["lib"]))) | .name')
           do
-            CARGO_TARGET_DIR=target/nightly cargo +nightly docs-rs -p "$package"
+            CARGO_TARGET_DIR=target/nightly cargo +nightly docs-rs -p "$package" 
           done
 
   aggregate:
