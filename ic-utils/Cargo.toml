@@ -29,7 +29,6 @@ strum = "0.26"
 strum_macros = "0.26"
 thiserror = { workspace = true }
 time = { workspace = true }
-tokio = { workspace = true }
 semver = "1.0.7"
 once_cell = "1.10.0"
 ic-management-canister-types = { workspace = true }
@@ -42,7 +41,8 @@ tokio = { workspace = true, features = ["full"] }
 
 [features]
 raw = []
+wasm-bindgen = ["ic-agent/wasm-bindgen"]
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
-features = ["raw", "ic-agent/wasm-bindgen"]
+features = ["raw", "wasm-bindgen"]
