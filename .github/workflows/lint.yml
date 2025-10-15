@@ -42,7 +42,7 @@ jobs:
         run: |
           for package in $(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.publish == null and (.targets | any(.kind == ["lib"]))) | .name')
           do
-            CARGO_TARGET_DIR=target/nightly cargo docs-rs -p "$package"
+            CARGO_TARGET_DIR=target/nightly cargo +nightly docs-rs -p "$package"
           done
 
   aggregate:
