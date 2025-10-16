@@ -9,6 +9,7 @@ members = [
     "ic-transport-types",
     "icx",
     "ref-tests",
+    "ic-utils-bindgen-tests",
 ]
 
 [workspace.package]
@@ -39,7 +40,7 @@ hex = "0.4.3"
 ic-ed25519 = "0.2"
 k256 = "0.13.4"
 leb128 = "0.2.5"
-pocket-ic = "6.0.0"
+pocket-ic = "10.0.0"
 p256 = "0.13.2"
 rand = "0.8.5"
 reqwest = { version = "0.12", default-features = false }
@@ -53,3 +54,7 @@ thiserror = "2.0.3"
 time = "0.3"
 tokio = { version = "1.41.1", default-features = false }
 ic-management-canister-types = "0.4.0"
+
+[patch.crates-io]
+candid_parser = { git = "https://github.com/dfinity/candid.git", rev = "d05fa3136ddeb6c4077fa79b659587460ab44a11" }
+candid = { git = "https://github.com/dfinity/candid.git", rev = "d05fa3136ddeb6c4077fa79b659587460ab44a11" }

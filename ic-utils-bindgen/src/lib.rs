@@ -6,11 +6,10 @@ use candid_parser::bindings::rust::{
 };
 use candid_parser::configs::Configs;
 use candid_parser::pretty_check_file;
-use heck::ToPascalCase;
 
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 /// Config for Candid to Rust bindings generation.
@@ -114,26 +113,29 @@ impl Config {
     /// For example, if the canister name is "my_canister", the generated file will be
     /// located at `$OUT_DIR/my_canister.rs`.
     pub fn generate(&self) {
+        let out_dir_str = std::env::var("OUT_DIR")
+            .expect("OUT_DIR should always be set when execute the build.rs script");
+        let out_dir = PathBuf::from(out_dir_str);
+        let generated_path = out_dir.join(format!("{}.rs", self.canister_name));
+        self.generate_to(&generated_path);
+    }
+
+    /// Generate the bindings to a user-specified path.
+    pub fn generate_to(&self, path: &Path) {
         // 0. Load type selector config if provided
-        let (type_selector_configs_str, service_name) = match &self.type_selector_config_path {
+        let type_selector_configs_str = match &self.type_selector_config_path {
             Some(p) => {
                 println!("cargo:rerun-if-changed={}", p.display());
-                let contents = fs::read_to_string(p).unwrap_or_else(|e| {
+
+                fs::read_to_string(p).unwrap_or_else(|e| {
                     panic!(
                         "failed to read the type selector config file ({}): {}",
                         p.display(),
                         e
                     )
-                });
-                let filename = p.file_stem().unwrap().to_string_lossy();
-                let real_basename = if let Some(stem) = filename.strip_suffix(".did") {
-                    stem
-                } else {
-                    &filename
-                };
-                (contents, Some(real_basename.to_pascal_case()))
+                })
             }
-            None => ("".to_string(), None),
+            None => "".to_string(),
         };
         let type_selector_configs = Configs::from_str(&type_selector_configs_str)
             .unwrap_or_else(|e| panic!("failed to parse the type selector config: {}", e));
@@ -154,10 +156,6 @@ impl Config {
 
         // 2. Generate the Rust bindings using the Handlebars template
         let mut external = ExternalConfig::default();
-        external.0.insert(
-            "service_name".to_string(),
-            service_name.unwrap_or_else(|| "Service".to_string()),
-        );
         let content = match &self.mode {
             Mode::StaticCallee { canister_id } => {
                 let template = include_str!("templates/static_callee.hbs");
@@ -177,21 +175,18 @@ impl Config {
         };
 
         // 3. Write the generated Rust bindings to the output directory
-        let out_dir_str = std::env::var("OUT_DIR")
-            .expect("OUT_DIR should always be set when execute the build.rs script");
-        let out_dir = PathBuf::from(out_dir_str);
-        let generated_path = out_dir.join(format!("{}.rs", self.canister_name));
-        let mut file = fs::File::create(&generated_path).unwrap_or_else(|e| {
+
+        let mut file = fs::File::create(path).unwrap_or_else(|e| {
             panic!(
                 "failed to create the output file ({}): {}",
-                generated_path.display(),
+                path.display(),
                 e
             )
         });
         writeln!(file, "{content}").unwrap_or_else(|e| {
             panic!(
                 "failed to write to the output file ({}): {}",
-                generated_path.display(),
+                path.display(),
                 e
             )
         });

@@ -1,6 +1,7 @@
 [package]
 name = "ic-utils-bindgen"
-version = "0.1.0"
+# do not release without removing the patch table from root Cargo.toml
+version = "0.0.0"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -15,5 +16,4 @@ include = ["src", "Cargo.toml", "LICENSE", "README.md"]
 [dependencies]
 candid.workspace = true
 candid_parser.workspace = true
-heck = "0.5.0"
 thiserror.workspace = true
