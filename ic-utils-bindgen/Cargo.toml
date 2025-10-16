@@ -1,6 +1,5 @@
 [package]
 name = "ic-utils-bindgen"
-# do not release without removing the patch table from root Cargo.toml
 version = "0.0.0"
 authors.workspace = true
 edition.workspace = true
