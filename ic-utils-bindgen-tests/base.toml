@@ -1,0 +1,4 @@
+[rust]
+visibility = "pub"
+name = "Icrc1Ledger"
+attributes = "#[derive(CandidType, Deserialize, Debug, Clone)]"
