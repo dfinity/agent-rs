@@ -54,7 +54,3 @@ thiserror = "2.0.3"
 time = "0.3"
 tokio = { version = "1.41.1", default-features = false }
 ic-management-canister-types = "0.4.0"
-
-[patch.crates-io]
-candid_parser = { git = "https://github.com/dfinity/candid.git", rev = "d05fa3136ddeb6c4077fa79b659587460ab44a11" }
-candid = { git = "https://github.com/dfinity/candid.git", rev = "d05fa3136ddeb6c4077fa79b659587460ab44a11" }
