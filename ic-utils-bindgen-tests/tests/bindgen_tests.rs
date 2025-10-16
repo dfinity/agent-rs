@@ -1,3 +1,4 @@
+#![cfg(unix)]
 use std::{fs, sync::Arc};
 
 use candid::{Encode, Principal};
