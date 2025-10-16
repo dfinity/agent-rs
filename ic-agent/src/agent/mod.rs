@@ -1239,6 +1239,9 @@ impl Agent {
             .await?;
 
         let (subnet_id, subnet) = lookup_subnet(&cert, &self.root_key.read().unwrap())?;
+        if !subnet.canister_ranges.contains(canister) {
+            return Err(AgentError::CertificateNotAuthorized());
+        }
         let subnet = Arc::new(subnet);
         self.subnet_key_cache
             .lock()
@@ -2110,6 +2113,10 @@ where
                             return Err(AgentError::TransportError(TransportError::Reqwest(err)));
                         }
                         retry_count += 1;
+                    }
+                    // All other errors return immediately.
+                    else {
+                        return Err(AgentError::TransportError(TransportError::Reqwest(err)));
                     }
                 }
 

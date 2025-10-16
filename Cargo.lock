@@ -1317,7 +1317,7 @@ dependencies = [
 
 [[package]]
 name = "ic-agent"
-version = "0.44.1"
+version = "0.44.2"
 dependencies = [
  "arc-swap",
  "async-channel",
@@ -1340,7 +1340,7 @@ dependencies = [
  "http-body-util",
  "ic-certification",
  "ic-ed25519",
- "ic-transport-types 0.44.1",
+ "ic-transport-types 0.44.2",
  "ic-verify-bls-signature",
  "js-sys",
  "k256",
@@ -1403,7 +1403,7 @@ dependencies = [
 
 [[package]]
 name = "ic-identity-hsm"
-version = "0.44.1"
+version = "0.44.2"
 dependencies = [
  "hex",
  "ic-agent",
@@ -1455,7 +1455,7 @@ dependencies = [
 
 [[package]]
 name = "ic-transport-types"
-version = "0.44.1"
+version = "0.44.2"
 dependencies = [
  "candid",
  "hex",
@@ -1472,7 +1472,7 @@ dependencies = [
 
 [[package]]
 name = "ic-utils"
-version = "0.44.1"
+version = "0.44.2"
 dependencies = [
  "async-trait",
  "candid",
@@ -1677,7 +1677,7 @@ dependencies = [
 
 [[package]]
 name = "icx"
-version = "0.44.1"
+version = "0.44.2"
 dependencies = [
  "anyhow",
  "candid",
@@ -1696,7 +1696,7 @@ dependencies = [
 
 [[package]]
 name = "icx-cert"
-version = "0.44.1"
+version = "0.44.2"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -2430,9 +2430,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.89"
+version = "1.0.101"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f139b0662de085916d1fb67d2b4169d1addddda1919e696f3252b740b629986e"
+checksum = "89ae43fd86e4158d6db51ad8e2b80f313af9cc74f5c0e03ccb87de09998732de"
 dependencies = [
  "unicode-ident",
 ]

@@ -23,7 +23,7 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-hack@0.6.21
+          tool: cargo-hack@0.6.21,cargo-docs-rs@1.0.0
 
       - name: Run Lint
         run: |
@@ -34,6 +34,19 @@ jobs:
 
       - name: Run Lint (WASM)
         run: CARGO_TARGET_DIR=target/wasm cargo clippy --target wasm32-unknown-unknown -p ic-agent --features wasm-bindgen -p ic-utils --verbose -- -D warnings
+
+      - name: Run Lint (docs)
+        run: RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps
+
+      - name: Check docs.rs build
+        run: |
+          rustup update nightly
+          rustup target add wasm32-unknown-unknown --toolchain nightly
+          for package in $(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.publish == null and (.targets | any(.kind == ["lib"]))) | .name')
+          do
+            CARGO_TARGET_DIR=target/nightly cargo +nightly docs-rs -p "$package" 
+          done
+
   aggregate:
     name: lint:required
     runs-on: ubuntu-latest
