@@ -33,3 +33,5 @@ This repo has multiple packages in its Cargo workspace.
 | `ic-utils` | [![README](https://img.shields.io/badge/-README-green)](https://github.com/dfinity/agent-rs/tree/next/ic-utils) [![DOC](https://img.shields.io/badge/-DOC-blue)](https://docs.rs/ic_utils) | A library of utilities for managing calls and canisters. |  
 | `icx` | [![README](https://img.shields.io/badge/-README-green)](https://github.com/dfinity/agent-rs/tree/next/icx) | A command line utility to use the agent. Not meant to be published, only available in this repo for tests. |
 | `ref-tests` | | A package that only exists to run the ic-ref tests with the ic-agent as the connection. |
+<br>## Welcome to ICP Rust Agents<br>Agent RS calls ICP canisters from Rust—new contributors, start with the Query tutorial for your first read call. Tip: Use Candid for IDL! <br>
+
