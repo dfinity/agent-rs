@@ -12,6 +12,7 @@ use super::Delegation;
 /// A cryptographic identity which signs using an Ed25519 key pair.
 ///
 /// The caller will be represented via [`Principal::self_authenticating`], which contains the SHA-224 hash of the public key.
+#[derive(Clone)]
 pub struct BasicIdentity {
     private_key: KeyCompat,
     der_encoded_public_key: Vec<u8>,
@@ -119,6 +120,7 @@ impl BasicIdentity {
     }
 }
 
+#[derive(Clone)]
 enum KeyCompat {
     /// ic_ed25519::PrivateKey
     Standard(PrivateKey),
