@@ -725,14 +725,14 @@ impl Agent {
         let mut retry_policy = self.get_retry_policy();
 
         let mut request_accepted = false;
-        let (resp, cert) = self
-            .request_status_signed(
-                request_id,
-                effective_canister_id,
-                signed_request_status.clone(),
-            )
-            .await?;
         loop {
+            let (resp, cert) = self
+                .request_status_signed(
+                    request_id,
+                    effective_canister_id,
+                    signed_request_status.clone(),
+                )
+                .await?;
             match resp {
                 RequestStatusResponse::Unknown => {}
 
