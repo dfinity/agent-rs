@@ -5,9 +5,11 @@ members = [
     "icx-cert",
     "ic-identity-hsm",
     "ic-utils",
+    "ic-utils-bindgen",
     "ic-transport-types",
     "icx",
     "ref-tests",
+    "ic-utils-bindgen-tests",
 ]
 
 [workspace.package]
@@ -31,14 +33,14 @@ ic-transport-types = { path = "ic-transport-types", version = "0.44.3" }
 
 ic-certification = "3"
 candid = "0.10.10"
-candid_parser = "0.1.4"
+candid_parser = "0.2.2"
 clap = "4.5.21"
 futures-util = "0.3.31"
 hex = "0.4.3"
 ic-ed25519 = "0.2"
 k256 = "0.13.4"
 leb128 = "0.2.5"
-pocket-ic = "6.0.0"
+pocket-ic = "10.0.0"
 p256 = "0.13.2"
 rand = "0.8.5"
 reqwest = { version = "0.12", default-features = false }
