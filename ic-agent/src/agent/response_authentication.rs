@@ -185,28 +185,26 @@ pub(crate) fn lookup_reply<Storage: AsRef<[u8]>>(
     Ok(RequestStatusResponse::Replied(ReplyResponse { arg }))
 }
 
+/// The cert should contain both /subnet/<subnet_id> and /canister_ranges/<subnet_id>
 pub(crate) fn lookup_subnet<Storage: AsRef<[u8]> + Clone>(
+    subnet_id: &Principal,
     certificate: &Certificate<Storage>,
-    root_key: &[u8],
-) -> Result<(Principal, Subnet), AgentError> {
-    let subnet_id = if let Some(delegation) = &certificate.delegation {
-        Principal::from_slice(delegation.subnet_id.as_ref())
-    } else {
-        Principal::self_authenticating(root_key)
-    };
+) -> Result<Subnet, AgentError> {
     let subnet_tree = lookup_tree(&certificate.tree, [b"subnet", subnet_id.as_slice()])?;
     let key = lookup_value(&subnet_tree, [b"public_key".as_ref()])?.to_vec();
-    let canister_ranges: Vec<(Principal, Principal)> =
-        if let Some(delegation) = &certificate.delegation {
-            let delegation: Certificate<Vec<u8>> =
-                serde_cbor::from_slice(delegation.certificate.as_ref())?;
-            serde_cbor::from_slice(lookup_value(
-                &delegation.tree,
-                [b"subnet", subnet_id.as_slice(), b"canister_ranges"],
-            )?)?
-        } else {
-            serde_cbor::from_slice(lookup_value(&subnet_tree, [b"canister_ranges".as_ref()])?)?
-        };
+    let canister_ranges_tree = lookup_tree(
+        &certificate.tree,
+        [b"canister_ranges", subnet_id.as_slice()],
+    )?;
+    let canister_ranges: Vec<(Principal, Principal)> = canister_ranges_tree
+        .list_paths()
+        .into_iter()
+        .try_fold(vec![], |mut ranges, shard| {
+            ranges.extend(serde_cbor::from_slice::<Vec<(Principal, Principal)>>(
+                lookup_value(&canister_ranges_tree, [shard[0].as_bytes()])?,
+            )?);
+            Ok::<_, AgentError>(ranges)
+        })?;
     let node_keys_subtree = lookup_tree(&subnet_tree, [b"node".as_ref()])?;
     let mut node_keys = HashMap::new();
     for path in node_keys_subtree.list_paths() {
@@ -237,7 +235,7 @@ pub(crate) fn lookup_subnet<Storage: AsRef<[u8]> + Clone>(
         _key: key,
         node_keys,
     };
-    Ok((subnet_id, subnet))
+    Ok(subnet)
 }
 
 pub(crate) fn lookup_api_boundary_nodes<Storage: AsRef<[u8]> + Clone>(
