@@ -990,7 +990,11 @@ impl Agent {
                 shard_paths.sort_unstable();
                 let shard_division = shard_paths
                     .partition_point(|shard| shard.as_bytes() < effective_canister_id.as_slice());
-                let max_potential_shard = &shard_paths[shard_division - 1];
+                if shard_division == 0 {
+                    // the certificate is not authorized to answer calls for this canister
+                    return Err(AgentError::CertificateNotAuthorized());
+                }
+                let max_potential_shard = &shard_paths[shard_division];
                 let canister_range_lookup = [max_potential_shard.as_bytes()];
                 let canister_range = lookup_value(&canister_range_shards, canister_range_lookup)?;
                 let ranges: Vec<(Principal, Principal)> =
