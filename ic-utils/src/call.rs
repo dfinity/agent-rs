@@ -61,7 +61,8 @@ pub trait AsyncCall: CallIntoFuture<Output = Result<Self::Value, AgentError>> {
     /// Apply a transformation function after the call has been successful. The transformation
     /// is applied with the result.
     ///
-    /// ```rust,ignore-windows,ignore-wasm
+    #[cfg_attr(unix, doc = " ```rust")]
+    #[cfg_attr(not(unix), doc = " ```ignore")]
     /// # // This test is ignored because it requires an ic to be running. We run these
     /// # // in the ic-ref workflow.
     /// use ic_agent::Agent;
