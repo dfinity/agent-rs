@@ -89,7 +89,7 @@ type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + '
 
 /// A low level Agent to make calls to a Replica endpoint.
 ///
-#[cfg_attr(unix, doc = " ```rust")]
+#[cfg_attr(unix, doc = " ```rust")] // pocket-ic
 #[cfg_attr(not(unix), doc = " ```ignore")]
 /// use ic_agent::{Agent, export::Principal};
 /// use candid::{Encode, Decode, CandidType, Nat};

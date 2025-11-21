@@ -1,3 +1,4 @@
+#![cfg(unix)] // pocket-ic
 //! In this file, please mark all tests that require a running ic-ref as ignored.
 //!
 //! Contrary to ic-ref.rs, these tests are not meant to match any other tests. They're

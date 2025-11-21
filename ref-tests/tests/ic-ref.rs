@@ -1,3 +1,4 @@
+#![cfg(unix)] // pocket-ic
 //! In this file, please mark all tests that require a running ic-ref as ignored.
 //!
 //! These tests are a Rust-like version using the Agent to cover the same tests
