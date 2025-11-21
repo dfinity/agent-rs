@@ -389,8 +389,8 @@ mod tests {
     use crate::call::AsyncCall;
     use crate::interfaces::ManagementCanister;
 
-    #[test]
-    fn simple() {
+    #[tokio::test]
+    async fn simple() {
         ref_tests::utils::with_agent(async move |pic, agent| {
             let management_canister = ManagementCanister::from_canister(
                 Canister::builder()
@@ -436,6 +436,7 @@ mod tests {
                 .await
                 .is_err());
             Ok(())
-        });
+        })
+        .await
     }
 }

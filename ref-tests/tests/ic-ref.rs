@@ -13,12 +13,13 @@
 //! use case being tested).
 use ref_tests::{universal_canister, with_agent};
 
-#[test]
-fn status_endpoint() {
+#[tokio::test]
+async fn status_endpoint() {
     with_agent(async move |_, agent| {
         agent.status().await?;
         Ok(())
     })
+    .await
 }
 
 mod management_canister {
@@ -64,8 +65,8 @@ mod management_canister {
         use ref_tests::get_effective_canister_id;
         use std::str::FromStr;
 
-        #[test]
-        fn no_id_given() {
+        #[tokio::test]
+        async fn no_id_given() {
             with_agent(async move |pic, agent| {
                 let ic00 = ManagementCanister::create(&agent);
 
@@ -78,10 +79,11 @@ mod management_canister {
 
                 Ok(())
             })
+            .await
         }
 
-        #[test]
-        fn create_canister_necessary() {
+        #[tokio::test]
+        async fn create_canister_necessary() {
             with_agent(async move |_, agent| {
                 let ic00 = ManagementCanister::create(&agent);
                 let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
@@ -109,12 +111,12 @@ mod management_canister {
                 );
 
                 Ok(())
-            })
+            }).await
         }
     }
 
-    #[test]
-    fn management() {
+    #[tokio::test]
+    async fn management() {
         use ref_tests::get_effective_canister_id;
         with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
@@ -259,11 +261,11 @@ mod management_canister {
             assert_eq!(result.0.module_hash, Some(sha256_digest.to_vec()));
 
             Ok(())
-        })
+        }).await
     }
 
-    #[test]
-    fn multiple_canisters_aaaaa_aa_but_really_provisional() {
+    #[tokio::test]
+    async fn multiple_canisters_aaaaa_aa_but_really_provisional() {
         with_agent(async move |pic, agent| {
             let agent_principal = agent.get_principal()?;
             // Each agent has their own identity.
@@ -401,6 +403,7 @@ mod management_canister {
 
             Ok(())
         })
+        .await
     }
 
     fn assert_err_or_reject<S>(
@@ -425,8 +428,8 @@ mod management_canister {
         );
     }
 
-    #[test]
-    fn canister_lifecycle_and_delete() {
+    #[tokio::test]
+    async fn canister_lifecycle_and_delete() {
         with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
             let (canister_id,) = ic00
@@ -610,11 +613,11 @@ mod management_canister {
                 "wrong error: {result:?}"
             );
             Ok(())
-        })
+        }).await
     }
 
-    #[test]
-    fn canister_lifecycle_as_wrong_controller() {
+    #[tokio::test]
+    async fn canister_lifecycle_as_wrong_controller() {
         with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
             let (canister_id,) = ic00
@@ -707,11 +710,11 @@ mod management_canister {
             );
 
             Ok(())
-        })
+        }).await
     }
 
-    #[test]
-    fn provisional_create_canister_with_cycles() {
+    #[tokio::test]
+    async fn provisional_create_canister_with_cycles() {
         with_wallet_canister(None, async move |pic, agent, wallet_id| {
             let default_canister_balance: u128 = 100_000_000_000_000;
 
@@ -805,10 +808,11 @@ mod management_canister {
 
             Ok(())
         })
+        .await
     }
 
-    #[test]
-    fn randomness() {
+    #[tokio::test]
+    async fn randomness() {
         with_wallet_canister(None, async move |_, agent, wallet_id| {
             let wallet = WalletCanister::create(&agent, wallet_id).await?;
             let (rand_1,): (Vec<u8>,) = wallet
@@ -849,10 +853,11 @@ mod management_canister {
 
             Ok(())
         })
+        .await
     }
 
-    #[test]
-    fn chunked_wasm() {
+    #[tokio::test]
+    async fn chunked_wasm() {
         use ic_management_canister_types::UploadChunkArgs;
         with_agent(async move |pic, agent| {
             let wasm = b"\0asm\x01\0\0\0";
@@ -890,21 +895,23 @@ mod management_canister {
                 .await?;
             Ok(())
         })
+        .await
     }
 
-    #[test]
+    #[tokio::test]
     // makes sure that calling fetch_root_key twice by accident does not break
-    fn multi_fetch_root_key() {
+    async fn multi_fetch_root_key() {
         with_agent(async move |_, agent| {
             agent.fetch_root_key().await?;
             agent.fetch_root_key().await?;
 
             Ok(())
         })
+        .await
     }
 
-    #[test]
-    fn subnet_metrics() {
+    #[tokio::test]
+    async fn subnet_metrics() {
         with_agent(async move |_, agent| {
             let ic00 = ManagementCanister::create(&agent);
 
@@ -927,10 +934,11 @@ mod management_canister {
             );
             Ok(())
         })
+        .await
     }
 
-    #[test]
-    fn subnet_canister_ranges() {
+    #[tokio::test]
+    async fn subnet_canister_ranges() {
         with_agent(async move |_, agent| {
             // fetch root subnet canister ranges
             let ranges = agent
@@ -944,6 +952,7 @@ mod management_canister {
             );
             Ok(())
         })
+        .await
     }
 }
 
@@ -955,8 +964,8 @@ mod simple_calls {
     };
     use ref_tests::with_universal_canister;
 
-    #[test]
-    fn call() {
+    #[tokio::test]
+    async fn call() {
         with_universal_canister(async move |_, agent, canister_id| {
             let arg = payload().reply_data(b"hello").build();
             let result = agent
@@ -968,10 +977,11 @@ mod simple_calls {
             assert_eq!(result.as_slice(), b"hello");
             Ok(())
         })
+        .await
     }
 
-    #[test]
-    fn query() {
+    #[tokio::test]
+    async fn query() {
         with_universal_canister(async move |_, agent, canister_id| {
             let arg = payload().reply_data(b"hello").build();
             let result = agent
@@ -992,10 +1002,11 @@ mod simple_calls {
             assert_eq!(result, b"hello");
             Ok(())
         })
+        .await
     }
 
-    #[test]
-    fn non_existant_call() {
+    #[tokio::test]
+    async fn non_existant_call() {
         with_universal_canister(async move |_, agent, canister_id| {
             let arg = payload().reply_data(b"hello").build();
             let result = agent
@@ -1019,10 +1030,11 @@ mod simple_calls {
             );
             Ok(())
         })
+        .await
     }
 
-    #[test]
-    fn non_existant_query() {
+    #[tokio::test]
+    async fn non_existant_query() {
         with_universal_canister(async move |_, agent, canister_id| {
             let arg = payload().reply_data(b"hello").build();
             let result = agent
@@ -1046,6 +1058,7 @@ mod simple_calls {
             );
             Ok(())
         })
+        .await
     }
 }
 
@@ -1065,8 +1078,8 @@ mod extras {
     };
     use ref_tests::{get_effective_canister_id, with_agent};
 
-    #[test]
-    fn valid_allocations() {
+    #[tokio::test]
+    async fn valid_allocations() {
         with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
 
@@ -1098,10 +1111,11 @@ mod extras {
 
             Ok(())
         })
+        .await
     }
 
-    #[test]
-    fn memory_allocation() {
+    #[tokio::test]
+    async fn memory_allocation() {
         with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
             // Prevent creating with over 1 << 48. This does not contact the server.
@@ -1127,10 +1141,11 @@ mod extras {
 
             Ok(())
         })
+        .await
     }
 
-    #[test]
-    fn compute_allocation() {
+    #[tokio::test]
+    async fn compute_allocation() {
         use std::convert::TryFrom;
 
         with_agent(async move |pic, agent| {
@@ -1147,10 +1162,11 @@ mod extras {
 
             Ok(())
         })
+        .await
     }
 
-    #[test]
-    fn freezing_threshold() {
+    #[tokio::test]
+    async fn freezing_threshold() {
         with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
             let result = ic00
@@ -1167,10 +1183,11 @@ mod extras {
 
             Ok(())
         })
+        .await
     }
 
-    #[test]
-    fn create_with_reserved_cycles_limit() {
+    #[tokio::test]
+    async fn create_with_reserved_cycles_limit() {
         with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
 
@@ -1191,10 +1208,11 @@ mod extras {
 
             Ok(())
         })
+        .await
     }
 
-    #[test]
-    fn update_reserved_cycles_limit() {
+    #[tokio::test]
+    async fn update_reserved_cycles_limit() {
         with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
 
@@ -1237,10 +1255,11 @@ mod extras {
 
             Ok(())
         })
+        .await
     }
 
-    #[test]
-    fn specified_id() {
+    #[tokio::test]
+    async fn specified_id() {
         with_agent(async move |_, agent| {
             let ic00 = ManagementCanister::create(&agent);
             let specified_id = Principal::from_text("iimsn-6yaaa-aaaaa-afiaa-cai").unwrap(); // [42, 0] should be large enough
@@ -1286,10 +1305,11 @@ mod extras {
 
             Ok(())
         })
+        .await
     }
 
-    #[test]
-    fn create_with_wasm_memory_limit() {
+    #[tokio::test]
+    async fn create_with_wasm_memory_limit() {
         with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
 
@@ -1310,10 +1330,11 @@ mod extras {
 
             Ok(())
         })
+        .await
     }
 
-    #[test]
-    fn update_wasm_memory_limit() {
+    #[tokio::test]
+    async fn update_wasm_memory_limit() {
         with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
 
@@ -1356,10 +1377,11 @@ mod extras {
 
             Ok(())
         })
+        .await
     }
 
-    #[test]
-    fn create_with_log_visibility() {
+    #[tokio::test]
+    async fn create_with_log_visibility() {
         with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
 
@@ -1377,10 +1399,11 @@ mod extras {
 
             Ok(())
         })
+        .await
     }
 
-    #[test]
-    fn update_log_visibility() {
+    #[tokio::test]
+    async fn update_log_visibility() {
         with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
 
@@ -1417,5 +1440,6 @@ mod extras {
 
             Ok(())
         })
+        .await
     }
 }

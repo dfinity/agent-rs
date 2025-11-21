@@ -1,3 +1,4 @@
+use ic_agent::export::reqwest::Url;
 use ic_agent::identity::{Prime256v1Identity, Secp256k1Identity};
 use ic_agent::{export::Principal, identity::BasicIdentity, Agent, Identity};
 use ic_identity_hsm::HardwareIdentity;
@@ -13,14 +14,9 @@ const HSM_KEY_ID: &str = "HSM_KEY_ID";
 const HSM_PIN: &str = "HSM_PIN";
 
 pub async fn get_effective_canister_id(pic: &PocketIc) -> Principal {
-    pocket_ic::nonblocking::get_default_effective_canister_id(
-        pic.get_server_url()
-            .join(&format!("instances/{}/", pic.instance_id))
-            .unwrap()
-            .to_string(),
-    )
-    .await
-    .unwrap()
+    pocket_ic::nonblocking::get_default_effective_canister_id(get_pic_url(pic).to_string())
+        .await
+        .unwrap()
 }
 
 pub fn create_identity() -> Result<Box<dyn Identity>, String> {
@@ -99,50 +95,59 @@ pub async fn create_agent(
     pic: &PocketIc,
     identity: impl Identity + 'static,
 ) -> Result<Agent, String> {
-    let url = pic
-        .get_server_url()
-        .join(&format!("instances/{}/", pic.instance_id))
-        .unwrap();
+    let url = get_pic_url(pic);
     let agent = Agent::builder()
         .with_url(url)
         .with_identity(identity)
         .with_max_polling_time(Duration::from_secs(15))
         .build()
         .map_err(|e| format!("{:?}", e))?;
-
-    agent.set_root_key(pic.root_key().await.unwrap());
+    agent.fetch_root_key().await.unwrap();
     Ok(agent)
 }
 
-pub fn with_agent<F>(f: F)
+pub async fn with_agent<F, R>(f: F) -> R
 where
-    F: AsyncFnOnce(&PocketIc, Agent) -> Result<(), Box<dyn Error>>,
+    F: AsyncFnOnce(&PocketIc, Agent) -> Result<R, Box<dyn Error>>,
 {
     let agent_identity = create_identity().expect("Could not create an identity.");
-    with_agent_as(agent_identity, f)
+    with_agent_as(agent_identity, f).await
 }
 
-pub fn with_agent_as<I, F>(agent_identity: I, f: F)
+pub async fn with_agent_as<I, F, R>(agent_identity: I, f: F) -> R
 where
     I: Identity + 'static,
-    F: AsyncFnOnce(&PocketIc, Agent) -> Result<(), Box<dyn Error>>,
+    F: AsyncFnOnce(&PocketIc, Agent) -> Result<R, Box<dyn Error>>,
 {
-    let runtime = tokio::runtime::Runtime::new().expect("Could not create tokio runtime.");
-    runtime.block_on(async {
-        let pic = PocketIcBuilder::new()
-            .with_nns_subnet()
-            .with_application_subnet()
-            .with_auto_progress()
-            .build_async()
-            .await;
-        let agent = create_agent(&pic, agent_identity)
+    with_pic(async move |pic| {
+        let agent = create_agent(pic, agent_identity)
             .await
             .expect("Could not create an agent.");
-        match f(&pic, agent).await {
-            Ok(_) => {}
-            Err(e) => panic!("{:?}", e),
-        };
+        f(pic, agent).await
     })
+    .await
+}
+
+pub async fn with_pic<F, R>(f: F) -> R
+where
+    F: AsyncFnOnce(&PocketIc) -> Result<R, Box<dyn Error>>,
+{
+    let pic = PocketIcBuilder::new()
+        .with_nns_subnet()
+        .with_application_subnet()
+        .with_auto_progress()
+        .build_async()
+        .await;
+    match f(&pic).await {
+        Ok(r) => r,
+        Err(e) => panic!("{:?}", e),
+    }
+}
+
+pub fn get_pic_url(pic: &PocketIc) -> Url {
+    pic.get_server_url()
+        .join(&format!("instances/{}/", pic.instance_id))
+        .unwrap()
 }
 
 pub async fn create_universal_canister(
@@ -206,33 +211,36 @@ pub async fn create_wallet_canister(
     Ok(canister_id)
 }
 
-pub fn with_universal_canister<F>(f: F)
+pub async fn with_universal_canister<F, R>(f: F) -> R
 where
-    F: AsyncFnOnce(&PocketIc, Agent, Principal) -> Result<(), Box<dyn Error>>,
+    F: AsyncFnOnce(&PocketIc, Agent, Principal) -> Result<R, Box<dyn Error>>,
 {
     with_agent(async move |pic, agent| {
         let canister_id = create_universal_canister(pic, &agent).await?;
         f(pic, agent, canister_id).await
     })
+    .await
 }
 
-pub fn with_universal_canister_as<I, F>(identity: I, f: F)
+pub async fn with_universal_canister_as<I, F, R>(identity: I, f: F) -> R
 where
     I: Identity + 'static,
-    F: AsyncFnOnce(&PocketIc, Agent, Principal) -> Result<(), Box<dyn Error>>,
+    F: AsyncFnOnce(&PocketIc, Agent, Principal) -> Result<R, Box<dyn Error>>,
 {
     with_agent_as(identity, async move |pic, agent| {
         let canister_id = create_universal_canister(pic, &agent).await?;
         f(pic, agent, canister_id).await
     })
+    .await
 }
 
-pub fn with_wallet_canister<F>(cycles: Option<u128>, f: F)
+pub async fn with_wallet_canister<F, R>(cycles: Option<u128>, f: F) -> R
 where
-    F: AsyncFnOnce(&PocketIc, Agent, Principal) -> Result<(), Box<dyn Error>>,
+    F: AsyncFnOnce(&PocketIc, Agent, Principal) -> Result<R, Box<dyn Error>>,
 {
     with_agent(async move |pic, agent| {
         let canister_id = create_wallet_canister(pic, &agent, cycles).await?;
         f(pic, agent, canister_id).await
     })
+    .await
 }
