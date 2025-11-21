@@ -1483,7 +1483,6 @@ dependencies = [
  "ic-ed25519",
  "ic-management-canister-types 0.4.0",
  "once_cell",
- "pocket-ic",
  "ref-tests",
  "semver",
  "serde",
