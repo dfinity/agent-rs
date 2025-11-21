@@ -7,79 +7,9 @@ on:
   pull_request:
 
 jobs:
-  test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        build: [linux-stable]
-        include:
-          - build: linux-stable
-            universal-canister-rev: "537b0fd6530ab5d2bc73181abdb031b7dbefb336" # Picked from dfinity/ic master branch on 2025-08-25
-            wallet-tag: "20230308"
-            os: ubuntu-latest
-
-    steps:
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - uses: actions/checkout@v4
-
-      - name: Cargo cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Run Integration Tests
-        run: |
-          set -ex
-          cargo test --all-features -- --ignored
-        env:
-          RUST_BACKTRACE: 1
-
-      - name: Install and Configure SoftHSM
-        run: |
-          set -ex
-          sudo apt-get install -f libsofthsm2 opensc-pkcs11 opensc
-          sudo usermod -a -G softhsm $USER
-          echo "SOFTHSM2_CONF=$HOME/softhsm.conf" >>$GITHUB_ENV
-          echo "directories.tokendir = $HOME/softhsm/tokens/" >$HOME/softhsm.conf
-          mkdir -p $HOME/softhsm/tokens
-
-      - name: Run Integration Tests with SoftHSM
-        run: |
-          set -ex
-          softhsm2-util --init-token --slot $HSM_SLOT_INDEX --label "agent-rs-token" --so-pin $HSM_SO_PIN --pin $HSM_PIN
-          # create key:
-          pkcs11-tool -k --module $HSM_PKCS11_LIBRARY_PATH --login --slot-index $HSM_SLOT_INDEX -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
-
-          cd ref-tests
-          cargo test --all-features -- --ignored --nocapture --test-threads=1
-        env:
-          RUST_BACKTRACE: 1
-          HSM_PKCS11_LIBRARY_PATH: /usr/lib/softhsm/libsofthsm2.so
-          HSM_SO_PIN: 123456
-          HSM_PIN: 1234
-          HSM_SLOT_INDEX: 0
-          HSM_KEY_ID: abcdef
-
-      - name: Run Doc Tests
-        run: |
-          set -ex
-          cargo test --all-features --doc -- --ignored
-        env:
-          RUST_BACKTRACE: 1
-
-  aggregate:
+  aggregate: # todo remove
     name: ic-ref:required
     runs-on: ubuntu-latest
-    if: ${{ always() }}
-    needs: test
     steps:
       - name: Check ic-ref result
-        if: ${{ needs.test.result != 'success' }}
         run: exit 1

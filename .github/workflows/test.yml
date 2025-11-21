@@ -24,11 +24,26 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-1
 
-      - name: Install wasm-pack and chromedriver
+      - name: Install wasm-pack and chromedriver for WASM tests
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
           sudo apt-get install -y chromium-chromedriver
+
+      - name: Install node for SoftHSM tests
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install and Configure SoftHSM
+        run: |
+          set -ex
+          sudo apt-get install -f libsofthsm2 opensc-pkcs11 opensc
+          sudo usermod -a -G softhsm $USER
+          echo "SOFTHSM2_CONF=$HOME/softhsm.conf" >>$GITHUB_ENV
+          echo "directories.tokendir = $HOME/softhsm/tokens/" >$HOME/softhsm.conf
+          mkdir -p $HOME/softhsm/tokens
 
       - name: Run Tests
         shell: bash
@@ -36,8 +51,8 @@ jobs:
           # Test all features and no features for each package.
           for p in $(cargo metadata --no-deps --format-version 1 | jq -r .packages[].manifest_path); do
             pushd $(dirname $p)
-            cargo test --all-targets --all-features
-            cargo test --all-targets --no-default-features
+            cargo test --all-features
+            cargo test --no-default-features
             popd
           done
         env:
@@ -47,6 +62,24 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           CARGO_TARGET_DIR=target/wasm wasm-pack test --chrome --headless ic-agent --features wasm-bindgen
+
+      - name: Run Tests (SoftHSM)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          set -ex
+          softhsm2-util --init-token --slot $HSM_SLOT_INDEX --label "agent-rs-token" --so-pin $HSM_SO_PIN --pin $HSM_PIN
+          # create key:
+          pkcs11-tool -k --module $HSM_PKCS11_LIBRARY_PATH --login --slot-index $HSM_SLOT_INDEX -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
+
+          cd ref-tests
+          cargo test --all-features -- --nocapture --test-threads=1
+        env:
+          RUST_BACKTRACE: 1
+          HSM_PKCS11_LIBRARY_PATH: /usr/lib/softhsm/libsofthsm2.so
+          HSM_SO_PIN: 123456
+          HSM_PIN: 1234
+          HSM_SLOT_INDEX: 0
+          HSM_KEY_ID: abcdef
 
   aggregate:
     name: test:required
