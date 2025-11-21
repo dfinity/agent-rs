@@ -13,7 +13,6 @@
 //! use case being tested).
 use ref_tests::{universal_canister, with_agent};
 
-#[ignore]
 #[test]
 fn status_endpoint() {
     with_agent(async move |_, agent| {
@@ -65,7 +64,6 @@ mod management_canister {
         use ref_tests::get_effective_canister_id;
         use std::str::FromStr;
 
-        #[ignore]
         #[test]
         fn no_id_given() {
             with_agent(async move |pic, agent| {
@@ -82,7 +80,6 @@ mod management_canister {
             })
         }
 
-        #[ignore]
         #[test]
         fn create_canister_necessary() {
             with_agent(async move |_, agent| {
@@ -116,7 +113,6 @@ mod management_canister {
         }
     }
 
-    #[ignore]
     #[test]
     fn management() {
         use ref_tests::get_effective_canister_id;
@@ -266,7 +262,6 @@ mod management_canister {
         })
     }
 
-    #[ignore]
     #[test]
     fn multiple_canisters_aaaaa_aa_but_really_provisional() {
         with_agent(async move |pic, agent| {
@@ -430,7 +425,6 @@ mod management_canister {
         );
     }
 
-    #[ignore]
     #[test]
     fn canister_lifecycle_and_delete() {
         with_agent(async move |pic, agent| {
@@ -619,7 +613,6 @@ mod management_canister {
         })
     }
 
-    #[ignore]
     #[test]
     fn canister_lifecycle_as_wrong_controller() {
         with_agent(async move |pic, agent| {
@@ -717,7 +710,6 @@ mod management_canister {
         })
     }
 
-    #[ignore]
     #[test]
     fn provisional_create_canister_with_cycles() {
         with_wallet_canister(None, async move |pic, agent, wallet_id| {
@@ -815,7 +807,6 @@ mod management_canister {
         })
     }
 
-    #[ignore]
     #[test]
     fn randomness() {
         with_wallet_canister(None, async move |_, agent, wallet_id| {
@@ -860,7 +851,6 @@ mod management_canister {
         })
     }
 
-    #[ignore]
     #[test]
     fn chunked_wasm() {
         use ic_management_canister_types::UploadChunkArgs;
@@ -902,7 +892,6 @@ mod management_canister {
         })
     }
 
-    #[ignore]
     #[test]
     // makes sure that calling fetch_root_key twice by accident does not break
     fn multi_fetch_root_key() {
@@ -914,7 +903,6 @@ mod management_canister {
         })
     }
 
-    #[ignore]
     #[test]
     fn subnet_metrics() {
         with_agent(async move |_, agent| {
@@ -941,7 +929,6 @@ mod management_canister {
         })
     }
 
-    #[ignore]
     #[test]
     fn subnet_canister_ranges() {
         with_agent(async move |_, agent| {
@@ -968,7 +955,6 @@ mod simple_calls {
     };
     use ref_tests::with_universal_canister;
 
-    #[ignore]
     #[test]
     fn call() {
         with_universal_canister(async move |_, agent, canister_id| {
@@ -984,7 +970,6 @@ mod simple_calls {
         })
     }
 
-    #[ignore]
     #[test]
     fn query() {
         with_universal_canister(async move |_, agent, canister_id| {
@@ -1009,7 +994,6 @@ mod simple_calls {
         })
     }
 
-    #[ignore]
     #[test]
     fn non_existant_call() {
         with_universal_canister(async move |_, agent, canister_id| {
@@ -1037,7 +1021,6 @@ mod simple_calls {
         })
     }
 
-    #[ignore]
     #[test]
     fn non_existant_query() {
         with_universal_canister(async move |_, agent, canister_id| {
@@ -1082,7 +1065,6 @@ mod extras {
     };
     use ref_tests::{get_effective_canister_id, with_agent};
 
-    #[ignore]
     #[test]
     fn valid_allocations() {
         with_agent(async move |pic, agent| {
@@ -1118,7 +1100,6 @@ mod extras {
         })
     }
 
-    #[ignore]
     #[test]
     fn memory_allocation() {
         with_agent(async move |pic, agent| {
@@ -1148,7 +1129,6 @@ mod extras {
         })
     }
 
-    #[ignore]
     #[test]
     fn compute_allocation() {
         use std::convert::TryFrom;
@@ -1169,7 +1149,6 @@ mod extras {
         })
     }
 
-    #[ignore]
     #[test]
     fn freezing_threshold() {
         with_agent(async move |pic, agent| {
@@ -1190,7 +1169,6 @@ mod extras {
         })
     }
 
-    #[ignore]
     #[test]
     fn create_with_reserved_cycles_limit() {
         with_agent(async move |pic, agent| {
@@ -1215,7 +1193,6 @@ mod extras {
         })
     }
 
-    #[ignore]
     #[test]
     fn update_reserved_cycles_limit() {
         with_agent(async move |pic, agent| {
@@ -1262,7 +1239,6 @@ mod extras {
         })
     }
 
-    #[ignore]
     #[test]
     fn specified_id() {
         with_agent(async move |_, agent| {
@@ -1312,7 +1288,6 @@ mod extras {
         })
     }
 
-    #[ignore]
     #[test]
     fn create_with_wasm_memory_limit() {
         with_agent(async move |pic, agent| {
@@ -1337,7 +1312,6 @@ mod extras {
         })
     }
 
-    #[ignore]
     #[test]
     fn update_wasm_memory_limit() {
         with_agent(async move |pic, agent| {
@@ -1384,7 +1358,6 @@ mod extras {
         })
     }
 
-    #[ignore]
     #[test]
     fn create_with_log_visibility() {
         with_agent(async move |pic, agent| {
@@ -1406,7 +1379,6 @@ mod extras {
         })
     }
 
-    #[ignore]
     #[test]
     fn update_log_visibility() {
         with_agent(async move |pic, agent| {

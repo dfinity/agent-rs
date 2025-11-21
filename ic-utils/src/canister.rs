@@ -383,31 +383,15 @@ impl<'agent: 'canister, 'canister> AsyncCallBuilder<'agent, 'canister> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))] // pocket-ic
 mod tests {
     use super::*;
     use crate::call::AsyncCall;
     use crate::interfaces::ManagementCanister;
-    use candid::Principal;
 
-    const POCKET_IC: &str = "POCKET_IC";
-
-    async fn get_effective_canister_id() -> Principal {
-        let default_effective_canister_id =
-            Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap();
-        if let Ok(pocket_ic_url) = std::env::var(POCKET_IC) {
-            pocket_ic::nonblocking::get_default_effective_canister_id(pocket_ic_url)
-                .await
-                .unwrap_or(default_effective_canister_id)
-        } else {
-            default_effective_canister_id
-        }
-    }
-
-    #[ignore]
     #[test]
     fn simple() {
-        ref_tests::utils::with_agent(async move |_, agent| {
+        ref_tests::utils::with_agent(async move |pic, agent| {
             let management_canister = ManagementCanister::from_canister(
                 Canister::builder()
                     .with_agent(&agent)
@@ -419,7 +403,7 @@ mod tests {
             let (new_canister_id,) = management_canister
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(ref_tests::utils::get_effective_canister_id(pic).await)
                 .call_and_wait()
                 .await
                 .unwrap();
