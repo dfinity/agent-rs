@@ -16,7 +16,7 @@ use ref_tests::{universal_canister, with_agent};
 #[ignore]
 #[test]
 fn status_endpoint() {
-    with_agent(|agent| async move {
+    with_agent(async move |_, agent| {
         agent.status().await?;
         Ok(())
     })
@@ -68,13 +68,13 @@ mod management_canister {
         #[ignore]
         #[test]
         fn no_id_given() {
-            with_agent(|agent| async move {
+            with_agent(async move |pic, agent| {
                 let ic00 = ManagementCanister::create(&agent);
 
                 let _ = ic00
                     .create_canister()
                     .as_provisional_create_with_amount(None)
-                    .with_effective_canister_id(get_effective_canister_id().await)
+                    .with_effective_canister_id(get_effective_canister_id(pic).await)
                     .call_and_wait()
                     .await?;
 
@@ -85,7 +85,7 @@ mod management_canister {
         #[ignore]
         #[test]
         fn create_canister_necessary() {
-            with_agent(|agent| async move {
+            with_agent(async move |_, agent| {
                 let ic00 = ManagementCanister::create(&agent);
                 let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
 
@@ -106,7 +106,9 @@ mod management_canister {
                     error_code: Some(ref error_code)
                 }, .. }) if reject_message == "Canister 75hes-oqbaa-aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-q not found" &&
                         error_code == "IC0301")
-                        || matches!(result, Err(HttpError(content)) if content.status == 400 && content.content == b"Canister 75hes-oqbaa-aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-q does not belong to any subnet.")
+                        || matches!(result, Err(HttpError(content)) if content.status == 400
+                            && (content.content == b"Canister 75hes-oqbaa-aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-q does not belong to any subnet."
+                                || content.content.starts_with(b"error: canister_not_found")))
                 );
 
                 Ok(())
@@ -118,13 +120,13 @@ mod management_canister {
     #[test]
     fn management() {
         use ref_tests::get_effective_canister_id;
-        with_agent(|agent| async move {
+        with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
 
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .call_and_wait()
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
@@ -153,7 +155,7 @@ mod management_canister {
             // Each agent has their own identity.
             let other_agent_identity = create_basic_identity();
             let other_agent_principal = other_agent_identity.sender()?;
-            let other_agent = create_agent(other_agent_identity).await?;
+            let other_agent = create_agent(pic, other_agent_identity).await?;
             other_agent.fetch_root_key().await?;
             let other_ic00 = ManagementCanister::create(&other_agent);
 
@@ -217,7 +219,7 @@ mod management_canister {
             let (canister_id_2,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .call_and_wait()
                 .await?;
 
@@ -231,7 +233,7 @@ mod management_canister {
             let (canister_id_3,) = other_ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .call_and_wait()
                 .await?;
 
@@ -267,24 +269,24 @@ mod management_canister {
     #[ignore]
     #[test]
     fn multiple_canisters_aaaaa_aa_but_really_provisional() {
-        with_agent(|agent| async move {
+        with_agent(async move |pic, agent| {
             let agent_principal = agent.get_principal()?;
             // Each agent has their own identity.
             let other_agent_identity = create_basic_identity();
             let other_agent_principal = other_agent_identity.sender()?;
-            let other_agent = create_agent(other_agent_identity).await?;
+            let other_agent = create_agent(pic, other_agent_identity).await?;
             other_agent.fetch_root_key().await?;
             let other_ic00 = ManagementCanister::create(&other_agent);
 
             let secp256k1_identity = create_secp256k1_identity()?;
             let secp256k1_principal = secp256k1_identity.sender()?;
-            let secp256k1_agent = create_agent(secp256k1_identity).await?;
+            let secp256k1_agent = create_agent(pic, secp256k1_identity).await?;
             secp256k1_agent.fetch_root_key().await?;
             let secp256k1_ic00 = ManagementCanister::create(&secp256k1_agent);
 
             let prime256v1_identity = create_prime256v1_identity()?;
             let prime256v1_principal = prime256v1_identity.sender()?;
-            let prime256v1_agent = create_agent(prime256v1_identity).await?;
+            let prime256v1_agent = create_agent(pic, prime256v1_identity).await?;
             prime256v1_agent.fetch_root_key().await?;
             let prime256v1_ic00 = ManagementCanister::create(&prime256v1_agent);
 
@@ -293,7 +295,7 @@ mod management_canister {
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None) // ok
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 //.with_canister_id("aaaaa-aa")
                 .with_controller(agent_principal)
                 .with_controller(other_agent_principal)
@@ -431,12 +433,12 @@ mod management_canister {
     #[ignore]
     #[test]
     fn canister_lifecycle_and_delete() {
-        with_agent(|agent| async move {
+        with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .call_and_wait()
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
@@ -620,12 +622,12 @@ mod management_canister {
     #[ignore]
     #[test]
     fn canister_lifecycle_as_wrong_controller() {
-        with_agent(|agent| async move {
+        with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .call_and_wait()
                 .await?;
             let canister_wasm = b"\0asm\x01\0\0\0".to_vec();
@@ -638,7 +640,7 @@ mod management_canister {
 
             // Create another agent with different identity.
             let other_agent_identity = create_basic_identity();
-            let other_agent = create_agent(other_agent_identity).await?;
+            let other_agent = create_agent(pic, other_agent_identity).await?;
             other_agent.fetch_root_key().await?;
             let other_ic00 = ManagementCanister::create(&other_agent);
 
@@ -718,7 +720,7 @@ mod management_canister {
     #[ignore]
     #[test]
     fn provisional_create_canister_with_cycles() {
-        with_wallet_canister(None, |agent, wallet_id| async move {
+        with_wallet_canister(None, async move |pic, agent, wallet_id| {
             let default_canister_balance: u128 = 100_000_000_000_000;
 
             // empty cycle balance on create
@@ -783,7 +785,7 @@ mod management_canister {
             let (canister_id_1,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .call_and_wait()
                 .await?;
             let result = ic00.canister_status(&canister_id_1).call_and_wait().await?;
@@ -798,7 +800,7 @@ mod management_canister {
             let (canister_id_2,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(Some(amount))
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .call_and_wait()
                 .await?;
             let result = ic00.canister_status(&canister_id_2).call_and_wait().await?;
@@ -816,7 +818,7 @@ mod management_canister {
     #[ignore]
     #[test]
     fn randomness() {
-        with_wallet_canister(None, |agent, wallet_id| async move {
+        with_wallet_canister(None, async move |_, agent, wallet_id| {
             let wallet = WalletCanister::create(&agent, wallet_id).await?;
             let (rand_1,): (Vec<u8>,) = wallet
                 .call(
@@ -862,14 +864,14 @@ mod management_canister {
     #[test]
     fn chunked_wasm() {
         use ic_management_canister_types::UploadChunkArgs;
-        with_agent(|agent| async move {
+        with_agent(async move |pic, agent| {
             let wasm = b"\0asm\x01\0\0\0";
             let wasm_hash = Sha256::digest(wasm).to_vec();
             let mgmt = ManagementCanister::create(&agent);
             let (canister_id,) = mgmt
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .call_and_wait()
                 .await?;
             let (pt1,) = mgmt
@@ -904,7 +906,7 @@ mod management_canister {
     #[test]
     // makes sure that calling fetch_root_key twice by accident does not break
     fn multi_fetch_root_key() {
-        with_agent(|agent| async move {
+        with_agent(async move |_, agent| {
             agent.fetch_root_key().await?;
             agent.fetch_root_key().await?;
 
@@ -915,7 +917,7 @@ mod management_canister {
     #[ignore]
     #[test]
     fn subnet_metrics() {
-        with_agent(|agent| async move {
+        with_agent(async move |_, agent| {
             let ic00 = ManagementCanister::create(&agent);
 
             // create a canister on the root subnet
@@ -942,7 +944,7 @@ mod management_canister {
     #[ignore]
     #[test]
     fn subnet_canister_ranges() {
-        with_agent(|agent| async move {
+        with_agent(async move |_, agent| {
             // fetch root subnet canister ranges
             let ranges = agent
                 .read_state_subnet_canister_ranges(Principal::self_authenticating(
@@ -969,7 +971,7 @@ mod simple_calls {
     #[ignore]
     #[test]
     fn call() {
-        with_universal_canister(|agent, canister_id| async move {
+        with_universal_canister(async move |_, agent, canister_id| {
             let arg = payload().reply_data(b"hello").build();
             let result = agent
                 .update(&canister_id, "update")
@@ -985,7 +987,7 @@ mod simple_calls {
     #[ignore]
     #[test]
     fn query() {
-        with_universal_canister(|agent, canister_id| async move {
+        with_universal_canister(async move |_, agent, canister_id| {
             let arg = payload().reply_data(b"hello").build();
             let result = agent
                 .query(&canister_id, "query")
@@ -1010,7 +1012,7 @@ mod simple_calls {
     #[ignore]
     #[test]
     fn non_existant_call() {
-        with_universal_canister(|agent, canister_id| async move {
+        with_universal_canister(async move |_, agent, canister_id| {
             let arg = payload().reply_data(b"hello").build();
             let result = agent
                 .update(&canister_id, "non_existent_method")
@@ -1038,7 +1040,7 @@ mod simple_calls {
     #[ignore]
     #[test]
     fn non_existant_query() {
-        with_universal_canister(|agent, canister_id| async move {
+        with_universal_canister(async move |_, agent, canister_id| {
             let arg = payload().reply_data(b"hello").build();
             let result = agent
                 .query(&canister_id, "non_existent_method")
@@ -1083,13 +1085,13 @@ mod extras {
     #[ignore]
     #[test]
     fn valid_allocations() {
-        with_agent(|agent| async move {
+        with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
 
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .with_compute_allocation(1_u64)
                 .with_memory_allocation(1024 * 1024_u64)
                 .with_freezing_threshold(1_000_000_u64)
@@ -1119,13 +1121,13 @@ mod extras {
     #[ignore]
     #[test]
     fn memory_allocation() {
-        with_agent(|agent| async move {
+        with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
             // Prevent creating with over 1 << 48. This does not contact the server.
             let result = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .with_memory_allocation(1u64 << 50)
                 .call_and_wait()
                 .await;
@@ -1137,7 +1139,7 @@ mod extras {
             let (_,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .with_memory_allocation(10 * 1024 * 1024u64)
                 .call_and_wait()
                 .await?;
@@ -1151,14 +1153,14 @@ mod extras {
     fn compute_allocation() {
         use std::convert::TryFrom;
 
-        with_agent(|agent| async move {
+        with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
             let ca = ComputeAllocation::try_from(10).unwrap();
 
             let (_,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(Some(1_000_000_000_000_000))
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .with_compute_allocation(ca)
                 .call_and_wait()
                 .await?;
@@ -1170,12 +1172,12 @@ mod extras {
     #[ignore]
     #[test]
     fn freezing_threshold() {
-        with_agent(|agent| async move {
+        with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
             let result = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .with_freezing_threshold(2u128.pow(70))
                 .call_and_wait()
                 .await;
@@ -1191,13 +1193,13 @@ mod extras {
     #[ignore]
     #[test]
     fn create_with_reserved_cycles_limit() {
-        with_agent(|agent| async move {
+        with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
 
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .with_reserved_cycles_limit(2u128.pow(70))
                 .call_and_wait()
                 .await
@@ -1216,13 +1218,13 @@ mod extras {
     #[ignore]
     #[test]
     fn update_reserved_cycles_limit() {
-        with_agent(|agent| async move {
+        with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
 
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .with_reserved_cycles_limit(2_500_800_000_000u128)
                 .call_and_wait()
                 .await?;
@@ -1263,7 +1265,7 @@ mod extras {
     #[ignore]
     #[test]
     fn specified_id() {
-        with_agent(|agent| async move {
+        with_agent(async move |_, agent| {
             let ic00 = ManagementCanister::create(&agent);
             let specified_id = Principal::from_text("iimsn-6yaaa-aaaaa-afiaa-cai").unwrap(); // [42, 0] should be large enough
             assert_eq!(
@@ -1313,13 +1315,13 @@ mod extras {
     #[ignore]
     #[test]
     fn create_with_wasm_memory_limit() {
-        with_agent(|agent| async move {
+        with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
 
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .with_wasm_memory_limit(1_000_000_000)
                 .call_and_wait()
                 .await
@@ -1338,13 +1340,13 @@ mod extras {
     #[ignore]
     #[test]
     fn update_wasm_memory_limit() {
-        with_agent(|agent| async move {
+        with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
 
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .with_wasm_memory_limit(1_000_000_000)
                 .call_and_wait()
                 .await?;
@@ -1385,13 +1387,13 @@ mod extras {
     #[ignore]
     #[test]
     fn create_with_log_visibility() {
-        with_agent(|agent| async move {
+        with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
 
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(None)
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .with_log_visibility(LogVisibility::Public)
                 .call_and_wait()
                 .await
@@ -1407,14 +1409,14 @@ mod extras {
     #[ignore]
     #[test]
     fn update_log_visibility() {
-        with_agent(|agent| async move {
+        with_agent(async move |pic, agent| {
             let ic00 = ManagementCanister::create(&agent);
 
             // Create with Controllers.
             let (canister_id,) = ic00
                 .create_canister()
                 .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
-                .with_effective_canister_id(get_effective_canister_id().await)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .with_log_visibility(LogVisibility::Controllers)
                 .call_and_wait()
                 .await?;
