@@ -37,6 +37,7 @@ jobs:
           node-version: 20
 
       - name: Install and Configure SoftHSM
+        if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           set -ex
           sudo apt-get install -f libsofthsm2 opensc-pkcs11 opensc
