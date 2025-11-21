@@ -84,6 +84,7 @@ wasm-bindgen-futures = { version = "0.4", optional = true }
 web-sys = { version = "0.3", features = ["Window"], optional = true }
 
 [dev-dependencies]
+anyhow.workspace = true
 serde_json.workspace = true
 tracing-subscriber = "0.3"
 tracing = "0.1"
@@ -91,6 +92,9 @@ tracing = "0.1"
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
 mockito = "1.0.2"
+
+[target.'cfg(unix)'.dev-dependencies]
+ref-tests = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 wasm-bindgen-test = "0.3.34"

@@ -36,8 +36,10 @@ ic-management-canister-types = { workspace = true }
 [dev-dependencies]
 ic-ed25519 = { workspace = true }
 ic-agent = { workspace = true, default-features = true }
-pocket-ic = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+
+[target.'cfg(unix)'.dev-dependencies]
+ref-tests = { workspace = true }
 
 [features]
 raw = []

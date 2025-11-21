@@ -30,8 +30,10 @@ needless_lifetimes = "allow"
 ic-agent = { path = "ic-agent", version = "0.44.3", default-features = false }
 ic-utils = { path = "ic-utils", version = "0.44.3" }
 ic-transport-types = { path = "ic-transport-types", version = "0.44.3" }
+ref-tests = { path = "ref-tests" }
 
 ic-certification = "3"
+anyhow = { version = "1.0", features = ["backtrace"] }
 candid = "0.10.10"
 candid_parser = "0.2.2"
 clap = "4.5.21"

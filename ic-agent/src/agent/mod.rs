@@ -89,9 +89,8 @@ type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + '
 
 /// A low level Agent to make calls to a Replica endpoint.
 ///
-/// ```ignore
-/// # // This test is ignored because it requires an ic to be running. We run these
-/// # // in the ic-ref workflow.
+#[cfg_attr(unix, doc = " ```rust")] // pocket-ic
+#[cfg_attr(not(unix), doc = " ```ignore")]
 /// use ic_agent::{Agent, export::Principal};
 /// use candid::{Encode, Decode, CandidType, Nat};
 /// use serde::Deserialize;
@@ -112,7 +111,8 @@ type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + '
 /// # }
 /// #
 /// async fn create_a_canister() -> Result<Principal, Box<dyn std::error::Error>> {
-/// # let url = format!("http://localhost:{}", option_env!("IC_REF_PORT").unwrap_or("4943"));
+/// # Ok(ref_tests::utils::with_pic(async move |pic| {
+/// # let url = ref_tests::utils::get_pic_url(&pic);
 ///   let agent = Agent::builder()
 ///     .with_url(url)
 ///     .with_identity(create_identity())
@@ -125,10 +125,10 @@ type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + '
 ///   agent.fetch_root_key().await?;
 ///   let management_canister_id = Principal::from_text("aaaaa-aa")?;
 ///
-///   // Create a call to the management canister to create a new canister ID,
-///   // and wait for a result.
-///   // The effective canister id must belong to the canister ranges of the subnet at which the canister is created.
-///   let effective_canister_id = Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap();
+///   // Create a call to the management canister to create a new canister ID, and wait for a result.
+///   // This API only works in local instances; mainnet instances must use the cycles ledger.
+///   // See `dfx info default-effective-canister-id`.
+/// # let effective_canister_id = ref_tests::utils::get_effective_canister_id(&pic).await;
 ///   let response = agent.update(&management_canister_id, "provisional_create_canister_with_cycles")
 ///     .with_effective_canister_id(effective_canister_id)
 ///     .with_arg(Encode!(&Argument { amount: None })?)
@@ -137,6 +137,7 @@ type AgentFuture<'a, V> = Pin<Box<dyn Future<Output = Result<V, AgentError>> + '
 ///   let result = Decode!(response.as_slice(), CreateCanisterResult)?;
 ///   let canister_id: Principal = Principal::from_text(&result.canister_id.to_text())?;
 ///   Ok(canister_id)
+/// # }).await)
 /// }
 ///
 /// # let mut runtime = tokio::runtime::Runtime::new().unwrap();

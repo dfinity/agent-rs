@@ -61,7 +61,8 @@ pub trait AsyncCall: CallIntoFuture<Output = Result<Self::Value, AgentError>> {
     /// Apply a transformation function after the call has been successful. The transformation
     /// is applied with the result.
     ///
-    /// ```ignore
+    #[cfg_attr(unix, doc = " ```rust")] // pocket-ic
+    #[cfg_attr(not(unix), doc = " ```ignore")]
     /// # // This test is ignored because it requires an ic to be running. We run these
     /// # // in the ic-ref workflow.
     /// use ic_agent::Agent;
@@ -70,12 +71,13 @@ pub trait AsyncCall: CallIntoFuture<Output = Result<Self::Value, AgentError>> {
     /// use candid::{Encode, Decode, CandidType, Principal};
     ///
     /// async fn create_a_canister() -> Result<Principal, Box<dyn std::error::Error>> {
+    /// # Ok(ref_tests::utils::with_pic(async move |pic| {
     /// # let canister_wasm = b"\0asm\x01\0\0\0";
     /// # fn create_identity() -> impl Identity {
     /// #     BasicIdentity::from_raw_key(&[0u8;32])
     /// # }
     /// #
-    /// # let url = format!("http://localhost:{}", option_env!("IC_REF_PORT").unwrap_or("4943"));
+    /// # let url = ref_tests::utils::get_pic_url(pic);
     /// #
     /// # let effective_id = Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap();
     ///   let agent = Agent::builder()
@@ -104,6 +106,7 @@ pub trait AsyncCall: CallIntoFuture<Output = Result<Self::Value, AgentError>> {
     ///     .await?;
     ///
     ///   Ok(canister_id)
+    /// # }).await)
     /// }
     ///
     /// # let mut runtime = tokio::runtime::Runtime::new().unwrap();

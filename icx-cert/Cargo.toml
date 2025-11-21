@@ -17,16 +17,13 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0"
+anyhow = { workspace = true }
 base64 = "0.22"
 clap = { workspace = true, features = ["derive", "cargo", "color"] }
 hex = { workspace = true }
 ic-certification = { workspace = true }
 leb128 = "0.2.4"
-reqwest = { workspace = true, default-features = false, features = [
-    "blocking",
-    "rustls-tls",
-] }
+reqwest = { workspace = true, default-features = false, features = ["blocking", "rustls-tls"] }
 sha2 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
