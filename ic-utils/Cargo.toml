@@ -38,6 +38,7 @@ ic-ed25519 = { workspace = true }
 ic-agent = { workspace = true, default-features = true }
 pocket-ic = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+ref-tests = { workspace = true }
 
 [features]
 raw = []
