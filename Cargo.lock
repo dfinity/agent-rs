@@ -1513,6 +1513,7 @@ dependencies = [
  "ic-utils",
  "ic-utils-bindgen",
  "pocket-ic",
+ "ref-tests",
  "serde",
  "tokio",
 ]
