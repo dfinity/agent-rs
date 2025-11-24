@@ -47,6 +47,7 @@ jobs:
           mkdir -p $HOME/softhsm/tokens
 
       - name: Download test assets
+        if: ${{ !contains(matrix.os, 'windows') }}
         run: |
           ./scripts/download_reftest_assets.sh
 

@@ -2,7 +2,7 @@
 set -e
 cd "$(dirname "$0")/.."
 
-ic_commit_for_pic=4832a5ef2d7dd75f43f35cb3f24d6114a3efa14f
+ic_commit_for_pic=3c7938320bad1a690f617836d8b799f3998cf3ac
 ic_commit_for_universal_canister=44e6a4830a03f05101a33d7baeb1f92c5c8093bc
 wallet_ver=20230530
 
