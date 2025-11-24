@@ -193,10 +193,11 @@ pub async fn create_universal_canister(
     pic: &PocketIc,
     agent: &Agent,
 ) -> Result<Principal, Box<dyn Error>> {
-    let canister_wasm = include_bytes!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/assets/universal-canister.wasm.gz"
-    ));
+    let canister_wasm = std::fs::read(format!(
+        "{}/assets/universal-canister.wasm.gz",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap();
 
     let ic00 = ManagementCanister::create(agent);
 
@@ -207,7 +208,7 @@ pub async fn create_universal_canister(
         .call_and_wait()
         .await?;
 
-    ic00.install(&canister_id, canister_wasm)
+    ic00.install(&canister_id, &canister_wasm)
         .with_raw_arg(vec![])
         .call_and_wait()
         .await?;
@@ -215,11 +216,12 @@ pub async fn create_universal_canister(
     Ok(canister_id)
 }
 
-pub fn get_wallet_wasm() -> &'static [u8] {
-    include_bytes!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/assets/cycles-wallet.wasm"
+pub fn get_wallet_wasm() -> Vec<u8> {
+    std::fs::read(format!(
+        "{}/assets/cycles-wallet.wasm",
+        env!("CARGO_MANIFEST_DIR")
     ))
+    .unwrap()
 }
 
 pub async fn create_wallet_canister(
@@ -242,7 +244,7 @@ pub async fn create_wallet_canister(
         .call_and_wait()
         .await?;
 
-    ic00.install(&canister_id, canister_wasm)
+    ic00.install(&canister_id, &canister_wasm)
         .with_raw_arg(vec![])
         .call_and_wait()
         .await?;
