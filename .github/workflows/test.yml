@@ -48,7 +48,7 @@ jobs:
 
       - name: Download test assets
         run: |
-          ./scripts/download-test-assets.sh
+          ./scripts/download_reftest_assets.sh
 
       - name: Run Tests
         shell: bash
