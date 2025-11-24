@@ -46,6 +46,10 @@ jobs:
           echo "directories.tokendir = $HOME/softhsm/tokens/" >$HOME/softhsm.conf
           mkdir -p $HOME/softhsm/tokens
 
+      - name: Download test assets
+        run: |
+          ./scripts/download-test-assets.sh
+
       - name: Run Tests
         shell: bash
         run: |
