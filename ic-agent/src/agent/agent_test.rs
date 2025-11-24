@@ -367,10 +367,7 @@ async fn status_error() -> Result<(), AgentError> {
 // these values for canister, paths, and mock_response are captured from a real request to mainnet
 // the response amounts to "method not found"
 // we don't really care about the response since we're just testing the cert verification
-const REQ_WITH_DELEGATED_CERT_PATH: [&str; 2] = [
-    "726571756573745F737461747573",
-    "92F03ABDDC774EE97882320CF15F2029A868FFCFE3BE48FEF84FC97B5A13E04A",
-];
+const REQ_WITH_DELEGATED_CERT_PATH: [&str; 1] = ["time"];
 const REQ_WITH_DELEGATED_CERT_CANISTER: &str = "ivg37-qiaaa-aaaab-aaaga-cai";
 const REQ_WITH_DELEGATED_CERT_RESPONSE: &[u8] =
     include_bytes!("agent_test/req_with_delegated_cert_response.bin");

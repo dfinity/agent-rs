@@ -13,9 +13,10 @@ async fn setup() -> (PocketIc, Principal, Agent, Arc<dyn Identity>) {
     ))
     .unwrap();
     let identity = Arc::new(identity);
-    let mut pic = PocketIcBuilder::new()
+    let pic = PocketIcBuilder::new()
         .with_application_subnet()
         .with_nns_subnet()
+        .with_auto_progress()
         .build_async()
         .await;
     let canister = pic
@@ -47,9 +48,12 @@ async fn setup() -> (PocketIc, Principal, Agent, Arc<dyn Identity>) {
         None,
     )
     .await;
-    pic.make_live(None).await;
     let agent = Agent::builder()
-        .with_url(pic.url().unwrap())
+        .with_url(
+            pic.get_server_url()
+                .join(&format!("instances/{}/", pic.instance_id))
+                .unwrap(),
+        )
         .with_arc_identity(identity.clone())
         .build()
         .unwrap();
