@@ -128,11 +128,50 @@ where
     .await
 }
 
+fn check_assets_uptodate() -> bool {
+    let repo_dir = std::fs::canonicalize(format!("{}/..", env!("CARGO_MANIFEST_DIR"))).unwrap();
+    let assets_dir = repo_dir.join("ref-tests/assets");
+    let checked_paths = [
+        ".",
+        "pocket-ic",
+        "cycles-wallet.wasm",
+        "universal-canister.wasm.gz",
+    ]
+    .map(|p| assets_dir.join(p));
+    for path in &checked_paths {
+        if !path.exists() {
+            return false;
+        }
+    }
+    let last_asset_update = repo_dir
+        .join("scripts/download_reftest_assets.sh")
+        .metadata()
+        .expect("failed to get metadata for update script")
+        .modified()
+        .expect("failed to get modification time for update script");
+    for path in &checked_paths {
+        let metadata = path
+            .metadata()
+            .expect("failed to get metadata for asset file");
+        let modified = metadata
+            .modified()
+            .expect("failed to get modification time for asset file");
+        if modified < last_asset_update {
+            return false;
+        }
+    }
+    true
+}
+
 pub async fn with_pic<F, R>(f: F) -> R
 where
     F: AsyncFnOnce(&PocketIc) -> Result<R, Box<dyn Error>>,
 {
+    if !check_assets_uptodate() {
+        panic!("Test assets are out of date. Please run `scripts/download_reftest_assets.sh` to update them.");
+    }
     let pic = PocketIcBuilder::new()
+        .with_server_binary(format!("{}/assets/pocket-ic", env!("CARGO_MANIFEST_DIR")).into())
         .with_nns_subnet()
         .with_application_subnet()
         .with_auto_progress()
@@ -154,10 +193,11 @@ pub async fn create_universal_canister(
     pic: &PocketIc,
     agent: &Agent,
 ) -> Result<Principal, Box<dyn Error>> {
-    let canister_wasm = include_bytes!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/canisters/universal-canister.wasm.gz"
-    ));
+    let canister_wasm = std::fs::read(format!(
+        "{}/assets/universal-canister.wasm.gz",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap();
 
     let ic00 = ManagementCanister::create(agent);
 
@@ -168,7 +208,7 @@ pub async fn create_universal_canister(
         .call_and_wait()
         .await?;
 
-    ic00.install_code(&canister_id, canister_wasm)
+    ic00.install(&canister_id, &canister_wasm)
         .with_raw_arg(vec![])
         .call_and_wait()
         .await?;
@@ -176,11 +216,12 @@ pub async fn create_universal_canister(
     Ok(canister_id)
 }
 
-pub fn get_wallet_wasm() -> &'static [u8] {
-    include_bytes!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/canisters/cycles-wallet.wasm"
+pub fn get_wallet_wasm() -> Vec<u8> {
+    std::fs::read(format!(
+        "{}/assets/cycles-wallet.wasm",
+        env!("CARGO_MANIFEST_DIR")
     ))
+    .unwrap()
 }
 
 pub async fn create_wallet_canister(
@@ -203,7 +244,7 @@ pub async fn create_wallet_canister(
         .call_and_wait()
         .await?;
 
-    ic00.install_code(&canister_id, canister_wasm)
+    ic00.install(&canister_id, &canister_wasm)
         .with_raw_arg(vec![])
         .call_and_wait()
         .await?;
