@@ -50,7 +50,8 @@
 //! **Note**: In the example above, `ic0.app` is used as a seed for initial topology discovery. However, it is not a true seed, as it is not an API boundary node in the ICP topology.
 //! It will be discarded after the first successful discovery.
 //! ## Example: Customized instantiation
-//! ```rust
+#![cfg_attr(feature = "_internal_dynamic-routing", doc = "```rust")]
+#![cfg_attr(not(feature = "_internal_dynamic-routing"), doc = "```ignore")]
 //! use std::{sync::Arc, time::Duration};
 //!
 //! use anyhow::Result;
