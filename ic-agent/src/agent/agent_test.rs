@@ -367,12 +367,11 @@ async fn status_error() -> Result<(), AgentError> {
 const REQ_WITH_DELEGATED_CERT_PATH: [&str; 1] = ["time"];
 const REQ_WITH_DELEGATED_CERT_CANISTER: &str = "ivg37-qiaaa-aaaab-aaaga-cai";
 // This file is a mainnet response to /api/v3/canister/ivg37-.../read_state with path /time
-const REQ_WITH_DELEGATED_CERT_RESPONSE: &[u8] =
-    include_bytes!("agent_test/req_with_delegated_cert_response.bin");
+const REQ_WITH_DELEGATED_CERT_RESPONSE: &[u8] = include_bytes!("agent_test/ivg37_time.bin");
 
 // this is the same response as REQ_WITH_DELEGATED_CERT_RESPONSE, but with a manually pruned /canister_ranges.
 // Run the ref-tests bin prune-ranges to generate it.
-const PRUNED_RANGES: &[u8] = include_bytes!("agent_test/pruned_ranges.bin");
+const PRUNED_RANGES: &[u8] = include_bytes!("agent_test/ivg37_time_pruned_ranges.bin");
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
@@ -512,9 +511,9 @@ async fn wrong_subnet_query_certificate() {
 }
 
 // This file is a mainnet response to /api/v3/subnet/o3ow2-.../read_state with path /subnet/hex(o3ow2-...)/public_key
-const SUBNET_KEYS_O3OW2: &[u8] = include_bytes!("agent_test/subnet_keys.bin");
+const SUBNET_KEYS_O3OW2: &[u8] = include_bytes!("agent_test/o3ow2_subnet_key.bin");
 // This file is a mainnet response to /api/v3/canister/224od-.../read_state with path /time
-const TIME_224OD: &[u8] = include_bytes!("agent_test/time.bin");
+const TIME_224OD: &[u8] = include_bytes!("agent_test/224od_time.bin");
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
@@ -557,7 +556,7 @@ async fn no_cert() {
     assert_mock(read_mock).await;
 }
 // This file is a mainnet response to /api/v3/subnet/uzr34-.../read_state with paths /canister_ranges/hex(uzr34-...) and /subnet/hex(uzr34-...)
-const SUBNET_KEYS_UZR34: &[u8] = include_bytes!("agent_test/with_subnet_key.bin");
+const NODE_KEYS_UZR34: &[u8] = include_bytes!("agent_test/uzr34_node_keys.bin");
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
@@ -586,7 +585,7 @@ async fn too_many_delegations() {
         "POST",
         format!("/api/v3/subnet/{subnet_id}/read_state").as_str(),
         200,
-        SUBNET_KEYS_UZR34.into(),
+        NODE_KEYS_UZR34.into(),
         Some("application/cbor"),
     )
     .await;

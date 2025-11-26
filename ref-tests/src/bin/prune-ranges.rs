@@ -4,10 +4,8 @@ use serde_cbor::Serializer;
 
 fn main() {
     let repo_dir = std::fs::canonicalize(format!("{}/..", env!("CARGO_MANIFEST_DIR"))).unwrap();
-    let response = std::fs::read(
-        repo_dir.join("ic-agent/src/agent/agent_test/req_with_delegated_cert_response.bin"),
-    )
-    .unwrap();
+    let response =
+        std::fs::read(repo_dir.join("ic-agent/src/agent/agent_test/ivg37_time.bin")).unwrap();
     let response: Response = serde_cbor::from_slice(&response).unwrap();
     let cert: Certificate = serde_cbor::from_slice(&response.certificate).unwrap();
     let delegation = cert.delegation.clone().unwrap();
@@ -36,7 +34,7 @@ fn main() {
     };
     let pruned_response = tagged_serialize(&pruned_response);
     std::fs::write(
-        repo_dir.join("ic-agent/src/agent/agent_test/pruned_ranges.bin"),
+        repo_dir.join("ic-agent/src/agent/agent_test/ivg37_time_pruned_ranges.bin"),
         pruned_response,
     )
     .unwrap();
