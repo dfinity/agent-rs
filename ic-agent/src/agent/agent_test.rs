@@ -366,7 +366,7 @@ async fn status_error() -> Result<(), AgentError> {
 
 const REQ_WITH_DELEGATED_CERT_PATH: [&str; 1] = ["time"];
 const REQ_WITH_DELEGATED_CERT_CANISTER: &str = "ivg37-qiaaa-aaaab-aaaga-cai";
-// This file is a mainnet response to /api/v3/canister/ivg37-.../read_state with path /time
+// This file is a mainnet POST response body to /api/v3/canister/ivg37-.../read_state with path /time
 const REQ_WITH_DELEGATED_CERT_RESPONSE: &[u8] = include_bytes!("agent_test/ivg37_time.bin");
 
 // this is the same response as REQ_WITH_DELEGATED_CERT_RESPONSE, but with a manually pruned /canister_ranges.
@@ -474,7 +474,7 @@ async fn wrong_subnet_query_certificate() {
         "POST",
         "/api/v3/subnet/o3ow2-2ipam-6fcjo-3j5vt-fzbge-2g7my-5fz2m-p4o2t-dwlc4-gt2q7-5ae/read_state",
         200,
-        SUBNET_KEYS_O3OW2.into(),
+        SUBNET_KEY_O3OW2.into(),
         Some("application/cbor"),
     )
     .await;
@@ -510,9 +510,9 @@ async fn wrong_subnet_query_certificate() {
     .await;
 }
 
-// This file is a mainnet response to /api/v3/subnet/o3ow2-.../read_state with path /subnet/hex(o3ow2-...)/public_key
-const SUBNET_KEYS_O3OW2: &[u8] = include_bytes!("agent_test/o3ow2_subnet_key.bin");
-// This file is a mainnet response to /api/v3/canister/224od-.../read_state with path /time
+// This file is a mainnet POST response body to /api/v3/subnet/o3ow2-.../read_state with path /subnet/hex(o3ow2-...)/public_key
+const SUBNET_KEY_O3OW2: &[u8] = include_bytes!("agent_test/o3ow2_subnet_key.bin");
+// This file is a mainnet POST response body to /api/v3/canister/224od-.../read_state with path /time
 const TIME_224OD: &[u8] = include_bytes!("agent_test/224od_time.bin");
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
@@ -523,7 +523,7 @@ async fn no_cert() {
         "POST",
         "/api/v3/subnet/o3ow2-2ipam-6fcjo-3j5vt-fzbge-2g7my-5fz2m-p4o2t-dwlc4-gt2q7-5ae/read_state",
         200,
-        SUBNET_KEYS_O3OW2.into(),
+        SUBNET_KEY_O3OW2.into(),
         Some("application/cbor"),
     )
     .await;
@@ -555,7 +555,7 @@ async fn no_cert() {
     assert!(matches!(result.unwrap_err(), AgentError::MissingSignature));
     assert_mock(read_mock).await;
 }
-// This file is a mainnet response to /api/v3/subnet/uzr34-.../read_state with paths /canister_ranges/hex(uzr34-...) and /subnet/hex(uzr34-...)
+// This file is a mainnet POST response body to /api/v3/subnet/uzr34-.../read_state with paths /canister_ranges/hex(uzr34-...) and /subnet/hex(uzr34-...)
 const NODE_KEYS_UZR34: &[u8] = include_bytes!("agent_test/uzr34_node_keys.bin");
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
