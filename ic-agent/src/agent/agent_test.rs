@@ -364,17 +364,15 @@ async fn status_error() -> Result<(), AgentError> {
     Ok(())
 }
 
-// these values for canister, paths, and mock_response are captured from a real request to mainnet
-// the response amounts to "method not found"
-// we don't really care about the response since we're just testing the cert verification
 const REQ_WITH_DELEGATED_CERT_PATH: [&str; 1] = ["time"];
 const REQ_WITH_DELEGATED_CERT_CANISTER: &str = "ivg37-qiaaa-aaaab-aaaga-cai";
+// This file is a mainnet response to /api/v3/canister/ivg37-.../read_state with path /time
 const REQ_WITH_DELEGATED_CERT_RESPONSE: &[u8] =
     include_bytes!("agent_test/req_with_delegated_cert_response.bin");
 
-// this is the same response as REQ_WITH_DELEGATED_CERT_RESPONSE, but with a manually pruned
-// /subnet/<subnetid>/canister_ranges field
-const PRUNED_SUBNET: &[u8] = include_bytes!("agent_test/pruned_subnet.bin");
+// this is the same response as REQ_WITH_DELEGATED_CERT_RESPONSE, but with a manually pruned /canister_ranges.
+// Run the ref-tests bin prune-ranges to generate it.
+const PRUNED_RANGES: &[u8] = include_bytes!("agent_test/pruned_ranges.bin");
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
@@ -442,7 +440,7 @@ async fn check_subnet_range_with_pruned_range() {
         "POST",
         "/api/v3/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
         200,
-        PRUNED_SUBNET.into(),
+        PRUNED_RANGES.into(),
         Some("application/cbor"),
     )
     .await;
@@ -513,7 +511,9 @@ async fn wrong_subnet_query_certificate() {
     .await;
 }
 
+// This file is a mainnet response to /api/v3/subnet/o3ow2-.../read_state with path /subnet/hex(o3ow2-...)/public_key
 const SUBNET_KEYS_O3OW2: &[u8] = include_bytes!("agent_test/subnet_keys.bin");
+// This file is a mainnet response to /api/v3/canister/224od-.../read_state with path /time
 const TIME_224OD: &[u8] = include_bytes!("agent_test/time.bin");
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
@@ -556,7 +556,7 @@ async fn no_cert() {
     assert!(matches!(result.unwrap_err(), AgentError::MissingSignature));
     assert_mock(read_mock).await;
 }
-
+// This file is a mainnet response to /api/v3/subnet/uzr34-.../read_state with paths /canister_ranges/hex(uzr34-...) and /subnet/hex(uzr34-...)
 const SUBNET_KEYS_UZR34: &[u8] = include_bytes!("agent_test/with_subnet_key.bin");
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]

@@ -2588,6 +2588,7 @@ dependencies = [
  "pocket-ic",
  "rand",
  "serde",
+ "serde_bytes",
  "serde_cbor",
  "sha2 0.10.9",
  "tokio",
