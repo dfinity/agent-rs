@@ -46,7 +46,7 @@ use crate::{
     agent::response_authentication::{
         extract_der, lookup_canister_info, lookup_canister_metadata, lookup_request_status,
         lookup_subnet, lookup_subnet_canister_ranges, lookup_subnet_metrics, lookup_time,
-        lookup_value,
+        lookup_tree, lookup_value,
     },
     agent_error::TransportError,
     export::Principal,
@@ -322,7 +322,7 @@ impl Agent {
         let bytes = self
             .execute(
                 Method::POST,
-                &format!("api/v2/canister/{}/query", effective_canister_id.to_text()),
+                &format!("api/v3/canister/{}/query", effective_canister_id.to_text()),
                 Some(serialized_bytes),
             )
             .await?
@@ -340,7 +340,7 @@ impl Agent {
     {
         let _permit = self.concurrent_requests_semaphore.acquire().await;
         let endpoint = format!(
-            "api/v2/canister/{}/read_state",
+            "api/v3/canister/{}/read_state",
             effective_canister_id.to_text()
         );
         let bytes = self
@@ -359,7 +359,7 @@ impl Agent {
         A: serde::de::DeserializeOwned,
     {
         let _permit = self.concurrent_requests_semaphore.acquire().await;
-        let endpoint = format!("api/v2/subnet/{}/read_state", subnet_id.to_text());
+        let endpoint = format!("api/v3/subnet/{}/read_state", subnet_id.to_text());
         let bytes = self
             .execute(Method::POST, &endpoint, Some(serialized_bytes))
             .await?
@@ -373,7 +373,7 @@ impl Agent {
         serialized_bytes: Vec<u8>,
     ) -> Result<TransportCallResponse, AgentError> {
         let _permit = self.concurrent_requests_semaphore.acquire().await;
-        let endpoint = format!("api/v3/canister/{}/call", effective_canister_id.to_text());
+        let endpoint = format!("api/v4/canister/{}/call", effective_canister_id.to_text());
         let (status_code, response_body) = self
             .execute(Method::POST, &endpoint, Some(serialized_bytes))
             .await?;
@@ -594,6 +594,7 @@ impl Agent {
 
         match response_body {
             TransportCallResponse::Replied { certificate } => {
+                dbg!(hex::encode(&certificate));
                 let certificate =
                     serde_cbor::from_slice(&certificate).map_err(AgentError::InvalidCborData)?;
 
@@ -973,12 +974,30 @@ impl Agent {
                     return Err(AgentError::CertificateHasTooManyDelegations);
                 }
                 self.verify_cert(&cert, effective_canister_id)?;
-                let canister_range_lookup = [
-                    "subnet".as_bytes(),
-                    delegation.subnet_id.as_ref(),
-                    "canister_ranges".as_bytes(),
-                ];
-                let canister_range = lookup_value(&cert.tree, canister_range_lookup)?;
+                let canister_range_shards_lookup =
+                    ["canister_ranges".as_bytes(), delegation.subnet_id.as_ref()];
+                let canister_range_shards = lookup_tree(&cert.tree, canister_range_shards_lookup)?;
+                let mut shard_paths = canister_range_shards
+                    .list_paths() // /canister_ranges/<subnet_id>/<shard>
+                    .into_iter()
+                    .map(|mut x| {
+                        x.pop() // flatten [label] to label
+                            .ok_or_else(AgentError::CertificateVerificationFailed)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                if shard_paths.is_empty() {
+                    return Err(AgentError::CertificateNotAuthorized());
+                }
+                shard_paths.sort_unstable();
+                let shard_division = shard_paths
+                    .partition_point(|shard| shard.as_bytes() <= effective_canister_id.as_slice());
+                if shard_division == 0 {
+                    // the certificate is not authorized to answer calls for this canister
+                    return Err(AgentError::CertificateNotAuthorized());
+                }
+                let max_potential_shard = &shard_paths[shard_division - 1];
+                let canister_range_lookup = [max_potential_shard.as_bytes()];
+                let canister_range = lookup_value(&canister_range_shards, canister_range_lookup)?;
                 let ranges: Vec<(Principal, Principal)> =
                     serde_cbor::from_slice(canister_range).map_err(AgentError::InvalidCborData)?;
                 if !principal_is_within_ranges(&effective_canister_id, &ranges[..]) {
@@ -1209,7 +1228,7 @@ impl Agent {
         }
     }
 
-    /// Retrieve all existing API boundary nodes from the state tree via endpoint `/api/v2/canister/<effective_canister_id>/read_state`
+    /// Retrieve all existing API boundary nodes from the state tree via endpoint `/api/v3/canister/<effective_canister_id>/read_state`
     pub async fn fetch_api_boundary_nodes_by_canister_id(
         &self,
         canister_id: Principal,
@@ -1220,7 +1239,7 @@ impl Agent {
         Ok(api_boundary_nodes)
     }
 
-    /// Retrieve all existing API boundary nodes from the state tree via endpoint `/api/v2/subnet/<subnet_id>/read_state`
+    /// Retrieve all existing API boundary nodes from the state tree via endpoint `/api/v3/subnet/<subnet_id>/read_state`
     pub async fn fetch_api_boundary_nodes_by_subnet_id(
         &self,
         subnet_id: Principal,
@@ -1235,11 +1254,29 @@ impl Agent {
         &self,
         canister: &Principal,
     ) -> Result<Arc<Subnet>, AgentError> {
-        let cert = self
-            .read_state_raw(vec![vec!["subnet".into()]], *canister)
+        let canister_cert = self
+            .read_state_raw(vec![vec!["time".into()]], *canister)
             .await?;
-
-        let (subnet_id, subnet) = lookup_subnet(&cert, &self.root_key.read().unwrap())?;
+        let subnet_id = if let Some(delegation) = canister_cert.delegation.as_ref() {
+            Principal::from_slice(&delegation.subnet_id)
+        } else {
+            Principal::self_authenticating(&self.root_key.read().unwrap()[..])
+        };
+        let subnet_cert = self
+            .read_subnet_state_raw(
+                vec![
+                    vec!["canister_ranges".into(), subnet_id.as_slice().into()],
+                    vec!["subnet".into(), subnet_id.as_slice().into(), "node".into()],
+                    vec![
+                        "subnet".into(),
+                        subnet_id.as_slice().into(),
+                        "public_key".into(),
+                    ],
+                ],
+                subnet_id,
+            )
+            .await?;
+        let subnet = lookup_subnet(&subnet_id, &subnet_cert)?;
         if !subnet.canister_ranges.contains(canister) {
             return Err(AgentError::CertificateNotAuthorized());
         }
