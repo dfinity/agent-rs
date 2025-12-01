@@ -594,7 +594,6 @@ impl Agent {
 
         match response_body {
             TransportCallResponse::Replied { certificate } => {
-                dbg!(hex::encode(&certificate));
                 let certificate =
                     serde_cbor::from_slice(&certificate).map_err(AgentError::InvalidCborData)?;
 
