@@ -61,7 +61,7 @@ async fn query() -> Result<(), AgentError> {
 
     let (query_mock, url) = mock(
         "POST",
-        "/api/v2/canister/aaaaa-aa/query",
+        "/api/v3/canister/aaaaa-aa/query",
         200,
         serde_cbor::to_vec(&response)?,
         Some("application/cbor"),
@@ -92,7 +92,7 @@ async fn query() -> Result<(), AgentError> {
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn query_error() -> Result<(), AgentError> {
     let (query_mock, url) =
-        mock("POST", "/api/v2/canister/aaaaa-aa/query", 500, vec![], None).await;
+        mock("POST", "/api/v3/canister/aaaaa-aa/query", 500, vec![], None).await;
     let agent = make_agent(&url);
 
     let result = agent
@@ -128,7 +128,7 @@ async fn query_rejected() -> Result<(), AgentError> {
 
     let (query_mock, url) = mock(
         "POST",
-        "/api/v2/canister/aaaaa-aa/query",
+        "/api/v3/canister/aaaaa-aa/query",
         200,
         serde_cbor::to_vec(&response)?,
         Some("application/cbor"),
@@ -169,7 +169,7 @@ async fn query_rejected() -> Result<(), AgentError> {
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn call_error() -> Result<(), AgentError> {
-    let (call_mock, url) = mock("POST", "/api/v3/canister/aaaaa-aa/call", 500, vec![], None).await;
+    let (call_mock, url) = mock("POST", "/api/v4/canister/aaaaa-aa/call", 500, vec![], None).await;
 
     let agent = make_agent(&url);
 
@@ -201,7 +201,7 @@ async fn call_rejected() -> Result<(), AgentError> {
 
     let (call_mock, url) = mock(
         "POST",
-        "/api/v3/canister/aaaaa-aa/call",
+        "/api/v4/canister/aaaaa-aa/call",
         200,
         body,
         Some("application/cbor"),
@@ -242,7 +242,7 @@ async fn call_rejected_without_error_code() -> Result<(), AgentError> {
 
     let (call_mock, url) = mock(
         "POST",
-        format!("/api/v3/canister/{canister_id_str}/call").as_str(),
+        format!("/api/v4/canister/{canister_id_str}/call").as_str(),
         200,
         body,
         Some("application/cbor"),
@@ -364,20 +364,14 @@ async fn status_error() -> Result<(), AgentError> {
     Ok(())
 }
 
-// these values for canister, paths, and mock_response are captured from a real request to mainnet
-// the response amounts to "method not found"
-// we don't really care about the response since we're just testing the cert verification
-const REQ_WITH_DELEGATED_CERT_PATH: [&str; 2] = [
-    "726571756573745F737461747573",
-    "92F03ABDDC774EE97882320CF15F2029A868FFCFE3BE48FEF84FC97B5A13E04A",
-];
+const REQ_WITH_DELEGATED_CERT_PATH: [&str; 1] = ["time"];
 const REQ_WITH_DELEGATED_CERT_CANISTER: &str = "ivg37-qiaaa-aaaab-aaaga-cai";
-const REQ_WITH_DELEGATED_CERT_RESPONSE: &[u8] =
-    include_bytes!("agent_test/req_with_delegated_cert_response.bin");
+// This file is a mainnet POST response body to /api/v3/canister/ivg37-.../read_state with path /time
+const REQ_WITH_DELEGATED_CERT_RESPONSE: &[u8] = include_bytes!("agent_test/ivg37_time.bin");
 
-// this is the same response as REQ_WITH_DELEGATED_CERT_RESPONSE, but with a manually pruned
-// /subnet/<subnetid>/canister_ranges field
-const PRUNED_SUBNET: &[u8] = include_bytes!("agent_test/pruned_subnet.bin");
+// this is the same response as REQ_WITH_DELEGATED_CERT_RESPONSE, but with a manually pruned /canister_ranges.
+// Run the ref-tests bin prune-ranges to generate it.
+const PRUNED_RANGES: &[u8] = include_bytes!("agent_test/ivg37_time_pruned_ranges.bin");
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
@@ -386,7 +380,7 @@ const PRUNED_SUBNET: &[u8] = include_bytes!("agent_test/pruned_subnet.bin");
 async fn check_subnet_range_with_valid_range() {
     let (_read_mock, url) = mock(
         "POST",
-        "/api/v2/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
+        "/api/v3/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
         200,
         REQ_WITH_DELEGATED_CERT_RESPONSE.into(),
         Some("application/cbor"),
@@ -415,7 +409,7 @@ async fn check_subnet_range_with_unauthorized_range() {
     let wrong_canister = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai").unwrap();
     let (_read_mock, url) = mock(
         "POST",
-        "/api/v2/canister/ryjl3-tyaaa-aaaaa-aaaba-cai/read_state",
+        "/api/v3/canister/ryjl3-tyaaa-aaaaa-aaaba-cai/read_state",
         200,
         REQ_WITH_DELEGATED_CERT_RESPONSE.into(),
         Some("application/cbor"),
@@ -443,9 +437,9 @@ async fn check_subnet_range_with_pruned_range() {
     let canister = Principal::from_text("ivg37-qiaaa-aaaab-aaaga-cai").unwrap();
     let (_read_mock, url) = mock(
         "POST",
-        "/api/v2/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
+        "/api/v3/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
         200,
-        PRUNED_SUBNET.into(),
+        PRUNED_RANGES.into(),
         Some("application/cbor"),
     )
     .await;
@@ -462,17 +456,25 @@ async fn check_subnet_range_with_pruned_range() {
     assert!(result.is_err());
 }
 
-const WRONG_SUBNET_CERT: &[u8] = include_bytes!("agent_test/wrong_subnet.bin");
-
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn wrong_subnet_query_certificate() {
-    let canister = Principal::from_text("224od-giaaa-aaaao-ae5vq-cai").unwrap();
+    // these responses are for canister 224od-giaaa-aaaao-ae5vq-cai
+    let wrong_canister = Principal::from_text("rdmx6-jaaaa-aaaaa-aaadq-cai").unwrap();
     let (mut read_mock, url) = mock(
         "POST",
-        "/api/v2/canister/224od-giaaa-aaaao-ae5vq-cai/read_state",
+        &format!("/api/v3/canister/{wrong_canister}/read_state"),
         200,
-        WRONG_SUBNET_CERT.into(),
+        TIME_224OD.into(),
+        Some("application/cbor"),
+    )
+    .await;
+    mock_additional(
+        &mut read_mock,
+        "POST",
+        "/api/v3/subnet/o3ow2-2ipam-6fcjo-3j5vt-fzbge-2g7my-5fz2m-p4o2t-dwlc4-gt2q7-5ae/read_state",
+        200,
+        SUBNET_KEY_O3OW2.into(),
         Some("application/cbor"),
     )
     .await;
@@ -488,27 +490,30 @@ async fn wrong_subnet_query_certificate() {
     mock_additional(
         &mut read_mock,
         "POST",
-        "/api/v2/canister/224od-giaaa-aaaao-ae5vq-cai/query",
+        &format!("/api/v3/canister/{wrong_canister}/query"),
         200,
         serde_cbor::to_vec(&response).unwrap(),
         Some("application/cbor"),
     )
     .await;
     let agent = make_certifying_agent(&url);
-    let result = agent.query(&canister, "getVersion").call().await;
+    let result = agent.query(&wrong_canister, "getVersion").call().await;
     assert!(matches!(
-        result.unwrap_err(),
+        dbg!(result.unwrap_err()),
         AgentError::CertificateNotAuthorized()
     ));
     assert_single_mock(
         "POST",
-        "/api/v2/canister/224od-giaaa-aaaao-ae5vq-cai/read_state",
+        &format!("/api/v3/canister/{wrong_canister}/read_state"),
         &read_mock,
     )
     .await;
 }
 
-const GOOD_SUBNET_KEYS: &[u8] = include_bytes!("agent_test/subnet_keys.bin");
+// This file is a mainnet POST response body to /api/v3/subnet/o3ow2-.../read_state with path /subnet/hex(o3ow2-...)/public_key
+const SUBNET_KEY_O3OW2: &[u8] = include_bytes!("agent_test/o3ow2_subnet_key.bin");
+// This file is a mainnet POST response body to /api/v3/canister/224od-.../read_state with path /time
+const TIME_224OD: &[u8] = include_bytes!("agent_test/224od_time.bin");
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
@@ -516,9 +521,18 @@ async fn no_cert() {
     let canister = Principal::from_text("224od-giaaa-aaaao-ae5vq-cai").unwrap();
     let (mut read_mock, url) = mock(
         "POST",
-        "/api/v2/canister/224od-giaaa-aaaao-ae5vq-cai/read_state",
+        "/api/v3/subnet/o3ow2-2ipam-6fcjo-3j5vt-fzbge-2g7my-5fz2m-p4o2t-dwlc4-gt2q7-5ae/read_state",
         200,
-        GOOD_SUBNET_KEYS.into(),
+        SUBNET_KEY_O3OW2.into(),
+        Some("application/cbor"),
+    )
+    .await;
+    mock_additional(
+        &mut read_mock,
+        "POST",
+        "/api/v3/canister/224od-giaaa-aaaao-ae5vq-cai/read_state",
+        200,
+        TIME_224OD.into(),
         Some("application/cbor"),
     )
     .await;
@@ -530,7 +544,7 @@ async fn no_cert() {
     mock_additional(
         &mut read_mock,
         "POST",
-        "/api/v2/canister/224od-giaaa-aaaao-ae5vq-cai/query",
+        "/api/v3/canister/224od-giaaa-aaaao-ae5vq-cai/query",
         200,
         serde_cbor::to_vec(&response).unwrap(),
         Some("application/cbor"),
@@ -541,8 +555,8 @@ async fn no_cert() {
     assert!(matches!(result.unwrap_err(), AgentError::MissingSignature));
     assert_mock(read_mock).await;
 }
-
-const RESP_WITH_SUBNET_KEY: &[u8] = include_bytes!("agent_test/with_subnet_key.bin");
+// This file is a mainnet POST response body to /api/v3/subnet/uzr34-.../read_state with paths /canister_ranges/hex(uzr34-...) and /subnet/hex(uzr34-...)
+const NODE_KEYS_UZR34: &[u8] = include_bytes!("agent_test/uzr34_node_keys.bin");
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
@@ -563,31 +577,27 @@ async fn too_many_delegations() {
         current
     }
 
-    let canister_id_str = "rdmx6-jaaaa-aaaaa-aaadq-cai";
-    let canister_id = Principal::from_text(canister_id_str).unwrap();
-    let subnet_id = Vec::from(
+    let subnet_id =
         Principal::from_text("uzr34-akd3s-xrdag-3ql62-ocgoh-ld2ao-tamcv-54e7j-krwgb-2gm4z-oqe")
-            .unwrap()
-            .as_slice(),
-    );
+            .unwrap();
 
     let (_read_mock, url) = mock(
         "POST",
-        format!("/api/v2/canister/{canister_id_str}/read_state").as_str(),
+        format!("/api/v3/subnet/{subnet_id}/read_state").as_str(),
         200,
-        RESP_WITH_SUBNET_KEY.into(),
+        NODE_KEYS_UZR34.into(),
         Some("application/cbor"),
     )
     .await;
     let path_label = Label::from_bytes("subnet".as_bytes());
     let agent = make_untimed_agent(&url);
     let cert = agent
-        .read_state_raw(vec![vec![path_label]], canister_id)
+        .read_subnet_state_raw(vec![vec![path_label]], subnet_id)
         .await
         .expect("read state failed");
-    let new_cert = self_delegate_cert(&subnet_id, &cert, 1);
+    let new_cert = self_delegate_cert(subnet_id.as_slice(), &cert, 1);
     assert!(matches!(
-        agent.verify(&new_cert, canister_id).unwrap_err(),
+        agent.verify_for_subnet(&new_cert, subnet_id).unwrap_err(),
         AgentError::CertificateHasTooManyDelegations
     ));
 }
@@ -597,7 +607,7 @@ async fn too_many_delegations() {
 async fn retry_ratelimit() {
     let (mut mock, url) = mock(
         "POST",
-        "/api/v2/canister/ryjl3-tyaaa-aaaaa-aaaba-cai/query",
+        "/api/v3/canister/ryjl3-tyaaa-aaaaa-aaaba-cai/query",
         429,
         vec![],
         Some("text/plain"),
@@ -610,7 +620,7 @@ async fn retry_ratelimit() {
     };
     assert_single_mock_count(
         "POST",
-        "/api/v2/canister/ryjl3-tyaaa-aaaaa-aaaba-cai/query",
+        "/api/v3/canister/ryjl3-tyaaa-aaaaa-aaaba-cai/query",
         2,
         &mut mock,
     )

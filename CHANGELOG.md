@@ -9,6 +9,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 * Fix panic in web worker environments in `ic-agent`. 
+* Update `ic-management-canister-types` to 0.5.0
+
+## [0.44.3] - 2025-10-31
+
+* Fix `Agent::wait_signed` to execute the read_state request on every retry iteration.
+
+## [0.44.2] - 2025-10-07
+
+* Fix `HttpService call` retry behavior such that only network errors are retried.
+
+## [0.44.1] - 2025-09-15
+
+* Added `read_state_subnet_canister_ranges` which can query the canister id ranges for a given subnet.
+
+## [0.44.0] - 2025-08-25
+
+* BREAKING: Bump `ic-management-canister-types` to v0.4.0.
+  * The `CanisterSettings` types contains a new field `environment_variables`.
+
+## [0.43.0] - 2025-08-25
+
+* BREAKING: Change `HttpService` trait to use normal `http` crate `Request` and `Response` types with `Bytes` as a body instead of `reqwest` ones and add `size_limit` argument.
+* BREAKING: Change `AgentError::TransportError` enum variant to hold a generic string instead of `reqwest::Error`.
+* `ic-utils`: Bump `ic-management-canister-types` to v0.3.3 which changes snapshot upload/download types.
+
+## [0.42.0] - 2025-08-04
+
+* Use [ic-management-canister-types](https://crates.io/crates/ic-management-canister-types/0.3.2) in [ic-utils](./ic-utils/README.md).
+  - This change introduces some breaking changes in `ic-utils` due to the type-inconsistency. For example, the `StatusCallResult` defined in `ic-utils` is not consistent to  the `CanisterStatusResult` defined in `ic-management-canister-types`.
+  - The legacy types defined in `ic-utils` are marked as deprecated with messages.
+  - Some APIs are updated to use the types defined in `ic-management-canister-types`, e.g. `upload_canister_snapshot_metadata`, `upload_canister_snapshot_data`.
+
+* Bump MSRV from `1.78.0` to `1.85.0`.
+
+## [0.41.0] - 2025-07-10
+
+* Add canister snapshot download and upload methods to `ManagementCanister`.
 
 ## [0.40.1] - 2025-05-15
 

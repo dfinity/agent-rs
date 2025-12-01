@@ -2,3 +2,4 @@
 #[doc(inline)]
 pub use candid::types::principal::{Principal, PrincipalError};
 pub use reqwest;
+pub use serde_bytes;

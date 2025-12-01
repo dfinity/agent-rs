@@ -6,8 +6,8 @@ on:
       - reopened
       - synchronize
     paths:
-      - 'e2e/**'
-      - '.github/**'
+      - "e2e/**"
+      - ".github/**"
   push:
     branches:
       - main
@@ -15,7 +15,7 @@ on:
 jobs:
   check_macos:
     # ubuntu-latest has shellcheck 0.4.6, while macos-12 has 0.7.1
-    runs-on: macos-13-large
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
       - name: Install shellcheck

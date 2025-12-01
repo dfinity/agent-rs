@@ -12,6 +12,17 @@ use std::{
 };
 use thiserror::Error;
 
+/// An error that occurs on transport layer
+#[derive(Error, Debug)]
+pub enum TransportError {
+    /// Reqwest-related error
+    #[error("{0}")]
+    Reqwest(reqwest::Error),
+    #[error("{0}")]
+    /// Generic non-specific error
+    Generic(String),
+}
+
 /// An error that occurred when using the agent.
 #[derive(Error, Debug)]
 pub enum AgentError {
@@ -192,7 +203,7 @@ pub enum AgentError {
 
     /// An unknown error occurred during communication with the replica.
     #[error("An error happened during communication with the replica: {0}")]
-    TransportError(#[from] reqwest::Error),
+    TransportError(TransportError),
 
     /// There was a mismatch between the expected and actual CBOR data during inspection.
     #[error("There is a mismatch between the CBOR encoded call and the arguments: field {field}, value in argument is {value_arg}, value in CBOR is {value_cbor}")]

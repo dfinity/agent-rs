@@ -383,86 +383,60 @@ impl<'agent: 'canister, 'canister> AsyncCallBuilder<'agent, 'canister> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))] // pocket-ic
 mod tests {
-    use super::super::interfaces::ManagementCanister;
+    use super::*;
     use crate::call::AsyncCall;
-    use candid::Principal;
-    use ic_agent::identity::BasicIdentity;
+    use crate::interfaces::ManagementCanister;
 
-    const POCKET_IC: &str = "POCKET_IC";
-
-    async fn get_effective_canister_id() -> Principal {
-        let default_effective_canister_id =
-            Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap();
-        if let Ok(pocket_ic_url) = std::env::var(POCKET_IC) {
-            pocket_ic::nonblocking::get_default_effective_canister_id(pocket_ic_url)
-                .await
-                .unwrap_or(default_effective_canister_id)
-        } else {
-            default_effective_canister_id
-        }
-    }
-
-    #[ignore]
     #[tokio::test]
     async fn simple() {
-        use super::Canister;
+        ref_tests::utils::with_agent(async move |pic, agent| {
+            let management_canister = ManagementCanister::from_canister(
+                Canister::builder()
+                    .with_agent(&agent)
+                    .with_canister_id("aaaaa-aa")
+                    .build()
+                    .unwrap(),
+            );
 
-        let identity =
-            BasicIdentity::from_raw_key(&ic_ed25519::PrivateKey::generate().serialize_raw());
+            let (new_canister_id,) = management_canister
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(ref_tests::utils::get_effective_canister_id(pic).await)
+                .call_and_wait()
+                .await
+                .unwrap();
 
-        let port = std::env::var("IC_REF_PORT").unwrap_or_else(|_| "4943".into());
+            let (status,) = management_canister
+                .canister_status(&new_canister_id)
+                .call_and_wait()
+                .await
+                .unwrap();
 
-        let agent = ic_agent::Agent::builder()
-            .with_url(format!("http://localhost:{port}"))
-            .with_identity(identity)
-            .build()
-            .unwrap();
-        agent.fetch_root_key().await.unwrap();
+            assert_eq!(format!("{:?}", status.status), "Running");
 
-        let management_canister = ManagementCanister::from_canister(
-            Canister::builder()
+            let canister_wasm = b"\0asm\x01\0\0\0";
+            management_canister
+                .install_code(&new_canister_id, canister_wasm)
+                .call_and_wait()
+                .await
+                .unwrap();
+
+            let canister = Canister::builder()
                 .with_agent(&agent)
-                .with_canister_id("aaaaa-aa")
+                .with_canister_id(new_canister_id)
                 .build()
-                .unwrap(),
-        );
+                .unwrap();
 
-        let (new_canister_id,) = management_canister
-            .create_canister()
-            .as_provisional_create_with_amount(None)
-            .with_effective_canister_id(get_effective_canister_id().await)
-            .call_and_wait()
-            .await
-            .unwrap();
-
-        let (status,) = management_canister
-            .canister_status(&new_canister_id)
-            .call_and_wait()
-            .await
-            .unwrap();
-
-        assert_eq!(format!("{}", status.status), "Running");
-
-        let canister_wasm = b"\0asm\x01\0\0\0";
-        management_canister
-            .install_code(&new_canister_id, canister_wasm)
-            .call_and_wait()
-            .await
-            .unwrap();
-
-        let canister = Canister::builder()
-            .with_agent(&agent)
-            .with_canister_id(new_canister_id)
-            .build()
-            .unwrap();
-
-        assert!(canister
-            .update("hello")
-            .build::<()>()
-            .call_and_wait()
-            .await
-            .is_err());
+            assert!(canister
+                .update("hello")
+                .build::<()>()
+                .call_and_wait()
+                .await
+                .is_err());
+            Ok(())
+        })
+        .await
     }
 }

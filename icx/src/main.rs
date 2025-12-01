@@ -19,7 +19,7 @@ use ic_agent::{
 };
 use ic_ed25519::PrivateKey;
 use ic_utils::interfaces::management_canister::{
-    builders::{CanisterInstall, CanisterSettings},
+    builders::{CanisterSettings, InstallCodeArgs},
     MgmtMethod,
 };
 use std::{
@@ -271,7 +271,7 @@ pub fn get_effective_canister_id(
                 method_name.as_ref()
             ),
             MgmtMethod::InstallCode => {
-                let install_args = Decode!(arg_value, CanisterInstall)
+                let install_args = Decode!(arg_value, InstallCodeArgs)
                     .context("Argument is not valid for CanisterInstall")?;
                 Ok(Some(install_args.canister_id))
             }
@@ -289,7 +289,11 @@ pub fn get_effective_canister_id(
             | MgmtMethod::TakeCanisterSnapshot
             | MgmtMethod::ListCanisterSnapshots
             | MgmtMethod::DeleteCanisterSnapshot
-            | MgmtMethod::LoadCanisterSnapshot => {
+            | MgmtMethod::LoadCanisterSnapshot
+            | MgmtMethod::ReadCanisterSnapshotMetadata
+            | MgmtMethod::ReadCanisterSnapshotData
+            | MgmtMethod::UploadCanisterSnapshotMetadata
+            | MgmtMethod::UploadCanisterSnapshotData => {
                 #[derive(CandidType, Deserialize)]
                 struct In {
                     canister_id: Principal,
