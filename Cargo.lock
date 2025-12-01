@@ -903,7 +903,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1428,9 +1428,9 @@ dependencies = [
 
 [[package]]
 name = "ic-management-canister-types"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "300adbb554ca7d6003f6080b978f5f53730d93cc9d6c8223199cbcfd166b7b42"
+checksum = "3149217e24186df3f13dc45eee14cdb3e5cad07d0b2b67bd53555c1c55462957"
 dependencies = [
  "candid",
  "serde",
@@ -1481,7 +1481,7 @@ dependencies = [
  "futures-util",
  "ic-agent",
  "ic-ed25519",
- "ic-management-canister-types 0.4.0",
+ "ic-management-canister-types 0.5.0",
  "once_cell",
  "ref-tests",
  "semver",
@@ -2075,7 +2075,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2581,7 +2581,7 @@ dependencies = [
  "ic-certification",
  "ic-ed25519",
  "ic-identity-hsm",
- "ic-management-canister-types 0.4.0",
+ "ic-management-canister-types 0.5.0",
  "ic-utils",
  "k256",
  "p256",
@@ -2723,7 +2723,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3273,7 +3273,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Update `ic-management-canister-types` to 0.5.0
+
 ## [0.44.3] - 2025-10-31
 
 * Fix `Agent::wait_signed` to execute the read_state request on every retry iteration.
