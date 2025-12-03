@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* BREAKING: Remove `subnet_id` parameter from `Agent::verify_for_subnet`.
 * Fix panic in web worker environments in `ic-agent`. 
 * Update `ic-management-canister-types` to 0.5.0
 

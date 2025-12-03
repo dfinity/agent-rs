@@ -870,7 +870,7 @@ impl Agent {
             .await?;
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
-        self.verify_for_subnet(&cert, subnet_id)?;
+        self.verify_for_subnet(&cert)?;
         Ok(cert)
     }
 
@@ -916,21 +916,13 @@ impl Agent {
 
     /// Verify a certificate, checking delegation if present.
     /// Only passes if the certificate is for the specified subnet.
-    pub fn verify_for_subnet(
-        &self,
-        cert: &Certificate,
-        subnet_id: Principal,
-    ) -> Result<(), AgentError> {
-        self.verify_cert_for_subnet(cert, subnet_id)?;
+    pub fn verify_for_subnet(&self, cert: &Certificate) -> Result<(), AgentError> {
+        self.verify_cert_for_subnet(cert)?;
         self.verify_cert_timestamp(cert)?;
         Ok(())
     }
 
-    fn verify_cert_for_subnet(
-        &self,
-        cert: &Certificate,
-        subnet_id: Principal,
-    ) -> Result<(), AgentError> {
+    fn verify_cert_for_subnet(&self, cert: &Certificate) -> Result<(), AgentError> {
         let sig = &cert.signature;
 
         let root_hash = cert.tree.digest();
@@ -938,7 +930,7 @@ impl Agent {
         msg.extend_from_slice(IC_STATE_ROOT_DOMAIN_SEPARATOR);
         msg.extend_from_slice(&root_hash);
 
-        let der_key = self.check_delegation_for_subnet(&cert.delegation, subnet_id)?;
+        let der_key = self.check_delegation_for_subnet(&cert.delegation)?;
         let key = extract_der(der_key)?;
 
         ic_verify_bls_signature::verify_bls_signature(sig, &msg, &key)
@@ -1017,7 +1009,6 @@ impl Agent {
     fn check_delegation_for_subnet(
         &self,
         delegation: &Option<Delegation>,
-        subnet_id: Principal,
     ) -> Result<Vec<u8>, AgentError> {
         match delegation {
             None => Ok(self.read_root_key()),
@@ -1027,7 +1018,7 @@ impl Agent {
                 if cert.delegation.is_some() {
                     return Err(AgentError::CertificateHasTooManyDelegations);
                 }
-                self.verify_cert_for_subnet(&cert, subnet_id)?;
+                self.verify_cert_for_subnet(&cert)?;
                 let public_key_path = [
                     "subnet".as_bytes(),
                     delegation.subnet_id.as_ref(),
