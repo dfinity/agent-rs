@@ -1030,7 +1030,7 @@ impl Agent {
                 self.verify_cert_for_subnet(&cert, subnet_id)?;
                 let public_key_path = [
                     "subnet".as_bytes(),
-                    delegation.subnet_id.as_ref(),
+                    subnet_id.as_ref(),
                     "public_key".as_bytes(),
                 ];
                 let pk = lookup_value(&cert.tree, public_key_path)
