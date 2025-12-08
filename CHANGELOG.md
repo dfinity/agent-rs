@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Fix panic in web worker environments in `ic-agent`. 
 * Update `ic-management-canister-types` to 0.5.0
+* Add `fetch_subnet_by_subnet_id` method to the `Agent`, make `Subnet` and relevant dependencies public
 
 ## [0.44.3] - 2025-10-31
 
