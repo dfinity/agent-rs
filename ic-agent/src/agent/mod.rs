@@ -1249,18 +1249,11 @@ impl Agent {
         Ok(api_boundary_nodes)
     }
 
-    async fn fetch_subnet_by_canister(
+    /// Fetches the subnet using the given subnet ID
+    pub async fn fetch_subnet_by_subnet_id(
         &self,
-        canister: &Principal,
+        subnet_id: Principal,
     ) -> Result<Arc<Subnet>, AgentError> {
-        let canister_cert = self
-            .read_state_raw(vec![vec!["time".into()]], *canister)
-            .await?;
-        let subnet_id = if let Some(delegation) = canister_cert.delegation.as_ref() {
-            Principal::from_slice(&delegation.subnet_id)
-        } else {
-            Principal::self_authenticating(&self.root_key.read().unwrap()[..])
-        };
         let subnet_cert = self
             .read_subnet_state_raw(
                 vec![
@@ -1276,15 +1269,29 @@ impl Agent {
             )
             .await?;
         let subnet = lookup_subnet(&subnet_id, &subnet_cert)?;
-        if !subnet.canister_ranges.contains(canister) {
-            return Err(AgentError::CertificateNotAuthorized());
-        }
+
         let subnet = Arc::new(subnet);
         self.subnet_key_cache
             .lock()
             .unwrap()
             .insert_subnet(subnet_id, subnet.clone());
         Ok(subnet)
+    }
+
+    async fn fetch_subnet_by_canister(
+        &self,
+        canister: &Principal,
+    ) -> Result<Arc<Subnet>, AgentError> {
+        let canister_cert = self
+            .read_state_raw(vec![vec!["time".into()]], *canister)
+            .await?;
+        let subnet_id = if let Some(delegation) = canister_cert.delegation.as_ref() {
+            Principal::from_slice(&delegation.subnet_id)
+        } else {
+            Principal::self_authenticating(&self.root_key.read().unwrap()[..])
+        };
+
+        self.fetch_subnet_by_subnet_id(subnet_id).await
     }
 
     async fn request(
@@ -1625,8 +1632,9 @@ impl SubnetCache {
     }
 }
 
+/// Struct to implement range bounds on Principals
 #[derive(Clone, Copy)]
-struct PrincipalStep;
+pub struct PrincipalStep;
 
 impl StepFns<Principal> for PrincipalStep {
     fn add_one(start: &Principal) -> Principal {
@@ -1655,13 +1663,16 @@ impl StepFns<Principal> for PrincipalStep {
     }
 }
 
+/// IC Subnet
 #[derive(Clone)]
-pub(crate) struct Subnet {
+pub struct Subnet {
     // This key is just fetched for completeness. Do not actually use this value as it is not authoritative in case of a rogue subnet.
     // If a future agent needs to know the subnet key then it should fetch /subnet from the *root* subnet.
     _key: Vec<u8>,
-    node_keys: HashMap<Principal, Vec<u8>>,
-    canister_ranges: RangeInclusiveSet<Principal, PrincipalStep>,
+    /// IC node public keys
+    pub node_keys: HashMap<Principal, Vec<u8>>,
+    /// IC Subnet canister ranges
+    pub canister_ranges: RangeInclusiveSet<Principal, PrincipalStep>,
 }
 
 /// API boundary node, which routes /api calls to IC replica nodes.
