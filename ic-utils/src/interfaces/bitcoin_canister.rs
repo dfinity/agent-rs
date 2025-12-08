@@ -13,13 +13,13 @@ use crate::{
 
 /// The canister interface for the IC [Bitcoin canister](https://github.com/dfinity/bitcoin-canister).
 #[derive(Debug)]
-pub struct BitcoinCanister<'agent> {
-    canister: Canister<'agent>,
+pub struct BitcoinCanister {
+    canister: Canister,
     network: BitcoinNetwork,
 }
 
-impl<'agent> Deref for BitcoinCanister<'agent> {
-    type Target = Canister<'agent>;
+impl Deref for BitcoinCanister {
+    type Target = Canister;
     fn deref(&self) -> &Self::Target {
         &self.canister
     }
@@ -29,16 +29,16 @@ const MAINNET_ID: Principal =
 const TESTNET_ID: Principal =
     Principal::from_slice(&[0x00, 0x00, 0x00, 0x00, 0x01, 0xa0, 0x00, 0x01, 0x01, 0x01]);
 
-impl<'agent> BitcoinCanister<'agent> {
+impl BitcoinCanister {
     /// Create a `BitcoinCanister` interface from an existing canister object.
-    pub fn from_canister(canister: Canister<'agent>, network: BitcoinNetwork) -> Self {
+    pub fn from_canister(canister: Canister, network: BitcoinNetwork) -> Self {
         Self { canister, network }
     }
     /// Create a `BitcoinCanister` interface pointing to the specified canister ID.
-    pub fn create(agent: &'agent Agent, canister_id: Principal, network: BitcoinNetwork) -> Self {
+    pub fn create(agent: &Agent, canister_id: Principal, network: BitcoinNetwork) -> Self {
         Self::from_canister(
             Canister::builder()
-                .with_agent(agent)
+                .with_agent(agent.clone())
                 .with_canister_id(canister_id)
                 .build()
                 .expect("all required fields should be set"),
@@ -46,15 +46,15 @@ impl<'agent> BitcoinCanister<'agent> {
         )
     }
     /// Create a `BitcoinCanister` interface for the Bitcoin mainnet canister on the IC mainnet.
-    pub fn mainnet(agent: &'agent Agent) -> Self {
+    pub fn mainnet(agent: &Agent) -> Self {
         Self::for_network(agent, BitcoinNetwork::Mainnet).expect("valid network")
     }
     /// Create a `BitcoinCanister` interface for the Bitcoin testnet canister on the IC mainnet.
-    pub fn testnet(agent: &'agent Agent) -> Self {
+    pub fn testnet(agent: &Agent) -> Self {
         Self::for_network(agent, BitcoinNetwork::Testnet).expect("valid network")
     }
     /// Create a `BitcoinCanister` interface for the specified Bitcoin network on the IC mainnet. Errors if `Regtest` is specified.
-    pub fn for_network(agent: &'agent Agent, network: BitcoinNetwork) -> Result<Self, AgentError> {
+    pub fn for_network(agent: &Agent, network: BitcoinNetwork) -> Result<Self, AgentError> {
         let canister_id = match network {
             BitcoinNetwork::Mainnet => MAINNET_ID,
             BitcoinNetwork::Testnet => TESTNET_ID,
@@ -73,7 +73,7 @@ impl<'agent> BitcoinCanister<'agent> {
         &self,
         address: &str,
         min_confirmations: Option<u32>,
-    ) -> impl 'agent + AsyncCall<Value = (u64,)> {
+    ) -> impl AsyncCall<Value = (u64,)> + '_ {
         self.update("bitcoin_get_balance")
             .with_arg(GetBalance {
                 address,
@@ -89,7 +89,7 @@ impl<'agent> BitcoinCanister<'agent> {
         &self,
         address: &str,
         min_confirmations: Option<u32>,
-    ) -> impl 'agent + SyncCall<Value = (u64,)> {
+    ) -> impl SyncCall<Value = (u64,)> + '_ {
         self.query("bitcoin_get_balance_query")
             .with_arg(GetBalance {
                 address,
@@ -108,7 +108,7 @@ impl<'agent> BitcoinCanister<'agent> {
         &self,
         address: &str,
         filter: Option<UtxosFilter>,
-    ) -> impl 'agent + AsyncCall<Value = (GetUtxosResponse,)> {
+    ) -> impl AsyncCall<Value = (GetUtxosResponse,)> + '_ {
         self.update("bitcoin_get_utxos")
             .with_arg(GetUtxos {
                 address,
@@ -127,7 +127,7 @@ impl<'agent> BitcoinCanister<'agent> {
         &self,
         address: &str,
         filter: Option<UtxosFilter>,
-    ) -> impl 'agent + SyncCall<Value = (GetUtxosResponse,)> {
+    ) -> impl SyncCall<Value = (GetUtxosResponse,)> + '_ {
         self.query("bitcoin_get_utxos_query")
             .with_arg(GetUtxos {
                 address,
@@ -139,7 +139,7 @@ impl<'agent> BitcoinCanister<'agent> {
 
     /// Gets the transaction fee percentiles for the last 10,000 transactions. In the returned vector, `v[i]` is the `i`th percentile fee,
     /// measured in millisatoshis/vbyte, and `v[0]` is the smallest fee.
-    pub fn get_current_fee_percentiles(&self) -> impl 'agent + AsyncCall<Value = (Vec<u64>,)> {
+    pub fn get_current_fee_percentiles(&self) -> impl AsyncCall<Value = (Vec<u64>,)> + '_ {
         #[derive(CandidType)]
         struct In {
             network: BitcoinNetwork,
@@ -156,7 +156,7 @@ impl<'agent> BitcoinCanister<'agent> {
         &self,
         start_height: u32,
         end_height: Option<u32>,
-    ) -> impl 'agent + AsyncCall<Value = (GetBlockHeadersResponse,)> {
+    ) -> impl AsyncCall<Value = (GetBlockHeadersResponse,)> + '_ {
         #[derive(CandidType)]
         struct In {
             start_height: u32,
@@ -170,7 +170,7 @@ impl<'agent> BitcoinCanister<'agent> {
             .build()
     }
     /// Submits a new Bitcoin transaction. No guarantees are made about the outcome.
-    pub fn send_transaction(&self, transaction: Vec<u8>) -> impl 'agent + AsyncCall<Value = ()> {
+    pub fn send_transaction(&self, transaction: Vec<u8>) -> impl AsyncCall<Value = ()> + '_ {
         #[derive(CandidType, Deserialize)]
         struct In {
             network: BitcoinNetwork,

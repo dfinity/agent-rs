@@ -244,9 +244,15 @@ impl Agent {
 
     /// Set the identity provider for signing messages.
     ///
-    /// NOTE: if you change the identity while having update calls in
+    /// If this agent has been cloned, this will not apply to outstanding clones.
+    ///
+    /// <div class="warning">
+    ///
+    /// If you change the identity while having update calls in
     /// flight, you will not be able to [`Agent::request_status_raw`] the status of these
     /// messages.
+    ///
+    /// </div>
     pub fn set_identity<I>(&mut self, identity: I)
     where
         I: 'static + Identity,
@@ -255,9 +261,15 @@ impl Agent {
     }
     /// Set the arc identity provider for signing messages.
     ///
-    /// NOTE: if you change the identity while having update calls in
+    /// If this agent has been cloned, this will not apply to outstanding clones.
+    ///
+    /// <div class="warning">
+    ///
+    /// If you change the identity while having update calls in
     /// flight, you will not be able to [`Agent::request_status_raw`] the status of these
     /// messages.
+    ///
+    /// </div>
     pub fn set_arc_identity(&mut self, identity: Arc<dyn Identity>) {
         self.identity = identity;
     }

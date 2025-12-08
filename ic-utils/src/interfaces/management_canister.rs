@@ -35,10 +35,10 @@ pub use builders::{
 
 /// The IC management canister.
 #[derive(Debug, Clone)]
-pub struct ManagementCanister<'agent>(Canister<'agent>);
+pub struct ManagementCanister(Canister);
 
-impl<'agent> Deref for ManagementCanister<'agent> {
-    type Target = Canister<'agent>;
+impl Deref for ManagementCanister {
+    type Target = Canister;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -118,12 +118,12 @@ pub enum MgmtMethod {
     CanisterInfo,
 }
 
-impl<'agent> ManagementCanister<'agent> {
+impl ManagementCanister {
     /// Create an instance of a `ManagementCanister` interface pointing to the specified Canister ID.
-    pub fn create(agent: &'agent Agent) -> Self {
+    pub fn create(agent: &Agent) -> Self {
         Self(
             Canister::builder()
-                .with_agent(agent)
+                .with_agent(agent.clone())
                 .with_canister_id(Principal::management_canister())
                 .build()
                 .unwrap(),
@@ -131,7 +131,7 @@ impl<'agent> ManagementCanister<'agent> {
     }
 
     /// Create a `ManagementCanister` interface from an existing canister object.
-    pub fn from_canister(canister: Canister<'agent>) -> Self {
+    pub fn from_canister(canister: Canister) -> Self {
         Self(canister)
     }
 }
@@ -173,12 +173,12 @@ pub type SnapshotDataResult = ReadCanisterSnapshotDataResult;
 )]
 pub type CanisterSnapshotId = UploadCanisterSnapshotMetadataResult;
 
-impl<'agent> ManagementCanister<'agent> {
+impl ManagementCanister {
     /// Get the status of a canister.
     pub fn canister_status(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<Value = (CanisterStatusResult,)> {
+    ) -> impl AsyncCall<Value = (CanisterStatusResult,)> + '_ {
         self.update(MgmtMethod::CanisterStatus.as_ref())
             .with_arg(CanisterIdRecord {
                 canister_id: *canister_id,
@@ -189,13 +189,13 @@ impl<'agent> ManagementCanister<'agent> {
     }
 
     /// Create a canister.
-    pub fn create_canister<'canister>(&'canister self) -> CreateCanisterBuilder<'agent, 'canister> {
+    pub fn create_canister(&self) -> CreateCanisterBuilder<'_> {
         CreateCanisterBuilder::builder(self)
     }
 
     /// This method deposits the cycles included in this call into the specified canister.
     /// Only the controller of the canister can deposit cycles.
-    pub fn deposit_cycles(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
+    pub fn deposit_cycles(&self, canister_id: &Principal) -> impl AsyncCall<Value = ()> + '_ {
         self.update(MgmtMethod::DepositCycles.as_ref())
             .with_arg(CanisterIdRecord {
                 canister_id: *canister_id,
@@ -205,7 +205,7 @@ impl<'agent> ManagementCanister<'agent> {
     }
 
     /// Deletes a canister.
-    pub fn delete_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
+    pub fn delete_canister(&self, canister_id: &Principal) -> impl AsyncCall<Value = ()> + '_ {
         self.update(MgmtMethod::DeleteCanister.as_ref())
             .with_arg(CanisterIdRecord {
                 canister_id: *canister_id,
@@ -222,7 +222,7 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
         top_up_args: &ProvisionalTopUpCanisterArgs,
-    ) -> impl 'agent + AsyncCall<Value = ()> {
+    ) -> impl AsyncCall<Value = ()> + '_ {
         self.update(MgmtMethod::ProvisionalTopUpCanister.as_ref())
             .with_arg(top_up_args)
             .with_effective_canister_id(canister_id.to_owned())
@@ -232,14 +232,14 @@ impl<'agent> ManagementCanister<'agent> {
     /// This method takes no input and returns 32 pseudo-random bytes to the caller.
     /// The return value is unknown to any part of the IC at time of the submission of this call.
     /// A new return value is generated for each call to this method.
-    pub fn raw_rand(&self) -> impl 'agent + AsyncCall<Value = (Vec<u8>,)> {
+    pub fn raw_rand(&self) -> impl AsyncCall<Value = (Vec<u8>,)> + '_ {
         self.update(MgmtMethod::RawRand.as_ref())
             .build()
             .map(|result: (Vec<u8>,)| (result.0,))
     }
 
     /// Starts a canister.
-    pub fn start_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
+    pub fn start_canister(&self, canister_id: &Principal) -> impl AsyncCall<Value = ()> + '_ {
         self.update(MgmtMethod::StartCanister.as_ref())
             .with_arg(CanisterIdRecord {
                 canister_id: *canister_id,
@@ -249,7 +249,7 @@ impl<'agent> ManagementCanister<'agent> {
     }
 
     /// Stop a canister.
-    pub fn stop_canister(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
+    pub fn stop_canister(&self, canister_id: &Principal) -> impl AsyncCall<Value = ()> + '_ {
         self.update(MgmtMethod::StopCanister.as_ref())
             .with_arg(CanisterIdRecord {
                 canister_id: *canister_id,
@@ -265,7 +265,7 @@ impl<'agent> ManagementCanister<'agent> {
     /// Outstanding responses to the canister will not be processed, even if they arrive after code has been installed again.
     /// The canister is now empty. In particular, any incoming or queued calls will be rejected.
     //// A canister after uninstalling retains its cycles balance, controller, status, and allocations.
-    pub fn uninstall_code(&self, canister_id: &Principal) -> impl 'agent + AsyncCall<Value = ()> {
+    pub fn uninstall_code(&self, canister_id: &Principal) -> impl AsyncCall<Value = ()> + '_ {
         self.update(MgmtMethod::UninstallCode.as_ref())
             .with_arg(CanisterIdRecord {
                 canister_id: *canister_id,
@@ -279,7 +279,7 @@ impl<'agent> ManagementCanister<'agent> {
         &'canister self,
         canister_id: &Principal,
         wasm: &'canister [u8],
-    ) -> InstallCodeBuilder<'agent, 'canister> {
+    ) -> InstallCodeBuilder<'canister> {
         InstallCodeBuilder::builder(self, canister_id, wasm)
     }
 
@@ -287,7 +287,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn update_settings<'canister>(
         &'canister self,
         canister_id: &Principal,
-    ) -> UpdateCanisterBuilder<'agent, 'canister> {
+    ) -> UpdateCanisterBuilder<'canister> {
         UpdateCanisterBuilder::builder(self, canister_id)
     }
 
@@ -296,7 +296,7 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
         upload_chunk_args: &UploadChunkArgs,
-    ) -> impl 'agent + AsyncCall<Value = (UploadChunkResult,)> {
+    ) -> impl AsyncCall<Value = (UploadChunkResult,)> + '_ {
         self.update(MgmtMethod::UploadChunk.as_ref())
             .with_arg(upload_chunk_args)
             .with_effective_canister_id(*canister_id)
@@ -304,10 +304,7 @@ impl<'agent> ManagementCanister<'agent> {
     }
 
     /// Clear a canister's chunked WASM storage.
-    pub fn clear_chunk_store(
-        &self,
-        canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<Value = ()> {
+    pub fn clear_chunk_store(&self, canister_id: &Principal) -> impl AsyncCall<Value = ()> + '_ {
         self.update(MgmtMethod::ClearChunkStore.as_ref())
             .with_arg(CanisterIdRecord {
                 canister_id: *canister_id,
@@ -320,7 +317,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn stored_chunks(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<Value = (StoredChunksResult,)> {
+    ) -> impl AsyncCall<Value = (StoredChunksResult,)> + '_ {
         self.update(MgmtMethod::StoredChunks.as_ref())
             .with_arg(CanisterIdRecord {
                 canister_id: *canister_id,
@@ -334,7 +331,7 @@ impl<'agent> ManagementCanister<'agent> {
         &'canister self,
         canister_id: &Principal,
         wasm_module_hash: &[u8],
-    ) -> InstallChunkedCodeBuilder<'agent, 'canister> {
+    ) -> InstallChunkedCodeBuilder<'canister> {
         InstallChunkedCodeBuilder::builder(self, *canister_id, wasm_module_hash)
     }
 
@@ -347,7 +344,7 @@ impl<'agent> ManagementCanister<'agent> {
         &'canister self,
         canister_id: &Principal,
         wasm: &'builder [u8],
-    ) -> InstallBuilder<'agent, 'canister, 'builder> {
+    ) -> InstallBuilder<'canister, 'builder> {
         InstallBuilder::builder(self, canister_id, wasm)
     }
 
@@ -355,7 +352,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn fetch_canister_logs(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + SyncCall<Value = (FetchCanisterLogsResult,)> {
+    ) -> impl SyncCall<Value = (FetchCanisterLogsResult,)> + '_ {
         // `fetch_canister_logs` is only supported in non-replicated mode.
         self.query(MgmtMethod::FetchCanisterLogs.as_ref())
             .with_arg(CanisterIdRecord {
@@ -372,7 +369,7 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
         take_args: &TakeCanisterSnapshotArgs,
-    ) -> impl 'agent + AsyncCall<Value = (Snapshot,)> {
+    ) -> impl AsyncCall<Value = (Snapshot,)> + '_ {
         self.update(MgmtMethod::TakeCanisterSnapshot.as_ref())
             .with_arg(take_args)
             .with_effective_canister_id(*canister_id)
@@ -386,7 +383,7 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
         load_args: &LoadCanisterSnapshotArgs,
-    ) -> impl 'agent + AsyncCall<Value = ()> {
+    ) -> impl AsyncCall<Value = ()> + '_ {
         self.update(MgmtMethod::LoadCanisterSnapshot.as_ref())
             .with_arg(load_args)
             .with_effective_canister_id(*canister_id)
@@ -397,7 +394,7 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn list_canister_snapshots(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<Value = (Vec<Snapshot>,)> {
+    ) -> impl AsyncCall<Value = (Vec<Snapshot>,)> + '_ {
         self.update(MgmtMethod::ListCanisterSnapshots.as_ref())
             .with_arg(CanisterIdRecord {
                 canister_id: *canister_id,
@@ -411,7 +408,7 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
         delete_args: &DeleteCanisterSnapshotArgs,
-    ) -> impl 'agent + AsyncCall<Value = ()> {
+    ) -> impl AsyncCall<Value = ()> + '_ {
         self.update(MgmtMethod::DeleteCanisterSnapshot.as_ref())
             .with_arg(delete_args)
             .with_effective_canister_id(*canister_id)
@@ -423,7 +420,7 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
         metadata_args: &ReadCanisterSnapshotMetadataArgs,
-    ) -> impl 'agent + AsyncCall<Value = (ReadCanisterSnapshotMetadataResult,)> {
+    ) -> impl AsyncCall<Value = (ReadCanisterSnapshotMetadataResult,)> + '_ {
         self.update(MgmtMethod::ReadCanisterSnapshotMetadata.as_ref())
             .with_arg(metadata_args)
             .with_effective_canister_id(*canister_id)
@@ -435,7 +432,7 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
         data_args: &ReadCanisterSnapshotDataArgs,
-    ) -> impl 'agent + AsyncCall<Value = (ReadCanisterSnapshotDataResult,)> {
+    ) -> impl AsyncCall<Value = (ReadCanisterSnapshotDataResult,)> + '_ {
         self.update(MgmtMethod::ReadCanisterSnapshotData.as_ref())
             .with_arg(data_args)
             .with_effective_canister_id(*canister_id)
@@ -447,7 +444,7 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
         metadata_args: &UploadCanisterSnapshotMetadataArgs,
-    ) -> impl 'agent + AsyncCall<Value = (UploadCanisterSnapshotMetadataResult,)> {
+    ) -> impl AsyncCall<Value = (UploadCanisterSnapshotMetadataResult,)> + '_ {
         self.update(MgmtMethod::UploadCanisterSnapshotMetadata.as_ref())
             .with_arg(metadata_args)
             .with_effective_canister_id(*canister_id)
@@ -459,7 +456,7 @@ impl<'agent> ManagementCanister<'agent> {
         &self,
         canister_id: &Principal,
         data_args: &UploadCanisterSnapshotDataArgs,
-    ) -> impl 'agent + AsyncCall<Value = ()> {
+    ) -> impl AsyncCall<Value = ()> + '_ {
         self.update(MgmtMethod::UploadCanisterSnapshotData.as_ref())
             .with_arg(data_args)
             .with_effective_canister_id(*canister_id)

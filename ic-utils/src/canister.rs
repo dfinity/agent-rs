@@ -23,14 +23,14 @@ pub enum CanisterBuilderError {
 
 /// A canister builder, which can be used to create a canister abstraction.
 #[derive(Debug, Default)]
-pub struct CanisterBuilder<'agent> {
-    agent: Option<&'agent Agent>,
+pub struct CanisterBuilder {
+    agent: Option<Agent>,
     canister_id: Option<Result<Principal, CanisterBuilderError>>,
 }
 
-impl<'agent> CanisterBuilder<'agent> {
+impl CanisterBuilder {
     /// Create a canister builder with no value.
-    pub fn new() -> CanisterBuilder<'static> {
+    pub fn new() -> CanisterBuilder {
         Default::default()
     }
 
@@ -51,7 +51,7 @@ impl<'agent> CanisterBuilder<'agent> {
     }
 
     /// Assign an agent to the canister being built.
-    pub fn with_agent(self, agent: &'agent Agent) -> Self {
+    pub fn with_agent(self, agent: Agent) -> Self {
         CanisterBuilder {
             agent: Some(agent),
             ..self
@@ -59,7 +59,7 @@ impl<'agent> CanisterBuilder<'agent> {
     }
 
     /// Create this canister abstraction after passing in all the necessary state.
-    pub fn build(self) -> Result<Canister<'agent>, CanisterBuilderError> {
+    pub fn build(self) -> Result<Canister, CanisterBuilderError> {
         let canister_id = if let Some(cid) = self.canister_id {
             cid?
         } else {
@@ -80,12 +80,12 @@ impl<'agent> CanisterBuilder<'agent> {
 /// This is the higher level construct for talking to a canister on the Internet
 /// Computer.
 #[derive(Debug, Clone)]
-pub struct Canister<'agent> {
-    pub(super) agent: &'agent Agent,
+pub struct Canister {
+    pub(super) agent: Agent,
     pub(super) canister_id: Principal,
 }
 
-impl<'agent> Canister<'agent> {
+impl Canister {
     /// Get the canister ID of this canister.
     /// Prefer using [`canister_id`](Canister::canister_id) instead.
     pub fn canister_id_(&self) -> &Principal {
@@ -99,35 +99,23 @@ impl<'agent> Canister<'agent> {
 
     /// Create an `AsyncCallBuilder` to do an update call.
     /// Prefer using [`update`](Canister::update) instead.
-    pub fn update_<'canister>(
-        &'canister self,
-        method_name: &str,
-    ) -> AsyncCallBuilder<'agent, 'canister> {
+    pub fn update_<'canister>(&'canister self, method_name: &str) -> AsyncCallBuilder<'canister> {
         AsyncCallBuilder::new(self, method_name)
     }
 
     /// Create an `AsyncCallBuilder` to do an update call.
-    pub fn update<'canister>(
-        &'canister self,
-        method_name: &str,
-    ) -> AsyncCallBuilder<'agent, 'canister> {
+    pub fn update<'canister>(&'canister self, method_name: &str) -> AsyncCallBuilder<'canister> {
         AsyncCallBuilder::new(self, method_name)
     }
 
     /// Create a `SyncCallBuilder` to do a query call.
     /// Prefer using [`query`](Canister::query) instead.
-    pub fn query_<'canister>(
-        &'canister self,
-        method_name: &str,
-    ) -> SyncCallBuilder<'agent, 'canister> {
+    pub fn query_<'canister>(&'canister self, method_name: &str) -> SyncCallBuilder<'canister> {
         SyncCallBuilder::new(self, method_name)
     }
 
     /// Create a `SyncCallBuilder` to do a query call.
-    pub fn query<'canister>(
-        &'canister self,
-        method_name: &str,
-    ) -> SyncCallBuilder<'agent, 'canister> {
+    pub fn query<'canister>(&'canister self, method_name: &str) -> SyncCallBuilder<'canister> {
         SyncCallBuilder::new(self, method_name)
     }
 
@@ -146,20 +134,20 @@ impl<'agent> Canister<'agent> {
     /// Prefer using [`clone_with`](Canister::clone_with) instead.
     pub fn clone_with_(&self, id: Principal) -> Self {
         Self {
-            agent: self.agent,
+            agent: self.agent.clone(),
             canister_id: id,
         }
     }
     /// Creates a copy of this canister, changing the canister ID to the provided principal.
     pub fn clone_with(&self, id: Principal) -> Self {
         Self {
-            agent: self.agent,
+            agent: self.agent.clone(),
             canister_id: id,
         }
     }
 
     /// Create a `CanisterBuilder` instance to build a canister abstraction.
-    pub fn builder() -> CanisterBuilder<'agent> {
+    pub fn builder() -> CanisterBuilder {
         Default::default()
     }
 }
@@ -235,19 +223,16 @@ impl Argument {
 ///
 /// See [`SyncCaller`] for a description of this structure once built.
 #[derive(Debug)]
-pub struct SyncCallBuilder<'agent, 'canister> {
-    canister: &'canister Canister<'agent>,
+pub struct SyncCallBuilder<'canister> {
+    canister: &'canister Canister,
     method_name: String,
     effective_canister_id: Principal,
     arg: Argument,
 }
 
-impl<'agent: 'canister, 'canister> SyncCallBuilder<'agent, 'canister> {
+impl<'canister> SyncCallBuilder<'canister> {
     /// Create a new instance of an `AsyncCallBuilder`.
-    pub(super) fn new<M: Into<String>>(
-        canister: &'canister Canister<'agent>,
-        method_name: M,
-    ) -> Self {
+    pub(super) fn new<M: Into<String>>(canister: &'canister Canister, method_name: M) -> Self {
         Self {
             canister,
             method_name: method_name.into(),
@@ -257,7 +242,7 @@ impl<'agent: 'canister, 'canister> SyncCallBuilder<'agent, 'canister> {
     }
 }
 
-impl<'agent: 'canister, 'canister> SyncCallBuilder<'agent, 'canister> {
+impl<'canister> SyncCallBuilder<'canister> {
     /// Set the argument with candid argument. Can be called at most once.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> Self
     where
@@ -294,13 +279,13 @@ impl<'agent: 'canister, 'canister> SyncCallBuilder<'agent, 'canister> {
     }
 
     /// Builds a [`SyncCaller`] from this builder's state.
-    pub fn build<Output>(self) -> SyncCaller<'agent, Output>
+    pub fn build<Output>(self) -> SyncCaller<'canister, Output>
     where
         Output: for<'de> ArgumentDecoder<'de> + Send + Sync,
     {
         let c = self.canister;
         SyncCaller {
-            agent: c.agent,
+            agent: &c.agent,
             effective_canister_id: self.effective_canister_id,
             canister_id: c.canister_id,
             method_name: self.method_name.clone(),
@@ -315,19 +300,19 @@ impl<'agent: 'canister, 'canister> SyncCallBuilder<'agent, 'canister> {
 ///
 /// See [`AsyncCaller`] for a description of this structure.
 #[derive(Debug)]
-pub struct AsyncCallBuilder<'agent, 'canister> {
-    canister: &'canister Canister<'agent>,
+pub struct AsyncCallBuilder<'canister> {
+    canister: &'canister Canister,
     method_name: String,
     effective_canister_id: Principal,
     arg: Argument,
 }
 
-impl<'agent: 'canister, 'canister> AsyncCallBuilder<'agent, 'canister> {
+impl<'canister> AsyncCallBuilder<'canister> {
     /// Create a new instance of an `AsyncCallBuilder`.
     pub(super) fn new(
-        canister: &'canister Canister<'agent>,
+        canister: &'canister Canister,
         method_name: &str,
-    ) -> AsyncCallBuilder<'agent, 'canister> {
+    ) -> AsyncCallBuilder<'canister> {
         Self {
             canister,
             method_name: method_name.to_string(),
@@ -337,7 +322,7 @@ impl<'agent: 'canister, 'canister> AsyncCallBuilder<'agent, 'canister> {
     }
 }
 
-impl<'agent: 'canister, 'canister> AsyncCallBuilder<'agent, 'canister> {
+impl<'canister> AsyncCallBuilder<'canister> {
     /// Set the argument with Candid argument. Can be called at most once.
     pub fn with_arg<Argument>(mut self, arg: Argument) -> Self
     where
@@ -366,13 +351,13 @@ impl<'agent: 'canister, 'canister> AsyncCallBuilder<'agent, 'canister> {
     }
 
     /// Builds an [`AsyncCaller`] from this builder's state.
-    pub fn build<Output>(self) -> AsyncCaller<'agent, Output>
+    pub fn build<Output>(self) -> AsyncCaller<'canister, Output>
     where
         Output: for<'de> ArgumentDecoder<'de> + Send + Sync,
     {
         let c = self.canister;
         AsyncCaller {
-            agent: c.agent,
+            agent: &c.agent,
             effective_canister_id: self.effective_canister_id,
             canister_id: c.canister_id,
             method_name: self.method_name.clone(),
@@ -394,7 +379,7 @@ mod tests {
         ref_tests::utils::with_agent(async move |pic, agent| {
             let management_canister = ManagementCanister::from_canister(
                 Canister::builder()
-                    .with_agent(&agent)
+                    .with_agent(agent.clone())
                     .with_canister_id("aaaaa-aa")
                     .build()
                     .unwrap(),
@@ -424,7 +409,7 @@ mod tests {
                 .unwrap();
 
             let canister = Canister::builder()
-                .with_agent(&agent)
+                .with_agent(agent)
                 .with_canister_id(new_canister_id)
                 .build()
                 .unwrap();

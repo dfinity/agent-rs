@@ -31,8 +31,8 @@ use std::{
 
 /// A builder for a `create_canister` call.
 #[derive(Debug)]
-pub struct CreateCanisterBuilder<'agent, 'canister: 'agent> {
-    canister: &'canister Canister<'agent>,
+pub struct CreateCanisterBuilder<'canister> {
+    canister: &'canister Canister,
     effective_canister_id: Principal,
     controllers: Option<Result<Vec<Principal>, AgentError>>,
     compute_allocation: Option<Result<ComputeAllocation, AgentError>>,
@@ -48,9 +48,9 @@ pub struct CreateCanisterBuilder<'agent, 'canister: 'agent> {
     specified_id: Option<Principal>,
 }
 
-impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
+impl<'canister> CreateCanisterBuilder<'canister> {
     /// Create an `CreateCanister` builder, which is also an `AsyncCall` implementation.
-    pub fn builder(canister: &'canister Canister<'agent>) -> Self {
+    pub fn builder(canister: &'canister Canister) -> Self {
         Self {
             canister,
             effective_canister_id: Principal::management_canister(),
@@ -356,7 +356,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
 
     /// Create an [`AsyncCall`] implementation that, when called, will create a
     /// canister.
-    pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = (Principal,)>, AgentError> {
+    pub fn build(self) -> Result<impl AsyncCall<Value = (Principal,)> + 'canister, AgentError> {
         let controllers = match self.controllers {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(x),
@@ -469,7 +469,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<'agent, 'canister: 'agent> AsyncCall for CreateCanisterBuilder<'agent, 'canister> {
+impl<'canister> AsyncCall for CreateCanisterBuilder<'canister> {
     type Value = (Principal,);
 
     async fn call(self) -> Result<CallResponse<(Principal,)>, AgentError> {
@@ -481,8 +481,8 @@ impl<'agent, 'canister: 'agent> AsyncCall for CreateCanisterBuilder<'agent, 'can
     }
 }
 
-impl<'agent, 'canister: 'agent> IntoFuture for CreateCanisterBuilder<'agent, 'canister> {
-    type IntoFuture = CallFuture<'agent, (Principal,)>;
+impl<'canister> IntoFuture for CreateCanisterBuilder<'canister> {
+    type IntoFuture = CallFuture<'canister, (Principal,)>;
     type Output = Result<(Principal,), AgentError>;
 
     fn into_future(self) -> Self::IntoFuture {
@@ -504,18 +504,18 @@ pub type CanisterInstall = InstallCodeArgs;
 
 /// A builder for an `install_code` call.
 #[derive(Debug)]
-pub struct InstallCodeBuilder<'agent, 'canister: 'agent> {
-    canister: &'canister Canister<'agent>,
+pub struct InstallCodeBuilder<'canister> {
+    canister: &'canister Canister,
     canister_id: Principal,
     wasm: &'canister [u8],
     arg: Argument,
     mode: Option<CanisterInstallMode>,
 }
 
-impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
+impl<'canister> InstallCodeBuilder<'canister> {
     /// Create an `InstallCode` builder, which is also an `AsyncCall` implementation.
     pub fn builder(
-        canister: &'canister Canister<'agent>,
+        canister: &'canister Canister,
         canister_id: &Principal,
         wasm: &'canister [u8],
     ) -> Self {
@@ -533,7 +533,7 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
     pub fn with_arg<Argument: CandidType>(
         mut self,
         arg: Argument,
-    ) -> InstallCodeBuilder<'agent, 'canister> {
+    ) -> InstallCodeBuilder<'canister> {
         self.arg.set_idl_arg(arg);
         self
     }
@@ -545,7 +545,7 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
         self
     }
     /// Set the argument passed in to the canister with raw bytes. Can be called at most once.
-    pub fn with_raw_arg(mut self, arg: Vec<u8>) -> InstallCodeBuilder<'agent, 'canister> {
+    pub fn with_raw_arg(mut self, arg: Vec<u8>) -> InstallCodeBuilder<'canister> {
         self.arg.set_raw_arg(arg);
         self
     }
@@ -560,7 +560,7 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
 
     /// Create an [`AsyncCall`] implementation that, when called, will install the
     /// canister.
-    pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = ()>, AgentError> {
+    pub fn build(self) -> Result<impl AsyncCall<Value = ()> + 'canister, AgentError> {
         Ok(self
             .canister
             .update(MgmtMethod::InstallCode.as_ref())
@@ -588,7 +588,7 @@ impl<'agent, 'canister: 'agent> InstallCodeBuilder<'agent, 'canister> {
 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<'agent, 'canister: 'agent> AsyncCall for InstallCodeBuilder<'agent, 'canister> {
+impl<'canister> AsyncCall for InstallCodeBuilder<'canister> {
     type Value = ();
 
     async fn call(self) -> Result<CallResponse<()>, AgentError> {
@@ -600,8 +600,8 @@ impl<'agent, 'canister: 'agent> AsyncCall for InstallCodeBuilder<'agent, 'canist
     }
 }
 
-impl<'agent, 'canister: 'agent> IntoFuture for InstallCodeBuilder<'agent, 'canister> {
-    type IntoFuture = CallFuture<'agent, ()>;
+impl<'canister> IntoFuture for InstallCodeBuilder<'canister> {
+    type IntoFuture = CallFuture<'canister, ()>;
     type Output = Result<(), AgentError>;
 
     fn into_future(self) -> Self::IntoFuture {
@@ -611,8 +611,8 @@ impl<'agent, 'canister: 'agent> IntoFuture for InstallCodeBuilder<'agent, 'canis
 
 /// A builder for an `install_chunked_code` call.
 #[derive(Debug)]
-pub struct InstallChunkedCodeBuilder<'agent, 'canister> {
-    canister: &'canister Canister<'agent>,
+pub struct InstallChunkedCodeBuilder<'canister> {
+    canister: &'canister Canister,
     target_canister: Principal,
     store_canister: Option<Principal>,
     chunk_hashes_list: Vec<ChunkHash>,
@@ -621,10 +621,10 @@ pub struct InstallChunkedCodeBuilder<'agent, 'canister> {
     mode: CanisterInstallMode,
 }
 
-impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> {
+impl<'canister> InstallChunkedCodeBuilder<'canister> {
     /// Create an `InstallChunkedCodeBuilder`.
     pub fn builder(
-        canister: &'canister Canister<'agent>,
+        canister: &'canister Canister,
         target_canister: Principal,
         wasm_module_hash: &[u8],
     ) -> Self {
@@ -679,7 +679,7 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
     }
 
     /// Create an [`AsyncCall`] implementation that, when called, will install the canister.
-    pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = ()>, AgentError> {
+    pub fn build(self) -> Result<impl AsyncCall<Value = ()> + 'canister, AgentError> {
         #[derive(CandidType)]
         struct In {
             mode: CanisterInstallMode,
@@ -728,7 +728,7 @@ impl<'agent: 'canister, 'canister> InstallChunkedCodeBuilder<'agent, 'canister> 
 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<'agent, 'canister: 'agent> AsyncCall for InstallChunkedCodeBuilder<'agent, 'canister> {
+impl<'canister> AsyncCall for InstallChunkedCodeBuilder<'canister> {
     type Value = ();
 
     async fn call(self) -> Result<CallResponse<()>, AgentError> {
@@ -740,8 +740,8 @@ impl<'agent, 'canister: 'agent> AsyncCall for InstallChunkedCodeBuilder<'agent, 
     }
 }
 
-impl<'agent, 'canister: 'agent> IntoFuture for InstallChunkedCodeBuilder<'agent, 'canister> {
-    type IntoFuture = CallFuture<'agent, ()>;
+impl<'canister> IntoFuture for InstallChunkedCodeBuilder<'canister> {
+    type IntoFuture = CallFuture<'canister, ()>;
     type Output = Result<(), AgentError>;
 
     fn into_future(self) -> Self::IntoFuture {
@@ -755,8 +755,8 @@ impl<'agent, 'canister: 'agent> IntoFuture for InstallChunkedCodeBuilder<'agent,
 ///
 /// This will clear chunked code storage if chunked installation is used. Do not use with canisters that you are manually uploading chunked code to.
 #[derive(Debug)]
-pub struct InstallBuilder<'agent, 'canister, 'builder> {
-    canister: &'canister ManagementCanister<'agent>,
+pub struct InstallBuilder<'canister, 'builder> {
+    canister: &'canister ManagementCanister,
     canister_id: Principal,
     // more precise lifetimes are used here at risk of annoying the user
     // because `wasm` may be memory-mapped which is tricky to lifetime
@@ -765,14 +765,14 @@ pub struct InstallBuilder<'agent, 'canister, 'builder> {
     mode: CanisterInstallMode,
 }
 
-impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'canister, 'builder> {
+impl<'canister: 'builder, 'builder> InstallBuilder<'canister, 'builder> {
     // Messages are a maximum of 2MiB. Thus basic installation should cap the wasm and arg size at 1.85MiB, since
     // the current API is definitely not going to produce 150KiB of framing data for it.
     const CHUNK_CUTOFF: usize = (1.85 * 1024. * 1024.) as usize;
 
     /// Create a canister installation builder.
     pub fn builder(
-        canister: &'canister ManagementCanister<'agent>,
+        canister: &'canister ManagementCanister,
         canister_id: &Principal,
         wasm: &'builder [u8],
     ) -> Self {
@@ -901,9 +901,7 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> InstallBuilder<'agent, 'c
     }
 }
 
-impl<'agent: 'canister, 'canister: 'builder, 'builder> IntoFuture
-    for InstallBuilder<'agent, 'canister, 'builder>
-{
+impl<'canister: 'builder, 'builder> IntoFuture for InstallBuilder<'canister, 'builder> {
     type IntoFuture = CallFuture<'builder, ()>;
     type Output = Result<(), AgentError>;
 
@@ -914,8 +912,8 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> IntoFuture
 
 /// A builder for an `update_settings` call.
 #[derive(Debug)]
-pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent> {
-    canister: &'canister Canister<'agent>,
+pub struct UpdateCanisterBuilder<'canister> {
+    canister: &'canister Canister,
     canister_id: Principal,
     controllers: Option<Result<Vec<Principal>, AgentError>>,
     compute_allocation: Option<Result<ComputeAllocation, AgentError>>,
@@ -928,9 +926,9 @@ pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent> {
     environment_variables: Option<Result<Vec<EnvironmentVariable>, AgentError>>,
 }
 
-impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
+impl<'canister> UpdateCanisterBuilder<'canister> {
     /// Create an `UpdateCanister` builder, which is also an `AsyncCall` implementation.
-    pub fn builder(canister: &'canister Canister<'agent>, canister_id: &Principal) -> Self {
+    pub fn builder(canister: &'canister Canister, canister_id: &Principal) -> Self {
         Self {
             canister,
             canister_id: *canister_id,
@@ -1190,7 +1188,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
 
     /// Create an [`AsyncCall`] implementation that, when called, will update a
     /// canisters settings.
-    pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = ()>, AgentError> {
+    pub fn build(self) -> Result<impl AsyncCall<Value = ()> + 'canister, AgentError> {
         #[derive(CandidType)]
         struct In {
             canister_id: Principal,
@@ -1277,7 +1275,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<'agent, 'canister: 'agent> AsyncCall for UpdateCanisterBuilder<'agent, 'canister> {
+impl<'canister> AsyncCall for UpdateCanisterBuilder<'canister> {
     type Value = ();
     async fn call(self) -> Result<CallResponse<()>, AgentError> {
         self.build()?.call().await
@@ -1288,8 +1286,8 @@ impl<'agent, 'canister: 'agent> AsyncCall for UpdateCanisterBuilder<'agent, 'can
     }
 }
 
-impl<'agent, 'canister: 'agent> IntoFuture for UpdateCanisterBuilder<'agent, 'canister> {
-    type IntoFuture = CallFuture<'agent, ()>;
+impl<'canister> IntoFuture for UpdateCanisterBuilder<'canister> {
+    type IntoFuture = CallFuture<'canister, ()>;
     type Output = Result<(), AgentError>;
     fn into_future(self) -> Self::IntoFuture {
         AsyncCall::call_and_wait(self)

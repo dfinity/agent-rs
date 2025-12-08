@@ -13,6 +13,7 @@ use candid::{
     CandidType, Deserialize, Func,
 };
 use ic_agent::{export::Principal, Agent};
+use serde::de::DeserializeOwned;
 use std::{
     borrow::Cow,
     convert::TryInto,
@@ -23,10 +24,10 @@ use std::{
 
 /// A canister that can serve a HTTP request.
 #[derive(Debug, Clone)]
-pub struct HttpRequestCanister<'agent>(Canister<'agent>);
+pub struct HttpRequestCanister(Canister);
 
-impl<'agent> Deref for HttpRequestCanister<'agent> {
-    type Target = Canister<'agent>;
+impl Deref for HttpRequestCanister {
+    type Target = Canister;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -379,12 +380,12 @@ impl CandidType for ArgToken {
     }
 }
 
-impl<'agent> HttpRequestCanister<'agent> {
+impl HttpRequestCanister {
     /// Create an instance of a `HttpRequestCanister` interface pointing to the specified Canister ID.
-    pub fn create(agent: &'agent Agent, canister_id: Principal) -> Self {
+    pub fn create(agent: &Agent, canister_id: Principal) -> Self {
         Self(
             Canister::builder()
-                .with_agent(agent)
+                .with_agent(agent.clone())
                 .with_canister_id(canister_id)
                 .build()
                 .unwrap(),
@@ -392,24 +393,24 @@ impl<'agent> HttpRequestCanister<'agent> {
     }
 
     /// Create a `HttpRequestCanister` interface from an existing canister object.
-    pub fn from_canister(canister: Canister<'agent>) -> Self {
+    pub fn from_canister(canister: Canister) -> Self {
         Self(canister)
     }
 }
 
-impl<'agent> HttpRequestCanister<'agent> {
+impl HttpRequestCanister {
     /// Performs a HTTP request, receiving a HTTP response.
-    pub fn http_request<'canister: 'agent>(
-        &'canister self,
+    pub fn http_request<'a>(
+        &'a self,
         method: impl AsRef<str>,
         url: impl AsRef<str>,
         headers: impl IntoIterator<
-            Item = HeaderField<'agent>,
-            IntoIter = impl 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
+            Item = HeaderField<'a>,
+            IntoIter = impl Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'a>> + 'a,
         >,
         body: impl AsRef<[u8]>,
         certificate_version: Option<&u16>,
-    ) -> impl 'agent + SyncCall<Value = (HttpResponse,)> {
+    ) -> impl SyncCall<Value = (HttpResponse,)> + 'a {
         self.http_request_custom(
             method.as_ref(),
             url.as_ref(),
@@ -421,18 +422,18 @@ impl<'agent> HttpRequestCanister<'agent> {
 
     /// Performs a HTTP request, receiving a HTTP response.
     /// `T` and `C` are the `token` and `callback` types for the `streaming_strategy`.
-    pub fn http_request_custom<'canister: 'agent, H, T, C>(
-        &'canister self,
+    pub fn http_request_custom<'a, H, T, C>(
+        &'a self,
         method: &str,
         url: &str,
         headers: H,
         body: &[u8],
         certificate_version: Option<&u16>,
-    ) -> impl 'agent + SyncCall<Value = (HttpResponse<T, C>,)>
+    ) -> impl SyncCall<Value = (HttpResponse<T, C>,)> + 'a
     where
-        H: 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
-        T: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
-        C: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
+        H: ExactSizeIterator<Item = HeaderField<'a>> + Clone + Send + Sync + 'a,
+        T: CandidType + DeserializeOwned + Send + Sync + 'static,
+        C: CandidType + DeserializeOwned + Send + Sync + 'static,
     {
         self.query("http_request")
             .with_arg(HttpRequest {
@@ -447,30 +448,30 @@ impl<'agent> HttpRequestCanister<'agent> {
 
     /// Performs a HTTP request over an update call. Unlike query calls, update calls must pass consensus
     /// and therefore cannot be tampered with by a malicious node.
-    pub fn http_request_update<'canister: 'agent>(
-        &'canister self,
+    pub fn http_request_update<'a>(
+        &'a self,
         method: impl AsRef<str>,
         url: impl AsRef<str>,
-        headers: impl 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
+        headers: impl ExactSizeIterator<Item = HeaderField<'a>> + Clone + Send + Sync + 'a,
         body: impl AsRef<[u8]>,
-    ) -> impl 'agent + AsyncCall<Value = (HttpResponse,)> {
+    ) -> impl AsyncCall<Value = (HttpResponse,)> + 'a {
         self.http_request_update_custom(method.as_ref(), url.as_ref(), headers, body.as_ref())
     }
 
     /// Performs a HTTP request over an update call. Unlike query calls, update calls must pass consensus
     /// and therefore cannot be tampered with by a malicious node.
     /// `T` and `C` are the `token` and `callback` types for the `streaming_strategy`.
-    pub fn http_request_update_custom<'canister: 'agent, H, T, C>(
-        &'canister self,
+    pub fn http_request_update_custom<'a, H, T, C>(
+        &'a self,
         method: &str,
         url: &str,
         headers: H,
         body: &[u8],
-    ) -> impl 'agent + AsyncCall<Value = (HttpResponse<T, C>,)>
+    ) -> impl AsyncCall<Value = (HttpResponse<T, C>,)> + 'a
     where
-        H: 'agent + Send + Sync + Clone + ExactSizeIterator<Item = HeaderField<'agent>>,
-        T: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
-        C: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
+        H: ExactSizeIterator<Item = HeaderField<'a>> + Clone + Send + Sync + 'a,
+        T: CandidType + DeserializeOwned + Send + Sync + 'static,
+        C: CandidType + DeserializeOwned + Send + Sync + 'static,
     {
         self.update("http_request_update")
             .with_arg(HttpUpdateRequest {
@@ -483,23 +484,23 @@ impl<'agent> HttpRequestCanister<'agent> {
     }
 
     /// Retrieves the next chunk of a stream from a streaming callback, using the method from [`CallbackStrategy`].
-    pub fn http_request_stream_callback<'canister: 'agent>(
-        &'canister self,
+    pub fn http_request_stream_callback<'a>(
+        &'a self,
         method: impl AsRef<str>,
         token: Token,
-    ) -> impl 'agent + SyncCall<Value = (StreamingCallbackHttpResponse,)> {
+    ) -> impl SyncCall<Value = (StreamingCallbackHttpResponse,)> + 'a {
         self.query(method.as_ref()).with_value_arg(token.0).build()
     }
 
     /// Retrieves the next chunk of a stream from a streaming callback, using the method from [`CallbackStrategy`].
     /// `T` is the `token` type.
-    pub fn http_request_stream_callback_custom<'canister: 'agent, T>(
-        &'canister self,
+    pub fn http_request_stream_callback_custom<'a, T>(
+        &'a self,
         method: impl AsRef<str>,
         token: T,
-    ) -> impl 'agent + SyncCall<Value = (StreamingCallbackHttpResponse<T>,)>
+    ) -> impl SyncCall<Value = (StreamingCallbackHttpResponse<T>,)> + 'a
     where
-        T: 'agent + Send + Sync + CandidType + for<'de> Deserialize<'de>,
+        T: DeserializeOwned + CandidType + Send + Sync + 'static,
     {
         self.query(method.as_ref()).with_arg(token).build()
     }

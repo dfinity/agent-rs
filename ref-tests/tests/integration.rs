@@ -154,7 +154,7 @@ async fn canister_query() {
     with_universal_canister(async move |_, agent, canister_id| {
         let universal = Canister::builder()
             .with_canister_id(canister_id)
-            .with_agent(&agent)
+            .with_agent(agent.clone())
             .build()?;
 
         let arg = payload().reply_data(b"hello").build();
@@ -327,7 +327,7 @@ async fn wallet_create_and_set_controller() {
         eprintln!("...build child_wallet");
         let child_wallet = WalletCanister::from_canister(
             Canister::builder()
-                .with_agent(&other_agent)
+                .with_agent(other_agent.clone())
                 .with_canister_id(create_result.canister_id)
                 .build()?,
         )
