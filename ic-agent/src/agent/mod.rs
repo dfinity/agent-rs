@@ -45,8 +45,8 @@ mod agent_test;
 use crate::{
     agent::response_authentication::{
         extract_der, lookup_canister_info, lookup_canister_metadata, lookup_canister_ranges,
-        lookup_request_status, lookup_subnet, lookup_subnet_canister_ranges, lookup_subnet_metrics,
-        lookup_time, lookup_tree, lookup_value,
+        lookup_incomplete_subnet, lookup_request_status, lookup_subnet_canister_ranges,
+        lookup_subnet_metrics, lookup_time, lookup_tree, lookup_value,
     },
     agent_error::TransportError,
     export::Principal,
@@ -1266,7 +1266,7 @@ impl Agent {
             // if no delegation, it comes from the root subnet
             Principal::self_authenticating(&self.root_key.read().unwrap()[..])
         };
-        let mut subnet = lookup_subnet(&subnet_id, &canister_cert)?;
+        let mut subnet = lookup_incomplete_subnet(&subnet_id, &canister_cert)?;
         let canister_ranges = if let Some(delegation) = canister_cert.delegation.as_ref() {
             // non-root subnets will not serve /subnet/<>/canister_ranges when looked up by canister, but their delegation will contain /canister_ranges
             let delegation_cert: Certificate = serde_cbor::from_slice(&delegation.certificate)?;

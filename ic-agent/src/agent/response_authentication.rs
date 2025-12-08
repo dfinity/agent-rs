@@ -193,13 +193,14 @@ pub(crate) fn lookup_subnet_and_ranges<Storage: AsRef<[u8]> + Clone>(
     subnet_id: &Principal,
     certificate: &Certificate<Storage>,
 ) -> Result<Subnet, AgentError> {
-    let mut subnet = lookup_subnet(subnet_id, certificate)?;
+    let mut subnet = lookup_incomplete_subnet(subnet_id, certificate)?;
     let canister_ranges = lookup_canister_ranges(subnet_id, certificate)?;
     subnet.canister_ranges = canister_ranges;
     Ok(subnet)
 }
 
-pub(crate) fn lookup_subnet<Storage: AsRef<[u8]> + Clone>(
+/// This function will *not* populate `canister_ranges`. See [`lookup_canister_ranges`] or [`lookup_subnet_and_ranges`] for that.
+pub(crate) fn lookup_incomplete_subnet<Storage: AsRef<[u8]> + Clone>(
     subnet_id: &Principal,
     certificate: &Certificate<Storage>,
 ) -> Result<Subnet, AgentError> {
