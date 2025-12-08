@@ -45,9 +45,8 @@ mod agent_test;
 use crate::{
     agent::response_authentication::{
         extract_der, lookup_canister_info, lookup_canister_metadata, lookup_canister_ranges,
-        lookup_request_status, lookup_subnet, lookup_subnet_and_ranges,
-        lookup_subnet_canister_ranges, lookup_subnet_metrics, lookup_time, lookup_tree,
-        lookup_value,
+        lookup_request_status, lookup_subnet, lookup_subnet_canister_ranges, lookup_subnet_metrics,
+        lookup_time, lookup_tree, lookup_value,
     },
     agent_error::TransportError,
     export::Principal,

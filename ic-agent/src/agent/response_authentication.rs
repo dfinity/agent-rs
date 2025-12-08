@@ -188,6 +188,7 @@ pub(crate) fn lookup_reply<Storage: AsRef<[u8]>>(
 }
 
 /// The cert should contain both /subnet/<subnet_id> and /canister_ranges/<subnet_id>
+#[expect(unused)]
 pub(crate) fn lookup_subnet_and_ranges<Storage: AsRef<[u8]> + Clone>(
     subnet_id: &Principal,
     certificate: &Certificate<Storage>,
