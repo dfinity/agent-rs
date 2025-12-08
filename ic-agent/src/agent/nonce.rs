@@ -57,14 +57,15 @@ pub trait NonceGenerator: Send + Sync {
     fn generate(&self) -> Option<Vec<u8>>;
 }
 
-pub struct Func<T>(pub T);
+#[expect(unused)]
+pub(crate) struct Func<T>(pub T);
 impl<T: Send + Sync + Fn() -> Option<Vec<u8>>> NonceGenerator for Func<T> {
     fn generate(&self) -> Option<Vec<u8>> {
         (self.0)()
     }
 }
 
-pub struct Iter<T>(Mutex<T>);
+pub(crate) struct Iter<T>(Mutex<T>);
 impl<T: Send + Iterator<Item = Vec<u8>>> From<T> for Iter<T> {
     fn from(val: T) -> Iter<T> {
         Iter(Mutex::new(val))
@@ -77,7 +78,7 @@ impl<T: Send + Iterator<Item = Vec<u8>>> NonceGenerator for Iter<T> {
 }
 
 #[derive(Default)]
-pub struct RandomBlob {}
+pub(crate) struct RandomBlob {}
 impl NonceGenerator for RandomBlob {
     fn generate(&self) -> Option<Vec<u8>> {
         Some(OsRng.gen::<[u8; 16]>().to_vec())
@@ -85,7 +86,7 @@ impl NonceGenerator for RandomBlob {
 }
 
 #[derive(Default)]
-pub struct Empty;
+pub(crate) struct Empty;
 impl NonceGenerator for Empty {
     fn generate(&self) -> Option<Vec<u8>> {
         None
@@ -93,7 +94,7 @@ impl NonceGenerator for Empty {
 }
 
 #[derive(Default)]
-pub struct Incrementing {
+pub(crate) struct Incrementing {
     next: AtomicU64,
 }
 impl From<u64> for Incrementing {

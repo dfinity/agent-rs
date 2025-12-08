@@ -118,6 +118,7 @@ impl RoutingSnapshot for RoundRobinRoutingSnapshot {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::slice;
     use std::time::Duration;
     use std::{collections::HashSet, sync::atomic::Ordering};
 
@@ -200,7 +201,7 @@ mod tests {
         let mut snapshot = RoundRobinRoutingSnapshot::new();
         let node_1 = Node::new("api1.com").unwrap();
         // Sync with node_1
-        let nodes_changed = snapshot.sync_nodes(&[node_1.clone()]);
+        let nodes_changed = snapshot.sync_nodes(slice::from_ref(&node_1));
         assert!(nodes_changed);
         assert!(snapshot.healthy_nodes.is_empty());
         assert_eq!(
@@ -210,7 +211,7 @@ mod tests {
         // Add node_1 to healthy_nodes manually
         snapshot.healthy_nodes.insert(node_1.clone());
         // Sync with node_1 again
-        let nodes_changed = snapshot.sync_nodes(&[node_1.clone()]);
+        let nodes_changed = snapshot.sync_nodes(slice::from_ref(&node_1));
         assert!(!nodes_changed);
         assert_eq!(
             snapshot.existing_nodes,
@@ -219,7 +220,7 @@ mod tests {
         assert_eq!(snapshot.healthy_nodes, HashSet::from_iter(vec![node_1]));
         // Sync with node_2
         let node_2 = Node::new("api2.com").unwrap();
-        let nodes_changed = snapshot.sync_nodes(&[node_2.clone()]);
+        let nodes_changed = snapshot.sync_nodes(slice::from_ref(&node_2));
         assert!(nodes_changed);
         assert_eq!(
             snapshot.existing_nodes,

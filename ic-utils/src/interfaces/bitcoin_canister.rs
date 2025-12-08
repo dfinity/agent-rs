@@ -74,12 +74,6 @@ impl<'agent> BitcoinCanister<'agent> {
         address: &str,
         min_confirmations: Option<u32>,
     ) -> impl 'agent + AsyncCall<Value = (u64,)> {
-        #[derive(CandidType)]
-        struct In<'a> {
-            address: &'a str,
-            network: BitcoinNetwork,
-            min_confirmations: Option<u32>,
-        }
         self.update("bitcoin_get_balance")
             .with_arg(GetBalance {
                 address,

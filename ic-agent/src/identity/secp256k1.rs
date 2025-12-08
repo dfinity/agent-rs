@@ -9,7 +9,7 @@ use k256::{
     SecretKey,
 };
 #[cfg(feature = "pem")]
-use std::{fs::File, io, path::Path};
+use std::path::Path;
 
 use super::Delegation;
 
@@ -27,18 +27,18 @@ impl Secp256k1Identity {
     /// Creates an identity from a PEM file. Shorthand for calling `from_pem` with `std::fs::read`.
     #[cfg(feature = "pem")]
     pub fn from_pem_file<P: AsRef<Path>>(file_path: P) -> Result<Self, PemError> {
-        Self::from_pem(File::open(file_path)?)
+        Self::from_pem(std::fs::read(file_path)?)
     }
 
     /// Creates an identity from a PEM certificate.
     #[cfg(feature = "pem")]
-    pub fn from_pem<R: io::Read>(pem_reader: R) -> Result<Self, PemError> {
+    pub fn from_pem<B: AsRef<[u8]>>(pem_contents: B) -> Result<Self, PemError> {
         use sec1::{pem::PemLabel, EcPrivateKey};
 
         const EC_PARAMETERS: &str = "EC PARAMETERS";
         const SECP256K1: &[u8] = b"\x06\x05\x2b\x81\x04\x00\x0a";
 
-        let contents = pem_reader.bytes().collect::<Result<Vec<u8>, io::Error>>()?;
+        let contents = pem_contents.as_ref();
 
         for pem in pem::parse_many(contents)? {
             if pem.tag() == EC_PARAMETERS && pem.contents() != SECP256K1 {

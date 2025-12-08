@@ -29,16 +29,16 @@ impl BasicIdentity {
     /// Create a `BasicIdentity` from reading a PEM file at the path.
     #[cfg(feature = "pem")]
     pub fn from_pem_file<P: AsRef<std::path::Path>>(file_path: P) -> Result<Self, PemError> {
-        Self::from_pem(std::fs::File::open(file_path)?)
+        Self::from_pem(std::fs::read(file_path)?)
     }
 
     /// Create a `BasicIdentity` from reading a PEM File from a Reader.
     #[cfg(feature = "pem")]
-    pub fn from_pem<R: std::io::Read>(pem_reader: R) -> Result<Self, PemError> {
+    pub fn from_pem<B: AsRef<[u8]>>(pem_contents: B) -> Result<Self, PemError> {
         use der::{asn1::OctetString, Decode, ErrorKind, SliceReader, Tag, TagNumber};
         use pkcs8::PrivateKeyInfo;
 
-        let bytes: Vec<u8> = pem_reader.bytes().collect::<Result<_, _>>()?;
+        let bytes = pem_contents.as_ref();
         let pem = pem::parse(bytes)?;
         let pki_res = PrivateKeyInfo::decode(&mut SliceReader::new(pem.contents())?);
         let mut truncated;

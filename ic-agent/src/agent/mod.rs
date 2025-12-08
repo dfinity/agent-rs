@@ -1168,7 +1168,7 @@ impl Agent {
         &self,
         canister_id: &Principal,
         method_name: S,
-    ) -> UpdateBuilder {
+    ) -> UpdateBuilder<'_> {
         UpdateBuilder::new(self, *canister_id, method_name.into())
     }
 
@@ -1185,7 +1185,11 @@ impl Agent {
 
     /// Returns a `QueryBuilder` enabling the construction of a query call without
     /// passing all arguments.
-    pub fn query<S: Into<String>>(&self, canister_id: &Principal, method_name: S) -> QueryBuilder {
+    pub fn query<S: Into<String>>(
+        &self,
+        canister_id: &Principal,
+        method_name: S,
+    ) -> QueryBuilder<'_> {
         QueryBuilder::new(self, *canister_id, method_name.into())
     }
 
