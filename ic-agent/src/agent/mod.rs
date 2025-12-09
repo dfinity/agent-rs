@@ -1653,7 +1653,7 @@ struct SubnetCache {
 impl SubnetCache {
     fn new() -> Self {
         Self {
-            subnets: TimedCache::with_lifespan(300),
+            subnets: TimedCache::with_lifespan(Duration::from_secs(300)),
             canister_index: RangeInclusiveMap::new_with_step_fns(),
         }
     }
