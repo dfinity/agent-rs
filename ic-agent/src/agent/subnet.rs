@@ -17,9 +17,9 @@ use crate::agent::PrincipalStep;
 /// fresh data with [`Agent::fetch_subnet_by_canister`].
 #[derive(Clone)]
 pub struct Subnet {
+    pub(crate) id: Principal,
     // This key is just fetched for completeness. Do not actually use this value as it is not authoritative in case of a rogue subnet.
     // If a future agent needs to know the subnet key then it should fetch /subnet from the *root* subnet.
-    pub(crate) id: Principal,
     pub(crate) key: Vec<u8>,
     pub(crate) node_keys: HashMap<Principal, Vec<u8>>,
     pub(crate) canister_ranges: RangeInclusiveSet<Principal, PrincipalStep>,
