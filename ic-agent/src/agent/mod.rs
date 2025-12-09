@@ -10,6 +10,7 @@ pub(crate) mod nonce;
 pub(crate) mod response_authentication;
 pub mod route_provider;
 pub mod status;
+pub mod subnet;
 
 pub use agent_config::AgentConfig;
 pub use agent_error::AgentError;
@@ -27,7 +28,7 @@ pub use ic_transport_types::{
     RequestStatusResponse,
 };
 pub use nonce::{NonceFactory, NonceGenerator};
-use rangemap::{RangeInclusiveMap, RangeInclusiveSet, StepFns};
+use rangemap::{RangeInclusiveMap, StepFns};
 use reqwest::{Client, Request, Response};
 use route_provider::{
     dynamic_routing::{
@@ -36,6 +37,7 @@ use route_provider::{
     },
     RouteProvider, UrlUntilReady,
 };
+pub use subnet::Subnet;
 use time::OffsetDateTime;
 use tower_service::Service;
 
@@ -45,8 +47,9 @@ mod agent_test;
 use crate::{
     agent::response_authentication::{
         extract_der, lookup_canister_info, lookup_canister_metadata, lookup_canister_ranges,
-        lookup_incomplete_subnet, lookup_request_status, lookup_subnet_canister_ranges,
-        lookup_subnet_metrics, lookup_time, lookup_tree, lookup_value,
+        lookup_incomplete_subnet, lookup_request_status, lookup_subnet_and_ranges,
+        lookup_subnet_canister_ranges, lookup_subnet_metrics, lookup_time, lookup_tree,
+        lookup_value,
     },
     agent_error::TransportError,
     export::Principal,
@@ -64,7 +67,6 @@ use serde::Serialize;
 use status::Status;
 use std::{
     borrow::Cow,
-    collections::HashMap,
     convert::TryFrom,
     fmt::{self, Debug},
     future::{Future, IntoFuture},
@@ -1215,7 +1217,9 @@ impl Agent {
         })
     }
 
-    async fn get_subnet_by_canister(
+    /// Retrieve subnet information for a canister. This uses an internal five-minute cache, fresh data can
+    /// be fetched with [`fetch_subnet_by_canister`](Self::fetch_subnet_by_canister).
+    pub async fn get_subnet_by_canister(
         &self,
         canister: &Principal,
     ) -> Result<Arc<Subnet>, AgentError> {
@@ -1228,6 +1232,21 @@ impl Agent {
             Ok(subnet)
         } else {
             self.fetch_subnet_by_canister(canister).await
+        }
+    }
+
+    /// Retrieve subnet information for a subnet ID. This uses an internal five-minute cache, fresh data can
+    /// be fetched with [`fetch_subnet_by_id`](Self::fetch_subnet_by_id).
+    pub async fn get_subnet_by_id(&self, subnet_id: &Principal) -> Result<Arc<Subnet>, AgentError> {
+        let subnet = self
+            .subnet_key_cache
+            .lock()
+            .unwrap()
+            .get_subnet_by_id(subnet_id);
+        if let Some(subnet) = subnet {
+            Ok(subnet)
+        } else {
+            self.fetch_subnet_by_id(subnet_id).await
         }
     }
 
@@ -1253,7 +1272,11 @@ impl Agent {
         Ok(api_boundary_nodes)
     }
 
-    async fn fetch_subnet_by_canister(
+    /// Fetches and caches the subnet information for a canister.
+    ///
+    /// This function does not read from the cache; most users want
+    /// [`get_subnet_by_canister`](Self::get_subnet_by_canister) instead.
+    pub async fn fetch_subnet_by_canister(
         &self,
         canister: &Principal,
     ) -> Result<Arc<Subnet>, AgentError> {
@@ -1283,6 +1306,32 @@ impl Agent {
             .lock()
             .unwrap()
             .insert_subnet(subnet_id, subnet.clone());
+        Ok(subnet)
+    }
+
+    /// Fetches and caches the subnet information for a subnet ID.
+    ///
+    /// This function does not read from the cache; most users want
+    /// [`get_subnet_by_id`](Self::get_subnet_by_id) instead.
+    pub async fn fetch_subnet_by_id(
+        &self,
+        subnet_id: &Principal,
+    ) -> Result<Arc<Subnet>, AgentError> {
+        let subnet_cert = self
+            .read_subnet_state_raw(
+                vec![
+                    vec!["canister_ranges".into(), subnet_id.as_slice().into()],
+                    vec!["subnet".into(), subnet_id.as_slice().into()],
+                ],
+                *subnet_id,
+            )
+            .await?;
+        let subnet = lookup_subnet_and_ranges(subnet_id, &subnet_cert)?;
+        let subnet = Arc::new(subnet);
+        self.subnet_key_cache
+            .lock()
+            .unwrap()
+            .insert_subnet(*subnet_id, subnet.clone());
         Ok(subnet)
     }
 
@@ -1616,6 +1665,10 @@ impl SubnetCache {
             .filter(|subnet| subnet.canister_ranges.contains(canister))
     }
 
+    fn get_subnet_by_id(&mut self, subnet_id: &Principal) -> Option<Arc<Subnet>> {
+        self.subnets.cache_get(subnet_id).cloned()
+    }
+
     fn insert_subnet(&mut self, subnet_id: Principal, subnet: Arc<Subnet>) {
         self.subnets.cache_set(subnet_id, subnet.clone());
         for range in subnet.canister_ranges.iter() {
@@ -1652,15 +1705,6 @@ impl StepFns<Principal> for PrincipalStep {
         }
         Principal::from_slice(&arr[..bytes.len()])
     }
-}
-
-#[derive(Clone)]
-pub(crate) struct Subnet {
-    // This key is just fetched for completeness. Do not actually use this value as it is not authoritative in case of a rogue subnet.
-    // If a future agent needs to know the subnet key then it should fetch /subnet from the *root* subnet.
-    _key: Vec<u8>,
-    node_keys: HashMap<Principal, Vec<u8>>,
-    canister_ranges: RangeInclusiveSet<Principal, PrincipalStep>,
 }
 
 /// API boundary node, which routes /api calls to IC replica nodes.
