@@ -14,7 +14,7 @@ use crate::agent::PrincipalStep;
 ///
 /// Range information may be incomplete depending on how the subnet was fetched. The lack of a canister ID
 /// within assigned ranges should not be treated immediately as an authorization failure without fetching
-/// fresh data with [`Agent::fetch_subnet_by_canister`].
+/// fresh data with [`Agent::fetch_subnet_by_canister`](crate::Agent::fetch_subnet_by_canister).
 #[derive(Clone)]
 pub struct Subnet {
     pub(crate) id: Principal,
