@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Add `{get,fetch}_subnet_by_{id,canister}` functions to enable looking up subnet information.
 * Fix panic in web worker environments in `ic-agent`. 
 * Update `ic-management-canister-types` to 0.5.0
 

@@ -188,7 +188,6 @@ pub(crate) fn lookup_reply<Storage: AsRef<[u8]>>(
 }
 
 /// The cert should contain both /subnet/<subnet_id> and /canister_ranges/<subnet_id>
-#[expect(unused)]
 pub(crate) fn lookup_subnet_and_ranges<Storage: AsRef<[u8]> + Clone>(
     subnet_id: &Principal,
     certificate: &Certificate<Storage>,
@@ -228,8 +227,9 @@ pub(crate) fn lookup_incomplete_subnet<Storage: AsRef<[u8]> + Clone>(
         node_keys.insert(node_id, node_key.to_vec());
     }
     let subnet = Subnet {
+        id: *subnet_id,
         canister_ranges: RangeInclusiveSet::new_with_step_fns(),
-        _key: key,
+        key,
         node_keys,
     };
     Ok(subnet)
