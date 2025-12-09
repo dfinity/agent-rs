@@ -465,16 +465,7 @@ async fn wrong_subnet_query_certificate() {
         "POST",
         &format!("/api/v3/canister/{wrong_canister}/read_state"),
         200,
-        TIME_224OD.into(),
-        Some("application/cbor"),
-    )
-    .await;
-    mock_additional(
-        &mut read_mock,
-        "POST",
-        "/api/v3/subnet/o3ow2-2ipam-6fcjo-3j5vt-fzbge-2g7my-5fz2m-p4o2t-dwlc4-gt2q7-5ae/read_state",
-        200,
-        SUBNET_KEY_O3OW2.into(),
+        SUBNET_224OD.into(),
         Some("application/cbor"),
     )
     .await;
@@ -510,10 +501,8 @@ async fn wrong_subnet_query_certificate() {
     .await;
 }
 
-// This file is a mainnet POST response body to /api/v3/subnet/o3ow2-.../read_state with path /subnet/hex(o3ow2-...)/public_key
-const SUBNET_KEY_O3OW2: &[u8] = include_bytes!("agent_test/o3ow2_subnet_key.bin");
-// This file is a mainnet POST response body to /api/v3/canister/224od-.../read_state with path /time
-const TIME_224OD: &[u8] = include_bytes!("agent_test/224od_time.bin");
+// This file is a mainnet POST response body to /api/v3/canister/224od-.../read_state with path /subnet
+const SUBNET_224OD: &[u8] = include_bytes!("agent_test/224od_subnet.bin");
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
@@ -521,18 +510,9 @@ async fn no_cert() {
     let canister = Principal::from_text("224od-giaaa-aaaao-ae5vq-cai").unwrap();
     let (mut read_mock, url) = mock(
         "POST",
-        "/api/v3/subnet/o3ow2-2ipam-6fcjo-3j5vt-fzbge-2g7my-5fz2m-p4o2t-dwlc4-gt2q7-5ae/read_state",
-        200,
-        SUBNET_KEY_O3OW2.into(),
-        Some("application/cbor"),
-    )
-    .await;
-    mock_additional(
-        &mut read_mock,
-        "POST",
         "/api/v3/canister/224od-giaaa-aaaao-ae5vq-cai/read_state",
         200,
-        TIME_224OD.into(),
+        SUBNET_224OD.into(),
         Some("application/cbor"),
     )
     .await;

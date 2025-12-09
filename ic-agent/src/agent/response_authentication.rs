@@ -1,4 +1,6 @@
-use crate::agent::{ApiBoundaryNode, RejectCode, RejectResponse, RequestStatusResponse};
+use crate::agent::{
+    ApiBoundaryNode, PrincipalStep, RejectCode, RejectResponse, RequestStatusResponse,
+};
 use crate::{export::Principal, AgentError, RequestId};
 use ic_certification::hash_tree::{HashTree, SubtreeLookupResult};
 use ic_certification::{certificate::Certificate, hash_tree::Label, LookupResult};
@@ -78,7 +80,7 @@ pub(crate) fn lookup_subnet_metrics<Storage: AsRef<[u8]>>(
 }
 
 pub(crate) fn lookup_subnet_canister_ranges<Storage: AsRef<[u8]>>(
-    certificate: Certificate<Storage>,
+    certificate: &Certificate<Storage>,
     subnet_id: Principal,
 ) -> Result<Vec<(Principal, Principal)>, AgentError> {
     let path_ranges = [b"subnet", subnet_id.as_slice(), b"canister_ranges"];
@@ -186,25 +188,24 @@ pub(crate) fn lookup_reply<Storage: AsRef<[u8]>>(
 }
 
 /// The cert should contain both /subnet/<subnet_id> and /canister_ranges/<subnet_id>
-pub(crate) fn lookup_subnet<Storage: AsRef<[u8]> + Clone>(
+#[expect(unused)]
+pub(crate) fn lookup_subnet_and_ranges<Storage: AsRef<[u8]> + Clone>(
+    subnet_id: &Principal,
+    certificate: &Certificate<Storage>,
+) -> Result<Subnet, AgentError> {
+    let mut subnet = lookup_incomplete_subnet(subnet_id, certificate)?;
+    let canister_ranges = lookup_canister_ranges(subnet_id, certificate)?;
+    subnet.canister_ranges = canister_ranges;
+    Ok(subnet)
+}
+
+/// This function will *not* populate `canister_ranges`. See [`lookup_canister_ranges`] or [`lookup_subnet_and_ranges`] for that.
+pub(crate) fn lookup_incomplete_subnet<Storage: AsRef<[u8]> + Clone>(
     subnet_id: &Principal,
     certificate: &Certificate<Storage>,
 ) -> Result<Subnet, AgentError> {
     let subnet_tree = lookup_tree(&certificate.tree, [b"subnet", subnet_id.as_slice()])?;
     let key = lookup_value(&subnet_tree, [b"public_key".as_ref()])?.to_vec();
-    let canister_ranges_tree = lookup_tree(
-        &certificate.tree,
-        [b"canister_ranges", subnet_id.as_slice()],
-    )?;
-    let canister_ranges: Vec<(Principal, Principal)> = canister_ranges_tree
-        .list_paths()
-        .into_iter()
-        .try_fold(vec![], |mut ranges, shard| {
-            ranges.extend(serde_cbor::from_slice::<Vec<(Principal, Principal)>>(
-                lookup_value(&canister_ranges_tree, [shard[0].as_bytes()])?,
-            )?);
-            Ok::<_, AgentError>(ranges)
-        })?;
     let node_keys_subtree = lookup_tree(&subnet_tree, [b"node".as_ref()])?;
     let mut node_keys = HashMap::new();
     for path in node_keys_subtree.list_paths() {
@@ -226,16 +227,51 @@ pub(crate) fn lookup_subnet<Storage: AsRef<[u8]> + Clone>(
         let node_key = lookup_value(&node_keys_subtree, [node_id.as_slice(), b"public_key"])?;
         node_keys.insert(node_id, node_key.to_vec());
     }
-    let mut range_set = RangeInclusiveSet::new_with_step_fns();
-    for (low, high) in canister_ranges {
-        range_set.insert(low..=high);
-    }
     let subnet = Subnet {
-        canister_ranges: range_set,
+        canister_ranges: RangeInclusiveSet::new_with_step_fns(),
         _key: key,
         node_keys,
     };
     Ok(subnet)
+}
+
+pub(crate) fn lookup_canister_ranges<Storage: AsRef<[u8]> + Clone>(
+    subnet_id: &Principal,
+    certificate: &Certificate<Storage>,
+) -> Result<RangeInclusiveSet<Principal, PrincipalStep>, AgentError> {
+    match certificate
+        .tree
+        .lookup_path([b"subnet", subnet_id.as_slice(), b"canister_ranges"])
+    {
+        LookupResult::Found(_) => {
+            let ranges: Vec<(Principal, Principal)> =
+                lookup_subnet_canister_ranges(certificate, *subnet_id)?;
+            let mut canister_ranges = RangeInclusiveSet::new_with_step_fns();
+            for (low, high) in ranges {
+                canister_ranges.insert(low..=high);
+            }
+            Ok(canister_ranges)
+        }
+        _ => {
+            let canister_ranges_tree = lookup_tree(
+                &certificate.tree,
+                [b"canister_ranges", subnet_id.as_slice()],
+            )?;
+            let mut canister_ranges = RangeInclusiveSet::new_with_step_fns();
+            for shard in canister_ranges_tree.list_paths() {
+                let shard_ranges: Vec<(Principal, Principal)> =
+                    serde_cbor::from_slice::<Vec<(Principal, Principal)>>(lookup_value(
+                        &canister_ranges_tree,
+                        [shard[0].as_bytes()],
+                    )?)?;
+                for (low, high) in shard_ranges {
+                    canister_ranges.insert(low..=high);
+                }
+            }
+
+            Ok(canister_ranges)
+        }
+    }
 }
 
 pub(crate) fn lookup_api_boundary_nodes<Storage: AsRef<[u8]> + Clone>(
