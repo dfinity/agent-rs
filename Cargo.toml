@@ -13,7 +13,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.44.3"
+version = "0.45.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2021"
 repository = "https://github.com/dfinity/agent-rs"
@@ -27,9 +27,9 @@ license = "Apache-2.0"
 needless_lifetimes = "allow"
 
 [workspace.dependencies]
-ic-agent = { path = "ic-agent", version = "0.44.3", default-features = false }
-ic-utils = { path = "ic-utils", version = "0.44.3" }
-ic-transport-types = { path = "ic-transport-types", version = "0.44.3" }
+ic-agent = { path = "ic-agent", version = "0.45.0", default-features = false }
+ic-utils = { path = "ic-utils", version = "0.45.0" }
+ic-transport-types = { path = "ic-transport-types", version = "0.45.0" }
 ref-tests = { path = "ref-tests" }
 
 ic-certification = "3"
