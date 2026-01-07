@@ -949,10 +949,11 @@ impl Agent {
     }
 
     fn verify_cert_timestamp(&self, cert: &Certificate) -> Result<(), AgentError> {
+        // Verify that the certificate is not older than ingress expiry
+        // Certificates with timestamps in the future are allowed
         let time = lookup_time(cert)?;
         if (OffsetDateTime::now_utc()
             - OffsetDateTime::from_unix_timestamp_nanos(time.into()).unwrap())
-        .abs()
             > self.ingress_expiry
         {
             Err(AgentError::CertificateOutdated(self.ingress_expiry))
