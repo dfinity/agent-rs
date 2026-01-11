@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Fix `StatusCode::SERVICE_UNAVAILABLE` in `ic-agent`.
+
 ## [0.45.0] - 2025-12-19
 
 * Add `{get,fetch}_subnet_by_{id,canister}` functions to enable looking up subnet information.
