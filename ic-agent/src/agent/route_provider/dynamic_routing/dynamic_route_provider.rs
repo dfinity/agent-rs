@@ -415,17 +415,16 @@ mod tests {
         checker.overwrite_healthy_nodes(vec![node_1.clone()]);
         // Configure RouteProvider
         let snapshot = RoundRobinRoutingSnapshot::new();
-        let route_provider =
-            DynamicRouteProviderBuilder::from_components(
-                snapshot,
-                vec![node_1.clone()],
-                fetcher.clone(),
-                checker.clone(),
-            )
-            .with_fetch_period(fetch_interval)
-            .with_check_period(check_interval)
-            .build()
-            .await;
+        let route_provider = DynamicRouteProviderBuilder::from_components(
+            snapshot,
+            vec![node_1.clone()],
+            fetcher.clone(),
+            checker.clone(),
+        )
+        .with_fetch_period(fetch_interval)
+        .with_check_period(check_interval)
+        .build()
+        .await;
         let route_provider = Arc::new(route_provider);
 
         // This time span is required for the snapshot to be fully updated with the new nodes and their health info.
@@ -564,17 +563,16 @@ mod tests {
         checker.overwrite_healthy_nodes(vec![node_1.clone()]);
         // Configure RouteProvider
         let snapshot = RoundRobinRoutingSnapshot::new();
-        let route_provider =
-            DynamicRouteProviderBuilder::from_components(
-                snapshot,
-                vec![node_1.clone()],
-                fetcher,
-                checker.clone(),
-            )
-            .with_fetch_period(fetch_interval)
-            .with_check_period(check_interval)
-            .build()
-            .await;
+        let route_provider = DynamicRouteProviderBuilder::from_components(
+            snapshot,
+            vec![node_1.clone()],
+            fetcher,
+            checker.clone(),
+        )
+        .with_fetch_period(fetch_interval)
+        .with_check_period(check_interval)
+        .build()
+        .await;
         let route_provider = Arc::new(route_provider);
 
         // Test 1: multiple route() calls return a single domain=ic0.app, as the seed is healthy.
@@ -610,17 +608,16 @@ mod tests {
         checker.overwrite_healthy_nodes(vec![]);
         // Configure RouteProvider
         let snapshot = RoundRobinRoutingSnapshot::new();
-        let route_provider =
-            DynamicRouteProviderBuilder::from_components(
-                snapshot,
-                vec![node_1.clone()],
-                fetcher,
-                checker,
-            )
-            .with_fetch_period(fetch_interval)
-            .with_check_period(check_interval)
-            .build()
-            .await;
+        let route_provider = DynamicRouteProviderBuilder::from_components(
+            snapshot,
+            vec![node_1.clone()],
+            fetcher,
+            checker,
+        )
+        .with_fetch_period(fetch_interval)
+        .with_check_period(check_interval)
+        .build()
+        .await;
 
         // Test: calls to route() return an error, as no healthy seeds exist.
         for _ in 0..4 {
@@ -690,17 +687,16 @@ mod tests {
         checker.overwrite_healthy_nodes(vec![node_1.clone()]);
         // Configure RouteProvider
         let snapshot = RoundRobinRoutingSnapshot::new();
-        let route_provider =
-            DynamicRouteProviderBuilder::from_components(
-                snapshot,
-                vec![node_1.clone()],
-                fetcher.clone(),
-                checker.clone(),
-            )
-            .with_fetch_period(fetch_interval)
-            .with_check_period(check_interval)
-            .build()
-            .await;
+        let route_provider = DynamicRouteProviderBuilder::from_components(
+            snapshot,
+            vec![node_1.clone()],
+            fetcher.clone(),
+            checker.clone(),
+        )
+        .with_fetch_period(fetch_interval)
+        .with_check_period(check_interval)
+        .build()
+        .await;
         let route_provider = Arc::new(route_provider);
 
         // This time span is required for the snapshot to be fully updated with the new nodes topology and health info.

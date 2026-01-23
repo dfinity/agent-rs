@@ -84,16 +84,16 @@
 //!         // Node::new("<api-boundary-node-domain>")?,
 //!     ];
 //!
-    //!     // Build dynamic route provider with HTTP client
-    //!     let http_client = Arc::new(reqwest::Client::new());
-    //!     let route_provider: DynamicRouteProvider<LatencyRoutingSnapshot> =
-    //!         DynamicRouteProviderBuilder::new(routing_strategy, seed_nodes, http_client)
-    //!             // Set how often to fetch the latest API boundary node topology
-    //!             .with_fetch_period(Duration::from_secs(10))
-    //!             // Set how often to perform health checks on the API boundary nodes
-    //!             .with_check_period(Duration::from_secs(2))
-    //!             .build()
-    //!             .await;
+//!     // Build dynamic route provider with HTTP client
+//!     let http_client = Arc::new(reqwest::Client::new());
+//!     let route_provider: DynamicRouteProvider<LatencyRoutingSnapshot> =
+//!         DynamicRouteProviderBuilder::new(routing_strategy, seed_nodes, http_client)
+//!             // Set how often to fetch the latest API boundary node topology
+//!             .with_fetch_period(Duration::from_secs(10))
+//!             // Set how often to perform health checks on the API boundary nodes
+//!             .with_check_period(Duration::from_secs(2))
+//!             .build()
+//!             .await;
 //!
 //!     // Advanced: Provide custom fetcher and checker implementations
 //!     // let route_provider = DynamicRouteProviderBuilder::from_components(
