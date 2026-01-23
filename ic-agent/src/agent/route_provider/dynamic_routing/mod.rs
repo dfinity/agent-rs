@@ -52,6 +52,7 @@
 //! ## Example: Customized instantiation
 #![cfg_attr(feature = "_internal_dynamic-routing", doc = "```rust")]
 #![cfg_attr(not(feature = "_internal_dynamic-routing"), doc = "```ignore")]
+//! use std::sync::Arc;
 //! use std::time::Duration;
 //!
 //! use anyhow::Result;
