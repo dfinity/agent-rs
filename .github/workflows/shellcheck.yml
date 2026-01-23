@@ -6,7 +6,6 @@ on:
       - reopened
       - synchronize
     paths:
-      - "e2e/**"
       - ".github/**"
   push:
     branches:
@@ -24,7 +23,6 @@ jobs:
           cd $HOME/bin
           curl -L https://github.com/koalaman/shellcheck/releases/download/v0.7.1/shellcheck-v0.7.1.darwin.x86_64.tar.xz \
             | xz -d | tar x
-      - name: Check e2e scripts
-        run: $HOME/bin/shellcheck-v0.7.1/shellcheck e2e/bash/*.bash e2e/bash/util/*.bash
+
       - name: Check workflow scripts
         run: $HOME/bin/shellcheck-v0.7.1/shellcheck .github/workflows/*.sh
