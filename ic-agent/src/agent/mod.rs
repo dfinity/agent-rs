@@ -221,13 +221,14 @@ impl Agent {
                     );
                     let seeds = vec![Node::new(url.domain().unwrap()).unwrap()];
                     UrlUntilReady::new(url, async move {
-                        DynamicRouteProviderBuilder::new(
+                        let provider = DynamicRouteProviderBuilder::new(
                             LatencyRoutingSnapshot::new(),
                             seeds,
                             client,
                         )
-                        .build()
-                        .await
+                        .build();
+                        provider.start().await;
+                        provider
                     }) as Arc<dyn RouteProvider>
                 } else {
                     Arc::new(url)

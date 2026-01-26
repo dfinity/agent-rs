@@ -93,8 +93,14 @@
 //!             .with_fetch_period(Duration::from_secs(10))
 //!             // Set how often to perform health checks on the API boundary nodes
 //!             .with_check_period(Duration::from_secs(2))
-//!             .build()
-//!             .await;
+//!             // Or optionally provide a custom node health checker implementation
+//!             // .with_checker(custom_checker)
+//!             // Or optionally provide a custom topology fetcher implementation
+//!             // .with_fetcher(custom_fetcher)
+//!             .build();
+//!
+//!     // Start background tasks and wait for initial health checks
+//!     route_provider.start().await;
 //!
 //!     // Advanced: Provide custom fetcher and checker implementations
 //!     // let route_provider = DynamicRouteProviderBuilder::from_components(
@@ -103,8 +109,7 @@
 //!     //     Arc::new(custom_fetcher),
 //!     //     Arc::new(custom_checker),
 //!     // )
-//!     // .build()
-//!     // .await;
+//!     // .build();
 //!
 //!     // Example: generate routing URLs
 //!     let url_1 = route_provider.route().expect("failed to get routing URL");
