@@ -470,7 +470,6 @@ mod tests {
         )
         .build();
         route_provider.start().await;
-        route_provider.start().await;
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         let route_provider = Arc::new(route_provider) as Arc<dyn RouteProvider>;
         let agent = Agent::builder()
