@@ -178,26 +178,29 @@ impl DynamicRouteProvider {
         strategy: DynamicRoutingStrategy,
     ) -> Result<Self, AgentError> {
         let seed_nodes: Result<Vec<_>, _> = seed_domains.into_iter().map(Node::new).collect();
-        let boxed = match strategy {
-            DynamicRoutingStrategy::ByLatency => Box::new(
-                DynamicRouteProviderBuilder::new(
+        let boxed: Box<dyn RouteProvider> = match strategy {
+            DynamicRoutingStrategy::ByLatency => {
+                let provider = DynamicRouteProviderBuilder::new(
                     LatencyRoutingSnapshot::new(),
                     seed_nodes?,
                     client,
                 )
-                .build()
-                .await,
-            ) as Box<dyn RouteProvider>,
-            DynamicRoutingStrategy::RoundRobin => Box::new(
-                DynamicRouteProviderBuilder::new(
+                .build();
+                provider.start().await;
+                Box::new(provider)
+            }
+            DynamicRoutingStrategy::RoundRobin => {
+                let provider = DynamicRouteProviderBuilder::new(
                     RoundRobinRoutingSnapshot::new(),
                     seed_nodes?,
                     client,
                 )
-                .build()
-                .await,
-            ),
+                .build();
+                provider.start().await;
+                Box::new(provider)
+            }
         };
+
         Ok(Self { inner: boxed })
     }
     /// Same as [`run_in_background`](Self::run_in_background), but with custom intervals for refreshing the routing list and health-checking nodes.
@@ -209,30 +212,33 @@ impl DynamicRouteProvider {
         health_check_interval: Duration,
     ) -> Result<Self, AgentError> {
         let seed_nodes: Result<Vec<_>, _> = seed_domains.into_iter().map(Node::new).collect();
-        let boxed = match strategy {
-            DynamicRoutingStrategy::ByLatency => Box::new(
-                DynamicRouteProviderBuilder::new(
+        let boxed: Box<dyn RouteProvider> = match strategy {
+            DynamicRoutingStrategy::ByLatency => {
+                let provider = DynamicRouteProviderBuilder::new(
                     LatencyRoutingSnapshot::new(),
                     seed_nodes?,
                     client,
                 )
                 .with_fetch_period(list_update_interval)
                 .with_check_period(health_check_interval)
-                .build()
-                .await,
-            ) as Box<dyn RouteProvider>,
-            DynamicRoutingStrategy::RoundRobin => Box::new(
-                DynamicRouteProviderBuilder::new(
+                .build();
+                provider.start().await;
+                Box::new(provider)
+            }
+            DynamicRoutingStrategy::RoundRobin => {
+                let provider = DynamicRouteProviderBuilder::new(
                     RoundRobinRoutingSnapshot::new(),
                     seed_nodes?,
                     client,
                 )
                 .with_fetch_period(list_update_interval)
                 .with_check_period(health_check_interval)
-                .build()
-                .await,
-            ),
+                .build();
+                provider.start().await;
+                Box::new(provider)
+            }
         };
+
         Ok(Self { inner: boxed })
     }
 }

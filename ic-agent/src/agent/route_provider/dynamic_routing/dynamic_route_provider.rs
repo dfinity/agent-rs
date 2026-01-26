@@ -1,7 +1,10 @@
 //! An implementation of [`RouteProvider`] for dynamic generation of routing urls.
 
 use std::{
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 
@@ -67,6 +70,8 @@ pub struct DynamicRouteProvider<S> {
     seeds: Vec<Node>,
     /// Cancellation token for stopping the spawned tasks.
     token: StopSource,
+    /// Flag indicating whether background tasks have been started.
+    started: Arc<AtomicBool>,
 }
 
 /// An error that occurred when the `DynamicRouteProvider` service was running.
@@ -156,11 +161,16 @@ impl<S> DynamicRouteProviderBuilder<S> {
     }
 
     /// Builds an instance of the `DynamicRouteProvider`.
-    pub async fn build(self) -> DynamicRouteProvider<S>
+    ///
+    /// The provider is constructed but background tasks are not started yet.
+    /// You can either:
+    /// - Call `.start().await` explicitly to start background tasks and wait for initialization
+    /// - Just use the provider - it will auto-start on first `route()` call (lazy initialization)
+    pub fn build(self) -> DynamicRouteProvider<S>
     where
         S: RoutingSnapshot + 'static,
     {
-        let route_provider = DynamicRouteProvider {
+        DynamicRouteProvider {
             fetcher: self.fetcher,
             fetch_period: self.fetch_period,
             fetch_retry_interval: self.fetch_retry_interval,
@@ -169,11 +179,8 @@ impl<S> DynamicRouteProviderBuilder<S> {
             routing_snapshot: self.routing_snapshot,
             seeds: self.seeds,
             token: StopSource::new(),
-        };
-
-        route_provider.run().await;
-
-        route_provider
+            started: Arc::new(AtomicBool::new(false)),
+        }
     }
 }
 
@@ -182,6 +189,9 @@ where
     S: RoutingSnapshot + 'static,
 {
     fn route(&self) -> Result<Url, AgentError> {
+        // Lazy initialization: auto-start if not already started
+        self.ensure_started();
+
         let snapshot = self.routing_snapshot.load();
         let node = snapshot.next_node().ok_or_else(|| {
             AgentError::RouteProviderError("No healthy API nodes found.".to_string())
@@ -190,6 +200,9 @@ where
     }
 
     fn n_ordered_routes(&self, n: usize) -> Result<Vec<Url>, AgentError> {
+        // Lazy initialization: auto-start if not already started
+        self.ensure_started();
+
         let snapshot = self.routing_snapshot.load();
         let nodes = snapshot.next_n_nodes(n);
         if nodes.is_empty() {
@@ -211,6 +224,82 @@ impl<S> DynamicRouteProvider<S>
 where
     S: RoutingSnapshot + 'static,
 {
+    /// Explicitly starts the background tasks and waits for initial health checks to complete.
+    ///
+    /// This method is optional - if you don't call it, the provider will auto-start
+    /// on the first `route()` call. However, calling `start()` explicitly gives you:
+    /// - Control over when initialization happens
+    /// - Ability to await initial health checks (waits up to 1 second for seeds)
+    /// - Better error visibility during startup
+    ///
+    /// This method is idempotent - calling it multiple times is safe.
+    pub async fn start(&self) {
+        // Check if already started
+        if self.started.swap(true, Ordering::AcqRel) {
+            // Already started, nothing to do
+            return;
+        }
+
+        // Start the background tasks and wait for initial health checks
+        self.run().await;
+    }
+
+    /// Ensures background tasks are started (lazy initialization).
+    /// Called automatically by route() if not explicitly started.
+    fn ensure_started(&self) {
+        // Fast path: already started
+        if self.started.load(Ordering::Acquire) {
+            return;
+        }
+
+        // Try to claim the right to start
+        if self.started.swap(true, Ordering::AcqRel) {
+            // Someone else started it
+            return;
+        }
+
+        // We won the race - start the background tasks
+        // Clone what we need for the spawned task
+        let fetcher = Arc::clone(&self.fetcher);
+        let checker = Arc::clone(&self.checker);
+        let routing_snapshot = Arc::clone(&self.routing_snapshot);
+        let seeds = self.seeds.clone();
+        let fetch_period = self.fetch_period;
+        let fetch_retry_interval = self.fetch_retry_interval;
+        let check_period = self.check_period;
+        let token = self.token.token();
+
+        // Spawn the initialization - don't wait (fire-and-forget)
+        crate::util::spawn(async move {
+            Self::run_background_tasks(
+                fetcher,
+                checker,
+                routing_snapshot,
+                seeds,
+                fetch_period,
+                fetch_retry_interval,
+                check_period,
+                token,
+            )
+            .await;
+        });
+    }
+
+    /// Internal implementation that starts the background tasks and waits for initialization.
+    async fn run(&self) {
+        Self::run_background_tasks(
+            Arc::clone(&self.fetcher),
+            Arc::clone(&self.checker),
+            Arc::clone(&self.routing_snapshot),
+            self.seeds.clone(),
+            self.fetch_period,
+            self.fetch_retry_interval,
+            self.check_period,
+            self.token.token(),
+        )
+        .await;
+    }
+
     /// Starts two background tasks:
     /// - Task1: `NodesFetchActor`
     ///   - Periodically fetches existing API nodes (gets latest nodes topology) and sends discovered nodes to `HealthManagerActor`.
@@ -218,7 +307,16 @@ where
     ///   - Listens to the fetched nodes messages from the `NodesFetchActor`.
     ///   - Starts/stops health check tasks (`HealthCheckActors`) based on the newly added/removed nodes.
     ///   - These spawned health check tasks periodically update the snapshot with the latest node health info.
-    pub async fn run(&self) {
+    async fn run_background_tasks(
+        fetcher: Arc<dyn Fetch>,
+        checker: Arc<dyn HealthCheck>,
+        routing_snapshot: AtomicSwap<S>,
+        seeds: Vec<Node>,
+        fetch_period: Duration,
+        fetch_retry_interval: Duration,
+        check_period: Duration,
+        token: stop_token::StopToken,
+    ) {
         log!(info, "{DYNAMIC_ROUTE_PROVIDER}: started ...");
         // Communication channel between NodesFetchActor and HealthManagerActor.
         let (fetch_sender, fetch_receiver) = async_watch::channel(None);
@@ -228,18 +326,18 @@ where
 
         // Start the receiving part first.
         let health_manager_actor = HealthManagerActor::new(
-            Arc::clone(&self.checker),
-            self.check_period,
-            Arc::clone(&self.routing_snapshot),
+            Arc::clone(&checker),
+            check_period,
+            Arc::clone(&routing_snapshot),
             fetch_receiver,
             init_sender,
-            self.token.token(),
+            token.clone(),
         );
         crate::util::spawn(async move { health_manager_actor.run().await });
 
         // Dispatch all seed nodes for initial health checks
         if let Err(_err) = fetch_sender.send(Some(FetchedNodes {
-            nodes: self.seeds.clone(),
+            nodes: seeds.clone(),
         })) {
             log!(
                 error,
@@ -269,12 +367,12 @@ where
         init_receiver.close();
 
         let fetch_actor = NodesFetchActor::new(
-            Arc::clone(&self.fetcher),
-            self.fetch_period,
-            self.fetch_retry_interval,
+            Arc::clone(&fetcher),
+            fetch_period,
+            fetch_retry_interval,
             fetch_sender,
-            Arc::clone(&self.routing_snapshot),
-            self.token.token(),
+            Arc::clone(&routing_snapshot),
+            token,
         );
         crate::util::spawn(async move { fetch_actor.run().await });
         log!(
@@ -374,8 +472,10 @@ mod tests {
             vec![seed],
             http_client,
         )
-        .build()
-        .await;
+        .build();
+        route_provider.start().await;
+        route_provider.start().await;
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         let route_provider = Arc::new(route_provider) as Arc<dyn RouteProvider>;
         let agent = Agent::builder()
             .with_arc_route_provider(Arc::clone(&route_provider))
@@ -415,16 +515,16 @@ mod tests {
         checker.overwrite_healthy_nodes(vec![node_1.clone()]);
         // Configure RouteProvider
         let snapshot = RoundRobinRoutingSnapshot::new();
-        let route_provider = DynamicRouteProviderBuilder::from_components(
-            snapshot,
-            vec![node_1.clone()],
-            fetcher.clone(),
-            checker.clone(),
-        )
-        .with_fetch_period(fetch_interval)
-        .with_check_period(check_interval)
-        .build()
-        .await;
+        let client = reqwest::Client::builder().build().unwrap();
+        let route_provider =
+            DynamicRouteProviderBuilder::new(snapshot, vec![node_1.clone()], Arc::new(client))
+                .with_fetcher(fetcher.clone())
+                .with_checker(checker.clone())
+                .with_fetch_period(fetch_interval)
+                .with_check_period(check_interval)
+                .build();
+        route_provider.start().await;
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         let route_provider = Arc::new(route_provider);
 
         // This time span is required for the snapshot to be fully updated with the new nodes and their health info.
@@ -526,8 +626,9 @@ mod tests {
         )
         .with_fetch_period(fetch_interval)
         .with_check_period(check_interval)
-        .build()
-        .await;
+        .build();
+        route_provider.start().await;
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         let route_provider = Arc::new(route_provider);
 
         // Test 1: calls to route() return an error, as no healthy seeds exist.
@@ -563,16 +664,16 @@ mod tests {
         checker.overwrite_healthy_nodes(vec![node_1.clone()]);
         // Configure RouteProvider
         let snapshot = RoundRobinRoutingSnapshot::new();
-        let route_provider = DynamicRouteProviderBuilder::from_components(
-            snapshot,
-            vec![node_1.clone()],
-            fetcher,
-            checker.clone(),
-        )
-        .with_fetch_period(fetch_interval)
-        .with_check_period(check_interval)
-        .build()
-        .await;
+        let client = reqwest::Client::builder().build().unwrap();
+        let route_provider =
+            DynamicRouteProviderBuilder::new(snapshot, vec![node_1.clone()], Arc::new(client))
+                .with_fetcher(fetcher)
+                .with_checker(checker.clone())
+                .with_fetch_period(fetch_interval)
+                .with_check_period(check_interval)
+                .build();
+        route_provider.start().await;
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         let route_provider = Arc::new(route_provider);
 
         // Test 1: multiple route() calls return a single domain=ic0.app, as the seed is healthy.
@@ -608,16 +709,14 @@ mod tests {
         checker.overwrite_healthy_nodes(vec![]);
         // Configure RouteProvider
         let snapshot = RoundRobinRoutingSnapshot::new();
-        let route_provider = DynamicRouteProviderBuilder::from_components(
-            snapshot,
-            vec![node_1.clone()],
-            fetcher,
-            checker,
-        )
-        .with_fetch_period(fetch_interval)
-        .with_check_period(check_interval)
-        .build()
-        .await;
+        let client = reqwest::Client::builder().build().unwrap();
+        let route_provider =
+            DynamicRouteProviderBuilder::new(snapshot, vec![node_1.clone()], Arc::new(client))
+                .with_fetcher(fetcher)
+                .with_checker(checker)
+                .with_fetch_period(fetch_interval)
+                .with_check_period(check_interval)
+                .build();
 
         // Test: calls to route() return an error, as no healthy seeds exist.
         for _ in 0..4 {
@@ -655,8 +754,9 @@ mod tests {
         )
         .with_fetch_period(fetch_interval)
         .with_check_period(check_interval)
-        .build()
-        .await;
+        .build();
+        route_provider.start().await;
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         let route_provider = Arc::new(route_provider);
 
         // Test 1: calls to route() return only a healthy seed ic0.app.
@@ -687,16 +787,16 @@ mod tests {
         checker.overwrite_healthy_nodes(vec![node_1.clone()]);
         // Configure RouteProvider
         let snapshot = RoundRobinRoutingSnapshot::new();
-        let route_provider = DynamicRouteProviderBuilder::from_components(
-            snapshot,
-            vec![node_1.clone()],
-            fetcher.clone(),
-            checker.clone(),
-        )
-        .with_fetch_period(fetch_interval)
-        .with_check_period(check_interval)
-        .build()
-        .await;
+        let client = reqwest::Client::builder().build().unwrap();
+        let route_provider =
+            DynamicRouteProviderBuilder::new(snapshot, vec![node_1.clone()], Arc::new(client))
+                .with_fetcher(fetcher.clone())
+                .with_checker(checker.clone())
+                .with_fetch_period(fetch_interval)
+                .with_check_period(check_interval)
+                .build();
+        route_provider.start().await;
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         let route_provider = Arc::new(route_provider);
 
         // This time span is required for the snapshot to be fully updated with the new nodes topology and health info.
