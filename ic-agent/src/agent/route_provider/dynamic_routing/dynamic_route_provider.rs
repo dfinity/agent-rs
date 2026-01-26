@@ -220,6 +220,18 @@ where
     }
 }
 
+/// Configuration and dependencies for running background tasks.
+struct BackgroundTaskConfig<S> {
+    fetcher: Arc<dyn Fetch>,
+    checker: Arc<dyn HealthCheck>,
+    routing_snapshot: AtomicSwap<S>,
+    seeds: Vec<Node>,
+    fetch_period: Duration,
+    fetch_retry_interval: Duration,
+    check_period: Duration,
+    token: stop_token::StopToken,
+}
+
 impl<S> DynamicRouteProvider<S>
 where
     S: RoutingSnapshot + 'static,
@@ -261,44 +273,36 @@ where
 
         // We won the race - start the background tasks
         // Clone what we need for the spawned task
-        let fetcher = Arc::clone(&self.fetcher);
-        let checker = Arc::clone(&self.checker);
-        let routing_snapshot = Arc::clone(&self.routing_snapshot);
-        let seeds = self.seeds.clone();
-        let fetch_period = self.fetch_period;
-        let fetch_retry_interval = self.fetch_retry_interval;
-        let check_period = self.check_period;
-        let token = self.token.token();
+        let config = BackgroundTaskConfig {
+            fetcher: Arc::clone(&self.fetcher),
+            checker: Arc::clone(&self.checker),
+            routing_snapshot: Arc::clone(&self.routing_snapshot),
+            seeds: self.seeds.clone(),
+            fetch_period: self.fetch_period,
+            fetch_retry_interval: self.fetch_retry_interval,
+            check_period: self.check_period,
+            token: self.token.token(),
+        };
 
         // Spawn the initialization - don't wait (fire-and-forget)
         crate::util::spawn(async move {
-            Self::run_background_tasks(
-                fetcher,
-                checker,
-                routing_snapshot,
-                seeds,
-                fetch_period,
-                fetch_retry_interval,
-                check_period,
-                token,
-            )
-            .await;
+            Self::run_background_tasks(config).await;
         });
     }
 
     /// Internal implementation that starts the background tasks and waits for initialization.
     async fn run(&self) {
-        Self::run_background_tasks(
-            Arc::clone(&self.fetcher),
-            Arc::clone(&self.checker),
-            Arc::clone(&self.routing_snapshot),
-            self.seeds.clone(),
-            self.fetch_period,
-            self.fetch_retry_interval,
-            self.check_period,
-            self.token.token(),
-        )
-        .await;
+        let config = BackgroundTaskConfig {
+            fetcher: Arc::clone(&self.fetcher),
+            checker: Arc::clone(&self.checker),
+            routing_snapshot: Arc::clone(&self.routing_snapshot),
+            seeds: self.seeds.clone(),
+            fetch_period: self.fetch_period,
+            fetch_retry_interval: self.fetch_retry_interval,
+            check_period: self.check_period,
+            token: self.token.token(),
+        };
+        Self::run_background_tasks(config).await;
     }
 
     /// Starts two background tasks:
@@ -308,16 +312,7 @@ where
     ///   - Listens to the fetched nodes messages from the `NodesFetchActor`.
     ///   - Starts/stops health check tasks (`HealthCheckActors`) based on the newly added/removed nodes.
     ///   - These spawned health check tasks periodically update the snapshot with the latest node health info.
-    async fn run_background_tasks(
-        fetcher: Arc<dyn Fetch>,
-        checker: Arc<dyn HealthCheck>,
-        routing_snapshot: AtomicSwap<S>,
-        seeds: Vec<Node>,
-        fetch_period: Duration,
-        fetch_retry_interval: Duration,
-        check_period: Duration,
-        token: stop_token::StopToken,
-    ) {
+    async fn run_background_tasks(config: BackgroundTaskConfig<S>) {
         log!(info, "{DYNAMIC_ROUTE_PROVIDER}: started ...");
         // Communication channel between NodesFetchActor and HealthManagerActor.
         let (fetch_sender, fetch_receiver) = async_watch::channel(None);
@@ -327,18 +322,18 @@ where
 
         // Start the receiving part first.
         let health_manager_actor = HealthManagerActor::new(
-            Arc::clone(&checker),
-            check_period,
-            Arc::clone(&routing_snapshot),
+            Arc::clone(&config.checker),
+            config.check_period,
+            Arc::clone(&config.routing_snapshot),
             fetch_receiver,
             init_sender,
-            token.clone(),
+            config.token.clone(),
         );
         crate::util::spawn(async move { health_manager_actor.run().await });
 
         // Dispatch all seed nodes for initial health checks
         if let Err(_err) = fetch_sender.send(Some(FetchedNodes {
-            nodes: seeds.clone(),
+            nodes: config.seeds.clone(),
         })) {
             log!(
                 error,
@@ -368,12 +363,12 @@ where
         init_receiver.close();
 
         let fetch_actor = NodesFetchActor::new(
-            Arc::clone(&fetcher),
-            fetch_period,
-            fetch_retry_interval,
+            Arc::clone(&config.fetcher),
+            config.fetch_period,
+            config.fetch_retry_interval,
             fetch_sender,
-            Arc::clone(&routing_snapshot),
-            token,
+            Arc::clone(&config.routing_snapshot),
+            config.token,
         );
         crate::util::spawn(async move { fetch_actor.run().await });
         log!(
