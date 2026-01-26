@@ -247,14 +247,15 @@ where
     /// Ensures background tasks are started (lazy initialization).
     /// Called automatically by route() if not explicitly started.
     fn ensure_started(&self) {
-        // Fast path: already started
-        if self.started.load(Ordering::Acquire) {
-            return;
-        }
-
-        // Try to claim the right to start
-        if self.started.swap(true, Ordering::AcqRel) {
-            // Someone else started it
+        // Try to atomically change false -> true
+        // If we succeed, we won the race and should start
+        // If we fail, it's already true (someone else started it)
+        if self
+            .started
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            // Already started, nothing to do
             return;
         }
 
