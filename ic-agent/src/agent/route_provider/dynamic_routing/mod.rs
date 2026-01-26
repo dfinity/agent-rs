@@ -52,7 +52,8 @@
 //! ## Example: Customized instantiation
 #![cfg_attr(feature = "_internal_dynamic-routing", doc = "```rust")]
 #![cfg_attr(not(feature = "_internal_dynamic-routing"), doc = "```ignore")]
-//! use std::{sync::Arc, time::Duration};
+//! use std::sync::Arc;
+//! use std::time::Duration;
 //!
 //! use anyhow::Result;
 //! use ic_agent::{
@@ -66,7 +67,6 @@
 //!     },
 //!     Agent,
 //! };
-//! use reqwest::Client;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
@@ -85,22 +85,26 @@
 //!         // Node::new("<api-boundary-node-domain>")?,
 //!     ];
 //!
-//!     // HTTP client for health checks and topology discovery
-//!     let client = Client::builder().build()?;
-//!
-//!     // Build dynamic route provider
+//!     // Build dynamic route provider with HTTP client
+//!     let http_client = Arc::new(reqwest::Client::new());
 //!     let route_provider: DynamicRouteProvider<LatencyRoutingSnapshot> =
-//!         DynamicRouteProviderBuilder::new(routing_strategy, seed_nodes, Arc::new(client))
+//!         DynamicRouteProviderBuilder::new(routing_strategy, seed_nodes, http_client)
 //!             // Set how often to fetch the latest API boundary node topology
 //!             .with_fetch_period(Duration::from_secs(10))
 //!             // Set how often to perform health checks on the API boundary nodes
 //!             .with_check_period(Duration::from_secs(2))
-//!             // Or optionally provide a custom node health checker implementation
-//!             // .with_checker(custom_checker)
-//!             // Or optionally provide a custom topology fetcher implementation
-//!             // .with_fetcher(custom_fetcher)
 //!             .build()
 //!             .await;
+//!
+//!     // Advanced: Provide custom fetcher and checker implementations
+//!     // let route_provider = DynamicRouteProviderBuilder::from_components(
+//!     //     routing_strategy,
+//!     //     seed_nodes,
+//!     //     Arc::new(custom_fetcher),
+//!     //     Arc::new(custom_checker),
+//!     // )
+//!     // .build()
+//!     // .await;
 //!
 //!     // Example: generate routing URLs
 //!     let url_1 = route_provider.route().expect("failed to get routing URL");
