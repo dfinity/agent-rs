@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Breaking Changes
+
+* BREAKING: `DynamicRouteProviderBuilder::build()` is no longer async. Background tasks are no longer started automatically during construction. Call `provider.start().await` for explicit initialization, or let it auto-start lazily on first `route()` call.
+* BREAKING: `DynamicRouteProvider::run()` is now private. Use `start()` instead.
+
 ## [0.45.0] - 2025-12-19
 
 * Add `{get,fetch}_subnet_by_{id,canister}` functions to enable looking up subnet information.
