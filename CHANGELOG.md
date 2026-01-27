@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Time out `Unknown` statuses after 5 minutes, regardless of the configured `max_polling_time`.
+
 ### Breaking Changes
 
 * BREAKING: `DynamicRouteProviderBuilder::build()` is no longer async. Background tasks are no longer started automatically during construction. Call `provider.start().await` for explicit initialization, or let it auto-start lazily on first `route()` call.
