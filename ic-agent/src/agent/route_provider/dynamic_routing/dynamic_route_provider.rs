@@ -388,7 +388,6 @@ mod tests {
                     DynamicRouteProviderBuilder, IC0_SEED_DOMAIN, MAINNET_ROOT_SUBNET_ID,
                 },
                 node::Node,
-                snapshot::latency_based_routing::LatencyRoutingSnapshot,
                 test_utils::{
                     assert_routed_domains, route_n_times, NodeHealthCheckerMock, NodesFetcherMock,
                 },
