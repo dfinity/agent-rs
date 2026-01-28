@@ -23,7 +23,10 @@ use crate::{
                 messages::FetchedNodes,
                 node::Node,
                 nodes_fetch::{Fetch, NodesFetchActor, NodesFetcher},
-                snapshot::routing_snapshot::RoutingSnapshot,
+                snapshot::{
+                    latency_based_routing::LatencyRoutingSnapshot,
+                    routing_snapshot::RoutingSnapshot,
+                },
                 type_aliases::AtomicSwap,
             },
             RouteProvider, RoutesStats,
@@ -53,7 +56,7 @@ const DYNAMIC_ROUTE_PROVIDER: &str = "DynamicRouteProvider";
 /// It spawns the discovery service (`NodesFetchActor`) for fetching the latest nodes topology.
 /// It also spawns the `HealthManagerActor`, which orchestrates the health check tasks for each node and updates routing snapshot.
 #[derive(Debug)]
-pub struct DynamicRouteProvider<S> {
+pub struct DynamicRouteProvider {
     /// Fetcher for fetching the latest nodes topology.
     fetcher: Arc<dyn Fetch>,
     /// Periodicity of fetching the latest nodes topology.
@@ -65,7 +68,7 @@ pub struct DynamicRouteProvider<S> {
     /// Periodicity of checking the health of the nodes.
     check_period: Duration,
     /// Snapshot of the routing nodes.
-    routing_snapshot: AtomicSwap<S>,
+    routing_snapshot: AtomicSwap<LatencyRoutingSnapshot>,
     /// Initial seed nodes, which are used for the initial fetching of the nodes.
     seeds: Vec<Node>,
     /// Cancellation token for stopping the spawned tasks.
@@ -86,22 +89,22 @@ pub enum DynamicRouteProviderError {
 }
 
 /// A builder for the `DynamicRouteProvider`.
-pub struct DynamicRouteProviderBuilder<S> {
+pub struct DynamicRouteProviderBuilder {
     fetcher: Arc<dyn Fetch>,
     fetch_period: Duration,
     fetch_retry_interval: Duration,
     checker: Arc<dyn HealthCheck>,
     check_period: Duration,
-    routing_snapshot: AtomicSwap<S>,
+    routing_snapshot: AtomicSwap<LatencyRoutingSnapshot>,
     seeds: Vec<Node>,
 }
 
-impl<S> DynamicRouteProviderBuilder<S> {
+impl DynamicRouteProviderBuilder {
     /// Creates a new instance of the builder with a HTTP client.
     /// Use this when you want to share an HTTP client with other components (e.g., the Agent)
     /// or when you need custom HTTP client configuration.
     /// For full control over fetcher and checker, use [`Self::from_components`].
-    pub fn new(snapshot: S, seeds: Vec<Node>, http_client: Arc<dyn HttpService>) -> Self {
+    pub fn new(seeds: Vec<Node>, http_client: Arc<dyn HttpService>) -> Self {
         let fetcher = Arc::new(NodesFetcher::new(
             http_client.clone(),
             Principal::from_text(MAINNET_ROOT_SUBNET_ID).unwrap(),
@@ -112,13 +115,12 @@ impl<S> DynamicRouteProviderBuilder<S> {
             #[cfg(not(target_family = "wasm"))]
             HEALTH_CHECK_TIMEOUT,
         ));
-        Self::from_components(snapshot, seeds, fetcher, checker)
+        Self::from_components(seeds, fetcher, checker)
     }
 
     /// Creates a new instance of the builder with custom fetcher and checker implementations.
     /// Use this when you need full control over the node fetching and health checking behavior.
     pub fn from_components(
-        snapshot: S,
         seeds: Vec<Node>,
         fetcher: Arc<dyn Fetch>,
         checker: Arc<dyn HealthCheck>,
@@ -130,7 +132,7 @@ impl<S> DynamicRouteProviderBuilder<S> {
             checker,
             check_period: HEALTH_CHECK_PERIOD,
             seeds,
-            routing_snapshot: Arc::new(ArcSwap::from_pointee(snapshot)),
+            routing_snapshot: Arc::new(ArcSwap::from_pointee(LatencyRoutingSnapshot::new())),
         }
     }
 
@@ -166,10 +168,7 @@ impl<S> DynamicRouteProviderBuilder<S> {
     /// You can either:
     /// - Call `.start().await` explicitly to start background tasks and wait for initialization
     /// - Just use the provider - it will auto-start on first `route()` call (lazy initialization)
-    pub fn build(self) -> DynamicRouteProvider<S>
-    where
-        S: RoutingSnapshot + 'static,
-    {
+    pub fn build(self) -> DynamicRouteProvider {
         DynamicRouteProvider {
             fetcher: self.fetcher,
             fetch_period: self.fetch_period,
@@ -184,10 +183,7 @@ impl<S> DynamicRouteProviderBuilder<S> {
     }
 }
 
-impl<S> RouteProvider for DynamicRouteProvider<S>
-where
-    S: RoutingSnapshot + 'static,
-{
+impl RouteProvider for DynamicRouteProvider {
     fn route(&self) -> Result<Url, AgentError> {
         // Lazy initialization: auto-start if not already started
         self.ensure_started();
@@ -221,10 +217,10 @@ where
 }
 
 /// Configuration and dependencies for running background tasks.
-struct BackgroundTaskConfig<S> {
+struct BackgroundTaskConfig {
     fetcher: Arc<dyn Fetch>,
     checker: Arc<dyn HealthCheck>,
-    routing_snapshot: AtomicSwap<S>,
+    routing_snapshot: AtomicSwap<LatencyRoutingSnapshot>,
     seeds: Vec<Node>,
     fetch_period: Duration,
     fetch_retry_interval: Duration,
@@ -232,10 +228,7 @@ struct BackgroundTaskConfig<S> {
     token: stop_token::StopToken,
 }
 
-impl<S> DynamicRouteProvider<S>
-where
-    S: RoutingSnapshot + 'static,
-{
+impl DynamicRouteProvider {
     /// Explicitly starts the background tasks and waits for initial health checks to complete.
     ///
     /// This method is optional - if you don't call it, the provider will auto-start
@@ -312,7 +305,7 @@ where
     ///   - Listens to the fetched nodes messages from the `NodesFetchActor`.
     ///   - Starts/stops health check tasks (`HealthCheckActors`) based on the newly added/removed nodes.
     ///   - These spawned health check tasks periodically update the snapshot with the latest node health info.
-    async fn run_background_tasks(config: BackgroundTaskConfig<S>) {
+    async fn run_background_tasks(config: BackgroundTaskConfig) {
         log!(info, "{DYNAMIC_ROUTE_PROVIDER}: started ...");
         // Communication channel between NodesFetchActor and HealthManagerActor.
         let (fetch_sender, fetch_receiver) = async_watch::channel(None);
@@ -395,10 +388,7 @@ mod tests {
                     DynamicRouteProviderBuilder, IC0_SEED_DOMAIN, MAINNET_ROOT_SUBNET_ID,
                 },
                 node::Node,
-                snapshot::{
-                    latency_based_routing::LatencyRoutingSnapshot,
-                    round_robin_routing::RoundRobinRoutingSnapshot,
-                },
+                snapshot::latency_based_routing::LatencyRoutingSnapshot,
                 test_utils::{
                     assert_routed_domains, route_n_times, NodeHealthCheckerMock, NodesFetcherMock,
                 },
@@ -463,12 +453,7 @@ mod tests {
         setup_tracing();
         let seed = Node::new(IC0_SEED_DOMAIN).unwrap();
         let http_client = Arc::new(reqwest::Client::new());
-        let route_provider = DynamicRouteProviderBuilder::new(
-            LatencyRoutingSnapshot::new(),
-            vec![seed],
-            http_client,
-        )
-        .build();
+        let route_provider = DynamicRouteProviderBuilder::new(vec![seed], http_client).build();
         route_provider.start().await;
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         let route_provider = Arc::new(route_provider) as Arc<dyn RouteProvider>;
@@ -509,10 +494,8 @@ mod tests {
         fetcher.overwrite_nodes(vec![node_1.clone()]);
         checker.overwrite_healthy_nodes(vec![node_1.clone()]);
         // Configure RouteProvider
-        let snapshot = RoundRobinRoutingSnapshot::new();
         let client = reqwest::Client::builder().build().unwrap();
-        let route_provider =
-            DynamicRouteProviderBuilder::new(snapshot, vec![node_1.clone()], Arc::new(client))
+        let route_provider = DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client))
                 .with_fetcher(fetcher.clone())
                 .with_checker(checker.clone())
                 .with_fetch_period(fetch_interval)
@@ -532,34 +515,35 @@ mod tests {
         assert_routed_domains(routed_domains, vec![node_1.domain()], 6);
         assert_eq!(route_provider.routes_stats(), RoutesStats::new(1, Some(1)));
 
-        // Test 2: multiple route() calls return 3 different domains with equal fairness (repetition).
+        // Test 2: multiple route() calls return 3 different domains.
         // Two healthy nodes are added to the topology.
+        // With latency-based routing, we use more calls to ensure all nodes are likely visited.
         let node_2 = Node::new("api1.com").unwrap();
         let node_3 = Node::new("api2.com").unwrap();
         checker.overwrite_healthy_nodes(vec![node_1.clone(), node_2.clone(), node_3.clone()]);
         fetcher.overwrite_nodes(vec![node_1.clone(), node_2.clone(), node_3.clone()]);
         tokio::time::sleep(snapshot_update_duration).await;
-        let routed_domains = route_n_times(6, Arc::clone(&route_provider));
+        let routed_domains = route_n_times(30, Arc::clone(&route_provider)); // Increased for probabilistic routing
         assert_routed_domains(
             routed_domains,
             vec![node_1.domain(), node_2.domain(), node_3.domain()],
-            2,
+            2, // Note: this parameter is not enforced with latency-based routing
         );
         assert_eq!(route_provider.routes_stats(), RoutesStats::new(3, Some(3)));
 
-        // Test 3:  multiple route() calls return 2 different domains with equal fairness (repetition).
+        // Test 3:  multiple route() calls return 2 different domains.
         // One node is set to unhealthy.
         checker.overwrite_healthy_nodes(vec![node_1.clone(), node_3.clone()]);
         tokio::time::sleep(snapshot_update_duration).await;
-        let routed_domains = route_n_times(6, Arc::clone(&route_provider));
+        let routed_domains = route_n_times(20, Arc::clone(&route_provider)); // Increased for probabilistic routing
         assert_routed_domains(routed_domains, vec![node_1.domain(), node_3.domain()], 3);
         assert_eq!(route_provider.routes_stats(), RoutesStats::new(3, Some(2)));
 
-        // Test 4: multiple route() calls return 3 different domains with equal fairness (repetition).
+        // Test 4: multiple route() calls return 3 different domains.
         // Unhealthy node is set back to healthy.
         checker.overwrite_healthy_nodes(vec![node_1.clone(), node_2.clone(), node_3.clone()]);
         tokio::time::sleep(snapshot_update_duration).await;
-        let routed_domains = route_n_times(6, Arc::clone(&route_provider));
+        let routed_domains = route_n_times(30, Arc::clone(&route_provider)); // Increased for probabilistic routing
         assert_routed_domains(
             routed_domains,
             vec![node_1.domain(), node_2.domain(), node_3.domain()],
@@ -567,7 +551,7 @@ mod tests {
         );
         assert_eq!(route_provider.routes_stats(), RoutesStats::new(3, Some(3)));
 
-        // Test 5: multiple route() calls return 3 different domains with equal fairness (repetition).
+        // Test 5: multiple route() calls return 3 different domains.
         // One healthy node is added, but another one goes unhealthy.
         let node_4 = Node::new("api3.com").unwrap();
         checker.overwrite_healthy_nodes(vec![node_2.clone(), node_3.clone(), node_4.clone()]);
@@ -578,7 +562,7 @@ mod tests {
             node_4.clone(),
         ]);
         tokio::time::sleep(snapshot_update_duration).await;
-        let routed_domains = route_n_times(6, Arc::clone(&route_provider));
+        let routed_domains = route_n_times(30, Arc::clone(&route_provider)); // Increased for probabilistic routing
         assert_routed_domains(
             routed_domains,
             vec![node_2.domain(), node_3.domain(), node_4.domain()],
@@ -612,9 +596,7 @@ mod tests {
         fetcher.overwrite_nodes(vec![node_1.clone(), node_2.clone()]);
         checker.overwrite_healthy_nodes(vec![]);
         // Configure RouteProvider
-        let snapshot = RoundRobinRoutingSnapshot::new();
         let route_provider = DynamicRouteProviderBuilder::from_components(
-            snapshot,
             vec![node_1.clone(), node_2.clone()],
             fetcher,
             checker.clone(),
@@ -658,15 +640,13 @@ mod tests {
         fetcher.overwrite_nodes(vec![node_1.clone()]);
         checker.overwrite_healthy_nodes(vec![node_1.clone()]);
         // Configure RouteProvider
-        let snapshot = RoundRobinRoutingSnapshot::new();
         let client = reqwest::Client::builder().build().unwrap();
-        let route_provider =
-            DynamicRouteProviderBuilder::new(snapshot, vec![node_1.clone()], Arc::new(client))
-                .with_fetcher(fetcher)
-                .with_checker(checker.clone())
-                .with_fetch_period(fetch_interval)
-                .with_check_period(check_interval)
-                .build();
+        let route_provider = DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client))
+            .with_fetcher(fetcher)
+            .with_checker(checker.clone())
+            .with_fetch_period(fetch_interval)
+            .with_check_period(check_interval)
+            .build();
         route_provider.start().await;
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         let route_provider = Arc::new(route_provider);
@@ -703,15 +683,13 @@ mod tests {
         fetcher.overwrite_nodes(vec![]);
         checker.overwrite_healthy_nodes(vec![]);
         // Configure RouteProvider
-        let snapshot = RoundRobinRoutingSnapshot::new();
         let client = reqwest::Client::builder().build().unwrap();
-        let route_provider =
-            DynamicRouteProviderBuilder::new(snapshot, vec![node_1.clone()], Arc::new(client))
-                .with_fetcher(fetcher)
-                .with_checker(checker)
-                .with_fetch_period(fetch_interval)
-                .with_check_period(check_interval)
-                .build();
+        let route_provider = DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client))
+            .with_fetcher(fetcher)
+            .with_checker(checker)
+            .with_fetch_period(fetch_interval)
+            .with_check_period(check_interval)
+            .build();
 
         // Test: calls to route() return an error, as no healthy seeds exist.
         for _ in 0..4 {
@@ -740,9 +718,7 @@ mod tests {
         fetcher.overwrite_nodes(vec![node_1.clone(), node_2.clone()]);
         checker.overwrite_healthy_nodes(vec![node_1.clone()]);
         // Configure RouteProvider
-        let snapshot = RoundRobinRoutingSnapshot::new();
         let route_provider = DynamicRouteProviderBuilder::from_components(
-            snapshot,
             vec![node_1.clone(), node_2.clone()],
             fetcher,
             checker.clone(),
@@ -781,15 +757,13 @@ mod tests {
         fetcher.overwrite_nodes(vec![]);
         checker.overwrite_healthy_nodes(vec![node_1.clone()]);
         // Configure RouteProvider
-        let snapshot = RoundRobinRoutingSnapshot::new();
         let client = reqwest::Client::builder().build().unwrap();
-        let route_provider =
-            DynamicRouteProviderBuilder::new(snapshot, vec![node_1.clone()], Arc::new(client))
-                .with_fetcher(fetcher.clone())
-                .with_checker(checker.clone())
-                .with_fetch_period(fetch_interval)
-                .with_check_period(check_interval)
-                .build();
+        let route_provider = DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client))
+            .with_fetcher(fetcher.clone())
+            .with_checker(checker.clone())
+            .with_fetch_period(fetch_interval)
+            .with_check_period(check_interval)
+            .build();
         route_provider.start().await;
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         let route_provider = Arc::new(route_provider);
@@ -803,14 +777,14 @@ mod tests {
         let routed_domains = route_n_times(3, Arc::clone(&route_provider));
         assert_routed_domains(routed_domains, vec![node_1.domain()], 3);
 
-        // Test 2: multiple route() calls should now return 3 different domains with equal fairness (repetition).
+        // Test 2: multiple route() calls should now return 3 different domains.
         // Three nodes are added to the topology, i.e. now the fetched nodes list is non-empty.
         let node_2 = Node::new("api1.com").unwrap();
         let node_3 = Node::new("api2.com").unwrap();
         fetcher.overwrite_nodes(vec![node_1.clone(), node_2.clone(), node_3.clone()]);
         checker.overwrite_healthy_nodes(vec![node_1.clone(), node_2.clone(), node_3.clone()]);
         tokio::time::sleep(snapshot_update_duration).await;
-        let routed_domains = route_n_times(6, Arc::clone(&route_provider));
+        let routed_domains = route_n_times(30, Arc::clone(&route_provider)); // Increased for probabilistic routing
         assert_routed_domains(
             routed_domains,
             vec![node_1.domain(), node_2.domain(), node_3.domain()],
