@@ -23,11 +23,8 @@ pub(super) fn route_n_times(n: usize, f: Arc<impl RouteProvider + ?Sized>) -> Ve
         .collect()
 }
 
-pub(super) fn assert_routed_domains<T>(
-    actual: Vec<T>,
-    expected: Vec<&str>,
-    expected_repetitions: usize,
-) where
+pub(super) fn assert_routed_domains<T>(actual: Vec<T>, expected: Vec<&str>)
+where
     T: AsRef<str> + Eq + Hash + Debug + Ord,
 {
     fn build_count_map<T>(items: &[T]) -> HashMap<&str, usize>
@@ -59,10 +56,6 @@ pub(super) fn assert_routed_domains<T>(
             expected_node
         );
     }
-
-    // Note: expected_repetitions parameter is kept for API compatibility but not enforced
-    // since latency-based routing doesn't guarantee equal distribution
-    let _ = expected_repetitions;
 }
 
 #[derive(Debug)]
