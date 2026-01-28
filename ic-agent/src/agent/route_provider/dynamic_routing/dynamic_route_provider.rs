@@ -495,7 +495,8 @@ mod tests {
         checker.overwrite_healthy_nodes(vec![node_1.clone()]);
         // Configure RouteProvider
         let client = reqwest::Client::builder().build().unwrap();
-        let route_provider = DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client))
+        let route_provider =
+            DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client))
                 .with_fetcher(fetcher.clone())
                 .with_checker(checker.clone())
                 .with_fetch_period(fetch_interval)
@@ -641,12 +642,13 @@ mod tests {
         checker.overwrite_healthy_nodes(vec![node_1.clone()]);
         // Configure RouteProvider
         let client = reqwest::Client::builder().build().unwrap();
-        let route_provider = DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client))
-            .with_fetcher(fetcher)
-            .with_checker(checker.clone())
-            .with_fetch_period(fetch_interval)
-            .with_check_period(check_interval)
-            .build();
+        let route_provider =
+            DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client))
+                .with_fetcher(fetcher)
+                .with_checker(checker.clone())
+                .with_fetch_period(fetch_interval)
+                .with_check_period(check_interval)
+                .build();
         route_provider.start().await;
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         let route_provider = Arc::new(route_provider);
@@ -684,12 +686,13 @@ mod tests {
         checker.overwrite_healthy_nodes(vec![]);
         // Configure RouteProvider
         let client = reqwest::Client::builder().build().unwrap();
-        let route_provider = DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client))
-            .with_fetcher(fetcher)
-            .with_checker(checker)
-            .with_fetch_period(fetch_interval)
-            .with_check_period(check_interval)
-            .build();
+        let route_provider =
+            DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client))
+                .with_fetcher(fetcher)
+                .with_checker(checker)
+                .with_fetch_period(fetch_interval)
+                .with_check_period(check_interval)
+                .build();
 
         // Test: calls to route() return an error, as no healthy seeds exist.
         for _ in 0..4 {
@@ -758,12 +761,13 @@ mod tests {
         checker.overwrite_healthy_nodes(vec![node_1.clone()]);
         // Configure RouteProvider
         let client = reqwest::Client::builder().build().unwrap();
-        let route_provider = DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client))
-            .with_fetcher(fetcher.clone())
-            .with_checker(checker.clone())
-            .with_fetch_period(fetch_interval)
-            .with_check_period(check_interval)
-            .build();
+        let route_provider =
+            DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client))
+                .with_fetcher(fetcher.clone())
+                .with_checker(checker.clone())
+                .with_fetch_period(fetch_interval)
+                .with_check_period(check_interval)
+                .build();
         route_provider.start().await;
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         let route_provider = Arc::new(route_provider);

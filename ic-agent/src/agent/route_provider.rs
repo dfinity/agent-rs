@@ -172,8 +172,10 @@ impl DynamicRouteProvider {
         let seed_nodes: Result<Vec<_>, _> = seed_domains.into_iter().map(Node::new).collect();
         let provider = DynamicRouteProviderBuilder::new(seed_nodes?, client).build();
         provider.start().await;
-        
-        Ok(Self { inner: Box::new(provider) })
+
+        Ok(Self {
+            inner: Box::new(provider),
+        })
     }
     /// Same as [`run_in_background`](Self::run_in_background), but with custom intervals for refreshing the routing list and health-checking nodes.
     pub async fn run_in_background_with_intervals(
@@ -189,7 +191,9 @@ impl DynamicRouteProvider {
             .build();
         provider.start().await;
 
-        Ok(Self { inner: Box::new(provider) })
+        Ok(Self {
+            inner: Box::new(provider),
+        })
     }
 }
 
@@ -204,7 +208,6 @@ impl RouteProvider for DynamicRouteProvider {
         self.inner.routes_stats()
     }
 }
-
 
 #[derive(Debug)]
 pub(crate) struct UrlUntilReady<R> {

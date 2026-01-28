@@ -59,7 +59,7 @@ pub(super) fn assert_routed_domains<T>(
             expected_node
         );
     }
-    
+
     // Note: expected_repetitions parameter is kept for API compatibility but not enforced
     // since latency-based routing doesn't guarantee equal distribution
     let _ = expected_repetitions;
