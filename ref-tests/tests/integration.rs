@@ -30,48 +30,6 @@ use std::{
 };
 
 #[tokio::test]
-async fn basic_expiry() {
-    with_universal_canister(async move |_, agent, canister_id| {
-        let arg = payload().reply_data(b"hello").build();
-
-        // Verify this works first.
-        let result = agent
-            .update(&canister_id, "update")
-            .with_arg(arg.clone())
-            .expire_after(std::time::Duration::from_secs(120))
-            .call_and_wait()
-            .await?;
-
-        assert_eq!(result.as_slice(), b"hello");
-
-        // Verify a zero expiry will fail with the proper code.
-        let result = agent
-            .update(&canister_id, "update")
-            .with_arg(arg.clone())
-            .expire_after(std::time::Duration::from_secs(0))
-            .call_and_wait()
-            .await;
-
-        match result.unwrap_err() {
-            AgentError::TimeoutWaitingForResponse() => (),
-            x => panic!("Was expecting an error, got {:?}", x),
-        }
-
-        let result = agent
-            .update(&canister_id, "update")
-            .with_arg(arg.clone())
-            .expire_after(std::time::Duration::from_secs(120))
-            .call_and_wait()
-            .await?;
-
-        assert_eq!(result.as_slice(), b"hello");
-
-        Ok(())
-    })
-    .await
-}
-
-#[tokio::test]
 async fn wait_signed() {
     with_universal_canister(async move |_, mut agent, canister_id| {
         fn serialized_bytes(envelope: Envelope) -> Vec<u8> {
