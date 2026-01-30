@@ -729,11 +729,14 @@ mod tests {
         route_provider.start().await;
         let route_provider = Arc::new(route_provider);
 
+        // Snapshot update duration accounts for fetch + health check cycles
+        let snapshot_update_duration = fetch_interval + 2 * check_interval;
+
         // Test 1: Wait for routing to stabilize and verify only the healthy seed ic0.app is returned.
         wait_for_routing_to_domains(
             Arc::clone(&route_provider),
             vec![node_1.domain()],
-            Duration::from_secs(3),
+            snapshot_update_duration + Duration::from_secs(2),
         )
         .await;
 
@@ -742,7 +745,7 @@ mod tests {
         wait_for_routing_to_domains(
             Arc::clone(&route_provider),
             vec![node_1.domain(), node_2.domain()],
-            Duration::from_secs(5),
+            snapshot_update_duration + Duration::from_secs(3),
         )
         .await;
     }
