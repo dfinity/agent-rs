@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Time out `Unknown` statuses after 5 minutes, regardless of the configured `max_polling_time`.
+
 ### Breaking Changes
 
 * BREAKING: Removed round-robin routing strategy. `DynamicRouteProvider` now exclusively uses latency-based routing.

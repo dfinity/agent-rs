@@ -730,7 +730,12 @@ impl Agent {
                 )
                 .await?;
             match resp {
-                RequestStatusResponse::Unknown => {}
+                RequestStatusResponse::Unknown => {
+                    // If status is still `Unknown` after 5 minutes, the ingress message is lost.
+                    if retry_policy.get_elapsed_time() > Duration::from_secs(5 * 60) {
+                        return Err(AgentError::TimeoutWaitingForResponse());
+                    }
+                }
 
                 RequestStatusResponse::Received | RequestStatusResponse::Processing => {
                     if !request_accepted {
@@ -789,7 +794,12 @@ impl Agent {
                 .request_status_raw(request_id, effective_canister_id)
                 .await?;
             match resp {
-                RequestStatusResponse::Unknown => {}
+                RequestStatusResponse::Unknown => {
+                    // If status is still `Unknown` after 5 minutes, the ingress message is lost.
+                    if retry_policy.get_elapsed_time() > Duration::from_secs(5 * 60) {
+                        return Err(AgentError::TimeoutWaitingForResponse());
+                    }
+                }
 
                 RequestStatusResponse::Received | RequestStatusResponse::Processing => {
                     if !request_accepted {
