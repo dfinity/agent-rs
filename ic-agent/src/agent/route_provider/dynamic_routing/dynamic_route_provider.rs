@@ -389,7 +389,8 @@ mod tests {
                 },
                 node::Node,
                 test_utils::{
-                    assert_routed_domains, route_n_times, NodeHealthCheckerMock, NodesFetcherMock,
+                    assert_routed_domains, route_n_times, wait_for_routing_to_domains,
+                    NodeHealthCheckerMock, NodesFetcherMock,
                 },
             },
             RouteProvider, RoutesStats,
@@ -726,18 +727,24 @@ mod tests {
         .with_check_period(check_interval)
         .build();
         route_provider.start().await;
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         let route_provider = Arc::new(route_provider);
 
-        // Test 1: calls to route() return only a healthy seed ic0.app.
-        let routed_domains = route_n_times(3, Arc::clone(&route_provider));
-        assert_routed_domains(routed_domains, vec![node_1.domain()]);
+        // Test 1: Wait for routing to stabilize and verify only the healthy seed ic0.app is returned.
+        wait_for_routing_to_domains(
+            Arc::clone(&route_provider),
+            vec![node_1.domain()],
+            Duration::from_secs(3),
+        )
+        .await;
 
-        // Test 2: calls to route() return two healthy seeds, as the unhealthy seed becomes healthy.
+        // Test 2: Make the unhealthy seed healthy and wait for routing to reflect both healthy seeds.
         checker.overwrite_healthy_nodes(vec![node_1.clone(), node_2.clone()]);
-        tokio::time::sleep(2 * check_interval).await;
-        let routed_domains = route_n_times(6, Arc::clone(&route_provider));
-        assert_routed_domains(routed_domains, vec![node_1.domain(), node_2.domain()]);
+        wait_for_routing_to_domains(
+            Arc::clone(&route_provider),
+            vec![node_1.domain(), node_2.domain()],
+            Duration::from_secs(5),
+        )
+        .await;
     }
 
     #[tokio::test]

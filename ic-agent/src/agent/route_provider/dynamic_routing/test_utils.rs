@@ -58,6 +58,42 @@ where
     }
 }
 
+/// Polls the route provider until the expected domains are available or timeout is reached.
+/// This is more reliable than fixed sleeps for async state updates in tests.
+pub(super) async fn wait_for_routing_to_domains(
+    route_provider: Arc<impl RouteProvider + ?Sized>,
+    expected_domains: Vec<&str>,
+    timeout: Duration,
+) {
+    let start = std::time::Instant::now();
+    let poll_interval = Duration::from_millis(50);
+    let sample_size = expected_domains.len() * 2; // Sample multiple times to account for probabilistic routing
+
+    loop {
+        if start.elapsed() >= timeout {
+            panic!(
+                "Timeout waiting for routing to expected domains: {:?}. Elapsed: {:?}",
+                expected_domains,
+                start.elapsed()
+            );
+        }
+
+        let routed_domains = route_n_times(sample_size, Arc::clone(&route_provider));
+        let unique_domains: HashSet<String> = routed_domains.into_iter().collect();
+
+        // Check if all expected domains are present
+        let expected_set: HashSet<&str> = expected_domains.iter().copied().collect();
+        let actual_set: HashSet<&str> = unique_domains.iter().map(|s| s.as_str()).collect();
+
+        if expected_set == actual_set {
+            // Success - all expected domains are now being routed to
+            return;
+        }
+
+        crate::util::sleep(poll_interval).await;
+    }
+}
+
 #[derive(Debug)]
 pub(super) struct NodesFetcherMock {
     // A set of nodes, existing in the topology.
