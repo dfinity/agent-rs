@@ -31,10 +31,7 @@ pub use nonce::{NonceFactory, NonceGenerator};
 use rangemap::{RangeInclusiveMap, StepFns};
 use reqwest::{Client, Request, Response};
 use route_provider::{
-    dynamic_routing::{
-        dynamic_route_provider::DynamicRouteProviderBuilder, node::Node,
-        snapshot::latency_based_routing::LatencyRoutingSnapshot,
-    },
+    dynamic_routing::{dynamic_route_provider::DynamicRouteProviderBuilder, node::Node},
     RouteProvider, UrlUntilReady,
 };
 pub use subnet::Subnet;
@@ -221,12 +218,7 @@ impl Agent {
                     );
                     let seeds = vec![Node::new(url.domain().unwrap()).unwrap()];
                     UrlUntilReady::new(url, async move {
-                        let provider = DynamicRouteProviderBuilder::new(
-                            LatencyRoutingSnapshot::new(),
-                            seeds,
-                            client,
-                        )
-                        .build();
+                        let provider = DynamicRouteProviderBuilder::new(seeds, client).build();
                         provider.start().await;
                         provider
                     }) as Arc<dyn RouteProvider>

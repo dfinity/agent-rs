@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+* BREAKING: Removed round-robin routing strategy. `DynamicRouteProvider` now exclusively uses latency-based routing.
+  * Removed `DynamicRoutingStrategy` enum and `RoundRobinRoutingSnapshot` type.
+  * `DynamicRouteProvider` is no longer generic over routing strategy.
+  * `DynamicRouteProviderBuilder::new()`, `::from_components()`, `::run_in_background()`, and `::run_in_background_with_intervals()` no longer accept `snapshot` or `strategy` parameters.
+  * Migration: Remove routing strategy arguments from your code - latency-based routing is now the only option.
 * BREAKING: `DynamicRouteProviderBuilder::build()` is no longer async. Background tasks are no longer started automatically during construction. Call `provider.start().await` for explicit initialization, or let it auto-start lazily on first `route()` call.
 * BREAKING: `DynamicRouteProvider::run()` is now private. Use `start()` instead.
 
