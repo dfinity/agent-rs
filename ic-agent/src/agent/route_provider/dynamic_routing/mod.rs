@@ -10,13 +10,10 @@
 //! 3. **HTTP Gateways**: Third-party services that proxy requests to API boundary nodes, e.g., gateways hosted on the `ic0.app` domain.
 //!
 //! The Agent uses the [`RouteProvider`](super::RouteProvider) trait, namely its [`route()`](super::RouteProvider::route()) method to determine the destination endpoint for each call.
-//! For example this trait is implemented for [`Url`](https://docs.rs/url/latest/url/) and [`RoundRobinRouteProvider`](super::RoundRobinRouteProvider).
-//! The `DynamicRouteProvider` is a more complex implementation, which is intended to be used only for option (2), it provides:
+//! The `DynamicRouteProvider` is an implementation which is intended to be used only for option (2), it provides:
 //! - **Automatic API Node Discovery**: periodically fetches the latest API boundary node topology.
 //! - **Health Monitoring**: Continuously checks health of all nodes in the topology.
-//! - **Flexible Routing**: Directs requests to healthy nodes using built-in or custom strategies:
-//!   - [`RoundRobinRoutingSnapshot`](snapshot::round_robin_routing::RoundRobinRoutingSnapshot): Evenly distributes requests across healthy nodes.
-//!   - [`LatencyRoutingSnapshot`](snapshot::latency_based_routing::LatencyRoutingSnapshot): Prioritizes low-latency nodes via weighted round-robin, with optional penalties if nodes are unavailable within a sliding time window.
+//! - **Latency-Based Routing**: Directs requests to healthy nodes by prioritizing low-latency nodes via weighted selection, with optional penalties if nodes are unavailable within a sliding time window.
 //! - **Customizability**: Supports custom node fetchers, health checkers, and routing logic.
 //! # Usage
 //! The `DynamicRouteProvider` can be used standalone or injected into the agent to enable dynamic routing. There are several ways to instantiate it:
@@ -52,7 +49,8 @@
 //! ## Example: Customized instantiation
 #![cfg_attr(feature = "_internal_dynamic-routing", doc = "```rust")]
 #![cfg_attr(not(feature = "_internal_dynamic-routing"), doc = "```ignore")]
-//! use std::{sync::Arc, time::Duration};
+//! use std::sync::Arc;
+//! use std::time::Duration;
 //!
 //! use anyhow::Result;
 //! use ic_agent::{
@@ -66,17 +64,11 @@
 //!     },
 //!     Agent,
 //! };
-//! use reqwest::Client;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
-//!     // Choose a routing strategy: top 3 lowest-latency API boundary nodes selected via weighted round-robin
-//!     let routing_strategy = LatencyRoutingSnapshot::new().set_k_top_nodes(3);
-//!
-//!     // Alternatively, use a basic round-robin routing across all healthy API boundary nodes
-//!     // let routing_strategy = RoundRobinRoutingSnapshot::new();
-//!
-//!     // Or implement and provide your own custom routing strategy
+//!     // The provider uses latency-based routing by default
+//!     // You can configure it using `DynamicRouteProviderBuilder` methods
 //!
 //!     // Seed nodes for initial topology discovery
 //!     let seed_nodes = vec![
@@ -85,12 +77,9 @@
 //!         // Node::new("<api-boundary-node-domain>")?,
 //!     ];
 //!
-//!     // HTTP client for health checks and topology discovery
-//!     let client = Client::builder().build()?;
-//!
-//!     // Build dynamic route provider
-//!     let route_provider: DynamicRouteProvider<LatencyRoutingSnapshot> =
-//!         DynamicRouteProviderBuilder::new(routing_strategy, seed_nodes, Arc::new(client))
+//!     // Build dynamic route provider with HTTP client
+//!     let http_client = Arc::new(reqwest::Client::new());
+//!     let route_provider = DynamicRouteProviderBuilder::new(seed_nodes, http_client)
 //!             // Set how often to fetch the latest API boundary node topology
 //!             .with_fetch_period(Duration::from_secs(10))
 //!             // Set how often to perform health checks on the API boundary nodes
@@ -99,8 +88,18 @@
 //!             // .with_checker(custom_checker)
 //!             // Or optionally provide a custom topology fetcher implementation
 //!             // .with_fetcher(custom_fetcher)
-//!             .build()
-//!             .await;
+//!             .build();
+//!
+//!     // Start background tasks and wait for initial health checks
+//!     route_provider.start().await;
+//!
+//!     // Advanced: Provide custom fetcher and checker implementations
+//!     // let route_provider = DynamicRouteProviderBuilder::from_components(
+//!     //     seed_nodes,
+//!     //     Arc::new(custom_fetcher),
+//!     //     Arc::new(custom_checker),
+//!     // )
+//!     // .build();
 //!
 //!     // Example: generate routing URLs
 //!     let url_1 = route_provider.route().expect("failed to get routing URL");
@@ -131,9 +130,8 @@
 //! - **Health Check Period**: How often to check node health (default: 1 second).
 //! - **Nodes Fetcher**: Custom implementation of the [`Fetch`](nodes_fetch::Fetch) trait for node discovery.
 //! - **Health Checker**: Custom implementation of the [`HealthCheck`](health_check::HealthCheck) trait for health monitoring.
-//! - **Routing Strategy**: Custom implementation of the [`RoutingSnapshot`](snapshot::routing_snapshot::RoutingSnapshot) trait for routing logic.
 //!
-//! Two built-in strategies are available: [`LatencyRoutingSnapshot`](snapshot::latency_based_routing::LatencyRoutingSnapshot) and [`RoundRobinRoutingSnapshot`](snapshot::round_robin_routing::RoundRobinRoutingSnapshot).
+//! The provider uses latency-based routing by default.
 //!
 //! # Error Handling
 //! Errors during node fetching or health checking are encapsulated in the [`DynamicRouteProviderError`](dynamic_route_provider::DynamicRouteProviderError) enum:

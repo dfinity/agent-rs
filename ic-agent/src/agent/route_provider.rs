@@ -1,13 +1,6 @@
 //! A [`RouteProvider`] for dynamic generation of routing urls.
 use arc_swap::ArcSwapOption;
-use dynamic_routing::{
-    dynamic_route_provider::DynamicRouteProviderBuilder,
-    node::Node,
-    snapshot::{
-        latency_based_routing::LatencyRoutingSnapshot,
-        round_robin_routing::RoundRobinRoutingSnapshot,
-    },
-};
+use dynamic_routing::{dynamic_route_provider::DynamicRouteProviderBuilder, node::Node};
 use std::{
     future::Future,
     str::FromStr,
@@ -171,69 +164,36 @@ pub struct DynamicRouteProvider {
 }
 
 impl DynamicRouteProvider {
-    /// Create a new `DynamicRouter` from a list of seed domains and a routing strategy.
+    /// Create a new `DynamicRouter` from a list of seed domains using latency-based routing.
     pub async fn run_in_background(
         seed_domains: Vec<String>,
         client: Arc<dyn HttpService>,
-        strategy: DynamicRoutingStrategy,
     ) -> Result<Self, AgentError> {
         let seed_nodes: Result<Vec<_>, _> = seed_domains.into_iter().map(Node::new).collect();
-        let boxed = match strategy {
-            DynamicRoutingStrategy::ByLatency => Box::new(
-                DynamicRouteProviderBuilder::new(
-                    LatencyRoutingSnapshot::new(),
-                    seed_nodes?,
-                    client,
-                )
-                .build()
-                .await,
-            ) as Box<dyn RouteProvider>,
-            DynamicRoutingStrategy::RoundRobin => Box::new(
-                DynamicRouteProviderBuilder::new(
-                    RoundRobinRoutingSnapshot::new(),
-                    seed_nodes?,
-                    client,
-                )
-                .build()
-                .await,
-            ),
-        };
-        Ok(Self { inner: boxed })
+        let provider = DynamicRouteProviderBuilder::new(seed_nodes?, client).build();
+        provider.start().await;
+
+        Ok(Self {
+            inner: Box::new(provider),
+        })
     }
     /// Same as [`run_in_background`](Self::run_in_background), but with custom intervals for refreshing the routing list and health-checking nodes.
     pub async fn run_in_background_with_intervals(
         seed_domains: Vec<String>,
         client: Arc<dyn HttpService>,
-        strategy: DynamicRoutingStrategy,
         list_update_interval: Duration,
         health_check_interval: Duration,
     ) -> Result<Self, AgentError> {
         let seed_nodes: Result<Vec<_>, _> = seed_domains.into_iter().map(Node::new).collect();
-        let boxed = match strategy {
-            DynamicRoutingStrategy::ByLatency => Box::new(
-                DynamicRouteProviderBuilder::new(
-                    LatencyRoutingSnapshot::new(),
-                    seed_nodes?,
-                    client,
-                )
-                .with_fetch_period(list_update_interval)
-                .with_check_period(health_check_interval)
-                .build()
-                .await,
-            ) as Box<dyn RouteProvider>,
-            DynamicRoutingStrategy::RoundRobin => Box::new(
-                DynamicRouteProviderBuilder::new(
-                    RoundRobinRoutingSnapshot::new(),
-                    seed_nodes?,
-                    client,
-                )
-                .with_fetch_period(list_update_interval)
-                .with_check_period(health_check_interval)
-                .build()
-                .await,
-            ),
-        };
-        Ok(Self { inner: boxed })
+        let provider = DynamicRouteProviderBuilder::new(seed_nodes?, client)
+            .with_fetch_period(list_update_interval)
+            .with_check_period(health_check_interval)
+            .build();
+        provider.start().await;
+
+        Ok(Self {
+            inner: Box::new(provider),
+        })
     }
 }
 
@@ -247,15 +207,6 @@ impl RouteProvider for DynamicRouteProvider {
     fn routes_stats(&self) -> RoutesStats {
         self.inner.routes_stats()
     }
-}
-
-/// Strategy for [`DynamicRouteProvider`]'s routing mechanism.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub enum DynamicRoutingStrategy {
-    /// Prefer nodes with low latency.
-    ByLatency,
-    /// Cycle through discovered nodes with no regard for latency.
-    RoundRobin,
 }
 
 #[derive(Debug)]

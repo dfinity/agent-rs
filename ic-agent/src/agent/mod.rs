@@ -31,10 +31,7 @@ pub use nonce::{NonceFactory, NonceGenerator};
 use rangemap::{RangeInclusiveMap, StepFns};
 use reqwest::{Client, Request, Response};
 use route_provider::{
-    dynamic_routing::{
-        dynamic_route_provider::DynamicRouteProviderBuilder, node::Node,
-        snapshot::latency_based_routing::LatencyRoutingSnapshot,
-    },
+    dynamic_routing::{dynamic_route_provider::DynamicRouteProviderBuilder, node::Node},
     RouteProvider, UrlUntilReady,
 };
 pub use subnet::Subnet;
@@ -221,13 +218,9 @@ impl Agent {
                     );
                     let seeds = vec![Node::new(url.domain().unwrap()).unwrap()];
                     UrlUntilReady::new(url, async move {
-                        DynamicRouteProviderBuilder::new(
-                            LatencyRoutingSnapshot::new(),
-                            seeds,
-                            client,
-                        )
-                        .build()
-                        .await
+                        let provider = DynamicRouteProviderBuilder::new(seeds, client).build();
+                        provider.start().await;
+                        provider
                     }) as Arc<dyn RouteProvider>
                 } else {
                     Arc::new(url)
@@ -737,7 +730,12 @@ impl Agent {
                 )
                 .await?;
             match resp {
-                RequestStatusResponse::Unknown => {}
+                RequestStatusResponse::Unknown => {
+                    // If status is still `Unknown` after 5 minutes, the ingress message is lost.
+                    if retry_policy.get_elapsed_time() > Duration::from_secs(5 * 60) {
+                        return Err(AgentError::TimeoutWaitingForResponse());
+                    }
+                }
 
                 RequestStatusResponse::Received | RequestStatusResponse::Processing => {
                     if !request_accepted {
@@ -796,7 +794,12 @@ impl Agent {
                 .request_status_raw(request_id, effective_canister_id)
                 .await?;
             match resp {
-                RequestStatusResponse::Unknown => {}
+                RequestStatusResponse::Unknown => {
+                    // If status is still `Unknown` after 5 minutes, the ingress message is lost.
+                    if retry_policy.get_elapsed_time() > Duration::from_secs(5 * 60) {
+                        return Err(AgentError::TimeoutWaitingForResponse());
+                    }
+                }
 
                 RequestStatusResponse::Received | RequestStatusResponse::Processing => {
                     if !request_accepted {
