@@ -10,6 +10,7 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
@@ -57,8 +58,8 @@ jobs:
           # Test all features and no features for each package.
           for p in $(cargo metadata --no-deps --format-version 1 | jq -r .packages[].manifest_path); do
             pushd $(dirname $p)
-            cargo test --all-features
-            cargo test --no-default-features
+            cargo test --all-features --no-fail-fast
+            cargo test --no-default-features --no-fail-fast
             popd
           done
         env:
@@ -78,7 +79,7 @@ jobs:
           pkcs11-tool -k --module $HSM_PKCS11_LIBRARY_PATH --login --slot-index $HSM_SLOT_INDEX -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
 
           cd ref-tests
-          cargo test --all-features -- --nocapture --test-threads=1
+          cargo test --all-features --no-fail-fast -- --nocapture --test-threads=1
         env:
           RUST_BACKTRACE: 1
           HSM_PKCS11_LIBRARY_PATH: /usr/lib/softhsm/libsofthsm2.so
