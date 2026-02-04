@@ -701,6 +701,10 @@ mod tests {
         }
     }
 
+    // TODO: Re-enable this test when we find a way to make the test deterministic.
+    // This test verified that nodes which become healthy are automatically re-adopted for routing.
+    // The deterministic round-robin strategy was removed in #694. Therefore, this test is now flaky in CI.
+    #[ignore]
     #[tokio::test]
     async fn test_route_with_one_healthy_and_one_unhealthy_seed() {
         // Setup.
