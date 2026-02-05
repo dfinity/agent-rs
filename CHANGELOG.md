@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* Fix `StatusCode::SERVICE_UNAVAILABLE` in `ic-agent`.
 * Time out `Unknown` statuses after 5 minutes, regardless of the configured `max_polling_time`.
 
 ### Breaking Changes
