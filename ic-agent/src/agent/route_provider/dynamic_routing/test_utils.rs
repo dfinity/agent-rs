@@ -52,8 +52,7 @@ where
     for expected_node in expected {
         assert!(
             count_actual.contains_key(expected_node),
-            "Expected node '{}' was not routed to",
-            expected_node
+            "Expected node '{expected_node}' was not routed to"
         );
     }
 }

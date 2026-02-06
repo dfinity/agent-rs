@@ -28,17 +28,17 @@ pub fn create_identity() -> Result<Box<dyn Identity>, String> {
 }
 
 fn expect_env_var(name: &str) -> Result<String, String> {
-    std::env::var(name).map_err(|_| format!("Need to specify the {} environment variable", name))
+    std::env::var(name).map_err(|_| format!("Need to specify the {name} environment variable"))
 }
 
 pub fn create_hsm_identity() -> Result<HardwareIdentity, String> {
     let path = expect_env_var(HSM_PKCS11_LIBRARY_PATH)?;
     let slot_index = expect_env_var(HSM_SLOT_INDEX)?
         .parse::<usize>()
-        .map_err(|e| format!("Unable to parse {} value: {}", HSM_SLOT_INDEX, e))?;
+        .map_err(|e| format!("Unable to parse {HSM_SLOT_INDEX} value: {e}"))?;
     let key = expect_env_var(HSM_KEY_ID)?;
     let id = HardwareIdentity::new(path, slot_index, &key, get_hsm_pin)
-        .map_err(|e| format!("Unable to create hw identity: {}", e))?;
+        .map_err(|e| format!("Unable to create hw identity: {e}"))?;
     Ok(id)
 }
 
@@ -101,7 +101,7 @@ pub async fn create_agent(
         .with_identity(identity)
         .with_max_polling_time(Duration::from_secs(15))
         .build()
-        .map_err(|e| format!("{:?}", e))?;
+        .map_err(|e| format!("{e:?}"))?;
     agent.fetch_root_key().await.unwrap();
     Ok(agent)
 }
@@ -179,7 +179,7 @@ where
         .await;
     match f(&pic).await {
         Ok(r) => r,
-        Err(e) => panic!("{:?}", e),
+        Err(e) => panic!("{e:?}"),
     }
 }
 

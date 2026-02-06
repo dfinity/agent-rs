@@ -203,7 +203,7 @@ mod management_canister {
                 reject_code: RejectCode::CanisterError,
                 reject_message,
                 error_code: Some(ref error_code),
-            }, .. }) if reject_message == format!("Only controllers of canister {} can call ic00 method update_settings", canister_id) &&
+            }, .. }) if reject_message == format!("Only controllers of canister {canister_id} can call ic00 method update_settings") &&
                     error_code == "IC0512")
             );
 
@@ -424,8 +424,7 @@ mod management_canister {
 
         assert!(
             matches!(result, Err(AgentError::HttpError(_))),
-            "expect an HttpError, or a CertifiedReject with reject_code in {:?}",
-            allowed_reject_codes
+            "expect an HttpError, or a CertifiedReject with reject_code in {allowed_reject_codes:?}"
         );
     }
 
@@ -531,7 +530,7 @@ mod management_canister {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
-                    }, .. }) if reject_message.contains(&format!("Canister {}: Canister has no query method 'query'", canister_id))
+                    }, .. }) if reject_message.contains(&format!("Canister {canister_id}: Canister has no query method 'query'"))
                         && error_code == "IC0536",
                 ),
                 "wrong error: {result:?}"
@@ -555,7 +554,7 @@ mod management_canister {
                         reject_code: RejectCode::DestinationInvalid,
                         reject_message,
                         error_code: Some(error_code),
-                    }, .. }) if *reject_message == format!("Canister {} not found", canister_id)
+                    }, .. }) if *reject_message == format!("Canister {canister_id} not found")
                         && error_code == "IC0301"
                 ),
                 "wrong error: {result:?}"
@@ -570,7 +569,7 @@ mod management_canister {
                         reject_code: RejectCode::DestinationInvalid,
                         reject_message,
                         error_code: Some(error_code),
-                    }, .. }) if *reject_message == format!("Canister {} not found", canister_id)
+                    }, .. }) if *reject_message == format!("Canister {canister_id} not found")
                         && error_code == "IC0301"
                 ),
                 "wrong error: {result:?}"
@@ -588,7 +587,7 @@ mod management_canister {
                                 error_code: Some(error_code),
                             },
                         ..
-                    }) if *reject_message == format!("Canister {} not found", canister_id)
+                    }) if *reject_message == format!("Canister {canister_id} not found")
                         && error_code == "IC0301" =>
                     {
                         true
@@ -608,7 +607,7 @@ mod management_canister {
                         reject_code: RejectCode::DestinationInvalid,
                         reject_message,
                         error_code: Some(error_code),
-                    }, .. }) if *reject_message == format!("Canister {} not found", canister_id)
+                    }, .. }) if *reject_message == format!("Canister {canister_id} not found")
                         && error_code == "IC0301"
                 ),
                 "wrong error: {result:?}"
@@ -653,7 +652,7 @@ mod management_canister {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
-                    }, .. }) if *reject_message == format!("Only controllers of canister {} can call ic00 method start_canister", canister_id)
+                    }, .. }) if *reject_message == format!("Only controllers of canister {canister_id} can call ic00 method start_canister")
                         && error_code == "IC0512"
                 ),
                 "wrong error: {result:?}"
@@ -668,7 +667,7 @@ mod management_canister {
                         reject_code: RejectCode::CanisterError,
                         reject_message,
                         error_code: Some(error_code),
-                    }, ..}) if *reject_message == format!("Only controllers of canister {} can call ic00 method stop_canister", canister_id)
+                    }, ..}) if *reject_message == format!("Only controllers of canister {canister_id} can call ic00 method stop_canister")
                         && error_code == "IC0512"
                 ),
                 "wrong error: {result:?}"

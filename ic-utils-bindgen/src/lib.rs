@@ -138,7 +138,7 @@ impl Config {
             None => "".to_string(),
         };
         let type_selector_configs = Configs::from_str(&type_selector_configs_str)
-            .unwrap_or_else(|e| panic!("failed to parse the type selector config: {}", e));
+            .unwrap_or_else(|e| panic!("failed to parse the type selector config: {e}"));
         let rust_bindgen_config = BindgenConfig::new(type_selector_configs);
 
         // 1. Parse the candid file and generate the Output (the struct for bindings)
