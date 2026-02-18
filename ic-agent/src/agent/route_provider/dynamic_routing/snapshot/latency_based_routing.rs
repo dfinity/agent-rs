@@ -179,7 +179,7 @@ fn compute_score(
 /// Summary of the routing strategy:
 /// - Uses sliding windows for storing latencies and availabilities of each node
 /// - Latency and availability scores are first computed separately from the sliding windows using an additional array of weights, allowing prioritization of more recent observations. By default, exponentially decaying weights are used.
-/// - The final overall score of each node is computed as a product of latency and availability scores, namely score = score_l * score_a
+/// - The final overall score of each node is computed as a product of latency and availability scores, namely `score = score_l * score_a`
 /// - Nodes pre-selection phase for routing candidate pool (snapshot):
 ///   - Criteria: if k-top-nodes setting is enabled, then only k nodes with highest scores are filtered into the routing candidate pool (snapshot), otherwise all healthy nodes are used
 ///   - Trigger conditions: topology updates, node health check status updates
@@ -205,9 +205,9 @@ pub struct LatencyRoutingSnapshot {
     use_availability_penalty: bool,
 }
 
-/// Implementation of the LatencyRoutingSnapshot.
+/// Implementation of the `LatencyRoutingSnapshot`.
 impl LatencyRoutingSnapshot {
-    /// Creates a new LatencyRoutingSnapshot with default configuration.
+    /// Creates a new `LatencyRoutingSnapshot` with default configuration.
     pub fn new() -> Self {
         // Weights are ordered from left to right, where the leftmost weight is for the most recent health check.
         let window_weights = generate_exp_decaying_weights(WINDOW_SIZE, LAMBDA_DECAY);
@@ -247,7 +247,7 @@ impl LatencyRoutingSnapshot {
         self
     }
 
-    /// Atomically updates the routing_candidates
+    /// Atomically updates the `routing_candidates`
     fn publish_routing_candidates(&self) {
         let mut routing_candidates: Vec<RoutingCandidateNode> = self
             .existing_nodes
@@ -395,6 +395,7 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
 mod tests {
     use std::{
         collections::{HashMap, VecDeque},
+        slice,
         time::Duration,
     };
 
@@ -449,7 +450,7 @@ mod tests {
             .set_availability_penalty(false);
         let node = Node::new("api1.com").unwrap();
         let health = HealthCheckStatus::new(Some(Duration::from_secs(1)));
-        snapshot.sync_nodes(&[node.clone()]);
+        snapshot.sync_nodes(slice::from_ref(&node));
         assert_eq!(snapshot.routes_stats(), RoutesStats::new(1, Some(0)));
         // Check first update
         let is_updated = snapshot.update_node(&node, health);
@@ -489,12 +490,12 @@ mod tests {
         let mut snapshot = LatencyRoutingSnapshot::new();
         let node_1 = Node::new("api1.com").unwrap();
         // Sync with node_1
-        let nodes_changed = snapshot.sync_nodes(&[node_1.clone()]);
+        let nodes_changed = snapshot.sync_nodes(slice::from_ref(&node_1));
         assert!(nodes_changed);
         assert!(snapshot.existing_nodes.contains_key(&node_1));
         assert!(!snapshot.has_nodes());
         // Sync with node_1 again
-        let nodes_changed = snapshot.sync_nodes(&[node_1.clone()]);
+        let nodes_changed = snapshot.sync_nodes(slice::from_ref(&node_1));
         assert!(!nodes_changed);
         assert_eq!(
             snapshot.existing_nodes.keys().collect::<Vec<_>>(),
@@ -502,7 +503,7 @@ mod tests {
         );
         // Sync with node_2
         let node_2 = Node::new("api2.com").unwrap();
-        let nodes_changed = snapshot.sync_nodes(&[node_2.clone()]);
+        let nodes_changed = snapshot.sync_nodes(slice::from_ref(&node_2));
         assert!(nodes_changed);
         assert_eq!(
             snapshot.existing_nodes.keys().collect::<Vec<_>>(),

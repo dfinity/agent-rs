@@ -8,7 +8,8 @@ publish = false
 
 [dependencies]
 candid = { workspace = true }
-ed25519-consensus = { workspace = true }
+ic-certification = { workspace = true }
+ic-ed25519 = { workspace = true }
 ic-agent = { path = "../ic-agent" }
 ic-identity-hsm = { path = "../ic-identity-hsm" }
 ic-utils = { path = "../ic-utils", features = ["raw"] }
@@ -17,9 +18,10 @@ p256 = { workspace = true }
 pocket-ic = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+serde_cbor = { workspace = true }
+serde_bytes = { workspace = true }
 sha2 = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
-serde_cbor = { workspace = true }
-ic-certification = { workspace = true }
+ic-management-canister-types = { workspace = true }

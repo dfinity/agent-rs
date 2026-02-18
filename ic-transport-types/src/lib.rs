@@ -327,7 +327,7 @@ impl TryFrom<u64> for RejectCode {
 #[error("Invalid reject code {0}")]
 pub struct InvalidRejectCodeError(pub u64);
 
-/// The response of `/api/v2/canister/<effective_canister_id>/read_state` with `request_status` request type.
+/// The response of `/api/v3/canister/<effective_canister_id>/read_state` with `request_status` request type.
 ///
 /// See [the HTTP interface specification](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call-overview) for more details.
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Clone)]

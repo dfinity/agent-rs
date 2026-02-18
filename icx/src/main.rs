@@ -6,7 +6,6 @@ use candid::{
 };
 use candid_parser::{check_prog, parse_idl_args, parse_idl_value, IDLProg};
 use clap::{crate_authors, crate_version, Parser, ValueEnum};
-use ed25519_consensus::SigningKey;
 use ic_agent::{
     agent::{
         self,
@@ -18,11 +17,11 @@ use ic_agent::{
     identity::BasicIdentity,
     Agent, AgentError, Identity,
 };
+use ic_ed25519::PrivateKey;
 use ic_utils::interfaces::management_canister::{
-    builders::{CanisterInstall, CanisterSettings},
+    builders::{CanisterSettings, InstallCodeArgs},
     MgmtMethod,
 };
-use rand::thread_rng;
 use std::{
     collections::VecDeque, convert::TryFrom, io::BufRead, path::PathBuf, str::FromStr,
     time::Duration,
@@ -272,7 +271,7 @@ pub fn get_effective_canister_id(
                 method_name.as_ref()
             ),
             MgmtMethod::InstallCode => {
-                let install_args = Decode!(arg_value, CanisterInstall)
+                let install_args = Decode!(arg_value, InstallCodeArgs)
                     .context("Argument is not valid for CanisterInstall")?;
                 Ok(Some(install_args.canister_id))
             }
@@ -290,7 +289,11 @@ pub fn get_effective_canister_id(
             | MgmtMethod::TakeCanisterSnapshot
             | MgmtMethod::ListCanisterSnapshots
             | MgmtMethod::DeleteCanisterSnapshot
-            | MgmtMethod::LoadCanisterSnapshot => {
+            | MgmtMethod::LoadCanisterSnapshot
+            | MgmtMethod::ReadCanisterSnapshotMetadata
+            | MgmtMethod::ReadCanisterSnapshotData
+            | MgmtMethod::UploadCanisterSnapshotMetadata
+            | MgmtMethod::UploadCanisterSnapshotData => {
                 #[derive(CandidType, Deserialize)]
                 struct In {
                     canister_id: Principal,
@@ -340,7 +343,8 @@ fn create_identity(maybe_pem: Option<PathBuf>) -> impl Identity {
     if let Some(pem_path) = maybe_pem {
         BasicIdentity::from_pem_file(pem_path).expect("Could not read the key pair.")
     } else {
-        BasicIdentity::from_signing_key(SigningKey::new(thread_rng()))
+        let private_key = PrivateKey::generate();
+        BasicIdentity::from_raw_key(&private_key.serialize_raw())
     }
 }
 

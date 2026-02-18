@@ -1,10 +1,11 @@
+#![cfg(unix)] // pocket-ic
 //! In this file, please mark all tests that require a running ic-ref as ignored.
 //!
 //! Contrary to ic-ref.rs, these tests are not meant to match any other tests. They're
 //! integration tests with a running IC-Ref.
 use candid::CandidType;
 use ic_agent::{
-    agent::{agent_error::HttpErrorPayload, Envelope, EnvelopeContent, RejectCode, RejectResponse},
+    agent::{Envelope, EnvelopeContent, RejectCode, RejectResponse},
     export::Principal,
     AgentError, Identity,
 };
@@ -12,15 +13,14 @@ use ic_certification::Label;
 use ic_utils::{
     call::{AsyncCall, SyncCall},
     interfaces::{
-        management_canister::builders::{CanisterSettings, InstallMode},
+        management_canister::builders::{CanisterInstallMode, CanisterSettings},
         WalletCanister,
     },
     Argument, Canister,
 };
 use ref_tests::{
     create_agent, create_basic_identity, create_universal_canister, create_wallet_canister,
-    get_wallet_wasm_from_env, universal_canister::payload, with_universal_canister,
-    with_wallet_canister,
+    get_wallet_wasm, universal_canister::payload, with_universal_canister, with_wallet_canister,
 };
 use serde::Serialize;
 use std::{
@@ -29,52 +29,9 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-#[ignore]
-#[test]
-fn basic_expiry() {
-    with_universal_canister(|agent, canister_id| async move {
-        let arg = payload().reply_data(b"hello").build();
-
-        // Verify this works first.
-        let result = agent
-            .update(&canister_id, "update")
-            .with_arg(arg.clone())
-            .expire_after(std::time::Duration::from_secs(120))
-            .call_and_wait()
-            .await?;
-
-        assert_eq!(result.as_slice(), b"hello");
-
-        // Verify a zero expiry will fail with the proper code.
-        let result = agent
-            .update(&canister_id, "update")
-            .with_arg(arg.clone())
-            .expire_after(std::time::Duration::from_secs(0))
-            .call_and_wait()
-            .await;
-
-        match result.unwrap_err() {
-            AgentError::HttpError(HttpErrorPayload { status, .. }) => assert_eq!(status, 400),
-            x => panic!("Was expecting an error, got {:?}", x),
-        }
-
-        let result = agent
-            .update(&canister_id, "update")
-            .with_arg(arg.clone())
-            .expire_after(std::time::Duration::from_secs(120))
-            .call_and_wait()
-            .await?;
-
-        assert_eq!(result.as_slice(), b"hello");
-
-        Ok(())
-    })
-}
-
-#[ignore]
-#[test]
-fn wait_signed() {
-    with_universal_canister(|mut agent, canister_id| async move {
+#[tokio::test]
+async fn wait_signed() {
+    with_universal_canister(async move |_, mut agent, canister_id| {
         fn serialized_bytes(envelope: Envelope) -> Vec<u8> {
             let mut serialized_bytes = Vec::new();
             let mut serializer = serde_cbor::Serializer::new(&mut serialized_bytes);
@@ -88,7 +45,7 @@ fn wait_signed() {
             + Duration::from_secs(120))
         .as_nanos() as u64;
 
-        let agent_identity = Arc::new(create_basic_identity().unwrap());
+        let agent_identity = Arc::new(create_basic_identity());
         agent.set_arc_identity(agent_identity.clone());
 
         let call_envelope_content = EnvelopeContent::Call {
@@ -147,12 +104,12 @@ fn wait_signed() {
 
         Ok(())
     })
+    .await
 }
 
-#[ignore]
-#[test]
-fn canister_query() {
-    with_universal_canister(|agent, canister_id| async move {
+#[tokio::test]
+async fn canister_query() {
+    with_universal_canister(async move |_, agent, canister_id| {
         let universal = Canister::builder()
             .with_canister_id(canister_id)
             .with_agent(&agent)
@@ -171,17 +128,17 @@ fn canister_query() {
 
         Ok(())
     })
+    .await
 }
 
-#[ignore]
-#[test]
-fn canister_reject_call() {
+#[tokio::test]
+async fn canister_reject_call() {
     // try to call a wallet method, but on the universal canister.
     // this lets us look up the reject code and reject message in the certificate.
-    with_universal_canister(|agent, wallet_id| async move {
+    with_universal_canister(async move |pic, agent, wallet_id| {
         let alice = WalletCanister::create(&agent, wallet_id).await?;
-        let bob =
-            WalletCanister::create(&agent, create_wallet_canister(&agent, None).await?).await?;
+        let bob = WalletCanister::create(&agent, create_wallet_canister(pic, &agent, None).await?)
+            .await?;
 
         let result = alice.wallet_send(*bob.canister_id(), 1_000_000).await;
 
@@ -202,13 +159,13 @@ fn canister_reject_call() {
         );
 
         Ok(())
-    });
+    })
+    .await
 }
 
-#[ignore]
-#[test]
-fn read_state_canister() {
-    with_universal_canister(|agent, canister_id| async move {
+#[tokio::test]
+async fn read_state_canister() {
+    with_universal_canister(async move |_, agent, canister_id| {
         let blob = agent
             .read_state_canister_info(canister_id, "module_hash")
             .await?;
@@ -219,15 +176,15 @@ fn read_state_canister() {
         assert_eq!(hash.len(), 32);
         Ok(())
     })
+    .await
 }
 
-#[ignore]
-#[test]
-fn wallet_canister_forward() {
-    with_wallet_canister(None, |agent, wallet_id| async move {
+#[tokio::test]
+async fn wallet_canister_forward() {
+    with_wallet_canister(None, async move |pic, agent, wallet_id| {
         let wallet = WalletCanister::create(&agent, wallet_id).await?;
 
-        let universal_id = create_universal_canister(&agent).await?;
+        let universal_id = create_universal_canister(pic, &agent).await?;
 
         // Perform an "echo" call through the wallet canister.
         // We encode the result in DIDL to decode it on the other side (would normally get
@@ -246,63 +203,66 @@ fn wallet_canister_forward() {
 
         assert_eq!(result, "Hello World");
         Ok(())
-    });
+    })
+    .await
 }
 
-#[ignore]
-#[test]
-fn wallet_canister_create_and_install() {
-    with_wallet_canister(Some(1_000_000_000_000_000), |agent, wallet_id| async move {
-        let wallet = WalletCanister::create(&agent, wallet_id).await?;
+#[tokio::test]
+async fn wallet_canister_create_and_install() {
+    with_wallet_canister(
+        Some(1_000_000_000_000_000),
+        async move |_, agent, wallet_id| {
+            let wallet = WalletCanister::create(&agent, wallet_id).await?;
 
-        let create_result = wallet
-            .wallet_create_canister(200_000_000_000_000, None, None, None, None)
-            .await?;
+            let create_result = wallet
+                .wallet_create_canister(200_000_000_000_000, None, None, None, None)
+                .await?;
 
-        #[derive(CandidType)]
-        struct CanisterInstall {
-            mode: InstallMode,
-            canister_id: Principal,
-            wasm_module: Vec<u8>,
-            arg: Vec<u8>,
-        }
+            #[derive(CandidType)]
+            struct CanisterInstall {
+                mode: CanisterInstallMode,
+                canister_id: Principal,
+                wasm_module: Vec<u8>,
+                arg: Vec<u8>,
+            }
 
-        let install_config = CanisterInstall {
-            mode: InstallMode::Install,
-            canister_id: create_result.canister_id,
-            wasm_module: b"\0asm\x01\0\0\0".to_vec(),
-            arg: Argument::default().serialize()?,
-        };
+            let install_config = CanisterInstall {
+                mode: CanisterInstallMode::Install,
+                canister_id: create_result.canister_id,
+                wasm_module: b"\0asm\x01\0\0\0".to_vec(),
+                arg: Argument::default().serialize()?,
+            };
 
-        let args = Argument::from_candid((install_config,));
+            let args = Argument::from_candid((install_config,));
 
-        wallet
-            .call64::<(), _>(Principal::management_canister(), "install_code", args, 0)
-            .call_and_wait()
-            .await?;
+            wallet
+                .call64::<(), _>(Principal::management_canister(), "install_code", args, 0)
+                .call_and_wait()
+                .await?;
 
-        Ok(())
-    });
+            Ok(())
+        },
+    )
+    .await
 }
 
-#[ignore]
-#[test]
-fn wallet_create_and_set_controller() {
-    with_wallet_canister(None, |agent, wallet_id| async move {
+#[tokio::test]
+async fn wallet_create_and_set_controller() {
+    with_wallet_canister(None, async move |pic, agent, wallet_id| {
         eprintln!("Parent wallet canister id: {:?}", wallet_id.to_text());
         let wallet = WalletCanister::create(&agent, wallet_id).await?;
         // get the wallet wasm from the environment
-        let wallet_wasm = get_wallet_wasm_from_env();
+        let wallet_wasm = get_wallet_wasm();
         // store the wasm into the wallet
         wallet
-            .wallet_store_wallet_wasm(wallet_wasm)
+            .wallet_store_wallet_wasm(wallet_wasm.to_vec())
             .call_and_wait()
             .await?;
 
         // controller
-        let other_agent_identity = create_basic_identity()?;
+        let other_agent_identity = create_basic_identity();
         let other_agent_principal = other_agent_identity.sender()?;
-        let other_agent = create_agent(other_agent_identity).await?;
+        let other_agent = create_agent(pic, other_agent_identity).await?;
         other_agent.fetch_root_key().await?;
 
         eprintln!("Agent id: {:?}", other_agent_principal.to_text());
@@ -344,23 +304,23 @@ fn wallet_create_and_set_controller() {
         }
 
         Ok(())
-    });
+    })
+    .await
 }
 
-#[ignore]
-#[test]
-fn wallet_create_wallet() {
-    with_wallet_canister(None, |agent, wallet_id| async move {
+#[tokio::test]
+async fn wallet_create_wallet() {
+    with_wallet_canister(None, async move |_, agent, wallet_id| {
         eprintln!("Parent wallet canister id: {:?}", wallet_id.to_text());
         let wallet = WalletCanister::create(&agent, wallet_id).await?;
         let wallet_initial_balance = wallet.wallet_balance().await?;
 
         // get the wallet wasm from the environment
-        let wallet_wasm = get_wallet_wasm_from_env();
+        let wallet_wasm = get_wallet_wasm();
 
         // store the wasm into the wallet
         wallet
-            .wallet_store_wallet_wasm(wallet_wasm)
+            .wallet_store_wallet_wasm(wallet_wasm.to_vec())
             .call_and_wait()
             .await?;
 
@@ -443,6 +403,7 @@ fn wallet_create_wallet() {
                 wasm_memory_limit: None,
                 wasm_memory_threshold: None,
                 log_visibility: None,
+                environment_variables: None,
             },
         };
         let args = Argument::from_candid((create_args,));
@@ -471,53 +432,55 @@ fn wallet_create_wallet() {
         );
 
         Ok(())
-    });
+    }).await
 }
 
-#[ignore]
-#[test]
-fn wallet_canister_funds() {
+#[tokio::test]
+async fn wallet_canister_funds() {
     let provisional_amount = 1_000_000_000_000_000;
-    with_wallet_canister(Some(provisional_amount), |agent, wallet_id| async move {
-        let alice = WalletCanister::create(&agent, wallet_id).await?;
-        let bob = WalletCanister::create(
-            &agent,
-            create_wallet_canister(&agent, Some(provisional_amount)).await?,
-        )
-        .await?;
+    with_wallet_canister(
+        Some(provisional_amount),
+        async move |pic, agent, wallet_id| {
+            let alice = WalletCanister::create(&agent, wallet_id).await?;
+            let bob = WalletCanister::create(
+                &agent,
+                create_wallet_canister(pic, &agent, Some(provisional_amount)).await?,
+            )
+            .await?;
 
-        let alice_previous_balance = alice.wallet_balance().await?;
-        let bob_previous_balance = bob.wallet_balance().await?;
+            let alice_previous_balance = alice.wallet_balance().await?;
+            let bob_previous_balance = bob.wallet_balance().await?;
 
-        alice.wallet_send(*bob.canister_id(), 1_000_000).await?;
+            alice.wallet_send(*bob.canister_id(), 1_000_000).await?;
 
-        let bob_balance = bob.wallet_balance().await?;
+            let bob_balance = bob.wallet_balance().await?;
 
-        let alice_balance = alice.wallet_balance().await?;
-        eprintln!(
-            "Alice previous: {}\n      current:  {}",
-            alice_previous_balance.amount, alice_balance.amount
-        );
-        eprintln!(
-            "Bob   previous: {}\n      current:  {}",
-            bob_previous_balance.amount, bob_balance.amount
-        );
-        assert!(
-            bob_balance.amount > bob_previous_balance.amount + 500_000,
-            "Wrong: {} > {}",
-            bob_balance.amount,
-            bob_previous_balance.amount + 500_000
-        );
-        assert!(alice_balance.amount < alice_previous_balance.amount - 500_000);
+            let alice_balance = alice.wallet_balance().await?;
+            eprintln!(
+                "Alice previous: {}\n      current:  {}",
+                alice_previous_balance.amount, alice_balance.amount
+            );
+            eprintln!(
+                "Bob   previous: {}\n      current:  {}",
+                bob_previous_balance.amount, bob_balance.amount
+            );
+            assert!(
+                bob_balance.amount > bob_previous_balance.amount + 500_000,
+                "Wrong: {} > {}",
+                bob_balance.amount,
+                bob_previous_balance.amount + 500_000
+            );
+            assert!(alice_balance.amount < alice_previous_balance.amount - 500_000);
 
-        Ok(())
-    });
+            Ok(())
+        },
+    )
+    .await
 }
 
-#[ignore]
-#[test]
-fn wallet_helper_functions() {
-    with_wallet_canister(None, |agent, wallet_id| async move {
+#[tokio::test]
+async fn wallet_helper_functions() {
+    with_wallet_canister(None, async move |pic, agent, wallet_id| {
         // name
         let wallet = WalletCanister::create(&agent, wallet_id).await?;
         let (name,) = wallet.name().call().await?;
@@ -530,9 +493,9 @@ fn wallet_helper_functions() {
         assert_eq!(name, Some(wallet_name));
 
         // controller
-        let other_agent_identity = create_basic_identity()?;
+        let other_agent_identity = create_basic_identity();
         let other_agent_principal = other_agent_identity.sender()?;
-        let other_agent = create_agent(other_agent_identity).await?;
+        let other_agent = create_agent(pic, other_agent_identity).await?;
         other_agent.fetch_root_key().await?;
 
         let (controller_list,) = wallet.get_controllers().call().await?;
@@ -563,7 +526,8 @@ fn wallet_helper_functions() {
         assert_ne!(&controller_list[0], &other_agent_principal);
 
         Ok(())
-    });
+    })
+    .await
 }
 
 mod sign_send {
@@ -577,10 +541,9 @@ mod sign_send {
     use ref_tests::{universal_canister::payload, with_universal_canister};
     use std::{thread, time};
 
-    #[ignore]
-    #[test]
-    fn query() {
-        with_universal_canister(|agent, canister_id| async move {
+    #[tokio::test]
+    async fn query() {
+        with_universal_canister(async move |_, agent, canister_id| {
             let arg = payload().reply_data(b"hello").build();
             let signed_query = agent.query(&canister_id, "query").with_arg(arg).sign()?;
 
@@ -604,12 +567,12 @@ mod sign_send {
             assert_eq!(result, b"hello");
             Ok(())
         })
+        .await
     }
 
-    #[ignore]
-    #[test]
-    fn update_then_request_status() {
-        with_universal_canister(|agent, canister_id| async move {
+    #[tokio::test]
+    async fn update_then_request_status() {
+        with_universal_canister(async move |_, agent, canister_id| {
             let arg = payload().reply_data(b"hello").build();
             let signed_update = agent.update(&canister_id, "update").with_arg(arg).sign()?;
 
@@ -658,13 +621,12 @@ mod sign_send {
                 matches!(response, RequestStatusResponse::Replied(ReplyResponse { arg: result, .. }) if result == b"hello")
             );
             Ok(())
-        })
+        }).await
     }
 
-    #[ignore]
-    #[test]
-    fn forged_query() {
-        with_universal_canister(|agent, canister_id| async move {
+    #[tokio::test]
+    async fn forged_query() {
+        with_universal_canister(async move |_, agent, canister_id| {
             let arg = payload().reply_data(b"hello").build();
             let mut signed_query = agent.query(&canister_id, "query").with_arg(arg).sign()?;
 
@@ -684,29 +646,26 @@ mod sign_send {
                     if field == *"method_name" && value_arg == *"non_query" && value_cbor == *"query"));
 
             Ok(())
-        })
+        }).await
     }
 }
 
 mod identity {
     use candid::Principal;
-    use ed25519_consensus::SigningKey;
     use ic_agent::{
         identity::{
-            BasicIdentity, DelegatedIdentity, Delegation, Prime256v1Identity, Secp256k1Identity,
-            SignedDelegation,
+            DelegatedIdentity, Delegation, Prime256v1Identity, Secp256k1Identity, SignedDelegation,
         },
         Identity,
     };
     use rand::thread_rng;
+    use ref_tests::utils::create_basic_identity;
     use ref_tests::{universal_canister::payload, with_universal_canister_as};
 
-    #[ignore]
-    #[test]
-    fn delegated_eddsa_identity() {
-        let mut random = thread_rng();
-        let sending_identity = BasicIdentity::from_signing_key(SigningKey::new(&mut random));
-        let signing_identity = BasicIdentity::from_signing_key(SigningKey::new(&mut random));
+    #[tokio::test]
+    async fn delegated_eddsa_identity() {
+        let sending_identity = create_basic_identity();
+        let signing_identity = create_basic_identity();
         let delegation = Delegation {
             expiration: i64::MAX as u64,
             pubkey: signing_identity.public_key().unwrap(),
@@ -722,7 +681,7 @@ mod identity {
             }],
         )
         .unwrap();
-        with_universal_canister_as(delegated_identity, |agent, canister| async move {
+        with_universal_canister_as(delegated_identity, async move |_, agent, canister| {
             let payload = payload().caller().append_and_reply().build();
             let caller_resp = agent
                 .query(&canister, "query")
@@ -734,11 +693,11 @@ mod identity {
             assert_eq!(caller, sending_identity.sender().unwrap());
             Ok(())
         })
+        .await
     }
 
-    #[ignore]
-    #[test]
-    fn delegated_ecdsa_identity() {
+    #[tokio::test]
+    async fn delegated_ecdsa_identity() {
         let mut random = thread_rng();
         let sending_identity =
             Secp256k1Identity::from_private_key(k256::SecretKey::random(&mut random));
@@ -759,7 +718,7 @@ mod identity {
             }],
         )
         .unwrap();
-        with_universal_canister_as(delegated_identity, |agent, canister| async move {
+        with_universal_canister_as(delegated_identity, async |_, agent, canister| {
             let payload = payload().caller().append_and_reply().build();
             let caller_resp = agent
                 .query(&canister, "query")
@@ -771,5 +730,6 @@ mod identity {
             assert_eq!(caller, sending_identity.sender().unwrap());
             Ok(())
         })
+        .await
     }
 }

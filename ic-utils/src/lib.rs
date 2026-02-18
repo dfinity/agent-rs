@@ -9,7 +9,7 @@
     rustdoc::private_intra_doc_links
 )]
 #![cfg_attr(not(target_family = "wasm"), warn(clippy::future_not_send))]
-#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 /// Utilities to encapsulate calls to a canister.
 pub mod call;
