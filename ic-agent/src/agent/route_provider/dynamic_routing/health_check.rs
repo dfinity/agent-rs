@@ -165,16 +165,21 @@ impl HealthCheckActor {
     /// Runs the actor.
     async fn run(self) {
         loop {
-            let health = self.checker.check(&self.node).await.unwrap_or_default();
+            let health = futures_util::select! {
+                result = self.checker.check(&self.node).fuse() => result.unwrap_or_default(),
+                _ = self.token.clone().fuse() => {
+                    log!(info, "{HEALTH_CHECK_ACTOR}: was gracefully cancelled for node {:?}", self.node);
+                    break;
+                }
+            };
             let message = NodeHealthState {
                 node: self.node.clone(),
                 health,
             };
             // Inform the listener about node's health. It can only fail if the listener was closed/dropped.
-            self.sender_channel
-                .send(message)
-                .await
-                .expect("Failed to send node's health state");
+            if self.sender_channel.send(message).await.is_err() {
+                break;
+            }
             futures_util::select! {
                 _ = crate::util::sleep(self.period).fuse() => {
                     continue;
