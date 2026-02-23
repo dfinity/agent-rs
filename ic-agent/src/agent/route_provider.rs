@@ -111,7 +111,7 @@ impl RouteProvider for RoundRobinRouteProvider {
     }
 
     fn routes_stats(&self) -> RoutesStats {
-        RoutesStats::new(self.routes.len(), None)
+        RoutesStats::new(self.routes.len(), Some(self.routes.len()))
     }
 }
 
@@ -153,7 +153,7 @@ impl RouteProvider for Url {
         Ok(vec![self.route()?])
     }
     fn routes_stats(&self) -> RoutesStats {
-        RoutesStats::new(1, None)
+        RoutesStats::new(1, Some(1))
     }
 }
 
