@@ -426,6 +426,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     wasm_memory_limit,
                     wasm_memory_threshold,
                     log_visibility,
+                    log_memory_limit: None,
                     environment_variables,
                 },
                 specified_id: self.specified_id,
@@ -446,6 +447,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     wasm_memory_limit,
                     wasm_memory_threshold,
                     log_visibility,
+                    log_memory_limit: None,
                     environment_variables,
                 })
                 .with_effective_canister_id(self.effective_canister_id)
@@ -1257,6 +1259,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
                     wasm_memory_limit,
                     wasm_memory_threshold,
                     log_visibility,
+                    log_memory_limit: None,
                     environment_variables,
                 },
             })
