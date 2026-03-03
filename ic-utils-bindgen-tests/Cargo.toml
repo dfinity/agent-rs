@@ -18,7 +18,7 @@ serde.workspace = true
 tokio.workspace = true
 
 [build-dependencies]
-ic-utils-bindgen = { workspace = true }
+ic-utils-bindgen = { path = "../ic-utils-bindgen" }
 candid.workspace = true
 
 [dev-dependencies]

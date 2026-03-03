@@ -724,7 +724,7 @@ mod mock {
         JsFuture::from(swc.ready().unwrap()).await.unwrap();
         let sw = registration.active().unwrap();
         let mut nonce = [0; 16];
-        getrandom::fill(&mut nonce).unwrap();
+        getrandom::getrandom(&mut nonce).unwrap();
         let nonce = hex::encode(nonce);
         let config = MockConfig {
             kind: "config".into(),

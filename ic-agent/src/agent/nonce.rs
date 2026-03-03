@@ -1,4 +1,4 @@
-use rand::RngExt;
+use rand::{rngs::OsRng, Rng};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc, Mutex,
@@ -81,7 +81,7 @@ impl<T: Send + Iterator<Item = Vec<u8>>> NonceGenerator for Iter<T> {
 pub(crate) struct RandomBlob {}
 impl NonceGenerator for RandomBlob {
     fn generate(&self) -> Option<Vec<u8>> {
-        Some(rand::rng().random::<[u8; 16]>().to_vec())
+        Some(OsRng.gen::<[u8; 16]>().to_vec())
     }
 }
 

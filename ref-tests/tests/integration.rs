@@ -659,7 +659,7 @@ mod identity {
         },
         Identity,
     };
-    use rand::RngExt;
+    use rand::thread_rng;
     use ref_tests::utils::create_basic_identity;
     use ref_tests::{universal_canister::payload, with_universal_canister_as};
 
@@ -699,12 +699,11 @@ mod identity {
 
     #[tokio::test]
     async fn delegated_ecdsa_identity() {
-        let sending_identity = Secp256k1Identity::from_private_key(
-            k256::SecretKey::from_slice(&rand::rng().random::<[u8; 32]>()).unwrap(),
-        );
-        let signing_identity = Prime256v1Identity::from_private_key(
-            p256::SecretKey::from_slice(&rand::rng().random::<[u8; 32]>()).unwrap(),
-        );
+        let mut random = thread_rng();
+        let sending_identity =
+            Secp256k1Identity::from_private_key(k256::SecretKey::random(&mut random));
+        let signing_identity =
+            Prime256v1Identity::from_private_key(p256::SecretKey::random(&mut random));
         let delegation = Delegation {
             expiration: i64::MAX as u64,
             pubkey: signing_identity.public_key().unwrap(),

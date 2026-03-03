@@ -35,7 +35,7 @@ impl BasicIdentity {
     /// Create a `BasicIdentity` from reading a PEM File from a Reader.
     #[cfg(feature = "pem")]
     pub fn from_pem<B: AsRef<[u8]>>(pem_contents: B) -> Result<Self, PemError> {
-        use pkcs8::der::{asn1::OctetString, Decode, ErrorKind, SliceReader, Tag, TagNumber};
+        use der::{asn1::OctetString, Decode, ErrorKind, SliceReader, Tag, TagNumber};
         use pkcs8::PrivateKeyInfo;
 
         let bytes = pem_contents.as_ref();
