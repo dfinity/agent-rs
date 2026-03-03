@@ -16,10 +16,11 @@ use ic_management_canister_types::{
 // Re-export the types that are used be defined in this file.
 pub use ic_management_canister_types::{
     CanisterLogRecord, CanisterStatusResult, CanisterStatusType, CanisterTimer, ChunkHash,
-    DefiniteCanisterSettings, FetchCanisterLogsResult, LogVisibility, OnLowWasmMemoryHookStatus,
-    QueryStats, ReadCanisterSnapshotDataResult, ReadCanisterSnapshotMetadataResult, Snapshot,
-    SnapshotDataKind, SnapshotDataOffset, SnapshotMetadataGlobal, SnapshotSource,
-    StoredChunksResult, UploadCanisterSnapshotMetadataResult, UploadChunkResult,
+    DefiniteCanisterSettings, FetchCanisterLogsArgs, FetchCanisterLogsResult, LogVisibility,
+    OnLowWasmMemoryHookStatus, QueryStats, ReadCanisterSnapshotDataResult,
+    ReadCanisterSnapshotMetadataResult, Snapshot, SnapshotDataKind, SnapshotDataOffset,
+    SnapshotMetadataGlobal, SnapshotSource, StoredChunksResult,
+    UploadCanisterSnapshotMetadataResult, UploadChunkResult,
 };
 use std::{convert::AsRef, ops::Deref};
 use strum_macros::{AsRefStr, Display, EnumString};
@@ -351,17 +352,14 @@ impl<'agent> ManagementCanister<'agent> {
         InstallBuilder::builder(self, canister_id, wasm)
     }
 
-    /// Fetch the logs of a canister.
+    /// Fetch (query) the logs of a canister.
     pub fn fetch_canister_logs(
         &self,
-        canister_id: &Principal,
+        args: &FetchCanisterLogsArgs,
     ) -> impl 'agent + SyncCall<Value = (FetchCanisterLogsResult,)> {
-        // `fetch_canister_logs` is only supported in non-replicated mode.
         self.query(MgmtMethod::FetchCanisterLogs.as_ref())
-            .with_arg(CanisterIdRecord {
-                canister_id: *canister_id,
-            })
-            .with_effective_canister_id(*canister_id)
+            .with_arg(args)
+            .with_effective_canister_id(args.canister_id)
             .build()
     }
 
