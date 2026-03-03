@@ -2,7 +2,8 @@
 
 #[doc(inline)]
 pub use super::attributes::{
-    ComputeAllocation, FreezingThreshold, MemoryAllocation, ReservedCyclesLimit, WasmMemoryLimit,
+    ComputeAllocation, FreezingThreshold, LogMemoryLimit, MemoryAllocation, ReservedCyclesLimit,
+    WasmMemoryLimit,
 };
 use super::{ChunkHash, LogVisibility, ManagementCanister};
 use crate::call::CallFuture;
@@ -42,6 +43,7 @@ pub struct CreateCanisterBuilder<'agent, 'canister: 'agent> {
     wasm_memory_limit: Option<Result<WasmMemoryLimit, AgentError>>,
     wasm_memory_threshold: Option<Result<WasmMemoryLimit, AgentError>>,
     log_visibility: Option<Result<LogVisibility, AgentError>>,
+    log_memory_limit: Option<Result<LogMemoryLimit, AgentError>>,
     environment_variables: Option<Result<Vec<EnvironmentVariable>, AgentError>>,
     is_provisional_create: bool,
     amount: Option<u128>,
@@ -62,6 +64,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             wasm_memory_limit: None,
             wasm_memory_threshold: None,
             log_visibility: None,
+            log_memory_limit: None,
             environment_variables: None,
             is_provisional_create: false,
             amount: None,
@@ -303,6 +306,32 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         }
     }
 
+    /// Pass in a log memory limit value for the canister.
+    pub fn with_log_memory_limit<C, E>(self, log_memory_limit: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<LogMemoryLimit, Error = E>,
+    {
+        self.with_optional_log_memory_limit(Some(log_memory_limit))
+    }
+
+    /// Pass in a log memory limit optional value for the canister. If this is [`None`],
+    /// it will revert the log memory limit to default.
+    pub fn with_optional_log_memory_limit<E, C>(self, log_memory_limit: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<LogMemoryLimit, Error = E>,
+    {
+        Self {
+            log_memory_limit: log_memory_limit.map(|limit| {
+                limit
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}")))
+            }),
+            ..self
+        }
+    }
+
     /// Pass in a log visibility setting for the canister.
     pub fn with_log_visibility<C, E>(self, log_visibility: C) -> Self
     where
@@ -397,6 +426,11 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             Some(Ok(x)) => Some(x),
             None => None,
         };
+        let log_memory_limit = match self.log_memory_limit {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
+            None => None,
+        };
         let environment_variables = match self.environment_variables {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(x),
@@ -426,7 +460,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     wasm_memory_limit,
                     wasm_memory_threshold,
                     log_visibility,
-                    log_memory_limit: None,
+                    log_memory_limit: log_memory_limit.clone(),
                     environment_variables,
                 },
                 specified_id: self.specified_id,
@@ -447,7 +481,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     wasm_memory_limit,
                     wasm_memory_threshold,
                     log_visibility,
-                    log_memory_limit: None,
+                    log_memory_limit,
                     environment_variables,
                 })
                 .with_effective_canister_id(self.effective_canister_id)
@@ -927,6 +961,7 @@ pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent> {
     wasm_memory_limit: Option<Result<WasmMemoryLimit, AgentError>>,
     wasm_memory_threshold: Option<Result<WasmMemoryLimit, AgentError>>,
     log_visibility: Option<Result<LogVisibility, AgentError>>,
+    log_memory_limit: Option<Result<LogMemoryLimit, AgentError>>,
     environment_variables: Option<Result<Vec<EnvironmentVariable>, AgentError>>,
 }
 
@@ -944,6 +979,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             wasm_memory_limit: None,
             wasm_memory_threshold: None,
             log_visibility: None,
+            log_memory_limit: None,
             environment_variables: None,
         }
     }
@@ -1139,6 +1175,32 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         }
     }
 
+    /// Pass in a log memory limit value for the canister.
+    pub fn with_log_memory_limit<C, E>(self, log_memory_limit: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<LogMemoryLimit, Error = E>,
+    {
+        self.with_optional_log_memory_limit(Some(log_memory_limit))
+    }
+
+    /// Pass in a log memory limit optional value for the canister. If this is [`None`],
+    /// leaves the log memory limit unchanged.
+    pub fn with_optional_log_memory_limit<E, C>(self, log_memory_limit: Option<C>) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<LogMemoryLimit, Error = E>,
+    {
+        Self {
+            log_memory_limit: log_memory_limit.map(|limit| {
+                limit
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}")))
+            }),
+            ..self
+        }
+    }
+
     /// Pass in a log visibility setting for the canister.
     pub fn with_log_visibility<C, E>(self, log_visibility: C) -> Self
     where
@@ -1239,6 +1301,11 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             Some(Ok(x)) => Some(x),
             None => None,
         };
+        let log_memory_limit = match self.log_memory_limit {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
+            None => None,
+        };
         let environment_variables = match self.environment_variables {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(x),
@@ -1259,7 +1326,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
                     wasm_memory_limit,
                     wasm_memory_threshold,
                     log_visibility,
-                    log_memory_limit: None,
+                    log_memory_limit,
                     environment_variables,
                 },
             })

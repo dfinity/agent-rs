@@ -15,12 +15,13 @@ use ic_management_canister_types::{
 };
 // Re-export the types that are used be defined in this file.
 pub use ic_management_canister_types::{
-    CanisterLogRecord, CanisterStatusResult, CanisterStatusType, CanisterTimer, ChunkHash,
-    DefiniteCanisterSettings, FetchCanisterLogsArgs, FetchCanisterLogsResult, LogVisibility,
+    CanisterLogFilter, CanisterLogRecord, CanisterMetadataArgs, CanisterMetadataResult,
+    CanisterStatusResult, CanisterStatusType, CanisterTimer, ChunkHash, DefiniteCanisterSettings,
+    FetchCanisterLogsArgs, FetchCanisterLogsResult, LogVisibility, MemoryMetrics,
     OnLowWasmMemoryHookStatus, QueryStats, ReadCanisterSnapshotDataResult,
-    ReadCanisterSnapshotMetadataResult, Snapshot, SnapshotDataKind, SnapshotDataOffset,
-    SnapshotMetadataGlobal, SnapshotSource, StoredChunksResult,
-    UploadCanisterSnapshotMetadataResult, UploadChunkResult,
+    ReadCanisterSnapshotMetadataResult, RenameCanisterRecord, RenameToRecord, Snapshot,
+    SnapshotDataKind, SnapshotDataOffset, SnapshotMetadataGlobal, SnapshotSource,
+    StoredChunksResult, UploadCanisterSnapshotMetadataResult, UploadChunkResult,
 };
 use std::{convert::AsRef, ops::Deref};
 use strum_macros::{AsRefStr, Display, EnumString};
@@ -117,6 +118,8 @@ pub enum MgmtMethod {
     NodeMetricsHistory,
     /// There is no corresponding agent function as only canisters can call it.
     CanisterInfo,
+    /// See [`ManagementCanister::canister_metadata`].
+    CanisterMetadata,
 }
 
 impl<'agent> ManagementCanister<'agent> {
@@ -368,12 +371,15 @@ impl<'agent> ManagementCanister<'agent> {
     /// <div class="warning">Canisters should be stopped before running this method!</div>
     pub fn take_canister_snapshot(
         &self,
-        canister_id: &Principal,
         take_args: &TakeCanisterSnapshotArgs,
     ) -> impl 'agent + AsyncCall<Value = (Snapshot,)> {
+        let args = TakeCanisterSnapshotArgs {
+            sender_canister_version: None,
+            ..take_args.clone()
+        };
         self.update(MgmtMethod::TakeCanisterSnapshot.as_ref())
-            .with_arg(take_args)
-            .with_effective_canister_id(*canister_id)
+            .with_arg(args)
+            .with_effective_canister_id(take_args.canister_id)
             .build()
     }
 
@@ -382,12 +388,15 @@ impl<'agent> ManagementCanister<'agent> {
     /// <div class="warning">Canisters should be stopped before running this method!</div>
     pub fn load_canister_snapshot(
         &self,
-        canister_id: &Principal,
         load_args: &LoadCanisterSnapshotArgs,
     ) -> impl 'agent + AsyncCall<Value = ()> {
+        let args = LoadCanisterSnapshotArgs {
+            sender_canister_version: None,
+            ..load_args.clone()
+        };
         self.update(MgmtMethod::LoadCanisterSnapshot.as_ref())
-            .with_arg(load_args)
-            .with_effective_canister_id(*canister_id)
+            .with_arg(args)
+            .with_effective_canister_id(load_args.canister_id)
             .build()
     }
 
@@ -407,60 +416,66 @@ impl<'agent> ManagementCanister<'agent> {
     /// Deletes a recorded canister snapshot by ID.
     pub fn delete_canister_snapshot(
         &self,
-        canister_id: &Principal,
         delete_args: &DeleteCanisterSnapshotArgs,
     ) -> impl 'agent + AsyncCall<Value = ()> {
         self.update(MgmtMethod::DeleteCanisterSnapshot.as_ref())
             .with_arg(delete_args)
-            .with_effective_canister_id(*canister_id)
+            .with_effective_canister_id(delete_args.canister_id)
             .build()
     }
 
     /// Reads the metadata of a recorded canister snapshot by canister ID and snapshot ID.
     pub fn read_canister_snapshot_metadata(
         &self,
-        canister_id: &Principal,
         metadata_args: &ReadCanisterSnapshotMetadataArgs,
     ) -> impl 'agent + AsyncCall<Value = (ReadCanisterSnapshotMetadataResult,)> {
         self.update(MgmtMethod::ReadCanisterSnapshotMetadata.as_ref())
             .with_arg(metadata_args)
-            .with_effective_canister_id(*canister_id)
+            .with_effective_canister_id(metadata_args.canister_id)
             .build()
     }
 
     /// Reads the data of a recorded canister snapshot by canister ID and snapshot ID.
     pub fn read_canister_snapshot_data(
         &self,
-        canister_id: &Principal,
         data_args: &ReadCanisterSnapshotDataArgs,
     ) -> impl 'agent + AsyncCall<Value = (ReadCanisterSnapshotDataResult,)> {
         self.update(MgmtMethod::ReadCanisterSnapshotData.as_ref())
             .with_arg(data_args)
-            .with_effective_canister_id(*canister_id)
+            .with_effective_canister_id(data_args.canister_id)
             .build()
     }
 
     /// Uploads the metadata of a canister snapshot by canister ID.
     pub fn upload_canister_snapshot_metadata(
         &self,
-        canister_id: &Principal,
         metadata_args: &UploadCanisterSnapshotMetadataArgs,
     ) -> impl 'agent + AsyncCall<Value = (UploadCanisterSnapshotMetadataResult,)> {
         self.update(MgmtMethod::UploadCanisterSnapshotMetadata.as_ref())
             .with_arg(metadata_args)
-            .with_effective_canister_id(*canister_id)
+            .with_effective_canister_id(metadata_args.canister_id)
             .build()
     }
 
     /// Uploads the data of a canister snapshot by canister ID and snapshot ID..
     pub fn upload_canister_snapshot_data(
         &self,
-        canister_id: &Principal,
         data_args: &UploadCanisterSnapshotDataArgs,
     ) -> impl 'agent + AsyncCall<Value = ()> {
         self.update(MgmtMethod::UploadCanisterSnapshotData.as_ref())
             .with_arg(data_args)
-            .with_effective_canister_id(*canister_id)
+            .with_effective_canister_id(data_args.canister_id)
+            .build()
+    }
+
+    /// Fetch a named metadata section of a canister's Wasm module.
+    pub fn canister_metadata(
+        &self,
+        args: &CanisterMetadataArgs,
+    ) -> impl 'agent + SyncCall<Value = (CanisterMetadataResult,)> {
+        self.query(MgmtMethod::CanisterMetadata.as_ref())
+            .with_arg(args)
+            .with_effective_canister_id(args.canister_id)
             .build()
     }
 }
