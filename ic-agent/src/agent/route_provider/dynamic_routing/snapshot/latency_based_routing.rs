@@ -5,7 +5,7 @@ use std::{
 };
 
 use arc_swap::ArcSwap;
-use rand::Rng;
+use rand::RngExt;
 
 use crate::agent::route_provider::{
     dynamic_routing::{
@@ -319,10 +319,10 @@ impl RoutingSnapshot for LatencyRoutingSnapshot {
         // Limit the number of returned nodes to the number of available nodes
         let n = std::cmp::min(n, routing_candidates.len());
         let mut nodes = Vec::with_capacity(n);
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         for _ in 0..n {
-            let rand_num = rng.gen::<f64>();
+            let rand_num = rng.random::<f64>();
             if let Some(idx) = weighted_sample(routing_candidates.as_slice(), rand_num) {
                 let removed_node = routing_candidates.swap_remove(idx);
                 nodes.push(removed_node.node);
