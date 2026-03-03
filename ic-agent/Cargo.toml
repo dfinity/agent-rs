@@ -77,7 +77,7 @@ optional = true
 tokio = { version = "1.24.2", features = ["time"] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-getrandom = { version = "0.2", features = ["js"], optional = true }
+getrandom = { version = "0.4", features = ["wasm_js"], optional = true }
 js-sys = { version = "0.3", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
