@@ -27,7 +27,6 @@ backoff = { workspace = true }
 bytes = { workspace = true }
 cached = { workspace = true }
 candid = { workspace = true }
-der = { workspace = true }
 ecdsa = { workspace = true }
 # Note
 # ed25519-consensus is kept as a dependency for backward compatibility.
