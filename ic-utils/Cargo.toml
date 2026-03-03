@@ -18,19 +18,19 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 workspace = true
 
 [dependencies]
-async-trait = "0.1.68"
+async-trait = { workspace = true }
 candid = { workspace = true, features = ["value"] }
 futures-util = { workspace = true }
 ic-agent = { workspace = true, default-features = false }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
 sha2 = { workspace = true }
-strum = "0.27"
-strum_macros = "0.27"
+strum = { workspace = true }
+strum_macros = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
-semver = "1.0.7"
-once_cell = "1.10.0"
+semver = { workspace = true }
+once_cell = { workspace = true }
 ic-management-canister-types = { workspace = true }
 
 [dev-dependencies]
