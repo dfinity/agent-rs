@@ -1242,12 +1242,6 @@ mod extras {
                 Nat::from(3_400_200_000_000u128)
             );
 
-            let no_change: Option<u128> = None;
-            ic00.update_settings(&canister_id)
-                .with_optional_reserved_cycles_limit(no_change)
-                .call_and_wait()
-                .await?;
-
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(
                 result.0.settings.reserved_cycles_limit,
@@ -1364,12 +1358,6 @@ mod extras {
                 Nat::from(3_000_000_000_u64)
             );
 
-            let no_change: Option<u64> = None;
-            ic00.update_settings(&canister_id)
-                .with_optional_wasm_memory_limit(no_change)
-                .call_and_wait()
-                .await?;
-
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(
                 result.0.settings.wasm_memory_limit,
@@ -1428,13 +1416,6 @@ mod extras {
 
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(result.0.settings.log_visibility, LogVisibility::Public);
-
-            // Update with no change.
-            let no_change: Option<LogVisibility> = None;
-            ic00.update_settings(&canister_id)
-                .with_optional_log_visibility(no_change)
-                .call_and_wait()
-                .await?;
 
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(result.0.settings.log_visibility, LogVisibility::Public);
