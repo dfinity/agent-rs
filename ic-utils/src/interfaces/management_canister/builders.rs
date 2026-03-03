@@ -950,7 +950,7 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> IntoFuture
 
 /// A builder for an `update_settings` call.
 #[derive(Debug)]
-pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent> {
+pub struct UpdateSettingsBuilder<'agent, 'canister: 'agent> {
     canister: &'canister Canister<'agent>,
     canister_id: Principal,
     controllers: Option<Result<Vec<Principal>, AgentError>>,
@@ -965,7 +965,7 @@ pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent> {
     environment_variables: Option<Result<Vec<EnvironmentVariable>, AgentError>>,
 }
 
-impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
+impl<'agent, 'canister: 'agent> UpdateSettingsBuilder<'agent, 'canister> {
     /// Create an `UpdateCanister` builder, which is also an `AsyncCall` implementation.
     pub fn builder(canister: &'canister Canister<'agent>, canister_id: &Principal) -> Self {
         Self {
@@ -1347,7 +1347,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<'agent, 'canister: 'agent> AsyncCall for UpdateCanisterBuilder<'agent, 'canister> {
+impl<'agent, 'canister: 'agent> AsyncCall for UpdateSettingsBuilder<'agent, 'canister> {
     type Value = ();
     async fn call(self) -> Result<CallResponse<()>, AgentError> {
         self.build()?.call().await
@@ -1358,7 +1358,7 @@ impl<'agent, 'canister: 'agent> AsyncCall for UpdateCanisterBuilder<'agent, 'can
     }
 }
 
-impl<'agent, 'canister: 'agent> IntoFuture for UpdateCanisterBuilder<'agent, 'canister> {
+impl<'agent, 'canister: 'agent> IntoFuture for UpdateSettingsBuilder<'agent, 'canister> {
     type IntoFuture = CallFuture<'agent, ()>;
     type Output = Result<(), AgentError>;
     fn into_future(self) -> Self::IntoFuture {

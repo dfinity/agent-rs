@@ -32,7 +32,7 @@ pub mod builders;
 #[doc(inline)]
 pub use builders::{
     CreateCanisterBuilder, InstallBuilder, InstallChunkedCodeBuilder, InstallCodeBuilder,
-    UpdateCanisterBuilder,
+    UpdateSettingsBuilder,
 };
 
 /// The IC management canister.
@@ -291,8 +291,8 @@ impl<'agent> ManagementCanister<'agent> {
     pub fn update_settings<'canister>(
         &'canister self,
         canister_id: &Principal,
-    ) -> UpdateCanisterBuilder<'agent, 'canister> {
-        UpdateCanisterBuilder::builder(self, canister_id)
+    ) -> UpdateSettingsBuilder<'agent, 'canister> {
+        UpdateSettingsBuilder::builder(self, canister_id)
     }
 
     /// Upload a chunk of a WASM module to a canister's chunked WASM storage.
