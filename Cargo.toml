@@ -42,7 +42,7 @@ hex = "0.4.3"
 ic-ed25519 = "0.5"
 k256 = "0.13.4"
 leb128 = "0.2.5"
-pocket-ic = "10.0.0"
+pocket-ic = "12.0.0"
 p256 = "0.13.2"
 rand = "0.8.5"
 reqwest = { version = "0.12", default-features = false }
