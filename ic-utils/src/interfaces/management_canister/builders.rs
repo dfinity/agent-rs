@@ -251,32 +251,6 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         }
     }
 
-    /// Pass in a log memory limit value for the canister.
-    pub fn with_log_memory_limit<C, E>(self, log_memory_limit: C) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<LogMemoryLimit, Error = E>,
-    {
-        self.with_optional_log_memory_limit(Some(log_memory_limit))
-    }
-
-    /// Pass in a log memory limit optional value for the canister. If this is [`None`],
-    /// it will revert the log memory limit to default.
-    pub fn with_optional_log_memory_limit<E, C>(self, log_memory_limit: Option<C>) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<LogMemoryLimit, Error = E>,
-    {
-        Self {
-            log_memory_limit: log_memory_limit.map(|limit| {
-                limit
-                    .try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{e}")))
-            }),
-            ..self
-        }
-    }
-
     /// Pass in a log visibility setting for the canister.
     pub fn with_log_visibility<C, E>(self, log_visibility: C) -> Self
     where
@@ -1042,32 +1016,6 @@ impl<'agent, 'canister: 'agent> UpdateSettingsBuilder<'agent, 'canister> {
                     .try_into()
                     .map_err(|e| AgentError::MessageError(format!("{e}"))),
             ),
-            ..self
-        }
-    }
-
-    /// Pass in a log memory limit value for the canister.
-    pub fn with_log_memory_limit<C, E>(self, log_memory_limit: C) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<LogMemoryLimit, Error = E>,
-    {
-        self.with_optional_log_memory_limit(Some(log_memory_limit))
-    }
-
-    /// Pass in a log memory limit optional value for the canister. If this is [`None`],
-    /// leaves the log memory limit unchanged.
-    pub fn with_optional_log_memory_limit<E, C>(self, log_memory_limit: Option<C>) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<LogMemoryLimit, Error = E>,
-    {
-        Self {
-            log_memory_limit: log_memory_limit.map(|limit| {
-                limit
-                    .try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{e}")))
-            }),
             ..self
         }
     }
