@@ -47,7 +47,7 @@ cached = { version = "0.56", features = ["ahash"], default-features = false }
 candid = "0.10.10"
 candid_parser = "0.3.0"
 clap = "4.5.21"
-der = "0.7"
+der = "0.8.0"
 ecdsa = "0.16"
 ed25519-consensus = "2.1.0"
 elliptic-curve = "0.13"

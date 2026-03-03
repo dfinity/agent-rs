@@ -1468,7 +1468,6 @@ dependencies = [
  "bytes",
  "cached",
  "candid",
- "der",
  "ecdsa",
  "ed25519-consensus",
  "elliptic-curve",
