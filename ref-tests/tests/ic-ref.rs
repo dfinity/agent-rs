@@ -1070,6 +1070,7 @@ mod extras {
         export::Principal,
         AgentError,
     };
+    use ic_management_canister_types::EnvironmentVariable;
     use ic_utils::{
         call::AsyncCall,
         interfaces::{
@@ -1419,6 +1420,204 @@ mod extras {
 
             let result = ic00.canister_status(&canister_id).call_and_wait().await?;
             assert_eq!(result.0.settings.log_visibility, LogVisibility::Public);
+
+            Ok(())
+        })
+        .await
+    }
+
+    #[tokio::test]
+    async fn create_with_wasm_memory_threshold() {
+        with_agent(async move |pic, agent| {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
+                .with_wasm_memory_threshold(500_000_000_u64)
+                .call_and_wait()
+                .await
+                .unwrap();
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.wasm_memory_threshold,
+                Nat::from(500_000_000_u64)
+            );
+
+            Ok(())
+        })
+        .await
+    }
+
+    #[tokio::test]
+    async fn update_wasm_memory_threshold() {
+        with_agent(async move |pic, agent| {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
+                .with_wasm_memory_threshold(500_000_000_u64)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.wasm_memory_threshold,
+                Nat::from(500_000_000_u64)
+            );
+
+            ic00.update_settings(&canister_id)
+                .with_wasm_memory_threshold(1_000_000_000_u64)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.wasm_memory_threshold,
+                Nat::from(1_000_000_000_u64)
+            );
+
+            Ok(())
+        })
+        .await
+    }
+
+    #[tokio::test]
+    async fn create_with_log_memory_limit() {
+        with_agent(async move |pic, agent| {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
+                .with_log_memory_limit(1_000_000_u64)
+                .call_and_wait()
+                .await
+                .unwrap();
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.log_memory_limit,
+                Nat::from(1_000_000_u64)
+            );
+
+            Ok(())
+        })
+        .await
+    }
+
+    #[tokio::test]
+    async fn update_log_memory_limit() {
+        with_agent(async move |pic, agent| {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
+                .with_log_memory_limit(1_000_000_u64)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.log_memory_limit,
+                Nat::from(1_000_000_u64)
+            );
+
+            ic00.update_settings(&canister_id)
+                .with_log_memory_limit(2_000_000_u64)
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(
+                result.0.settings.log_memory_limit,
+                Nat::from(2_000_000_u64)
+            );
+
+            Ok(())
+        })
+        .await
+    }
+
+    #[tokio::test]
+    async fn create_with_environment_variables() {
+        with_agent(async move |pic, agent| {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let env_vars = vec![
+                EnvironmentVariable {
+                    name: "KEY1".to_string(),
+                    value: "value1".to_string(),
+                },
+                EnvironmentVariable {
+                    name: "KEY2".to_string(),
+                    value: "value2".to_string(),
+                },
+            ];
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
+                .with_environment_variables(env_vars.clone())
+                .call_and_wait()
+                .await
+                .unwrap();
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(result.0.settings.environment_variables, env_vars);
+
+            Ok(())
+        })
+        .await
+    }
+
+    #[tokio::test]
+    async fn update_environment_variables() {
+        with_agent(async move |pic, agent| {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let initial_vars = vec![EnvironmentVariable {
+                name: "KEY1".to_string(),
+                value: "value1".to_string(),
+            }];
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(Some(20_000_000_000_000_u128))
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
+                .with_environment_variables(initial_vars.clone())
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(result.0.settings.environment_variables, initial_vars);
+
+            let updated_vars = vec![
+                EnvironmentVariable {
+                    name: "KEY1".to_string(),
+                    value: "new_value1".to_string(),
+                },
+                EnvironmentVariable {
+                    name: "KEY2".to_string(),
+                    value: "value2".to_string(),
+                },
+            ];
+
+            ic00.update_settings(&canister_id)
+                .with_environment_variables(updated_vars.clone())
+                .call_and_wait()
+                .await?;
+
+            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            assert_eq!(result.0.settings.environment_variables, updated_vars);
 
             Ok(())
         })
