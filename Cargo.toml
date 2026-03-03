@@ -2,14 +2,14 @@
 resolver = "2"
 members = [
     "ic-agent",
-    "icx-cert",
     "ic-identity-hsm",
+    "ic-transport-types",
     "ic-utils",
     "ic-utils-bindgen",
-    "ic-transport-types",
-    "icx",
-    "ref-tests",
     "ic-utils-bindgen-tests",
+    "icx",
+    "icx-cert",
+    "ref-tests",
 ]
 
 [workspace.package]
@@ -27,13 +27,15 @@ license = "Apache-2.0"
 needless_lifetimes = "allow"
 
 [workspace.dependencies]
+# The path dependencies are used to ensure that all workspace members use the same version of these crates.
 ic-agent = { path = "ic-agent", version = "0.46.0", default-features = false }
-ic-utils = { path = "ic-utils", version = "0.46.0" }
 ic-identity-hsm = { path = "ic-identity-hsm", version = "0.46.0" }
 ic-transport-types = { path = "ic-transport-types", version = "0.46.0" }
+ic-utils = { path = "ic-utils", version = "0.46.0" }
 ic-utils-bindgen = { path = "ic-utils-bindgen" }
 ref-tests = { path = "ref-tests" }
 
+# Public dependencies
 anyhow = { version = "1.0", features = ["backtrace"] }
 arc-swap = "1.7"
 async-channel = "2.5"
@@ -86,8 +88,8 @@ serde_repr = "0.1.19"
 sha2 = "0.10.8"
 simple_asn1 = "0.6.0"
 stop-token = "0.7"
-strum = "0.27"
-strum_macros = "0.27"
+strum = "0.28.0"
+strum_macros = "0.28.0"
 thiserror = "2.0.3"
 time = "0.3"
 tokio = { version = "1.50.0", default-features = false }
