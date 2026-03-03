@@ -67,7 +67,7 @@ url = "2.1.0"
 [dependencies.reqwest]
 workspace = true
 default-features = false
-features = ["blocking", "json", "rustls-tls-webpki-roots", "stream"]
+features = ["blocking", "json", "rustls", "stream"]
 
 [dependencies.pem]
 version = "3"
