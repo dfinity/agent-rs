@@ -52,6 +52,20 @@ jobs:
         run: |
           ./scripts/download_reftest_assets.sh
 
+      - name: Run Tests (ref-tests)
+        if: ${{ !contains(matrix.os, 'windows') }}
+        shell: bash
+        run: |
+          # macOS: threads count against RLIMIT_NPROC; increase limit so that
+          # pocket-ic's scoped_threadpool can spawn threads across all 34 tests.
+          if [ "$(uname)" = "Darwin" ]; then
+            ulimit -u unlimited 2>/dev/null || ulimit -u 2000 2>/dev/null || true
+          fi
+          cd ref-tests
+          cargo test --no-fail-fast -- --test-threads=1
+        env:
+          RUST_BACKTRACE: 1
+
       - name: Run Tests
         shell: bash
         run: |
@@ -64,15 +78,6 @@ jobs:
             cargo test --no-default-features --no-fail-fast
             popd
           done
-        env:
-          RUST_BACKTRACE: 1
-
-      - name: Run Tests (ref-tests)
-        if: ${{ !contains(matrix.os, 'windows') }}
-        shell: bash
-        run: |
-          cd ref-tests
-          cargo test --no-fail-fast -- --test-threads=1
         env:
           RUST_BACKTRACE: 1
 
