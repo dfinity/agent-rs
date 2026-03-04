@@ -122,7 +122,7 @@ mod test {
     use k256::{
         ecdsa::{signature::Verifier, Signature},
         elliptic_curve::PrimeField,
-        FieldBytes, Scalar,
+        Scalar,
     };
 
     // WRONG_CURVE_IDENTITY_FILE is generated from the following command:
@@ -210,12 +210,18 @@ N3d26cRxD99TPtm8uo2OuzKhSiq6EQ==
             .expect("Cannot find secp256k1 signature bytes.");
 
         // Import the secp256k1 signature into OpenSSL.
-        let r: Scalar = Option::from(Scalar::from_repr(*FieldBytes::from_slice(
-            &signature[0..32],
-        )))
+        let r: Scalar = Option::from(Scalar::from_repr(
+            <[u8; 32]>::try_from(&signature[0..32])
+                .expect("Cannot extract r component from secp256k1 signature bytes.")
+                .into(),
+        ))
         .expect("Cannot extract r component from secp256k1 signature bytes.");
-        let s: Scalar = Option::from(Scalar::from_repr(*FieldBytes::from_slice(&signature[32..])))
-            .expect("Cannot extract s component from secp256k1 signature bytes.");
+        let s: Scalar = Option::from(Scalar::from_repr(
+            <[u8; 32]>::try_from(&signature[32..])
+                .expect("Cannot extract s component from secp256k1 signature bytes.")
+                .into(),
+        ))
+        .expect("Cannot extract s component from secp256k1 signature bytes.");
         let ecdsa_sig = Signature::from_scalars(r, s)
             .expect("Cannot create secp256k1 signature from r and s components.");
 

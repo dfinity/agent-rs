@@ -10,20 +10,20 @@ description = "Types related to the HTTP transport for the Internet Computer"
 keywords = ["internet-computer", "agent", "types", "ic", "dfinity"]
 categories = ["cryptography::cryptocurrencies", "api-bindings"]
 
-[lints]
-workspace = true
-
 [dependencies]
 candid.workspace = true
 hex.workspace = true
 ic-certification.workspace = true
 leb128.workspace = true
-thiserror.workspace = true
 serde.workspace = true
 serde_bytes.workspace = true
 serde_cbor.workspace = true
 serde_repr.workspace = true
 sha2.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -122,7 +122,7 @@ mod test {
     use p256::{
         ecdsa::{signature::Verifier, Signature},
         elliptic_curve::PrimeField,
-        FieldBytes, Scalar,
+        Scalar,
     };
 
     // WRONG_CURVE_IDENTITY_FILE is generated from the following command:
@@ -210,12 +210,18 @@ Sks4xGbA/ZbazsrMl4v446U5UIVxCGGaKw==
             .expect("Cannot find prime256v1 signature bytes.");
 
         // Import the prime256v1 signature.
-        let r: Scalar = Option::from(Scalar::from_repr(*FieldBytes::from_slice(
-            &signature[0..32],
-        )))
+        let r: Scalar = Option::from(Scalar::from_repr(
+            <[u8; 32]>::try_from(&signature[0..32])
+                .expect("Cannot extract r component from prime256v1 signature bytes.")
+                .into(),
+        ))
         .expect("Cannot extract r component from prime256v1 signature bytes.");
-        let s: Scalar = Option::from(Scalar::from_repr(*FieldBytes::from_slice(&signature[32..])))
-            .expect("Cannot extract s component from prime256v1 signature bytes.");
+        let s: Scalar = Option::from(Scalar::from_repr(
+            <[u8; 32]>::try_from(&signature[32..])
+                .expect("Cannot extract s component from prime256v1 signature bytes.")
+                .into(),
+        ))
+        .expect("Cannot extract s component from prime256v1 signature bytes.");
         let ecdsa_sig = Signature::from_scalars(r, s)
             .expect("Cannot create prime256v1 signature from r and s components.");
 

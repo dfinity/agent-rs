@@ -14,8 +14,29 @@ categories = ["api-bindings", "data-structures", "no-std"]
 keywords = ["internet-computer", "agent", "icp", "dfinity"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
-[lints]
-workspace = true
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
+features = ["wasm-bindgen"]
+
+[features]
+default = ["pem"]
+pem = ["dep:pem"]
+ring = ["dep:ring"]
+ic_ref_tests = [
+    "default",
+] # Used to separate integration tests for ic-ref which need a server running.
+wasm-bindgen = [
+    "dep:js-sys",
+    "dep:wasm-bindgen",
+    "dep:wasm-bindgen-futures",
+    "dep:getrandom",
+    "dep:web-sys",
+    "time/wasm-bindgen",
+    "backoff/wasm-bindgen",
+    "cached/wasm",
+]
+_internal_dynamic-routing = []
+tracing = ["dep:tracing"] # Does very little right now.
 
 [dependencies]
 arc-swap = { workspace = true }
@@ -44,15 +65,15 @@ ic-ed25519 = { workspace = true }
 ic-transport-types = { workspace = true }
 ic-verify-bls-signature = { workspace = true }
 k256 = { workspace = true, features = ["pem"] }
-p256 = { workspace = true, features = ["pem"] }
 leb128 = { workspace = true }
+p256 = { workspace = true, features = ["pem"] }
 pem = { workspace = true, optional = true }
 pkcs8 = { workspace = true }
-sec1 = { workspace = true }
 rand = { workspace = true }
 rangemap = { workspace = true }
 reqwest = { workspace = true, features = ["blocking", "json", "rustls", "stream"] }
 ring = { workspace = true, optional = true }
+sec1 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
 serde_cbor = { workspace = true }
@@ -78,15 +99,12 @@ web-sys = { workspace = true, optional = true }
 [dev-dependencies]
 anyhow = { workspace = true }
 serde_json = { workspace = true }
-tracing-subscriber = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
-tokio = { workspace = true, features = ["full"] }
 mockito = { workspace = true }
-
-[target.'cfg(unix)'.dev-dependencies]
-ref-tests = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 wasm-bindgen-test = { workspace = true }
@@ -98,24 +116,8 @@ web-sys = { workspace = true, features = [
     "ServiceWorkerState",
 ] }
 
-[features]
-default = ["pem"]
-pem = ["dep:pem"]
-ring = ["dep:ring"]
-ic_ref_tests = ["default"] # Used to separate integration tests for ic-ref which need a server running.
-wasm-bindgen = [
-    "dep:js-sys",
-    "dep:wasm-bindgen",
-    "dep:wasm-bindgen-futures",
-    "dep:getrandom",
-    "dep:web-sys",
-    "time/wasm-bindgen",
-    "backoff/wasm-bindgen",
-    "cached/wasm",
-]
-_internal_dynamic-routing = []
-tracing = ["dep:tracing"] # Does very little right now.
+[target.'cfg(unix)'.dev-dependencies]
+ref-tests = { workspace = true }
 
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
-features = ["wasm-bindgen"]
+[lints]
+workspace = true

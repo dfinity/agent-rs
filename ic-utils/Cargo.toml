@@ -14,14 +14,22 @@ categories = ["api-bindings", "data-structures"]
 keywords = ["internet-computer", "agent", "utility", "icp", "dfinity"]
 include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
-[lints]
-workspace = true
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
+features = ["raw", "wasm-bindgen"]
+
+[features]
+raw = []
+wasm-bindgen = ["ic-agent/wasm-bindgen"]
 
 [dependencies]
 async-trait = { workspace = true }
 candid = { workspace = true, features = ["value"] }
 futures-util = { workspace = true }
 ic-agent = { workspace = true, default-features = false }
+ic-management-canister-types = { workspace = true }
+once_cell = { workspace = true }
+semver = { workspace = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
 sha2 = { workspace = true }
@@ -29,22 +37,14 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
-semver = { workspace = true }
-once_cell = { workspace = true }
-ic-management-canister-types = { workspace = true }
 
 [dev-dependencies]
-ic-ed25519 = { workspace = true }
 ic-agent = { workspace = true, default-features = true }
+ic-ed25519 = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
 [target.'cfg(unix)'.dev-dependencies]
 ref-tests = { workspace = true }
 
-[features]
-raw = []
-wasm-bindgen = ["ic-agent/wasm-bindgen"]
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
-features = ["raw", "wasm-bindgen"]
+[lints]
+workspace = true

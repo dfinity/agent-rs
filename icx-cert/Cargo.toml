@@ -24,8 +24,8 @@ hex = { workspace = true }
 ic-certification = { workspace = true }
 leb128 = { workspace = true }
 reqwest = { workspace = true, features = ["blocking", "rustls"] }
-sha2 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
 serde_cbor = { workspace = true }
+sha2 = { workspace = true }
 time = { workspace = true, features = ["formatting"] }
