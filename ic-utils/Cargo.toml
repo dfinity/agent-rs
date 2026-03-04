@@ -39,7 +39,7 @@ thiserror = { workspace = true }
 time = { workspace = true }
 
 [dev-dependencies]
-ic-agent = { workspace = true, default-features = true }
+ic-agent = { workspace = true }
 ic-ed25519 = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
