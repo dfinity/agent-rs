@@ -1,3 +1,4 @@
+#![allow(clippy::needless_lifetimes)]
 use crate::agent::{
     ApiBoundaryNode, PrincipalStep, RejectCode, RejectResponse, RequestStatusResponse,
 };

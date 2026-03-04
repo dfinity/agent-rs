@@ -20,6 +20,3 @@ ic-utils-bindgen = { workspace = true }
 
 [dev-dependencies]
 ref-tests.workspace = true
-
-[lints]
-workspace = true

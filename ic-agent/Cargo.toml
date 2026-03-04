@@ -71,7 +71,12 @@ pem = { workspace = true, optional = true }
 pkcs8 = { workspace = true }
 rand = { workspace = true }
 rangemap = { workspace = true }
-reqwest = { workspace = true, features = ["blocking", "json", "rustls", "stream"] }
+reqwest = { workspace = true, features = [
+    "blocking",
+    "json",
+    "rustls",
+    "stream",
+] }
 ring = { workspace = true, optional = true }
 sec1 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -118,6 +123,3 @@ web-sys = { workspace = true, features = [
 
 [target.'cfg(unix)'.dev-dependencies]
 ref-tests = { workspace = true }
-
-[lints]
-workspace = true

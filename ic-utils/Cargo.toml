@@ -45,6 +45,3 @@ tokio = { workspace = true, features = ["full"] }
 
 [target.'cfg(unix)'.dev-dependencies]
 ref-tests = { workspace = true }
-
-[lints]
-workspace = true

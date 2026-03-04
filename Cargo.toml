@@ -23,9 +23,6 @@ repository = "https://github.com/dfinity/agent-rs"
 rust-version = "1.88.0"
 license = "Apache-2.0"
 
-[workspace.lints.clippy]
-needless_lifetimes = "allow"
-
 [workspace.dependencies]
 # The path dependencies are used to ensure that all workspace members use the same version of these crates.
 ic-agent = { path = "ic-agent", version = "0.46.0", default-features = false }

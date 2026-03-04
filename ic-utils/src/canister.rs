@@ -1,3 +1,4 @@
+#![allow(clippy::needless_lifetimes)]
 use crate::call::{AsyncCaller, SyncCaller};
 use candid::utils::ArgumentEncoder;
 use candid::{ser::IDLBuilder, types::value::IDLValue, utils::ArgumentDecoder, CandidType, Encode};
