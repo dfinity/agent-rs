@@ -8,8 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-## [0.46.0] - 2026-03-03
-
 * Time out `Unknown` statuses after 5 minutes, regardless of the configured `max_polling_time`.
 * `ic-utils`: Bump `ic-management-canister-types` to 0.7.1.
   * Added `LogMemoryLimit` attribute type and `with_log_memory_limit` setter to `CreateCanisterBuilder` and `UpdateSettingsBuilder`.

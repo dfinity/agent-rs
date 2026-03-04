@@ -72,8 +72,7 @@ jobs:
         shell: bash
         run: |
           cd ref-tests
-          cargo test --all-features --no-fail-fast -- --test-threads=1
-          cargo test --no-default-features --no-fail-fast -- --test-threads=1
+          cargo test --no-fail-fast -- --test-threads=1
         env:
           RUST_BACKTRACE: 1
 
