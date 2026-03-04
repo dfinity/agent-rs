@@ -11,10 +11,7 @@ use pkcs11::{
     },
     Ctx,
 };
-use sha2::{
-    digest::{generic_array::GenericArray, OutputSizeUser},
-    Digest, Sha256,
-};
+use sha2::{digest::Output, Digest, Sha256};
 use simple_asn1::{
     from_der, oid, to_der,
     ASN1Block::{BitString, ObjectIdentifier, OctetString, Sequence},
@@ -28,7 +25,7 @@ type KeyId = [u8];
 type DerPublicKeyVec = Vec<u8>;
 
 /// Type alias for a sha256 result (ie. a u256).
-type Sha256Hash = GenericArray<u8, <Sha256 as OutputSizeUser>::OutputSize>;
+type Sha256Hash = Output<Sha256>;
 
 // We expect the parameters to be curve secp256r1.  This is the base127 encoded form:
 const EXPECTED_EC_PARAMS: &[u8; 10] = b"\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07";

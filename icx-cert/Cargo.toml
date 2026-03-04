@@ -18,14 +18,14 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 
 [dependencies]
 anyhow = { workspace = true }
-base64 = "0.22"
-clap = { workspace = true, features = ["derive", "cargo", "color"] }
+base64 = { workspace = true }
+clap = { workspace = true }
 hex = { workspace = true }
 ic-certification = { workspace = true }
-leb128 = "0.2.4"
-reqwest = { workspace = true, default-features = false, features = ["blocking", "rustls-tls"] }
-sha2 = { workspace = true }
+leb128 = { workspace = true }
+reqwest = { workspace = true, default-features = false, features = ["blocking", "rustls"] }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
 serde_cbor = { workspace = true }
+sha2 = { workspace = true }
 time = { workspace = true, features = ["formatting"] }

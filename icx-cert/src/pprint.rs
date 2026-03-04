@@ -23,19 +23,11 @@ struct ReplicaCertificate {
 fn parse_structured_cert_header(value: &str) -> Result<StructuredCertHeader<'_>> {
     fn extract_field<'a>(value: &'a str, field_name: &'a str, prefix: &'a str) -> Result<&'a str> {
         let start = value.find(prefix).ok_or_else(|| {
-            anyhow!(
-                "Certificate header doesn't have '{}' field: {}",
-                field_name,
-                value,
-            )
+            anyhow!("Certificate header doesn't have '{field_name}' field: {value}",)
         })? + prefix.len();
-        let len = value[start..].find(':').ok_or_else(|| {
-            anyhow!(
-                "malformed '{}' field: no ending colon found: {}",
-                prefix,
-                value
-            )
-        })?;
+        let len = value[start..]
+            .find(':')
+            .ok_or_else(|| anyhow!("malformed '{prefix}' field: no ending colon found: {value}"))?;
         Ok(&value[start..(start + len)])
     }
 

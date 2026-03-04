@@ -21,7 +21,7 @@ pub enum PemError {
     /// An error occurred while reading the file in DER format.
     #[cfg(feature = "pem")]
     #[error("An error occurred while reading the file: {0}")]
-    DerError(#[from] der::Error),
+    DerError(#[from] pkcs8::der::Error),
 
     /// The private key is invalid.
     #[error("Invalid private key: {0}")]
