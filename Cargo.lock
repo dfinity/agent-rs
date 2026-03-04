@@ -1438,9 +1438,9 @@ dependencies = [
 
 [[package]]
 name = "ic-management-canister-types"
-version = "0.3.3"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea7e5b8a0f7c3b320d9450ac950547db4f24a31601b5d398f9680b64427455d2"
+checksum = "3149217e24186df3f13dc45eee14cdb3e5cad07d0b2b67bd53555c1c55462957"
 dependencies = [
  "candid",
  "serde",
@@ -1449,9 +1449,9 @@ dependencies = [
 
 [[package]]
 name = "ic-management-canister-types"
-version = "0.5.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3149217e24186df3f13dc45eee14cdb3e5cad07d0b2b67bd53555c1c55462957"
+checksum = "51705516ed4d23f24e8d714a70fe9d7ec17106cfd830d5434a1b29f583ef70ee"
 dependencies = [
  "candid",
  "serde",
@@ -1502,7 +1502,7 @@ dependencies = [
  "futures-util",
  "ic-agent",
  "ic-ed25519",
- "ic-management-canister-types 0.5.0",
+ "ic-management-canister-types 0.7.1",
  "once_cell",
  "ref-tests",
  "semver",
@@ -2371,9 +2371,9 @@ dependencies = [
 
 [[package]]
 name = "pocket-ic"
-version = "10.0.0"
+version = "12.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c9b78f339182efb981ceca2ac360aa280609f8d8c785e5a7eeda488f53497a8"
+checksum = "03c0fe19b920be1485cdd3d58a70abfa768c2608f8349864d950791fe1a5c193"
 dependencies = [
  "backoff",
  "base64 0.13.1",
@@ -2381,10 +2381,11 @@ dependencies = [
  "flate2",
  "hex",
  "ic-certification",
- "ic-management-canister-types 0.3.3",
+ "ic-management-canister-types 0.5.0",
  "ic-transport-types 0.40.1",
  "reqwest",
  "schemars",
+ "semver",
  "serde",
  "serde_bytes",
  "serde_cbor",
@@ -2593,7 +2594,7 @@ dependencies = [
  "ic-certification",
  "ic-ed25519",
  "ic-identity-hsm",
- "ic-management-canister-types 0.5.0",
+ "ic-management-canister-types 0.7.1",
  "ic-utils",
  "k256",
  "p256",
@@ -2902,6 +2903,9 @@ name = "semver"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61697e0a1c7e512e84a621326239844a24d8207b4669b41bc18b32ea5cbf988b"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "serde"

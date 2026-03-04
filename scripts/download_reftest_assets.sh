@@ -2,8 +2,9 @@
 set -e
 cd "$(dirname "$0")/.."
 
-ic_commit_for_pic=3c7938320bad1a690f617836d8b799f3998cf3ac
-ic_commit_for_universal_canister=3c7938320bad1a690f617836d8b799f3998cf3ac
+# release-2026-03-02_11-09-base
+ic_commit_for_pic=781ef50bd6bfbcfac6769b55361d0624247009c1
+ic_commit_for_universal_canister=781ef50bd6bfbcfac6769b55361d0624247009c1
 wallet_ver=20230530
 
 case $(uname -s) in

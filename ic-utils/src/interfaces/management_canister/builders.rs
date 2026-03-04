@@ -2,7 +2,8 @@
 
 #[doc(inline)]
 pub use super::attributes::{
-    ComputeAllocation, FreezingThreshold, MemoryAllocation, ReservedCyclesLimit, WasmMemoryLimit,
+    ComputeAllocation, FreezingThreshold, LogMemoryLimit, MemoryAllocation, ReservedCyclesLimit,
+    WasmMemoryLimit,
 };
 use super::{ChunkHash, LogVisibility, ManagementCanister};
 use crate::call::CallFuture;
@@ -42,6 +43,7 @@ pub struct CreateCanisterBuilder<'agent, 'canister: 'agent> {
     wasm_memory_limit: Option<Result<WasmMemoryLimit, AgentError>>,
     wasm_memory_threshold: Option<Result<WasmMemoryLimit, AgentError>>,
     log_visibility: Option<Result<LogVisibility, AgentError>>,
+    log_memory_limit: Option<Result<LogMemoryLimit, AgentError>>,
     environment_variables: Option<Result<Vec<EnvironmentVariable>, AgentError>>,
     is_provisional_create: bool,
     amount: Option<u128>,
@@ -62,6 +64,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             wasm_memory_limit: None,
             wasm_memory_threshold: None,
             log_visibility: None,
+            log_memory_limit: None,
             environment_variables: None,
             is_provisional_create: false,
             amount: None,
@@ -112,56 +115,26 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         }
     }
 
-    /// Pass in an optional controller for the canister. If this is [`None`],
-    /// it will revert the controller to default.
-    pub fn with_optional_controller<C, E>(self, controller: Option<C>) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<Principal, Error = E>,
-    {
-        let controller_to_add: Option<Result<Principal, _>> = controller.map(|ca| {
-            ca.try_into()
-                .map_err(|e| AgentError::MessageError(format!("{e}")))
-        });
-        let controllers: Option<Result<Vec<Principal>, _>> =
-            match (controller_to_add, self.controllers) {
-                (_, Some(Err(sticky))) => Some(Err(sticky)),
-                (Some(Err(e)), _) => Some(Err(e)),
-                (None, _) => None,
-                (Some(Ok(controller)), Some(Ok(controllers))) => {
-                    let mut controllers = controllers;
-                    controllers.push(controller);
-                    Some(Ok(controllers))
-                }
-                (Some(Ok(controller)), None) => Some(Ok(vec![controller])),
-            };
-        Self {
-            controllers,
-            ..self
-        }
-    }
-
-    /// Pass in a designated controller for the canister.
+    /// Pass in a controller for the canister. Can be called multiple times to add multiple controllers.
     pub fn with_controller<C, E>(self, controller: C) -> Self
     where
         E: std::fmt::Display,
         C: TryInto<Principal, Error = E>,
     {
-        self.with_optional_controller(Some(controller))
-    }
-
-    /// Pass in a compute allocation optional value for the canister. If this is [`None`],
-    /// it will revert the compute allocation to default.
-    pub fn with_optional_compute_allocation<C, E>(self, compute_allocation: Option<C>) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<ComputeAllocation, Error = E>,
-    {
+        let controller_result = controller
+            .try_into()
+            .map_err(|e| AgentError::MessageError(format!("{e}")));
+        let controllers = match (controller_result, self.controllers) {
+            (_, Some(Err(sticky))) => Some(Err(sticky)),
+            (Err(e), _) => Some(Err(e)),
+            (Ok(controller), Some(Ok(mut controllers))) => {
+                controllers.push(controller);
+                Some(Ok(controllers))
+            }
+            (Ok(controller), None) => Some(Ok(vec![controller])),
+        };
         Self {
-            compute_allocation: compute_allocation.map(|ca| {
-                ca.try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{e}")))
-            }),
+            controllers,
             ..self
         }
     }
@@ -172,21 +145,12 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         E: std::fmt::Display,
         C: TryInto<ComputeAllocation, Error = E>,
     {
-        self.with_optional_compute_allocation(Some(compute_allocation))
-    }
-
-    /// Pass in a memory allocation optional value for the canister. If this is [`None`],
-    /// it will revert the memory allocation to default.
-    pub fn with_optional_memory_allocation<E, C>(self, memory_allocation: Option<C>) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<MemoryAllocation, Error = E>,
-    {
         Self {
-            memory_allocation: memory_allocation.map(|ma| {
-                ma.try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{e}")))
-            }),
+            compute_allocation: Some(
+                compute_allocation
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
             ..self
         }
     }
@@ -197,21 +161,12 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         E: std::fmt::Display,
         C: TryInto<MemoryAllocation, Error = E>,
     {
-        self.with_optional_memory_allocation(Some(memory_allocation))
-    }
-
-    /// Pass in a freezing threshold optional value for the canister. If this is [`None`],
-    /// it will revert the freezing threshold to default.
-    pub fn with_optional_freezing_threshold<E, C>(self, freezing_threshold: Option<C>) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<FreezingThreshold, Error = E>,
-    {
         Self {
-            freezing_threshold: freezing_threshold.map(|ma| {
-                ma.try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{e}")))
-            }),
+            memory_allocation: Some(
+                memory_allocation
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
             ..self
         }
     }
@@ -222,7 +177,14 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         E: std::fmt::Display,
         C: TryInto<FreezingThreshold, Error = E>,
     {
-        self.with_optional_freezing_threshold(Some(freezing_threshold))
+        Self {
+            freezing_threshold: Some(
+                freezing_threshold
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
+            ..self
+        }
     }
 
     /// Pass in a reserved cycles limit value for the canister.
@@ -231,22 +193,12 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         E: std::fmt::Display,
         C: TryInto<ReservedCyclesLimit, Error = E>,
     {
-        self.with_optional_reserved_cycles_limit(Some(limit))
-    }
-
-    /// Pass in a reserved cycles limit optional value for the canister. If this is [`None`],
-    /// it will create the canister with the default limit.
-    pub fn with_optional_reserved_cycles_limit<E, C>(self, limit: Option<C>) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<ReservedCyclesLimit, Error = E>,
-    {
         Self {
-            reserved_cycles_limit: limit.map(|limit| {
+            reserved_cycles_limit: Some(
                 limit
                     .try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{e}")))
-            }),
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
             ..self
         }
     }
@@ -257,22 +209,12 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         E: std::fmt::Display,
         C: TryInto<WasmMemoryLimit, Error = E>,
     {
-        self.with_optional_wasm_memory_limit(Some(wasm_memory_limit))
-    }
-
-    /// Pass in a Wasm memory limit optional value for the canister. If this is [`None`],
-    /// it will revert the Wasm memory limit to default.
-    pub fn with_optional_wasm_memory_limit<E, C>(self, wasm_memory_limit: Option<C>) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<WasmMemoryLimit, Error = E>,
-    {
         Self {
-            wasm_memory_limit: wasm_memory_limit.map(|limit| {
-                limit
+            wasm_memory_limit: Some(
+                wasm_memory_limit
                     .try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{e}")))
-            }),
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
             ..self
         }
     }
@@ -283,22 +225,28 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         E: std::fmt::Display,
         C: TryInto<WasmMemoryLimit, Error = E>,
     {
-        self.with_optional_wasm_memory_threshold(Some(wasm_memory_threshold))
+        Self {
+            wasm_memory_threshold: Some(
+                wasm_memory_threshold
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
+            ..self
+        }
     }
 
-    /// Pass in a Wasm memory threshold optional value for the canister. If this is [`None`],
-    /// it will revert the Wasm memory threshold to default.
-    pub fn with_optional_wasm_memory_threshold<E, C>(self, wasm_memory_threshold: Option<C>) -> Self
+    /// Pass in a log memory limit value for the canister.
+    pub fn with_log_memory_limit<C, E>(self, log_memory_limit: C) -> Self
     where
         E: std::fmt::Display,
-        C: TryInto<WasmMemoryLimit, Error = E>,
+        C: TryInto<LogMemoryLimit, Error = E>,
     {
         Self {
-            wasm_memory_threshold: wasm_memory_threshold.map(|limit| {
-                limit
+            log_memory_limit: Some(
+                log_memory_limit
                     .try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{e}")))
-            }),
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
             ..self
         }
     }
@@ -309,47 +257,28 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         E: std::fmt::Display,
         C: TryInto<LogVisibility, Error = E>,
     {
-        self.with_optional_log_visibility(Some(log_visibility))
-    }
-
-    /// Pass in a log visibility optional setting for the canister. If this is [`None`],
-    /// it will revert the log visibility to default.
-    pub fn with_optional_log_visibility<E, C>(self, log_visibility: Option<C>) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<LogVisibility, Error = E>,
-    {
         Self {
-            log_visibility: log_visibility.map(|visibility| {
-                visibility
+            log_visibility: Some(
+                log_visibility
                     .try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{e}")))
-            }),
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
             ..self
         }
     }
 
-    /// Pass in a environment variables setting for the canister.
+    /// Pass in environment variables for the canister.
     pub fn with_environment_variables<E, C>(self, environment_variables: C) -> Self
     where
         E: std::fmt::Display,
         C: TryInto<Vec<EnvironmentVariable>, Error = E>,
     {
-        self.with_optional_environment_variables(Some(environment_variables))
-    }
-
-    /// Pass in a environment variables optional setting for the canister. If this is [`None`],
-    /// it will revert the environment variables to default.
-    pub fn with_optional_environment_variables<E, C>(self, environment_variables: Option<C>) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<Vec<EnvironmentVariable>, Error = E>,
-    {
         Self {
-            environment_variables: environment_variables.map(|vars| {
-                vars.try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{e}")))
-            }),
+            environment_variables: Some(
+                environment_variables
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
             ..self
         }
     }
@@ -397,6 +326,11 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             Some(Ok(x)) => Some(x),
             None => None,
         };
+        let log_memory_limit = match self.log_memory_limit {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
+            None => None,
+        };
         let environment_variables = match self.environment_variables {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(x),
@@ -426,6 +360,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     wasm_memory_limit,
                     wasm_memory_threshold,
                     log_visibility,
+                    log_memory_limit: log_memory_limit.clone(),
                     environment_variables,
                 },
                 specified_id: self.specified_id,
@@ -446,6 +381,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     wasm_memory_limit,
                     wasm_memory_threshold,
                     log_visibility,
+                    log_memory_limit,
                     environment_variables,
                 })
                 .with_effective_canister_id(self.effective_canister_id)
@@ -914,7 +850,7 @@ impl<'agent: 'canister, 'canister: 'builder, 'builder> IntoFuture
 
 /// A builder for an `update_settings` call.
 #[derive(Debug)]
-pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent> {
+pub struct UpdateSettingsBuilder<'agent, 'canister: 'agent> {
     canister: &'canister Canister<'agent>,
     canister_id: Principal,
     controllers: Option<Result<Vec<Principal>, AgentError>>,
@@ -925,10 +861,11 @@ pub struct UpdateCanisterBuilder<'agent, 'canister: 'agent> {
     wasm_memory_limit: Option<Result<WasmMemoryLimit, AgentError>>,
     wasm_memory_threshold: Option<Result<WasmMemoryLimit, AgentError>>,
     log_visibility: Option<Result<LogVisibility, AgentError>>,
+    log_memory_limit: Option<Result<LogMemoryLimit, AgentError>>,
     environment_variables: Option<Result<Vec<EnvironmentVariable>, AgentError>>,
 }
 
-impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
+impl<'agent, 'canister: 'agent> UpdateSettingsBuilder<'agent, 'canister> {
     /// Create an `UpdateCanister` builder, which is also an `AsyncCall` implementation.
     pub fn builder(canister: &'canister Canister<'agent>, canister_id: &Principal) -> Self {
         Self {
@@ -942,61 +879,31 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             wasm_memory_limit: None,
             wasm_memory_threshold: None,
             log_visibility: None,
+            log_memory_limit: None,
             environment_variables: None,
         }
     }
 
-    /// Pass in an optional controller for the canister. If this is [`None`],
-    /// it will revert the controller to default.
-    pub fn with_optional_controller<C, E>(self, controller: Option<C>) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<Principal, Error = E>,
-    {
-        let controller_to_add: Option<Result<Principal, _>> = controller.map(|ca| {
-            ca.try_into()
-                .map_err(|e| AgentError::MessageError(format!("{e}")))
-        });
-        let controllers: Option<Result<Vec<Principal>, _>> =
-            match (controller_to_add, self.controllers) {
-                (_, Some(Err(sticky))) => Some(Err(sticky)),
-                (Some(Err(e)), _) => Some(Err(e)),
-                (None, _) => None,
-                (Some(Ok(controller)), Some(Ok(controllers))) => {
-                    let mut controllers = controllers;
-                    controllers.push(controller);
-                    Some(Ok(controllers))
-                }
-                (Some(Ok(controller)), None) => Some(Ok(vec![controller])),
-            };
-
-        Self {
-            controllers,
-            ..self
-        }
-    }
-
-    /// Pass in a designated controller for the canister.
+    /// Pass in a controller for the canister. Can be called multiple times to add multiple controllers.
     pub fn with_controller<C, E>(self, controller: C) -> Self
     where
         E: std::fmt::Display,
         C: TryInto<Principal, Error = E>,
     {
-        self.with_optional_controller(Some(controller))
-    }
-
-    /// Pass in a compute allocation optional value for the canister. If this is [`None`],
-    /// it will revert the compute allocation to default.
-    pub fn with_optional_compute_allocation<C, E>(self, compute_allocation: Option<C>) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<ComputeAllocation, Error = E>,
-    {
+        let controller_result = controller
+            .try_into()
+            .map_err(|e| AgentError::MessageError(format!("{e}")));
+        let controllers = match (controller_result, self.controllers) {
+            (_, Some(Err(sticky))) => Some(Err(sticky)),
+            (Err(e), _) => Some(Err(e)),
+            (Ok(controller), Some(Ok(mut controllers))) => {
+                controllers.push(controller);
+                Some(Ok(controllers))
+            }
+            (Ok(controller), None) => Some(Ok(vec![controller])),
+        };
         Self {
-            compute_allocation: compute_allocation.map(|ca| {
-                ca.try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{e}")))
-            }),
+            controllers,
             ..self
         }
     }
@@ -1007,21 +914,12 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         E: std::fmt::Display,
         C: TryInto<ComputeAllocation, Error = E>,
     {
-        self.with_optional_compute_allocation(Some(compute_allocation))
-    }
-
-    /// Pass in a memory allocation optional value for the canister. If this is [`None`],
-    /// it will revert the memory allocation to default.
-    pub fn with_optional_memory_allocation<E, C>(self, memory_allocation: Option<C>) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<MemoryAllocation, Error = E>,
-    {
         Self {
-            memory_allocation: memory_allocation.map(|ma| {
-                ma.try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{e}")))
-            }),
+            compute_allocation: Some(
+                compute_allocation
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
             ..self
         }
     }
@@ -1032,21 +930,12 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         E: std::fmt::Display,
         C: TryInto<MemoryAllocation, Error = E>,
     {
-        self.with_optional_memory_allocation(Some(memory_allocation))
-    }
-
-    /// Pass in a freezing threshold optional value for the canister. If this is [`None`],
-    /// it will revert the freezing threshold to default.
-    pub fn with_optional_freezing_threshold<E, C>(self, freezing_threshold: Option<C>) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<FreezingThreshold, Error = E>,
-    {
         Self {
-            freezing_threshold: freezing_threshold.map(|ma| {
-                ma.try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{e}")))
-            }),
+            memory_allocation: Some(
+                memory_allocation
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
             ..self
         }
     }
@@ -1057,7 +946,14 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         E: std::fmt::Display,
         C: TryInto<FreezingThreshold, Error = E>,
     {
-        self.with_optional_freezing_threshold(Some(freezing_threshold))
+        Self {
+            freezing_threshold: Some(
+                freezing_threshold
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
+            ..self
+        }
     }
 
     /// Pass in a reserved cycles limit value for the canister.
@@ -1066,21 +962,12 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         E: std::fmt::Display,
         C: TryInto<ReservedCyclesLimit, Error = E>,
     {
-        self.with_optional_reserved_cycles_limit(Some(limit))
-    }
-
-    /// Pass in a reserved cycles limit optional value for the canister.
-    /// If this is [`None`], leaves the reserved cycles limit unchanged.
-    pub fn with_optional_reserved_cycles_limit<E, C>(self, limit: Option<C>) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<ReservedCyclesLimit, Error = E>,
-    {
         Self {
-            reserved_cycles_limit: limit.map(|ma| {
-                ma.try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{e}")))
-            }),
+            reserved_cycles_limit: Some(
+                limit
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
             ..self
         }
     }
@@ -1091,22 +978,12 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         E: std::fmt::Display,
         C: TryInto<WasmMemoryLimit, Error = E>,
     {
-        self.with_optional_wasm_memory_limit(Some(wasm_memory_limit))
-    }
-
-    /// Pass in a Wasm memory limit optional value for the canister. If this is [`None`],
-    /// leaves the Wasm memory limit unchanged.
-    pub fn with_optional_wasm_memory_limit<E, C>(self, wasm_memory_limit: Option<C>) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<WasmMemoryLimit, Error = E>,
-    {
         Self {
-            wasm_memory_limit: wasm_memory_limit.map(|limit| {
-                limit
+            wasm_memory_limit: Some(
+                wasm_memory_limit
                     .try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{e}")))
-            }),
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
             ..self
         }
     }
@@ -1117,22 +994,28 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         E: std::fmt::Display,
         C: TryInto<WasmMemoryLimit, Error = E>,
     {
-        self.with_optional_wasm_memory_threshold(Some(wasm_memory_threshold))
+        Self {
+            wasm_memory_threshold: Some(
+                wasm_memory_threshold
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
+            ..self
+        }
     }
 
-    /// Pass in a Wasm memory threshold value for the canister. If this is [`None`],
-    /// leaves the memory threshold unchanged.
-    pub fn with_optional_wasm_memory_threshold<E, C>(self, wasm_memory_threshold: Option<C>) -> Self
+    /// Pass in a log memory limit value for the canister.
+    pub fn with_log_memory_limit<C, E>(self, log_memory_limit: C) -> Self
     where
         E: std::fmt::Display,
-        C: TryInto<WasmMemoryLimit, Error = E>,
+        C: TryInto<LogMemoryLimit, Error = E>,
     {
         Self {
-            wasm_memory_threshold: wasm_memory_threshold.map(|limit| {
-                limit
+            log_memory_limit: Some(
+                log_memory_limit
                     .try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{e}")))
-            }),
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
             ..self
         }
     }
@@ -1143,47 +1026,28 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
         E: std::fmt::Display,
         C: TryInto<LogVisibility, Error = E>,
     {
-        self.with_optional_log_visibility(Some(log_visibility))
-    }
-
-    /// Pass in a log visibility optional setting for the canister. If this is [`None`],
-    /// leaves the log visibility unchanged.
-    pub fn with_optional_log_visibility<E, C>(self, log_visibility: Option<C>) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<LogVisibility, Error = E>,
-    {
         Self {
-            log_visibility: log_visibility.map(|limit| {
-                limit
+            log_visibility: Some(
+                log_visibility
                     .try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{e}")))
-            }),
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
             ..self
         }
     }
 
-    /// Pass in a environment variables setting for the canister.
+    /// Pass in environment variables for the canister.
     pub fn with_environment_variables<C, E>(self, environment_variables: C) -> Self
     where
         E: std::fmt::Display,
         C: TryInto<Vec<EnvironmentVariable>, Error = E>,
     {
-        self.with_optional_environment_variables(Some(environment_variables))
-    }
-
-    /// Pass in a environment variables optional setting for the canister. If this is [`None`],
-    /// leaves the environment variables unchanged.
-    pub fn with_optional_environment_variables<E, C>(self, environment_variables: Option<C>) -> Self
-    where
-        E: std::fmt::Display,
-        C: TryInto<Vec<EnvironmentVariable>, Error = E>,
-    {
         Self {
-            environment_variables: environment_variables.map(|vars| {
-                vars.try_into()
-                    .map_err(|e| AgentError::MessageError(format!("{e}")))
-            }),
+            environment_variables: Some(
+                environment_variables
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
             ..self
         }
     }
@@ -1237,6 +1101,11 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
             Some(Ok(x)) => Some(x),
             None => None,
         };
+        let log_memory_limit = match self.log_memory_limit {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
+            None => None,
+        };
         let environment_variables = match self.environment_variables {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(x),
@@ -1257,6 +1126,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
                     wasm_memory_limit,
                     wasm_memory_threshold,
                     log_visibility,
+                    log_memory_limit,
                     environment_variables,
                 },
             })
@@ -1277,7 +1147,7 @@ impl<'agent, 'canister: 'agent> UpdateCanisterBuilder<'agent, 'canister> {
 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<'agent, 'canister: 'agent> AsyncCall for UpdateCanisterBuilder<'agent, 'canister> {
+impl<'agent, 'canister: 'agent> AsyncCall for UpdateSettingsBuilder<'agent, 'canister> {
     type Value = ();
     async fn call(self) -> Result<CallResponse<()>, AgentError> {
         self.build()?.call().await
@@ -1288,7 +1158,7 @@ impl<'agent, 'canister: 'agent> AsyncCall for UpdateCanisterBuilder<'agent, 'can
     }
 }
 
-impl<'agent, 'canister: 'agent> IntoFuture for UpdateCanisterBuilder<'agent, 'canister> {
+impl<'agent, 'canister: 'agent> IntoFuture for UpdateSettingsBuilder<'agent, 'canister> {
     type IntoFuture = CallFuture<'agent, ()>;
     type Output = Result<(), AgentError>;
     fn into_future(self) -> Self::IntoFuture {

@@ -254,6 +254,50 @@ try_from_wasm_memory_limit_decl!(i16);
 try_from_wasm_memory_limit_decl!(i32);
 try_from_wasm_memory_limit_decl!(i64);
 
+/// An error encountered when attempting to construct a [`LogMemoryLimit`].
+#[derive(Error, Debug)]
+pub enum LogMemoryLimitError {
+    /// The provided value was not in the range [0, 2^48] (i.e. 256 TiB).
+    #[error("Log memory limit must be between 0 and 2^48 (i.e 256TiB), inclusively. Got {0}.")]
+    InvalidMemoryLimit(i64),
+}
+
+/// A limit on the memory allocated to storing canister logs.
+/// Must be a number between 0 and 2^48 (i.e 256TiB), inclusively.
+#[derive(Copy, Clone, Debug)]
+pub struct LogMemoryLimit(u64);
+
+impl std::convert::From<LogMemoryLimit> for u64 {
+    fn from(log_memory_limit: LogMemoryLimit) -> Self {
+        log_memory_limit.0
+    }
+}
+
+macro_rules! try_from_log_memory_limit_decl {
+    ( $t: ty ) => {
+        impl std::convert::TryFrom<$t> for LogMemoryLimit {
+            type Error = LogMemoryLimitError;
+
+            fn try_from(value: $t) -> Result<Self, Self::Error> {
+                if (value as i64) < 0 || (value as i64) > (1i64 << 48) {
+                    Err(Self::Error::InvalidMemoryLimit(value as i64))
+                } else {
+                    Ok(Self(value as u64))
+                }
+            }
+        }
+    };
+}
+
+try_from_log_memory_limit_decl!(u8);
+try_from_log_memory_limit_decl!(u16);
+try_from_log_memory_limit_decl!(u32);
+try_from_log_memory_limit_decl!(u64);
+try_from_log_memory_limit_decl!(i8);
+try_from_log_memory_limit_decl!(i16);
+try_from_log_memory_limit_decl!(i32);
+try_from_log_memory_limit_decl!(i64);
+
 #[test]
 #[allow(clippy::useless_conversion)]
 fn can_convert_compute_allocation() {

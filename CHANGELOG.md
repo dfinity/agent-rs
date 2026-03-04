@@ -9,16 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 * Time out `Unknown` statuses after 5 minutes, regardless of the configured `max_polling_time`.
+* `ic-utils`: Bump `ic-management-canister-types` to 0.7.1.
+  * Added `LogMemoryLimit` attribute type and `with_log_memory_limit` setter to `CreateCanisterBuilder` and `UpdateSettingsBuilder`.
+  * Added `canister_metadata()` query method to `ManagementCanister`.
+  * Re-exported new types: `CanisterLogFilter`, `CanisterMetadataArgs`, `CanisterMetadataResult`, `FetchCanisterLogsArgs`, `MemoryMetrics`, `RenameCanisterRecord`, `RenameToRecord`.
 
 ### Breaking Changes
 
-* BREAKING: Removed round-robin routing strategy. `DynamicRouteProvider` now exclusively uses latency-based routing.
+* `ic-utils`:
+  * `UpdateCanisterBuilder` renamed to `UpdateSettingsBuilder`.
+    * Migration: Replace all uses of `UpdateCanisterBuilder` with `UpdateSettingsBuilder`.
+  * `ManagementCanister::fetch_canister_logs` now takes `&FetchCanisterLogsArgs` instead of `&Principal`.
+    * Migration: Replace `fetch_canister_logs(&canister_id)` with `fetch_canister_logs(&FetchCanisterLogsArgs { canister_id, filter: None })`.
+  * Snapshot methods (`take_canister_snapshot`, `load_canister_snapshot`, `delete_canister_snapshot`, `read_canister_snapshot_metadata`, `read_canister_snapshot_data`, `upload_canister_snapshot_metadata`, `upload_canister_snapshot_data`) no longer accept a separate `canister_id: &Principal` parameter; the canister ID is now derived from the args struct.
+    * Migration: Remove the leading `&canister_id` argument from these calls.
+  * Removed `with_optional_*` builder methods from `CreateCanisterBuilder` and `UpdateSettingsBuilder` (`with_optional_controller`, `with_optional_compute_allocation`, `with_optional_memory_allocation`, `with_optional_freezing_threshold`, `with_optional_reserved_cycles_limit`, `with_optional_wasm_memory_limit`, `with_optional_wasm_memory_threshold`, `with_optional_log_visibility`, `with_optional_environment_variables`).
+    * Migration: Remove calls passing `None` (they were no-ops). For calls passing `Some(value)`, use the corresponding `with_*` method directly with the value.
+* Removed round-robin routing strategy. `DynamicRouteProvider` now exclusively uses latency-based routing.
   * Removed `DynamicRoutingStrategy` enum and `RoundRobinRoutingSnapshot` type.
   * `DynamicRouteProvider` is no longer generic over routing strategy.
   * `DynamicRouteProviderBuilder::new()`, `::from_components()`, `::run_in_background()`, and `::run_in_background_with_intervals()` no longer accept `snapshot` or `strategy` parameters.
   * Migration: Remove routing strategy arguments from your code - latency-based routing is now the only option.
-* BREAKING: `DynamicRouteProviderBuilder::build()` is no longer async. Background tasks are no longer started automatically during construction. Call `provider.start().await` for explicit initialization, or let it auto-start lazily on first `route()` call.
-* BREAKING: `DynamicRouteProvider::run()` is now private. Use `start()` instead.
+* `DynamicRouteProviderBuilder::build()` is no longer async. Background tasks are no longer started automatically during construction. Call `provider.start().await` for explicit initialization, or let it auto-start lazily on first `route()` call.
+* `DynamicRouteProvider::run()` is now private. Use `start()` instead.
 
 ## [0.45.0] - 2025-12-19
 
