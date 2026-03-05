@@ -308,6 +308,9 @@ impl DynamicRouteProvider {
     async fn run_background_tasks(config: BackgroundTaskConfig) {
         log!(info, "{DYNAMIC_ROUTE_PROVIDER}: started ...");
         // Communication channel between NodesFetchActor and HealthManagerActor.
+        #[cfg(not(target_family = "wasm"))]
+        let (fetch_sender, fetch_receiver) = tokio::sync::watch::channel(None);
+        #[cfg(target_family = "wasm")]
         let (fetch_sender, fetch_receiver) = async_watch::channel(None);
 
         // Communication channel with HealthManagerActor to receive info about healthy seed nodes (used only once).
