@@ -385,7 +385,7 @@ mod tests {
 
     fn make_nodes(n: usize) -> Vec<Node> {
         (1..=n)
-            .map(|i| Node::new(&format!("api{i}.example.com")).unwrap())
+            .map(|i| Node::new(format!("api{i}.example.com")).unwrap())
             .collect()
     }
 
