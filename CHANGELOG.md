@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.46.1] - 2026-03-05
+
+* Fix panic in `ic-agent` on non-WASM targets caused by `async-watch` crate; replaced with `tokio::sync::watch`.
+
 ## [0.46.0] - 2026-03-04
 
 * Time out `Unknown` statuses after 5 minutes, regardless of the configured `max_polling_time`.
