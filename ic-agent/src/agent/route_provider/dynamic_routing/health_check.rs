@@ -23,6 +23,23 @@ use crate::agent::{
 
 const CHANNEL_BUFFER: usize = 128;
 
+/// Receives the next changed value from a watch channel receiver.
+/// On non-WASM uses `tokio::sync::watch` which is race-condition-free.
+/// On WASM uses `async_watch` (single-threaded, no race condition).
+#[cfg(not(target_family = "wasm"))]
+async fn fetch_receiver_recv(
+    rx: &mut tokio::sync::watch::Receiver<Option<FetchedNodes>>,
+) -> Result<Option<FetchedNodes>, tokio::sync::watch::error::RecvError> {
+    rx.changed().await?;
+    Ok(rx.borrow_and_update().clone())
+}
+#[cfg(target_family = "wasm")]
+async fn fetch_receiver_recv(
+    rx: &mut async_watch::Receiver<Option<FetchedNodes>>,
+) -> Result<Option<FetchedNodes>, async_watch::error::RecvError> {
+    rx.recv().await
+}
+
 /// A trait representing a health check of the node.
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
@@ -257,12 +274,12 @@ where
         loop {
             futures_util::select! {
                 // Process a new array of fetched nodes from NodesFetchActor, if it appeared in the channel.
-                result = self.fetch_receiver.recv().fuse() => {
+                result = fetch_receiver_recv(&mut self.fetch_receiver).fuse() => {
                     let value = match result {
                         Ok(value) => value,
                         Err(_err) => {
                             log!(error, "{HEALTH_MANAGER_ACTOR}: nodes fetch sender has been dropped: {_err:?}");
-                            continue;
+                            break;
                         }
                     };
                     // Get the latest value from the channel and mark it as seen.
@@ -348,5 +365,141 @@ where
             "{HEALTH_MANAGER_ACTOR}: stopping all running health checks"
         );
         self.nodes_token = StopSource::new();
+    }
+}
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod tests {
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use arc_swap::ArcSwap;
+    use stop_token::StopSource;
+
+    use crate::agent::route_provider::dynamic_routing::{
+        messages::FetchedNodes, node::Node,
+        snapshot::latency_based_routing::LatencyRoutingSnapshot, test_utils::NodeHealthCheckerMock,
+    };
+
+    use super::{HealthCheck, HealthManagerActor};
+
+    fn make_nodes(n: usize) -> Vec<Node> {
+        (1..=n)
+            .map(|i| Node::new(format!("api{i}.example.com")).unwrap())
+            .collect()
+    }
+
+    /// Regression test for https://github.com/dfinity/agent-rs/issues/698 (0.46 variant).
+    ///
+    /// The original panic was `[bug] failed to observe change after notificaton.` inside
+    /// `async-watch` v0.3.1's `changed()`, triggered by a race condition in the
+    /// multi-threaded tokio runtime when `HealthManagerActor::run` polled
+    /// `fetch_receiver.recv().fuse()` concurrently with other `select!` arms.
+    ///
+    /// The fix replaces `async_watch` with `tokio::sync::watch` on non-WASM.
+    /// This stress test exercises the exact race pattern — rapid watch-channel floods
+    /// combined with heavy `check_receiver` traffic and simultaneous cancellation —
+    /// so that any regression back to async-watch would surface here with high
+    /// probability.  Every iteration captures the `JoinHandle` so a spawned-task
+    /// panic is surfaced as a test failure.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_health_manager_no_panic_on_rapid_updates_and_shutdown() {
+        let nodes = make_nodes(5);
+
+        for _ in 0..50 {
+            let checker = Arc::new(NodeHealthCheckerMock::new());
+            checker.overwrite_healthy_nodes(nodes.clone());
+
+            let routing_snapshot = Arc::new(ArcSwap::from_pointee(LatencyRoutingSnapshot::new()));
+            let (fetch_sender, fetch_receiver) = tokio::sync::watch::channel(None);
+            let (init_sender, _init_receiver) = async_channel::bounded(1);
+            let stop_source = StopSource::new();
+
+            let actor = HealthManagerActor::new(
+                Arc::clone(&checker) as Arc<dyn HealthCheck>,
+                Duration::from_millis(1), // fast health checks generate heavy check_receiver traffic
+                Arc::clone(&routing_snapshot),
+                fetch_receiver,
+                init_sender,
+                stop_source.token(),
+            );
+
+            // Capture the handle so a panic inside actor.run() is detected.
+            let handle = tokio::spawn(actor.run());
+
+            // Flood the watch channel as fast as possible from a concurrent task.
+            // This stresses the race between the recv() future suspending at
+            // listener.await and the executor dropping it when another select! arm wins.
+            let nodes_clone = nodes.clone();
+            let flood_handle = tokio::spawn(async move {
+                for i in 0..200usize {
+                    let batch = nodes_clone[..=(i % nodes_clone.len())].to_vec();
+                    let _ = fetch_sender.send(Some(FetchedNodes { nodes: batch }));
+                    tokio::task::yield_now().await;
+                }
+            });
+
+            // Let all tasks race, then fire cancellation.
+            tokio::time::sleep(Duration::from_millis(5)).await;
+            drop(stop_source);
+
+            flood_handle.await.expect("flood task should not panic");
+
+            tokio::time::timeout(Duration::from_secs(2), handle)
+                .await
+                .expect("HealthManagerActor timed out; it may be stuck in an infinite loop")
+                .expect("HealthManagerActor panicked");
+        }
+    }
+
+    /// Verifies that `HealthManagerActor` exits when the fetch sender is dropped,
+    /// even when the cancellation token is still live.
+    ///
+    /// Before the fix, the `Err` branch on a closed watch channel did `continue`
+    /// instead of `break`.  Because `fetch_receiver_recv` returns immediately with
+    /// `Err` on a closed channel, the `token` arm in the `select!` was starved and
+    /// the actor looped forever.  This test would time out under the old behaviour.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_health_manager_exits_when_fetch_sender_dropped() {
+        let nodes = make_nodes(3);
+
+        let checker = Arc::new(NodeHealthCheckerMock::new());
+        checker.overwrite_healthy_nodes(nodes.clone());
+
+        let routing_snapshot = Arc::new(ArcSwap::from_pointee(LatencyRoutingSnapshot::new()));
+        let (fetch_sender, fetch_receiver) = tokio::sync::watch::channel(None);
+        let (init_sender, _init_receiver) = async_channel::bounded(1);
+        // Keep the stop_source alive — the actor must exit via the closed channel,
+        // not via the cancellation token.
+        let stop_source = StopSource::new();
+
+        let actor = HealthManagerActor::new(
+            Arc::clone(&checker) as Arc<dyn HealthCheck>,
+            Duration::from_millis(10),
+            Arc::clone(&routing_snapshot),
+            fetch_receiver,
+            init_sender,
+            stop_source.token(),
+        );
+
+        let handle = tokio::spawn(actor.run());
+
+        // Deliver an initial node list so health-check actors start running.
+        fetch_sender
+            .send(Some(FetchedNodes {
+                nodes: nodes.clone(),
+            }))
+            .expect("initial send should succeed");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // Close the channel — the actor must detect this and break.
+        drop(fetch_sender);
+
+        let result = tokio::time::timeout(Duration::from_secs(2), handle).await;
+        drop(stop_source); // clean up after assertion
+
+        result
+            .expect("HealthManagerActor did not exit within 2 s after fetch_sender was dropped")
+            .expect("HealthManagerActor panicked");
     }
 }
