@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* `Subnet`, `SubnetNodeIter`, and `SubnetKeysIter` now implement `Debug`.
+
 ## [0.46.1] - 2026-03-05
 
 * Fix panic in `ic-agent` on non-WASM targets caused by `async-watch` crate; replaced with `tokio::sync::watch`.
