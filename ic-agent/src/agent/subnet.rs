@@ -8,6 +8,21 @@ use std::{collections::HashMap, ops::RangeInclusive};
 use candid::Principal;
 use rangemap::RangeInclusiveSet;
 
+/// The type of an IC subnet, as reported in the state tree under `/subnet/<subnet_id>/type`.
+///
+/// This leaf is present for certification version V25 and higher.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SubnetType {
+    /// The NNS subnet and other system-level subnets.
+    System,
+    /// A standard application subnet.
+    Application,
+    /// A verified application subnet.
+    VerifiedApplication,
+    /// An unrecognized subnet type string, preserved for forward compatibility.
+    Unknown(String),
+}
+
 /// Information about a subnet, including its public key, member nodes, and assigned canister ranges.
 ///
 /// Range information may be incomplete depending on how the subnet was fetched. The lack of a canister ID
@@ -21,6 +36,8 @@ pub struct Subnet {
     pub(crate) key: Vec<u8>,
     pub(crate) node_keys: HashMap<Principal, Vec<u8>>,
     pub(crate) canister_ranges: RangeInclusiveSet<Principal>,
+    /// Present when the certificate's version is V25 or higher; `None` for older certificates.
+    pub(crate) subnet_type: Option<SubnetType>,
 }
 
 impl Subnet {
@@ -63,6 +80,13 @@ impl Subnet {
     /// Returns the subnet's ID.
     pub fn id(&self) -> Principal {
         self.id
+    }
+    /// Returns the subnet type if it was present in the state tree certificate.
+    ///
+    /// This is populated when the replica uses certification version V25 or higher.
+    /// Returns `None` for older certificates that do not include the `type` leaf.
+    pub fn subnet_type(&self) -> Option<&SubnetType> {
+        self.subnet_type.as_ref()
     }
 }
 

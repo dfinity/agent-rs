@@ -8,7 +8,7 @@ use rangemap::RangeInclusiveSet;
 use std::collections::{HashMap, HashSet};
 use std::str::from_utf8;
 
-use super::Subnet;
+use super::{subnet::SubnetType, Subnet};
 
 const DER_PREFIX: &[u8; 37] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00";
 const KEY_LENGTH: usize = 96;
@@ -225,11 +225,22 @@ pub(crate) fn lookup_incomplete_subnet<Storage: AsRef<[u8]> + Clone>(
         let node_key = lookup_value(&node_keys_subtree, [node_id.as_slice(), b"public_key"])?;
         node_keys.insert(node_id, node_key.to_vec());
     }
+    let subnet_type = match lookup_value(&subnet_tree, [b"type".as_ref()]) {
+        Ok(value) => Some(match from_utf8(value)? {
+            "system" => SubnetType::System,
+            "application" => SubnetType::Application,
+            "verified_application" => SubnetType::VerifiedApplication,
+            other => SubnetType::Unknown(other.to_string()),
+        }),
+        Err(AgentError::LookupPathAbsent(_)) => None,
+        Err(e) => return Err(e),
+    };
     let subnet = Subnet {
         id: *subnet_id,
         canister_ranges: RangeInclusiveSet::new_with_step_fns(),
         key,
         node_keys,
+        subnet_type,
     };
     Ok(subnet)
 }
