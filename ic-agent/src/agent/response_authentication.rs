@@ -1,7 +1,5 @@
 #![allow(clippy::needless_lifetimes)]
-use crate::agent::{
-    ApiBoundaryNode, PrincipalStep, RejectCode, RejectResponse, RequestStatusResponse,
-};
+use crate::agent::{ApiBoundaryNode, RejectCode, RejectResponse, RequestStatusResponse};
 use crate::{export::Principal, AgentError, RequestId};
 use ic_certification::hash_tree::{HashTree, SubtreeLookupResult};
 use ic_certification::{certificate::Certificate, hash_tree::Label, LookupResult};
@@ -250,7 +248,7 @@ pub(crate) fn lookup_incomplete_subnet<Storage: AsRef<[u8]> + Clone>(
 pub(crate) fn lookup_canister_ranges<Storage: AsRef<[u8]> + Clone>(
     subnet_id: &Principal,
     certificate: &Certificate<Storage>,
-) -> Result<RangeInclusiveSet<Principal, PrincipalStep>, AgentError> {
+) -> Result<RangeInclusiveSet<Principal>, AgentError> {
     match certificate
         .tree
         .lookup_path([b"subnet", subnet_id.as_slice(), b"canister_ranges"])
@@ -258,7 +256,7 @@ pub(crate) fn lookup_canister_ranges<Storage: AsRef<[u8]> + Clone>(
         LookupResult::Found(_) => {
             let ranges: Vec<(Principal, Principal)> =
                 lookup_subnet_canister_ranges(certificate, *subnet_id)?;
-            let mut canister_ranges = RangeInclusiveSet::new_with_step_fns();
+            let mut canister_ranges = RangeInclusiveSet::new();
             for (low, high) in ranges {
                 canister_ranges.insert(low..=high);
             }

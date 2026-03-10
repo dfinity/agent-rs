@@ -22,9 +22,7 @@ features = ["wasm-bindgen"]
 default = ["pem"]
 pem = ["dep:pem"]
 ring = ["dep:ring"]
-ic_ref_tests = [
-    "default",
-] # Used to separate integration tests for ic-ref which need a server running.
+ic_ref_tests = ["default"] # Used to separate integration tests for ic-ref which need a server running.
 wasm-bindgen = [
     "dep:js-sys",
     "dep:wasm-bindgen",
@@ -62,6 +60,7 @@ http-body-util = { workspace = true }
 ic-certification = { workspace = true }
 ic-ed25519 = { workspace = true }
 ic-transport-types = { workspace = true }
+ic_principal = { workspace = true }
 ic-verify-bls-signature = { workspace = true }
 k256 = { workspace = true, features = ["pem"] }
 leb128 = { workspace = true }
@@ -70,12 +69,7 @@ pem = { workspace = true, optional = true }
 pkcs8 = { workspace = true, features = ["std"] }
 rand = { workspace = true }
 rangemap = { workspace = true }
-reqwest = { workspace = true, default-features = false, features = [
-    "blocking",
-    "json",
-    "rustls",
-    "stream",
-] }
+reqwest = { workspace = true, default-features = false, features = ["blocking", "json", "rustls", "stream"] }
 ring = { workspace = true, optional = true }
 sec1 = { workspace = true, features = ["pem"] }
 serde = { workspace = true, features = ["derive"] }
