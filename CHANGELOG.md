@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* `ic-agent`: Added `SubnetType` enum (`System`, `Application`, `VerifiedApplication`, `Unknown(String)`) and exposed it via a new `subnet_type()` accessor on `Subnet`. The field is `None` when the certificate was produced by a replica with certification version older than V25, and `Some(SubnetType)` otherwise. `SubnetType` is re-exported from `ic_agent` alongside `Subnet`.
+
 ## [0.46.1] - 2026-03-05
 
 * Fix panic in `ic-agent` on non-WASM targets caused by `async-watch` crate; replaced with `tokio::sync::watch`.

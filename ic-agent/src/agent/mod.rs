@@ -34,7 +34,7 @@ use route_provider::{
     dynamic_routing::{dynamic_route_provider::DynamicRouteProviderBuilder, node::Node},
     RouteProvider, UrlUntilReady,
 };
-pub use subnet::Subnet;
+pub use subnet::{Subnet, SubnetType};
 use time::OffsetDateTime;
 use tower_service::Service;
 
