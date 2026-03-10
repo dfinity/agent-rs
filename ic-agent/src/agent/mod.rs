@@ -28,7 +28,7 @@ pub use ic_transport_types::{
     RequestStatusResponse,
 };
 pub use nonce::{NonceFactory, NonceGenerator};
-use rangemap::{RangeInclusiveMap, StepFns};
+use rangemap::RangeInclusiveMap;
 use reqwest::{Client, Request, Response};
 use route_provider::{
     dynamic_routing::{dynamic_route_provider::DynamicRouteProviderBuilder, node::Node},
@@ -1651,14 +1651,14 @@ pub fn signed_request_status_inspect(
 #[derive(Clone)]
 struct SubnetCache {
     subnets: TimedCache<Principal, Arc<Subnet>>,
-    canister_index: RangeInclusiveMap<Principal, Principal, PrincipalStep>,
+    canister_index: RangeInclusiveMap<Principal, Principal>,
 }
 
 impl SubnetCache {
     fn new() -> Self {
         Self {
             subnets: TimedCache::with_lifespan(Duration::from_secs(300)),
-            canister_index: RangeInclusiveMap::new_with_step_fns(),
+            canister_index: RangeInclusiveMap::new(),
         }
     }
 
@@ -1678,36 +1678,6 @@ impl SubnetCache {
         for range in subnet.canister_ranges.iter() {
             self.canister_index.insert(range.clone(), subnet_id);
         }
-    }
-}
-
-#[derive(Clone, Copy)]
-pub(crate) struct PrincipalStep;
-
-impl StepFns<Principal> for PrincipalStep {
-    fn add_one(start: &Principal) -> Principal {
-        let bytes = start.as_slice();
-        let mut arr = [0; 29];
-        arr[..bytes.len()].copy_from_slice(bytes);
-        for byte in arr[..bytes.len() - 1].iter_mut().rev() {
-            *byte = byte.wrapping_add(1);
-            if *byte != 0 {
-                break;
-            }
-        }
-        Principal::from_slice(&arr[..bytes.len()])
-    }
-    fn sub_one(start: &Principal) -> Principal {
-        let bytes = start.as_slice();
-        let mut arr = [0; 29];
-        arr[..bytes.len()].copy_from_slice(bytes);
-        for byte in arr[..bytes.len() - 1].iter_mut().rev() {
-            *byte = byte.wrapping_sub(1);
-            if *byte != 255 {
-                break;
-            }
-        }
-        Principal::from_slice(&arr[..bytes.len()])
     }
 }
 

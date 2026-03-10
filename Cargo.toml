@@ -38,7 +38,7 @@ ic-utils-bindgen = { path = "ic-utils-bindgen" }
 ref-tests = { path = "ref-tests" }
 
 # Public dependencies
-anyhow = { version = "1.0", features = ["backtrace"] } # icx, icx-cert
+anyhow = { version = "1.0", features = ["backtrace"] }                 # icx, icx-cert
 arc-swap = "1.7"
 async-channel = "2.5"
 async-lock = "3.4"
@@ -65,6 +65,7 @@ humantime = "2.0.1"
 ic-certification = "3"
 ic-ed25519 = "0.6.0"
 ic-management-canister-types = "0.7.1"
+ic_principal = { version = "0.1.2", features = ["rangemap"] }
 ic-verify-bls-signature = "0.6"
 js-sys = "0.3"
 k256 = "0.13.4"
