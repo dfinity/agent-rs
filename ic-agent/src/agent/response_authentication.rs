@@ -230,6 +230,7 @@ pub(crate) fn lookup_incomplete_subnet<Storage: AsRef<[u8]> + Clone>(
             "system" => SubnetType::System,
             "application" => SubnetType::Application,
             "verified_application" => SubnetType::VerifiedApplication,
+            "cloud_engine" => SubnetType::CloudEngine,
             other => SubnetType::Unknown(other.to_string()),
         }),
         Err(AgentError::LookupPathAbsent(_)) => None,
