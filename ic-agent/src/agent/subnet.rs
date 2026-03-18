@@ -19,6 +19,8 @@ pub enum SubnetType {
     Application,
     /// A verified application subnet.
     VerifiedApplication,
+    /// A cloud engine subnet.
+    CloudEngine,
     /// An unrecognized subnet type string, preserved for forward compatibility.
     Unknown(String),
 }
