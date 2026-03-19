@@ -107,7 +107,11 @@ impl DynamicRouteProviderBuilder {
     ///
     /// `k_top_nodes`: if `Some(k)`, only the top `k` nodes with the highest latency score are
     /// used for routing. Pass `None` to use all healthy nodes.
-    pub fn new(seeds: Vec<Node>, http_client: Arc<dyn HttpService>, k_top_nodes: Option<usize>) -> Self {
+    pub fn new(
+        seeds: Vec<Node>,
+        http_client: Arc<dyn HttpService>,
+        k_top_nodes: Option<usize>,
+    ) -> Self {
         let fetcher = Arc::new(NodesFetcher::new(
             http_client.clone(),
             Principal::from_text(MAINNET_ROOT_SUBNET_ID).unwrap(),
@@ -467,7 +471,8 @@ mod tests {
         setup_tracing();
         let seed = Node::new(IC0_SEED_DOMAIN).unwrap();
         let http_client = Arc::new(reqwest::Client::new());
-        let route_provider = DynamicRouteProviderBuilder::new(vec![seed], http_client, None).build();
+        let route_provider =
+            DynamicRouteProviderBuilder::new(vec![seed], http_client, None).build();
         route_provider.start().await;
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         let route_provider = Arc::new(route_provider) as Arc<dyn RouteProvider>;
