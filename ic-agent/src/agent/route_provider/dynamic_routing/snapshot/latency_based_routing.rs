@@ -225,7 +225,6 @@ impl LatencyRoutingSnapshot {
     }
 
     /// Sets whether to use only k nodes with the highest score for routing.
-    #[allow(unused)]
     pub fn set_k_top_nodes(mut self, k_top_nodes: usize) -> Self {
         self.k_top_nodes = Some(k_top_nodes);
         self

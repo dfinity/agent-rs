@@ -95,8 +95,8 @@ pub struct DynamicRouteProviderBuilder {
     fetch_retry_interval: Duration,
     checker: Arc<dyn HealthCheck>,
     check_period: Duration,
-    routing_snapshot: AtomicSwap<LatencyRoutingSnapshot>,
     seeds: Vec<Node>,
+    k_top_nodes: Option<usize>,
 }
 
 impl DynamicRouteProviderBuilder {
@@ -104,7 +104,14 @@ impl DynamicRouteProviderBuilder {
     /// Use this when you want to share an HTTP client with other components (e.g., the Agent)
     /// or when you need custom HTTP client configuration.
     /// For full control over fetcher and checker, use [`Self::from_components`].
-    pub fn new(seeds: Vec<Node>, http_client: Arc<dyn HttpService>) -> Self {
+    ///
+    /// `k_top_nodes`: if `Some(k)`, only the top `k` nodes with the highest latency score are
+    /// used for routing. Pass `None` to use all healthy nodes.
+    pub fn new(
+        seeds: Vec<Node>,
+        http_client: Arc<dyn HttpService>,
+        k_top_nodes: Option<usize>,
+    ) -> Self {
         let fetcher = Arc::new(NodesFetcher::new(
             http_client.clone(),
             Principal::from_text(MAINNET_ROOT_SUBNET_ID).unwrap(),
@@ -115,15 +122,20 @@ impl DynamicRouteProviderBuilder {
             #[cfg(not(target_family = "wasm"))]
             HEALTH_CHECK_TIMEOUT,
         ));
-        Self::from_components(seeds, fetcher, checker)
+        Self::from_components(seeds, fetcher, checker, k_top_nodes)
     }
 
     /// Creates a new instance of the builder with custom fetcher and checker implementations.
     /// Use this when you need full control over the node fetching and health checking behavior.
+    ///
+    /// `k_top_nodes`: if `Some(k)`, only the top `k` nodes with the highest latency score are
+    /// used for routing. Pass `None` to use all healthy nodes.
+    #[allow(unused)]
     pub fn from_components(
         seeds: Vec<Node>,
         fetcher: Arc<dyn Fetch>,
         checker: Arc<dyn HealthCheck>,
+        k_top_nodes: Option<usize>,
     ) -> Self {
         Self {
             fetcher,
@@ -132,7 +144,7 @@ impl DynamicRouteProviderBuilder {
             checker,
             check_period: HEALTH_CHECK_PERIOD,
             seeds,
-            routing_snapshot: Arc::new(ArcSwap::from_pointee(LatencyRoutingSnapshot::new())),
+            k_top_nodes,
         }
     }
 
@@ -169,13 +181,17 @@ impl DynamicRouteProviderBuilder {
     /// - Call `.start().await` explicitly to start background tasks and wait for initialization
     /// - Just use the provider - it will auto-start on first `route()` call (lazy initialization)
     pub fn build(self) -> DynamicRouteProvider {
+        let mut snapshot = LatencyRoutingSnapshot::new();
+        if let Some(k) = self.k_top_nodes {
+            snapshot = snapshot.set_k_top_nodes(k);
+        }
         DynamicRouteProvider {
             fetcher: self.fetcher,
             fetch_period: self.fetch_period,
             fetch_retry_interval: self.fetch_retry_interval,
             checker: self.checker,
             check_period: self.check_period,
-            routing_snapshot: self.routing_snapshot,
+            routing_snapshot: Arc::new(ArcSwap::from_pointee(snapshot)),
             seeds: self.seeds,
             token: StopSource::new(),
             started: Arc::new(AtomicBool::new(false)),
@@ -455,7 +471,8 @@ mod tests {
         setup_tracing();
         let seed = Node::new(IC0_SEED_DOMAIN).unwrap();
         let http_client = Arc::new(reqwest::Client::new());
-        let route_provider = DynamicRouteProviderBuilder::new(vec![seed], http_client).build();
+        let route_provider =
+            DynamicRouteProviderBuilder::new(vec![seed], http_client, None).build();
         route_provider.start().await;
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         let route_provider = Arc::new(route_provider) as Arc<dyn RouteProvider>;
@@ -498,7 +515,7 @@ mod tests {
         // Configure RouteProvider
         let client = reqwest::Client::builder().build().unwrap();
         let route_provider =
-            DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client))
+            DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client), None)
                 .with_fetcher(fetcher.clone())
                 .with_checker(checker.clone())
                 .with_fetch_period(fetch_interval)
@@ -600,6 +617,7 @@ mod tests {
             vec![node_1.clone(), node_2.clone()],
             fetcher,
             checker.clone(),
+            None,
         )
         .with_fetch_period(fetch_interval)
         .with_check_period(check_interval)
@@ -642,7 +660,7 @@ mod tests {
         // Configure RouteProvider
         let client = reqwest::Client::builder().build().unwrap();
         let route_provider =
-            DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client))
+            DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client), None)
                 .with_fetcher(fetcher)
                 .with_checker(checker.clone())
                 .with_fetch_period(fetch_interval)
@@ -686,7 +704,7 @@ mod tests {
         // Configure RouteProvider
         let client = reqwest::Client::builder().build().unwrap();
         let route_provider =
-            DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client))
+            DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client), None)
                 .with_fetcher(fetcher)
                 .with_checker(checker)
                 .with_fetch_period(fetch_interval)
@@ -728,6 +746,7 @@ mod tests {
             vec![node_1.clone(), node_2.clone()],
             fetcher,
             checker.clone(),
+            None,
         )
         .with_fetch_period(fetch_interval)
         .with_check_period(check_interval)
@@ -765,7 +784,7 @@ mod tests {
         // Configure RouteProvider
         let client = reqwest::Client::builder().build().unwrap();
         let route_provider =
-            DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client))
+            DynamicRouteProviderBuilder::new(vec![node_1.clone()], Arc::new(client), None)
                 .with_fetcher(fetcher.clone())
                 .with_checker(checker.clone())
                 .with_fetch_period(fetch_interval)
