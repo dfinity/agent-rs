@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.47.0] - 2026-03-23
+
 * `ic-agent`: `DynamicRouteProviderBuilder::new()` and `::from_components()` now accept a `k_top_nodes: Option<usize>` parameter. Pass `Some(k)` to limit routing to the `k` nodes with the highest latency score; pass `None` to retain the existing behaviour of routing across all healthy nodes.
 
 ## [0.46.2] - 2026-03-10
