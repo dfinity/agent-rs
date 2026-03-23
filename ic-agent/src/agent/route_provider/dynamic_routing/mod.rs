@@ -79,7 +79,7 @@
 //!
 //!     // Build dynamic route provider with HTTP client
 //!     let http_client = Arc::new(reqwest::Client::new());
-//!     let route_provider = DynamicRouteProviderBuilder::new(seed_nodes, http_client)
+//!     let route_provider = DynamicRouteProviderBuilder::new(seed_nodes, http_client, None)
 //!             // Set how often to fetch the latest API boundary node topology
 //!             .with_fetch_period(Duration::from_secs(10))
 //!             // Set how often to perform health checks on the API boundary nodes
@@ -98,6 +98,7 @@
 //!     //     seed_nodes,
 //!     //     Arc::new(custom_fetcher),
 //!     //     Arc::new(custom_checker),
+//!     //     None, // or Some(k) to limit routing to top k nodes
 //!     // )
 //!     // .build();
 //!
