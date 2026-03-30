@@ -17,7 +17,12 @@ use simple_asn1::{
     ASN1Block::{BitString, ObjectIdentifier, OctetString, Sequence},
     ASN1DecodeErr, ASN1EncodeErr,
 };
-use std::{path::Path, ptr};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    ptr,
+    sync::{Arc, Mutex, OnceLock, Weak},
+};
 use thiserror::Error;
 
 type KeyIdVec = Vec<u8>;
@@ -88,11 +93,34 @@ pub enum HardwareIdentityError {
     NoSuchSlotIndex(usize),
 }
 
+/// Global cache of initialized PKCS#11 contexts, keyed by library path.
+/// Uses `Weak` so the `Ctx` is finalized when all `HardwareIdentity` users drop.
+fn ctx_cache() -> &'static Mutex<HashMap<PathBuf, Weak<Ctx>>> {
+    static CACHE: OnceLock<Mutex<HashMap<PathBuf, Weak<Ctx>>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn get_or_init_ctx(path: &Path) -> Result<Arc<Ctx>, HardwareIdentityError> {
+    let mut cache = ctx_cache().lock().unwrap();
+    let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+
+    if let Some(weak) = cache.get(&canonical) {
+        if let Some(arc) = weak.upgrade() {
+            return Ok(arc);
+        }
+    }
+
+    let ctx = Ctx::new_and_initialize(path)?;
+    let arc = Arc::new(ctx);
+    cache.insert(canonical, Arc::downgrade(&arc));
+    Ok(arc)
+}
+
 /// An identity based on an HSM
 #[derive(Debug)]
 pub struct HardwareIdentity {
     key_id: KeyIdVec,
-    ctx: Ctx,
+    ctx: Arc<Ctx>,
     session_handle: CK_SESSION_HANDLE,
     logged_in: bool,
     public_key: DerPublicKeyVec,
@@ -116,7 +144,7 @@ impl HardwareIdentity {
         P: AsRef<Path>,
         PinFn: FnOnce() -> Result<String, String>,
     {
-        let ctx = Ctx::new_and_initialize(pkcs11_lib_path)?;
+        let ctx = get_or_init_ctx(pkcs11_lib_path.as_ref())?;
         let slot_id = get_slot_id(&ctx, slot_index)?;
         let session_handle = open_session(&ctx, slot_id)?;
         let logged_in = login_if_required(&ctx, session_handle, pin_fn, slot_id)?;
