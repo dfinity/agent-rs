@@ -35,7 +35,7 @@ impl Secp256k1Identity {
     /// Accepts keys in SEC1 ("EC PRIVATE KEY") or PKCS#8 ("PRIVATE KEY") format.
     #[cfg(feature = "pem")]
     pub fn from_pem<B: AsRef<[u8]>>(pem_contents: B) -> Result<Self, PemError> {
-        use pkcs8::{der::Decode, AssociatedOid, PrivateKeyInfo};
+        use pkcs8::{AssociatedOid, PrivateKeyInfo};
         use sec1::{pem::PemLabel, EcPrivateKey};
 
         const EC_PARAMETERS: &str = "EC PARAMETERS";
@@ -60,43 +60,11 @@ impl Secp256k1Identity {
 
             if pem.tag() == PrivateKeyInfo::PEM_LABEL {
                 // PKCS#8 "PRIVATE KEY" format
-                let (alg_oid, curve_oid, key_bytes) = {
-                    let mut truncated: Vec<u8>;
-                    let pki = match PrivateKeyInfo::from_der(pem.contents()) {
-                        Ok(pki) => pki,
-                        Err(e) => {
-                            // Very old versions of dfx generated nonconforming PKCS#8 containers.
-                            // This code was copied from agent-rs@1e67be03 via icp-cli.
-                            truncated = pem.contents().to_vec();
-                            if truncated.len() >= 52 && truncated[48..52] == *b"\xA1\x23\x03\x21" {
-                                truncated.truncate(48);
-                                truncated[1] = 46;
-                                truncated[4] = 0;
-                                PrivateKeyInfo::from_der(&truncated).map_err(|_| e)?
-                            } else {
-                                return Err(e.into());
-                            }
-                        }
-                    };
-                    let curve_oid = pki
-                        .algorithm
-                        .parameters_oid()
-                        .map_err(|_| pkcs8::Error::KeyMalformed)?;
-                    (pki.algorithm.oid, curve_oid, pki.private_key.to_vec())
-                };
-                if alg_oid != elliptic_curve::ALGORITHM_OID {
-                    return Err(PemError::InvalidPrivateKey(format!(
-                        "expected EC algorithm OID {}, found {}",
-                        elliptic_curve::ALGORITHM_OID,
-                        alg_oid,
-                    )));
-                }
-                if curve_oid != k256::Secp256k1::OID {
-                    return Err(PemError::UnsupportedKeyCurve(
-                        "secp256k1".to_string(),
-                        curve_oid.as_bytes().to_vec(),
-                    ));
-                }
+                let key_bytes = super::parse_ec_pkcs8_key_bytes(
+                    pem.contents(),
+                    k256::Secp256k1::OID,
+                    "secp256k1",
+                )?;
                 let private_key =
                     SecretKey::from_sec1_der(&key_bytes).map_err(|_| pkcs8::Error::KeyMalformed)?;
                 return Ok(Self::from_private_key(private_key));
