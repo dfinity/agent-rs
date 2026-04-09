@@ -20,7 +20,7 @@ features = ["wasm-bindgen"]
 
 [features]
 default = ["pem"]
-pem = ["dep:pem"]
+pem = ["dep:pem", "pkcs8/pem"]
 ring = ["dep:ring"]
 ic_ref_tests = ["default"] # Used to separate integration tests for ic-ref which need a server running.
 wasm-bindgen = [

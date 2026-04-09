@@ -30,7 +30,7 @@ impl Prime256v1Identity {
         Self::from_pem(std::fs::read(file_path)?)
     }
 
-    /// Creates an identity from a PEM certificate.
+    /// Creates an identity from a PEM-encoded private key (SEC1 or PKCS#8).
     ///
     /// Accepts keys in SEC1 ("EC PRIVATE KEY") or PKCS#8 ("PRIVATE KEY") format.
     #[cfg(feature = "pem")]
