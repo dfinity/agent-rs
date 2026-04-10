@@ -660,8 +660,53 @@ mod identity {
         Identity,
     };
     use rand::RngExt;
-    use ref_tests::utils::create_basic_identity;
-    use ref_tests::{universal_canister::payload, with_universal_canister_as};
+    use ref_tests::utils::{create_agent, create_basic_identity};
+    use ref_tests::{
+        universal_canister::payload, with_universal_canister, with_universal_canister_as,
+    };
+
+    /// Build a DER-encoded SubjectPublicKeyInfo for a canister signature key.
+    ///
+    /// OID 1.3.6.1.4.1.56387.1.2; BIT STRING payload: `| len(canister_id) | canister_id | seed |`.
+    fn canister_sig_pubkey_der(canister_id: Principal, seed: &[u8]) -> Vec<u8> {
+        fn der_tlv(tag: u8, value: &[u8]) -> Vec<u8> {
+            let mut out = vec![tag];
+            let len = value.len();
+            if len < 0x80 {
+                out.push(len as u8);
+            } else if len < 0x100 {
+                out.extend_from_slice(&[0x81, len as u8]);
+            } else {
+                out.extend_from_slice(&[0x82, (len >> 8) as u8, len as u8]);
+            }
+            out.extend_from_slice(value);
+            out
+        }
+        let id_bytes = canister_id.as_slice();
+        let mut raw_key = Vec::with_capacity(1 + id_bytes.len() + seed.len());
+        raw_key.push(id_bytes.len() as u8);
+        raw_key.extend_from_slice(id_bytes);
+        raw_key.extend_from_slice(seed);
+        // OID 1.3.6.1.4.1.56387.1.2
+        let oid_tlv = der_tlv(
+            0x06,
+            &[0x2b, 0x06, 0x01, 0x04, 0x01, 0x83, 0xb8, 0x43, 0x01, 0x02],
+        );
+        let alg_id = der_tlv(0x30, &oid_tlv);
+        let mut bit_string_content = vec![0x00u8]; // 0 unused bits
+        bit_string_content.extend_from_slice(&raw_key);
+        let bit_string = der_tlv(0x03, &bit_string_content);
+        let mut spki_content = alg_id;
+        spki_content.extend_from_slice(&bit_string);
+        der_tlv(0x30, &spki_content)
+    }
+
+    #[derive(serde::Serialize)]
+    struct CanisterSigEnvelope<'a> {
+        #[serde(with = "serde_bytes")]
+        certificate: &'a [u8],
+        tree: &'a ic_certification::HashTree,
+    }
 
     #[tokio::test]
     async fn delegated_eddsa_identity() {
@@ -730,6 +775,104 @@ mod identity {
                 .unwrap();
             let caller = Principal::from_slice(&caller_resp);
             assert_eq!(caller, sending_identity.sender().unwrap());
+            Ok(())
+        })
+        .await
+    }
+
+    #[tokio::test]
+    async fn delegated_canister_sig_identity() {
+        use ic_certification::{labeled, leaf};
+        use sha2::{Digest, Sha256};
+
+        with_universal_canister(async |pic, agent, canister_id| {
+            // Fetch the local network's root key (needed to verify the canister signature).
+            let root_key = agent
+                .status()
+                .await?
+                .root_key
+                .expect("root_key should be present in status");
+
+            // Empty seed: identifies this particular "key slot" within the canister.
+            let seed: &[u8] = b"";
+
+            // The canister signature public key encodes (canister_id, seed) in DER.
+            let from_key = canister_sig_pubkey_der(canister_id, seed);
+
+            // The identity that will actually sign envelopes once the delegation is in place.
+            let signing_identity = create_basic_identity();
+
+            // Build the delegation: canister_sig_key → signing_identity.
+            let delegation = Delegation {
+                pubkey: signing_identity.public_key().unwrap(),
+                expiration: i64::MAX as u64,
+                targets: None,
+            };
+
+            // Build the signature tree:
+            //   ["sig", sha256(seed), sha256(delegation.signable())] = ""
+            let msg = delegation.signable();
+            let seed_hash: [u8; 32] = Sha256::digest(seed).into();
+            let msg_hash: [u8; 32] = Sha256::digest(&msg).into();
+            let sig_tree = labeled(
+                "sig",
+                labeled(seed_hash.as_ref(), labeled(msg_hash.as_ref(), leaf(vec![]))),
+            );
+
+            // Set certified_data = reconstruct(sig_tree) in an update call.
+            agent
+                .update(&canister_id, "update")
+                .with_arg(
+                    payload()
+                        .push_bytes(&sig_tree.digest())
+                        .certified_data_set()
+                        .reply()
+                        .build(),
+                )
+                .call_and_wait()
+                .await?;
+
+            // Retrieve the data certificate in a query call.
+            // The certificate contains the IC's certification of certified_data.
+            let data_cert_bytes = agent
+                .query(&canister_id, "query")
+                .with_arg(payload().data_certificate().append_and_reply().build())
+                .call()
+                .await?;
+
+            // Assemble the canister signature: tag(55799, { certificate, tree }).
+            // The replica requires the CBOR self-describing tag 0xd9d9f7.
+            let mut canister_sig = vec![0xd9u8, 0xd9, 0xf7];
+            serde_cbor::to_writer(
+                &mut canister_sig,
+                &CanisterSigEnvelope {
+                    certificate: &data_cert_bytes,
+                    tree: &sig_tree,
+                },
+            )?;
+
+            // Construct the delegated identity and verify the chain.
+            let delegated_identity = DelegatedIdentity::new_with_root_key(
+                from_key,
+                Box::new(signing_identity),
+                vec![SignedDelegation {
+                    delegation,
+                    signature: canister_sig,
+                }],
+                &root_key,
+            )
+            .expect("canister signature delegation chain should be valid");
+            let expected_principal = delegated_identity.sender().unwrap();
+
+            // Confirm the replica reports the correct caller for the delegated identity.
+            let delegated_agent = create_agent(pic, delegated_identity).await?;
+            let caller_resp = delegated_agent
+                .query(&canister_id, "query")
+                .with_arg(payload().caller().append_and_reply().build())
+                .call()
+                .await?;
+            assert_eq!(Principal::from_slice(&caller_resp), expected_principal);
+
             Ok(())
         })
         .await
