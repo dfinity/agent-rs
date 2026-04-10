@@ -30,7 +30,7 @@ license = "Apache-2.0"
 #   a comment listing those crates). Otherwise, features are declared in the individual crate Cargo.toml.
 #
 # The path dependencies below ensure all workspace members use the same version of internal crates.
-ic-agent = { path = "ic-agent", version = "0.47.1" }
+ic-agent = { path = "ic-agent", version = "0.47.1", default-features = false }
 ic-identity-hsm = { path = "ic-identity-hsm", version = "0.47.1" }
 ic-transport-types = { path = "ic-transport-types", version = "0.47.1" }
 ic-utils = { path = "ic-utils", version = "0.47.1" }
@@ -47,7 +47,7 @@ async-watch = "0.3"
 backoff = "0.4.0"
 base64 = "0.22"
 bytes = "1.11"
-cached = "0.56"
+cached = { version = "0.56", default-features = false }
 candid = "0.10.10"
 candid_parser = "0.3.0"
 clap = { version = "4.5.21", features = ["derive", "cargo", "color"] } # icx, icx-cert
@@ -79,7 +79,7 @@ pkcs8 = "0.10.2"
 pocket-ic = "12.0.0"
 rand = "0.10.0"
 rangemap = "1.7"
-reqwest = "0.13.2"
+reqwest = { version = "0.13.2", default-features = false }
 ring = "0.17"
 sec1 = "0.7.2"
 semver = "1.0.7"
@@ -95,7 +95,7 @@ strum = "0.28.0"
 strum_macros = "0.28.0"
 thiserror = "2.0.3"
 time = "0.3"
-tokio = "1.50.0"
+tokio = { version = "1.50.0", default-features = false }
 tower-service = "0.3"
 tracing = "0.1"
 tracing-subscriber = "0.3"

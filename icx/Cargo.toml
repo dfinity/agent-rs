@@ -25,7 +25,7 @@ candid_parser = { workspace = true }
 clap = { workspace = true }
 hex = { workspace = true }
 humantime = { workspace = true }
-ic-agent = { workspace = true }
+ic-agent = { workspace = true, default-features = true }
 ic-ed25519 = { workspace = true }
 ic-utils = { workspace = true }
 pocket-ic = { workspace = true }
