@@ -119,3 +119,56 @@ macro_rules! delegating_impl {
 delegating_impl!(Box<dyn Identity>, self => **self);
 delegating_impl!(Arc<dyn Identity>, self => **self);
 delegating_impl!(&dyn Identity, self => *self);
+
+/// Parses a PKCS#8 ("PRIVATE KEY") EC private key from raw DER bytes.
+///
+/// Validates that the algorithm OID is EC and that the curve OID matches `expected_curve`,
+/// then returns the inner SEC1 private key bytes. Applies the dfx legacy hatchet surgery for
+/// nonconforming containers if needed.
+#[cfg(feature = "pem")]
+fn parse_ec_pkcs8_key_bytes(
+    der_bytes: &[u8],
+    expected_curve: pkcs8::der::asn1::ObjectIdentifier,
+    curve_name: &str,
+) -> Result<Vec<u8>, error::PemError> {
+    use pkcs8::{
+        der::{Decode, Encode},
+        PrivateKeyInfo,
+    };
+
+    let mut truncated: Vec<u8>;
+    let pki = match PrivateKeyInfo::from_der(der_bytes) {
+        Ok(pki) => pki,
+        Err(e) => {
+            // Very old versions of dfx generated nonconforming PKCS#8 containers.
+            // This code was copied from agent-rs@1e67be03 via icp-cli.
+            truncated = der_bytes.to_vec();
+            if truncated.len() >= 52 && truncated[48..52] == *b"\xA1\x23\x03\x21" {
+                truncated.truncate(48);
+                truncated[1] = 46;
+                truncated[4] = 0;
+                PrivateKeyInfo::from_der(&truncated).map_err(|_| e)?
+            } else {
+                return Err(e.into());
+            }
+        }
+    };
+    if pki.algorithm.oid != elliptic_curve::ALGORITHM_OID {
+        return Err(error::PemError::InvalidPrivateKey(format!(
+            "expected EC algorithm OID {}, found {}",
+            elliptic_curve::ALGORITHM_OID,
+            pki.algorithm.oid,
+        )));
+    }
+    let curve_oid = pki
+        .algorithm
+        .parameters_oid()
+        .map_err(|_| pkcs8::Error::KeyMalformed)?;
+    if curve_oid != expected_curve {
+        return Err(error::PemError::UnsupportedKeyCurve(
+            curve_name.to_string(),
+            curve_oid.to_der().unwrap_or_default(),
+        ));
+    }
+    Ok(pki.private_key.to_vec())
+}
