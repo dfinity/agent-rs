@@ -982,30 +982,49 @@ impl Agent {
                 self.verify_cert(&cert, effective_canister_id)?;
                 let canister_range_shards_lookup =
                     ["canister_ranges".as_bytes(), delegation.subnet_id.as_ref()];
-                let canister_range_shards = lookup_tree(&cert.tree, canister_range_shards_lookup)?;
-                let mut shard_paths = canister_range_shards
-                    .list_paths() // /canister_ranges/<subnet_id>/<shard>
-                    .into_iter()
-                    .map(|mut x| {
-                        x.pop() // flatten [label] to label
-                            .ok_or_else(AgentError::CertificateVerificationFailed)
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-                if shard_paths.is_empty() {
-                    return Err(AgentError::CertificateNotAuthorized());
-                }
-                shard_paths.sort_unstable();
-                let shard_division = shard_paths
-                    .partition_point(|shard| shard.as_bytes() <= effective_canister_id.as_slice());
-                if shard_division == 0 {
-                    // the certificate is not authorized to answer calls for this canister
-                    return Err(AgentError::CertificateNotAuthorized());
-                }
-                let max_potential_shard = &shard_paths[shard_division - 1];
-                let canister_range_lookup = [max_potential_shard.as_bytes()];
-                let canister_range = lookup_value(&canister_range_shards, canister_range_lookup)?;
                 let ranges: Vec<(Principal, Principal)> =
-                    serde_cbor::from_slice(canister_range).map_err(AgentError::InvalidCborData)?;
+                    match lookup_tree(&cert.tree, canister_range_shards_lookup) {
+                        Ok(canister_range_shards) => {
+                            let mut shard_paths = canister_range_shards
+                                .list_paths() // /canister_ranges/<subnet_id>/<shard>
+                                .into_iter()
+                                .map(|mut x| {
+                                    x.pop() // flatten [label] to label
+                                        .ok_or_else(AgentError::CertificateVerificationFailed)
+                                })
+                                .collect::<Result<Vec<_>, _>>()?;
+                            if shard_paths.is_empty() {
+                                return Err(AgentError::CertificateNotAuthorized());
+                            }
+                            shard_paths.sort_unstable();
+                            let shard_division = shard_paths.partition_point(|shard| {
+                                shard.as_bytes() <= effective_canister_id.as_slice()
+                            });
+                            if shard_division == 0 {
+                                // the certificate is not authorized to answer calls for this canister
+                                return Err(AgentError::CertificateNotAuthorized());
+                            }
+                            let max_potential_shard = &shard_paths[shard_division - 1];
+                            let canister_range = lookup_value(
+                                &canister_range_shards,
+                                [max_potential_shard.as_bytes()],
+                            )?;
+                            serde_cbor::from_slice(canister_range)
+                                .map_err(AgentError::InvalidCborData)?
+                        }
+                        // Fall back to /subnet/<subnet_id>/canister_ranges (non-sharded)
+                        Err(AgentError::LookupPathAbsent(_) | AgentError::LookupPathUnknown(_)) => {
+                            let subnet_ranges_path = [
+                                "subnet".as_bytes(),
+                                delegation.subnet_id.as_ref(),
+                                "canister_ranges".as_bytes(),
+                            ];
+                            let canister_range = lookup_value(&cert.tree, subnet_ranges_path)?;
+                            serde_cbor::from_slice(canister_range)
+                                .map_err(AgentError::InvalidCborData)?
+                        }
+                        Err(e) => return Err(e),
+                    };
                 if !principal_is_within_ranges(&effective_canister_id, &ranges[..]) {
                     // the certificate is not authorized to answer calls for this canister
                     return Err(AgentError::CertificateNotAuthorized());

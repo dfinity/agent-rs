@@ -25,8 +25,8 @@ jobs:
             binary_path: target/x86_64-apple-darwin/release
             binary_files: icx
     steps:
-    - uses: actions/checkout@v4
-    - uses: taiki-e/install-action@v2
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+    - uses: taiki-e/install-action@80e6af7a2ec7f280fffe2d0a9d3a12a9d11d86e9 # v2.75.1
       with:
         tool: cross@0.2.5
 
@@ -62,7 +62,7 @@ jobs:
 
     - name: Upload tarball
       if: ${{ github.event_name == 'push' }}
-      uses: svenstaro/upload-release-action@v2
+      uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de # 2.11.5
       with:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         file: binaries.tar.gz

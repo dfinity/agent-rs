@@ -373,6 +373,13 @@ const REQ_WITH_DELEGATED_CERT_RESPONSE: &[u8] = include_bytes!("agent_test/ivg37
 // Run the ref-tests bin prune-ranges to generate it.
 const PRUNED_RANGES: &[u8] = include_bytes!("agent_test/ivg37_time_pruned_ranges.bin");
 
+// This file is a mainnet POST response body to /api/v2/canister/ivg37-.../read_state (old format).
+// The delegation cert uses /subnet/<subnet_id>/canister_ranges instead of /canister_ranges/<subnet_id>/<shard>.
+const DELEGATED_CERT_SUBNET_RANGES: &[u8] = include_bytes!("agent_test/ivg37_delegated_v2.bin");
+// Same as above, but with /subnet/<subnet_id>/canister_ranges manually pruned.
+const DELEGATED_CERT_SUBNET_RANGES_PRUNED: &[u8] =
+    include_bytes!("agent_test/ivg37_delegated_v2_pruned_subnet.bin");
+
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 // asserts that a delegated certificate with correct /subnet/<subnetid>/canister_ranges
@@ -440,6 +447,86 @@ async fn check_subnet_range_with_pruned_range() {
         "/api/v3/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
         200,
         PRUNED_RANGES.into(),
+        Some("application/cbor"),
+    )
+    .await;
+    let agent = make_untimed_agent(&url);
+    let result = agent
+        .read_state_raw(
+            vec![REQ_WITH_DELEGATED_CERT_PATH
+                .into_iter()
+                .map(Label::from)
+                .collect()],
+            canister,
+        )
+        .await;
+    assert!(result.is_err());
+}
+
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+// asserts that a delegated certificate using the older /subnet/<subnetid>/canister_ranges path
+// passes certificate verification via the fallback path in check_delegation
+async fn check_subnet_range_fallback_valid_range() {
+    let (_read_mock, url) = mock(
+        "POST",
+        "/api/v3/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
+        200,
+        DELEGATED_CERT_SUBNET_RANGES.into(),
+        Some("application/cbor"),
+    )
+    .await;
+    let agent = make_untimed_agent(&url);
+    let _result = agent
+        .read_state_raw(
+            vec![REQ_WITH_DELEGATED_CERT_PATH
+                .into_iter()
+                .map(Label::from)
+                .collect()],
+            Principal::from_text(REQ_WITH_DELEGATED_CERT_CANISTER).unwrap(),
+        )
+        .await
+        .expect("read state failed");
+}
+
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+// asserts that a delegated certificate using /subnet/<subnetid>/canister_ranges that doesn't
+// include the canister gets rejected via the fallback path
+async fn check_subnet_range_fallback_unauthorized_range() {
+    let wrong_canister = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai").unwrap();
+    let (_read_mock, url) = mock(
+        "POST",
+        "/api/v3/canister/ryjl3-tyaaa-aaaaa-aaaba-cai/read_state",
+        200,
+        DELEGATED_CERT_SUBNET_RANGES.into(),
+        Some("application/cbor"),
+    )
+    .await;
+    let agent = make_untimed_agent(&url);
+    let result = agent
+        .read_state_raw(
+            vec![REQ_WITH_DELEGATED_CERT_PATH
+                .into_iter()
+                .map(Label::from)
+                .collect()],
+            wrong_canister,
+        )
+        .await;
+    assert_eq!(result, Err(AgentError::CertificateNotAuthorized()));
+}
+
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+// asserts that a delegated certificate with both canister range paths absent or pruned
+// fails cert verification (exercises the fallback returning an error)
+async fn check_subnet_range_fallback_pruned_range() {
+    let canister = Principal::from_text("ivg37-qiaaa-aaaab-aaaga-cai").unwrap();
+    let (_read_mock, url) = mock(
+        "POST",
+        "/api/v3/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
+        200,
+        DELEGATED_CERT_SUBNET_RANGES_PRUNED.into(),
         Some("application/cbor"),
     )
     .await;
