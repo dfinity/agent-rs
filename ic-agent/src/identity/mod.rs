@@ -7,6 +7,7 @@ pub(crate) mod anonymous;
 pub(crate) mod basic;
 pub(crate) mod delegated;
 pub(crate) mod error;
+pub(crate) mod info_aware;
 pub(crate) mod prime256v1;
 pub(crate) mod secp256k1;
 
@@ -19,7 +20,9 @@ pub use delegated::DelegatedIdentity;
 #[doc(inline)]
 pub use error::DelegationError;
 #[doc(inline)]
-pub use ic_transport_types::{Delegation, SignedDelegation};
+pub use ic_transport_types::{Delegation, SenderInfo, SignedDelegation};
+#[doc(inline)]
+pub use info_aware::InfoAwareIdentity;
 #[doc(inline)]
 pub use prime256v1::Prime256v1Identity;
 #[doc(inline)]
@@ -84,6 +87,13 @@ pub trait Identity: Send + Sync {
     fn delegation_chain(&self) -> Vec<SignedDelegation> {
         vec![]
     }
+
+    /// Returns canister-certified sender information to include in the request envelope, or `None`.
+    ///
+    /// Only implemented by [`InfoAwareIdentity`].
+    fn sender_info(&self) -> Option<SenderInfo> {
+        None
+    }
 }
 
 macro_rules! delegating_impl {
@@ -111,6 +121,10 @@ macro_rules! delegating_impl {
 
             fn delegation_chain(&$name) -> Vec<SignedDelegation> {
                 $self_expr.delegation_chain()
+            }
+
+            fn sender_info(&$name) -> Option<SenderInfo> {
+                $self_expr.sender_info()
             }
         }
     };

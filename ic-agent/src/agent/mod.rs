@@ -557,6 +557,7 @@ impl Agent {
             arg,
             ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
             nonce: use_nonce.then(|| self.nonce_factory.generate()).flatten(),
+            sender_info: self.identity.sender_info(),
         })
     }
 
@@ -700,6 +701,7 @@ impl Agent {
             nonce,
             sender: self.identity.sender().map_err(AgentError::SigningError)?,
             ingress_expiry: ingress_expiry_datetime.unwrap_or_else(|| self.get_expiry_date()),
+            sender_info: self.identity.sender_info(),
         })
     }
 
@@ -1480,6 +1482,7 @@ pub fn signed_query_inspect(
             method_name: method_name_cbor,
             arg: arg_cbor,
             nonce: _nonce,
+            sender_info: _,
         } => {
             if ingress_expiry != *ingress_expiry_cbor {
                 return Err(AgentError::CallDataMismatch {
@@ -1555,6 +1558,7 @@ pub fn signed_update_inspect(
             canister_id: canister_id_cbor,
             method_name: method_name_cbor,
             arg: arg_cbor,
+            sender_info: _,
         } => {
             if ingress_expiry != *ingress_expiry_cbor {
                 return Err(AgentError::CallDataMismatch {
@@ -1847,6 +1851,7 @@ impl<'agent> QueryBuilder<'agent> {
             method_name,
             arg,
             nonce,
+            sender_info,
         } = content
         else {
             unreachable!()
@@ -1860,6 +1865,7 @@ impl<'agent> QueryBuilder<'agent> {
             effective_canister_id,
             signed_query,
             nonce,
+            sender_info,
         })
     }
 
@@ -2035,6 +2041,7 @@ impl<'agent> UpdateBuilder<'agent> {
             canister_id,
             method_name,
             arg,
+            sender_info,
         } = content
         else {
             unreachable!()
@@ -2049,6 +2056,7 @@ impl<'agent> UpdateBuilder<'agent> {
             effective_canister_id,
             signed_update,
             request_id,
+            sender_info,
         })
     }
 

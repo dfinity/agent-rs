@@ -19,7 +19,8 @@ use crate::{
 use super::{error::DelegationError, Delegation, Identity, SignedDelegation};
 
 // OID for canister signatures per IC interface spec §Canister signatures: 1.3.6.1.4.1.56387.1.2
-const CANISTER_SIG_OID: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.3.6.1.4.1.56387.1.2");
+pub(crate) const CANISTER_SIG_OID: ObjectIdentifier =
+    ObjectIdentifier::new_unwrap("1.3.6.1.4.1.56387.1.2");
 
 /// CBOR body of a canister signature per the IC interface spec.
 ///
@@ -149,6 +150,9 @@ impl Identity for DelegatedIdentity {
         chain.extend(self.chain.iter().cloned());
         chain
     }
+    fn sender_info(&self) -> Option<ic_transport_types::SenderInfo> {
+        self.to.sender_info()
+    }
 }
 
 /// Verify one link in the delegation chain: that `delegation` was signed by the key `from_key`.
@@ -225,7 +229,9 @@ fn verify_delegation_link(
 ///
 /// Format per the IC interface spec:
 ///   `| canister_id_length (1 byte) | canister_id_bytes | seed_bytes |`
-fn parse_canister_sig_pubkey(raw: &[u8]) -> Result<(Principal, Vec<u8>), DelegationError> {
+pub(crate) fn parse_canister_sig_pubkey(
+    raw: &[u8],
+) -> Result<(Principal, Vec<u8>), DelegationError> {
     if raw.is_empty() {
         return Err(DelegationError::Parse);
     }
@@ -322,7 +328,7 @@ fn resolve_cert_key(
 /// 1. The certificate must be valid.
 /// 2. `lookup_path(["canister", canister_id, "certified_data"], cert.tree) == reconstruct(sig.tree)`.
 /// 3. `lookup_path(["sig", sha256(seed), sha256(payload)], sig.tree) == Found("")`.
-fn verify_canister_sig(
+pub(crate) fn verify_canister_sig(
     payload: &[u8],
     sig_bytes: &[u8],
     signing_canister_id: Principal,

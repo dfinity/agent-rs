@@ -16,6 +16,23 @@ use thiserror::Error;
 mod request_id;
 pub mod signed;
 
+/// Canister-certified sender information attached to a request envelope.
+///
+/// `sig` must be a canister signature (domain separator `\x0Eic-sender-info`) over the `info`
+/// field, verifiable using the envelope's `sender_pubkey` as the canister sig public key.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SenderInfo {
+    /// The sender information to be passed to the canister.
+    #[serde(with = "serde_bytes")]
+    pub info: Vec<u8>,
+    /// The principal (as raw bytes) of the canister that signed the info.
+    #[serde(with = "serde_bytes")]
+    pub signer: Vec<u8>,
+    /// A canister signature over `\x0Eic-sender-info || info`.
+    #[serde(with = "serde_bytes")]
+    pub sig: Vec<u8>,
+}
+
 /// The authentication envelope, containing the contents and their signature. This struct can be passed to `Agent`'s
 /// `*_signed` methods via [`encode_bytes`](Envelope::encode_bytes).
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -66,6 +83,9 @@ pub enum EnvelopeContent {
         /// The argument to pass to the canister method.
         #[serde(with = "serde_bytes")]
         arg: Vec<u8>,
+        /// Canister-certified sender information. See [`SenderInfo`].
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sender_info: Option<SenderInfo>,
     },
     /// A request for information from the [IC state tree](https://internetcomputer.org/docs/current/references/ic-interface-spec#state-tree).
     ReadState {
@@ -92,6 +112,9 @@ pub enum EnvelopeContent {
         /// A random series of bytes to uniquely identify this message.
         #[serde(default, skip_serializing_if = "Option::is_none", with = "serde_bytes")]
         nonce: Option<Vec<u8>>,
+        /// Canister-certified sender information. See [`SenderInfo`].
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sender_info: Option<SenderInfo>,
     },
 }
 

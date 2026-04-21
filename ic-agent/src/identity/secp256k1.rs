@@ -249,6 +249,7 @@ FRL8jv/6Kmy74w/LB+cEUhlKSzjEZsD9ltrOysyXi/jjpTlQhXEIYZor
             canister_id: "bkyz2-fmaaa-aaaaa-qaaaq-cai".parse().unwrap(),
             method_name: "greet".to_string(),
             arg: Encode!(&"world").unwrap(),
+            sender_info: None,
         };
         let signature = identity
             .sign(&message)

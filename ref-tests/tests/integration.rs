@@ -55,6 +55,7 @@ async fn wait_signed() {
             nonce: None,
             canister_id,
             method_name: "update".to_string(),
+            sender_info: None,
         };
 
         let call_request_id = call_envelope_content.to_request_id();

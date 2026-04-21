@@ -1,6 +1,6 @@
 //! Types representing signed messages.
 
-use crate::request_id::RequestId;
+use crate::{request_id::RequestId, SenderInfo};
 use candid::Principal;
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +32,9 @@ pub struct SignedQuery {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(with = "serde_bytes")]
     pub nonce: Option<Vec<u8>>,
+    /// Canister-certified sender information included in the request content.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_info: Option<SenderInfo>,
 }
 
 /// A signed update request message. Produced by
@@ -64,6 +67,9 @@ pub struct SignedUpdate {
     pub signed_update: Vec<u8>,
     /// The request ID.
     pub request_id: RequestId,
+    /// Canister-certified sender information included in the request content.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_info: Option<SenderInfo>,
 }
 
 /// A signed request-status request message. Produced by
@@ -102,6 +108,7 @@ mod tests {
             effective_canister_id: Principal::management_canister(),
             signed_query: vec![0, 1, 2, 3],
             nonce: None,
+            sender_info: None,
         };
         let serialized = serde_json::to_string(&query).unwrap();
         let deserialized = serde_json::from_str::<SignedQuery>(&serialized);
@@ -120,6 +127,7 @@ mod tests {
             effective_canister_id: Principal::management_canister(),
             signed_update: vec![0, 1, 2, 3],
             request_id: RequestId::new(&[0; 32]),
+            sender_info: None,
         };
         let serialized = serde_json::to_string(&update).unwrap();
         let deserialized = serde_json::from_str::<SignedUpdate>(&serialized);

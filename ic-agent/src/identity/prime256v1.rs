@@ -251,6 +251,7 @@ VwidXc26G4+/g7dUbMwbN4E3d3bpxHEP31M+2by6jY67MqFKKroR
             canister_id: "bkyz2-fmaaa-aaaaa-qaaaq-cai".parse().unwrap(),
             method_name: "greet".to_string(),
             arg: Encode!(&"world").unwrap(),
+            sender_info: None,
         };
         let signature = identity
             .sign(&message)
