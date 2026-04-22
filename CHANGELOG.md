@@ -8,7 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.47.2] - 2026-04-22
+
 * `ic-agent`: Added `InfoAwareIdentity` and `Identity::sender_info` for setting canister-certified sender info.
+* `ic-agent`: Added PKCS#8 pem parsing to `Secp256k1Identity` and `Prime256v1Identity`.
 
 ## [0.47.0] - 2026-03-23
 
