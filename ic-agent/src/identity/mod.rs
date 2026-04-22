@@ -90,7 +90,7 @@ pub trait Identity: Send + Sync {
 
     /// Returns canister-certified sender information to include in the request envelope, or `None`.
     ///
-    /// Only implemented by [`InfoAwareIdentity`].
+    /// See [`InfoAwareIdentity`].
     fn sender_info(&self) -> Option<SenderInfo> {
         None
     }
