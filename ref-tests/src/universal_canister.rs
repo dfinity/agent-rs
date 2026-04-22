@@ -107,6 +107,8 @@ enum Ops {
     SetOnLowWasmMemoryMethod = 95,
     WasmMemoryGrow = 96,
     CostHttpRequestV2 = 97,
+    MsgCallerInfoData = 98,
+    MsgCallerInfoSigner = 99,
 }
 
 /// A succinct shortcut for creating a `PayloadBuilder`, which is used to encode
@@ -270,6 +272,16 @@ impl PayloadBuilder {
     /// Pop offset (i32) and size (i32), push the corresponding slice of the caller blob.
     pub fn msg_caller_copy(self) -> Self {
         self.op(Ops::MsgCallerCopy)
+    }
+
+    /// Push the caller info data blob (ic0.msg_caller_info_data_*).
+    pub fn msg_caller_info_data(self) -> Self {
+        self.op(Ops::MsgCallerInfoData)
+    }
+
+    /// Push the caller info signer blob (ic0.msg_caller_info_signer_*).
+    pub fn msg_caller_info_signer(self) -> Self {
+        self.op(Ops::MsgCallerInfoSigner)
     }
 
     /// Push the reject message size.

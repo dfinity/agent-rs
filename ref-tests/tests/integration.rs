@@ -878,4 +878,132 @@ mod identity {
         })
         .await
     }
+
+    #[tokio::test]
+    async fn sender_info_via_canister_sig() {
+        use ic_agent::identity::InfoAwareIdentity;
+        use ic_certification::{fork, labeled, leaf};
+        use sha2::{Digest, Sha256};
+
+        with_universal_canister(async |pic, agent, canister_id| {
+            let root_key = agent
+                .status()
+                .await?
+                .root_key
+                .expect("root_key should be present in status");
+
+            // The seed identifies this key slot within the canister. A single seed is reused for
+            // both the delegation signature and the sender info signature — the combined tree
+            // covers both message hashes under the same seed hash.
+            let seed: &[u8] = b"sender-info-test";
+            let from_key = canister_sig_pubkey_der(canister_id, seed);
+
+            let signing_identity = create_basic_identity();
+
+            let delegation = Delegation {
+                pubkey: signing_identity.public_key().unwrap(),
+                expiration: i64::MAX as u64,
+                targets: None,
+            };
+
+            // Compute hash of the delegation message.
+            let deleg_msg = delegation.signable();
+            let seed_hash: [u8; 32] = Sha256::digest(seed).into();
+            let deleg_hash: [u8; 32] = Sha256::digest(&deleg_msg).into();
+
+            // Compute hash of the sender info payload: domain_sep || b"test".
+            let sender_info_data: &[u8] = b"test";
+            let mut sender_info_payload =
+                Vec::with_capacity(b"\x0Eic-sender-info".len() + sender_info_data.len());
+            sender_info_payload.extend_from_slice(b"\x0Eic-sender-info");
+            sender_info_payload.extend_from_slice(sender_info_data);
+            let sender_info_hash: [u8; 32] = Sha256::digest(&sender_info_payload).into();
+
+            // Build a combined signature tree covering both messages under the same seed.
+            // The certified_data is the digest of this tree; the same CBOR envelope is valid
+            // for both the delegation lookup and the sender info lookup.
+            //
+            // Hash tree lookup assumes sorted label order within a fork, so put the
+            // lexicographically smaller hash on the left.
+            let (left_hash, right_hash): (&[u8], &[u8]) = if deleg_hash <= sender_info_hash {
+                (&deleg_hash, &sender_info_hash)
+            } else {
+                (&sender_info_hash, &deleg_hash)
+            };
+            let sig_tree = labeled(
+                "sig",
+                labeled(
+                    seed_hash.as_ref(),
+                    fork(
+                        labeled(left_hash, leaf(vec![])),
+                        labeled(right_hash, leaf(vec![])),
+                    ),
+                ),
+            );
+
+            agent
+                .update(&canister_id, "update")
+                .with_arg(
+                    payload()
+                        .push_bytes(&sig_tree.digest())
+                        .certified_data_set()
+                        .reply()
+                        .build(),
+                )
+                .call_and_wait()
+                .await?;
+
+            let data_cert_bytes = agent
+                .query(&canister_id, "query")
+                .with_arg(payload().data_certificate().append_and_reply().build())
+                .call()
+                .await?;
+
+            let mut canister_sig = vec![0xd9u8, 0xd9, 0xf7];
+            serde_cbor::to_writer(
+                &mut canister_sig,
+                &CanisterSigEnvelope {
+                    certificate: &data_cert_bytes,
+                    tree: &sig_tree,
+                },
+            )?;
+
+            // The delegated identity presents the canister sig key as its public key; the inner
+            // signing_identity actually signs envelopes via the delegation chain.
+            let delegated_identity = DelegatedIdentity::new_with_root_key(
+                from_key,
+                Box::new(signing_identity),
+                vec![SignedDelegation {
+                    delegation,
+                    signature: canister_sig.clone(),
+                }],
+                &root_key,
+            )
+            .expect("canister signature delegation chain should be valid");
+
+            // Wrap the delegated identity so every request carries certified sender info.
+            // The same canister_sig is valid for the sender info lookup in the combined tree.
+            let info_identity = InfoAwareIdentity::new_with_root_key(
+                delegated_identity,
+                sender_info_data.to_vec(),
+                canister_sig,
+                &root_key,
+            )
+            .expect("sender info canister signature should be valid");
+
+            let info_agent = create_agent(pic, info_identity).await?;
+
+            // The UC reads the caller's sender info data blob and returns it in the reply.
+            let resp = info_agent
+                .query(&canister_id, "query")
+                .with_arg(payload().msg_caller_info_data().append_and_reply().build())
+                .call()
+                .await?;
+
+            assert_eq!(resp, sender_info_data);
+
+            Ok(())
+        })
+        .await
+    }
 }
