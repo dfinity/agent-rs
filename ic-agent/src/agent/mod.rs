@@ -381,6 +381,24 @@ impl Agent {
         serde_cbor::from_slice(&response_body).map_err(AgentError::InvalidCborData)
     }
 
+    async fn call_subnet_endpoint(
+        &self,
+        subnet_id: Principal,
+        serialized_bytes: Vec<u8>,
+    ) -> Result<TransportCallResponse, AgentError> {
+        let _permit = self.concurrent_requests_semaphore.acquire().await;
+        let endpoint = format!("api/v4/subnet/{}/call", subnet_id.to_text());
+        let (status_code, response_body) = self
+            .execute(Method::POST, &endpoint, Some(serialized_bytes))
+            .await?;
+
+        if status_code == StatusCode::ACCEPTED {
+            return Ok(TransportCallResponse::Accepted);
+        }
+
+        serde_cbor::from_slice(&response_body).map_err(AgentError::InvalidCborData)
+    }
+
     /// The simplest way to do a query call; sends a byte array and will return a byte vector.
     /// The encoding is left as an exercise to the user.
     #[allow(clippy::too_many_arguments)]
@@ -686,6 +704,73 @@ impl Agent {
         }
     }
 
+    /// Send the signed update to the subnet-scoped call endpoint (`/api/v4/subnet/<subnet_id>/call`).
+    /// Sibling of [`update_signed`](Self::update_signed); use this when routing via an effective
+    /// subnet id. Per the [interface spec], this endpoint only accepts canister creation calls to
+    /// the Management Canister.
+    ///
+    /// [interface spec]: https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-subnet-id
+    pub async fn update_signed_subnet(
+        &self,
+        subnet_id: Principal,
+        signed_update: Vec<u8>,
+    ) -> Result<CallResponse<Vec<u8>>, AgentError> {
+        let envelope: Envelope =
+            serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
+        let EnvelopeContent::Call {
+            canister_id,
+            method_name,
+            ..
+        } = &*envelope.content
+        else {
+            return Err(AgentError::CallDataMismatch {
+                field: "request_type".to_string(),
+                value_arg: "update".to_string(),
+                value_cbor: if matches!(*envelope.content, EnvelopeContent::Query { .. }) {
+                    "query"
+                } else {
+                    "read_state"
+                }
+                .to_string(),
+            });
+        };
+        let operation = Some(Operation::Call {
+            canister: *canister_id,
+            method: method_name.clone(),
+        });
+        let request_id = to_request_id(&envelope.content)?;
+
+        let response_body = self.call_subnet_endpoint(subnet_id, signed_update).await?;
+
+        match response_body {
+            TransportCallResponse::Replied { certificate } => {
+                let certificate =
+                    serde_cbor::from_slice(&certificate).map_err(AgentError::InvalidCborData)?;
+
+                self.verify_for_subnet(&certificate, subnet_id)?;
+                let status = lookup_request_status(&certificate, &request_id)?;
+
+                match status {
+                    RequestStatusResponse::Replied(reply) => Ok(CallResponse::Response(reply.arg)),
+                    RequestStatusResponse::Rejected(reject_response) => {
+                        Err(AgentError::CertifiedReject {
+                            reject: reject_response,
+                            operation,
+                        })?
+                    }
+                    _ => Ok(CallResponse::Poll(request_id)),
+                }
+            }
+            TransportCallResponse::Accepted => Ok(CallResponse::Poll(request_id)),
+            TransportCallResponse::NonReplicatedRejection(reject_response) => {
+                Err(AgentError::UncertifiedReject {
+                    reject: reject_response,
+                    operation,
+                })
+            }
+        }
+    }
+
     fn update_content(
         &self,
         canister_id: Principal,
@@ -735,6 +820,65 @@ impl Agent {
             match resp {
                 RequestStatusResponse::Unknown => {
                     // If status is still `Unknown` after 5 minutes, the ingress message is lost.
+                    if retry_policy.get_elapsed_time() > Duration::from_secs(5 * 60) {
+                        return Err(AgentError::TimeoutWaitingForResponse());
+                    }
+                }
+
+                RequestStatusResponse::Received | RequestStatusResponse::Processing => {
+                    if !request_accepted {
+                        retry_policy.reset();
+                        request_accepted = true;
+                    }
+                }
+
+                RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => {
+                    return Ok((arg, cert))
+                }
+
+                RequestStatusResponse::Rejected(response) => {
+                    return Err(AgentError::CertifiedReject {
+                        reject: response,
+                        operation: None,
+                    })
+                }
+
+                RequestStatusResponse::Done => {
+                    return Err(AgentError::RequestStatusDoneNoReply(String::from(
+                        *request_id,
+                    )))
+                }
+            };
+
+            match retry_policy.next_backoff() {
+                Some(duration) => crate::util::sleep(duration).await,
+
+                None => return Err(AgentError::TimeoutWaitingForResponse()),
+            }
+        }
+    }
+
+    /// Sibling of [`wait_signed`](Self::wait_signed) that polls the subnet-scoped
+    /// read_state endpoint (`/api/v3/subnet/<subnet_id>/read_state`).
+    pub async fn wait_signed_subnet(
+        &self,
+        request_id: &RequestId,
+        subnet_id: Principal,
+        signed_request_status: Vec<u8>,
+    ) -> Result<(Vec<u8>, Certificate), AgentError> {
+        let mut retry_policy = self.get_retry_policy();
+
+        let mut request_accepted = false;
+        loop {
+            let (resp, cert) = self
+                .request_status_signed_subnet(
+                    request_id,
+                    subnet_id,
+                    signed_request_status.clone(),
+                )
+                .await?;
+            match resp {
+                RequestStatusResponse::Unknown => {
                     if retry_policy.get_elapsed_time() > Duration::from_secs(5 * 60) {
                         return Err(AgentError::TimeoutWaitingForResponse());
                     }
@@ -1190,6 +1334,27 @@ impl Agent {
         Ok((lookup_request_status(&cert, request_id)?, cert))
     }
 
+    /// Sibling of [`request_status_signed`](Self::request_status_signed) that reads from the
+    /// subnet-scoped endpoint (`/api/v3/subnet/<subnet_id>/read_state`). The returned certificate
+    /// is verified against `subnet_id` rather than against canister range membership.
+    pub async fn request_status_signed_subnet(
+        &self,
+        request_id: &RequestId,
+        subnet_id: Principal,
+        signed_request_status: Vec<u8>,
+    ) -> Result<(RequestStatusResponse, Certificate), AgentError> {
+        let _envelope: Envelope =
+            serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
+        let read_state_response: ReadStateResponse = self
+            .read_subnet_state_endpoint(subnet_id, signed_request_status)
+            .await?;
+
+        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
+            .map_err(AgentError::InvalidCborData)?;
+        self.verify_for_subnet(&cert, subnet_id)?;
+        Ok((lookup_request_status(&cert, request_id)?, cert))
+    }
+
     /// Returns an `UpdateBuilder` enabling the construction of an update call without
     /// passing all arguments.
     pub fn update<S: Into<String>>(
@@ -1222,10 +1387,13 @@ impl Agent {
     }
 
     /// Sign a `request_status` call. This will return a [`signed::SignedRequestStatus`]
-    /// which contains all fields of the `request_status` and the signed `request_status` in CBOR encoding
+    /// which contains all fields of the `request_status` and the signed `request_status` in CBOR encoding.
+    ///
+    /// `effective_id` may be either an effective canister ID or an effective subnet ID,
+    /// depending on which endpoint the caller will submit the signed message to.
     pub fn sign_request_status(
         &self,
-        effective_canister_id: Principal,
+        effective_id: Principal,
         request_id: RequestId,
     ) -> Result<SignedRequestStatus, AgentError> {
         let paths: Vec<Vec<Label>> =
@@ -1237,7 +1405,7 @@ impl Agent {
         Ok(SignedRequestStatus {
             ingress_expiry,
             sender,
-            effective_canister_id,
+            effective_canister_id: effective_id,
             request_id,
             signed_request_status,
         })

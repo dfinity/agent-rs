@@ -82,7 +82,11 @@ pub struct SignedRequestStatus {
     pub ingress_expiry: u64,
     /// The principal ID of the caller.
     pub sender: Principal,
-    /// The [effective canister ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-canister-id) of the destination.
+    /// The [effective canister ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-canister-id)
+    /// of the destination. Despite the name, this may also hold an
+    /// [effective subnet ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-subnet-id)
+    /// when the underlying `request_status` targets a subnet-scoped endpoint
+    /// (e.g., when passed to [`Agent::request_status_signed_subnet`](https://docs.rs/ic-agent/latest/ic_agent/struct.Agent.html#method.request_status_signed_subnet)).
     pub effective_canister_id: Principal,
     /// The request ID.
     pub request_id: RequestId,
