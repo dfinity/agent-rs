@@ -1610,7 +1610,7 @@ dependencies = [
  "ic-agent",
  "ic-utils",
  "ic-utils-bindgen",
- "pocket-ic",
+ "pocket-ic 13.0.0 (git+https://github.com/dfinity/ic?rev=62e841d27ea12451f504e74c54843b7cbf93ca4d)",
  "ref-tests",
  "serde",
  "tokio",
@@ -1753,7 +1753,7 @@ dependencies = [
  "ic-agent",
  "ic-ed25519",
  "ic-utils",
- "pocket-ic",
+ "pocket-ic 13.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde_json",
  "tokio",
@@ -2534,6 +2534,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "pocket-ic"
+version = "13.0.0"
+source = "git+https://github.com/dfinity/ic?rev=62e841d27ea12451f504e74c54843b7cbf93ca4d#62e841d27ea12451f504e74c54843b7cbf93ca4d"
+dependencies = [
+ "backoff",
+ "base64 0.13.1",
+ "candid",
+ "flate2",
+ "hex",
+ "ic-certification",
+ "ic-management-canister-types 0.5.0",
+ "ic-transport-types 0.45.0",
+ "reqwest 0.12.28",
+ "schemars",
+ "semver",
+ "serde",
+ "serde_cbor",
+ "serde_json",
+ "sha2 0.10.9",
+ "slog",
+ "strum 0.26.3",
+ "strum_macros 0.26.4",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "wslpath",
+]
+
+[[package]]
 name = "potential_utf"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2804,7 +2836,7 @@ dependencies = [
  "ic-utils",
  "k256",
  "p256",
- "pocket-ic",
+ "pocket-ic 13.0.0 (git+https://github.com/dfinity/ic?rev=62e841d27ea12451f504e74c54843b7cbf93ca4d)",
  "rand 0.10.1",
  "serde",
  "serde_bytes",
