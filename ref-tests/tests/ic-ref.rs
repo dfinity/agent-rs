@@ -84,6 +84,33 @@ mod management_canister {
         }
 
         #[tokio::test]
+        async fn create_canister_with_effective_subnet_id() {
+            use ref_tests::{create_basic_identity, with_subnet_admin_agent};
+
+            let admin_identity = create_basic_identity();
+            with_subnet_admin_agent(admin_identity, async move |pic, agent, subnet_id| {
+                let ic00 = ManagementCanister::create(&agent);
+
+                let (canister_id,) = ic00
+                    .create_canister()
+                    .as_provisional_create_with_amount(None)
+                    .with_effective_subnet_id(subnet_id)
+                    .call_and_wait()
+                    .await?;
+
+                let actual_subnet = pic
+                    .topology()
+                    .await
+                    .get_subnet(canister_id)
+                    .expect("created canister has a subnet");
+                assert_eq!(actual_subnet, subnet_id);
+
+                Ok(())
+            })
+            .await
+        }
+
+        #[tokio::test]
         async fn create_canister_necessary() {
             with_agent(async move |_, agent| {
                 let ic00 = ManagementCanister::create(&agent);
