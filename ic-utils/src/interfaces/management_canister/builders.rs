@@ -566,11 +566,11 @@ impl<'agent, 'canister: 'agent> AsyncCall for CreateCanisterBuilder<'agent, 'can
     type Value = (Principal,);
 
     async fn call(self) -> Result<CallResponse<(Principal,)>, AgentError> {
-        self.build()?.call().await
+        self.call().await
     }
 
     async fn call_and_wait(self) -> Result<(Principal,), AgentError> {
-        self.build()?.call_and_wait().await
+        self.call_and_wait().await
     }
 }
 
@@ -579,7 +579,7 @@ impl<'agent, 'canister: 'agent> IntoFuture for CreateCanisterBuilder<'agent, 'ca
     type Output = Result<(Principal,), AgentError>;
 
     fn into_future(self) -> Self::IntoFuture {
-        AsyncCall::call_and_wait(self)
+        Box::pin(self.call_and_wait())
     }
 }
 
