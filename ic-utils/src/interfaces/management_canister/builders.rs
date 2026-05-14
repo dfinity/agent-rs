@@ -34,7 +34,9 @@ use std::{
 #[derive(Debug)]
 pub struct CreateCanisterBuilder<'agent, 'canister: 'agent> {
     canister: &'canister Canister<'agent>,
-    effective_canister_id: Principal,
+    /// For most use cases, this is `effective_canister_id`, the call will create a canister on the same subnet of it.
+    /// Subnet administrators can directly set effective_subnet_id and the canister will be created on the specified subnet.
+    effective_id: Principal,
     controllers: Option<Result<Vec<Principal>, AgentError>>,
     compute_allocation: Option<Result<ComputeAllocation, AgentError>>,
     memory_allocation: Option<Result<MemoryAllocation, AgentError>>,
@@ -55,7 +57,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
     pub fn builder(canister: &'canister Canister<'agent>) -> Self {
         Self {
             canister,
-            effective_canister_id: Principal::management_canister(),
+            effective_id: Principal::management_canister(),
             controllers: None,
             compute_allocation: None,
             memory_allocation: None,
@@ -95,12 +97,17 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         Self {
             is_provisional_create: true,
             specified_id: Some(specified_id),
-            effective_canister_id: specified_id,
+            effective_id: specified_id,
             ..self
         }
     }
 
     /// Pass in an effective canister id for the update call.
+    ///
+    /// Boundary nodes use the effective {canister / subnet} id to route the request to the target subnet.
+    ///
+    /// This method and [`Self::with_effective_subnet_id`] share the same underlying field, so only
+    /// the last call among them takes effect; earlier calls are shadowed.
     pub fn with_effective_canister_id<C, E>(self, effective_canister_id: C) -> Self
     where
         E: std::fmt::Display,
@@ -108,7 +115,29 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
     {
         match effective_canister_id.try_into() {
             Ok(effective_canister_id) => Self {
-                effective_canister_id,
+                effective_id: effective_canister_id,
+                ..self
+            },
+            Err(_) => self,
+        }
+    }
+
+    /// Pass in an effective subnet id for the update call.
+    ///
+    /// The constructed `create_canister` call is only valid if the caller has subnet administrator permissions.
+    ///
+    /// Boundary nodes use the effective {canister / subnet} id to route the request to the target subnet.
+    ///
+    /// This method and [`Self::with_effective_canister_id`] share the same underlying field, so only
+    /// the last call among them takes effect; earlier calls are shadowed.
+    pub fn with_effective_subnet_id<C, E>(self, effective_subnet_id: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<Principal, Error = E>,
+    {
+        match effective_subnet_id.try_into() {
+            Ok(subnet_id) => Self {
+                effective_id: subnet_id,
                 ..self
             },
             Err(_) => self,
@@ -368,7 +397,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             self.canister
                 .update(MgmtMethod::ProvisionalCreateCanisterWithCycles.as_ref())
                 .with_arg(in_arg)
-                .with_effective_canister_id(self.effective_canister_id)
+                .with_effective_canister_id(self.effective_id)
         } else {
             self.canister
                 .update(MgmtMethod::CreateCanister.as_ref())
@@ -384,7 +413,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     log_memory_limit,
                     environment_variables,
                 })
-                .with_effective_canister_id(self.effective_canister_id)
+                .with_effective_canister_id(self.effective_id)
         };
 
         Ok(async_builder
