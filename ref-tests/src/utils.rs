@@ -200,13 +200,13 @@ where
     let admin_principal = admin_identity
         .sender()
         .expect("admin identity has a sender principal");
-    let mut config = ExtendedSubnetConfigSet::default();
-    config.nns = Some(SubnetSpec::default());
-    config.cloud_engine.push(
-        SubnetSpec::default()
+    let config = ExtendedSubnetConfigSet {
+        nns: Some(SubnetSpec::default()),
+        cloud_engine: vec![SubnetSpec::default()
             .with_subnet_admins(vec![admin_principal])
-            .with_cost_schedule(CanisterCyclesCostSchedule::Free),
-    );
+            .with_cost_schedule(CanisterCyclesCostSchedule::Free)],
+        ..Default::default()
+    };
     let pic = PocketIcBuilder::new_with_config(config)
         .with_server_binary(format!("{}/assets/pocket-ic", env!("CARGO_MANIFEST_DIR")).into())
         .with_auto_progress()

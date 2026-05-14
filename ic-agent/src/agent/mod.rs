@@ -871,11 +871,7 @@ impl Agent {
         let mut request_accepted = false;
         loop {
             let (resp, cert) = self
-                .request_status_signed_subnet(
-                    request_id,
-                    subnet_id,
-                    signed_request_status.clone(),
-                )
+                .request_status_signed_subnet(request_id, subnet_id, signed_request_status.clone())
                 .await?;
             match resp {
                 RequestStatusResponse::Unknown => {

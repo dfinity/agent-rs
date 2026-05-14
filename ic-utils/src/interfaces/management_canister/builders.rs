@@ -356,7 +356,13 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             EffectiveId::Canister(_) => self.build()?.call().await,
             EffectiveId::Subnet(subnet_id) => {
                 let prepared = self.prepare()?;
-                let response = subnet_call(prepared.canister, prepared.method, prepared.arg_bytes, subnet_id).await?;
+                let response = subnet_call(
+                    prepared.canister,
+                    prepared.method,
+                    prepared.arg_bytes,
+                    subnet_id,
+                )
+                .await?;
                 match response {
                     CallResponse::Response(bytes) => {
                         let (out,): (CreateCanisterOut,) = decode_args(&bytes)
@@ -375,7 +381,13 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             EffectiveId::Canister(_) => self.build()?.call_and_wait().await,
             EffectiveId::Subnet(subnet_id) => {
                 let prepared = self.prepare()?;
-                subnet_call_and_wait(prepared.canister, prepared.method, prepared.arg_bytes, subnet_id).await
+                subnet_call_and_wait(
+                    prepared.canister,
+                    prepared.method,
+                    prepared.arg_bytes,
+                    subnet_id,
+                )
+                .await
             }
         }
     }
@@ -520,11 +532,7 @@ async fn subnet_call_and_wait(
         CallResponse::Poll(request_id) => {
             let signed_status = agent.sign_request_status(subnet_id, request_id)?;
             agent
-                .wait_signed_subnet(
-                    &request_id,
-                    subnet_id,
-                    signed_status.signed_request_status,
-                )
+                .wait_signed_subnet(&request_id, subnet_id, signed_status.signed_request_status)
                 .await?
                 .0
         }
