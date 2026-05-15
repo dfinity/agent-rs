@@ -11,13 +11,17 @@ use crate::{
     call::AsyncCall, canister::Argument, interfaces::management_canister::MgmtMethod, Canister,
 };
 use async_trait::async_trait;
-use candid::{utils::ArgumentEncoder, CandidType, Deserialize, Nat};
+use candid::{decode_args, utils::ArgumentEncoder, CandidType, Deserialize, Encode, Nat};
 use futures_util::{
     future::ready,
     stream::{self, FuturesUnordered},
     FutureExt, Stream, StreamExt, TryStreamExt,
 };
-use ic_agent::{agent::CallResponse, export::Principal, AgentError};
+use ic_agent::{
+    agent::{CallResponse, EffectiveId},
+    export::Principal,
+    AgentError,
+};
 pub use ic_management_canister_types::{
     CanisterInstallMode, CanisterSettings, EnvironmentVariable, InstallCodeArgs, UpgradeFlags,
     WasmMemoryPersistence,
@@ -34,7 +38,9 @@ use std::{
 #[derive(Debug)]
 pub struct CreateCanisterBuilder<'agent, 'canister: 'agent> {
     canister: &'canister Canister<'agent>,
-    effective_canister_id: Principal,
+    /// For most use cases, this is `effective_canister_id`, the call will create a canister on the same subnet of it.
+    /// Subnet administrators can directly set effective_subnet_id and the canister will be created on the specified subnet.
+    effective_id: EffectiveId,
     controllers: Option<Result<Vec<Principal>, AgentError>>,
     compute_allocation: Option<Result<ComputeAllocation, AgentError>>,
     memory_allocation: Option<Result<MemoryAllocation, AgentError>>,
@@ -55,7 +61,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
     pub fn builder(canister: &'canister Canister<'agent>) -> Self {
         Self {
             canister,
-            effective_canister_id: Principal::management_canister(),
+            effective_id: EffectiveId::Canister(Principal::management_canister()),
             controllers: None,
             compute_allocation: None,
             memory_allocation: None,
@@ -89,18 +95,28 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
 
     /// Specify the canister id.
     ///
-    /// The `effective_canister_id` will also be set with the same value so that ic-ref can determine
+    /// The effective canister id will also be set to the same value so that ic-ref can determine
     /// the target subnet of this request. The replica implementation ignores it.
+    ///
+    /// This overwrites the effective id previously set by [`Self::with_effective_canister_id`] or
+    /// [`Self::with_effective_subnet_id`] (and is itself overwritten by any later call to those).
+    /// Only the last call among the three takes effect.
     pub fn as_provisional_create_with_specified_id(self, specified_id: Principal) -> Self {
         Self {
             is_provisional_create: true,
             specified_id: Some(specified_id),
-            effective_canister_id: specified_id,
+            effective_id: EffectiveId::Canister(specified_id),
             ..self
         }
     }
 
     /// Pass in an effective canister id for the update call.
+    ///
+    /// Boundary nodes use the effective {canister / subnet} id to route the request to the target subnet.
+    ///
+    /// This method, [`Self::with_effective_subnet_id`], and [`Self::as_provisional_create_with_specified_id`]
+    /// all write to the same underlying field, so only the last call among them takes effect; earlier
+    /// calls are silently shadowed.
     pub fn with_effective_canister_id<C, E>(self, effective_canister_id: C) -> Self
     where
         E: std::fmt::Display,
@@ -108,7 +124,30 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
     {
         match effective_canister_id.try_into() {
             Ok(effective_canister_id) => Self {
-                effective_canister_id,
+                effective_id: EffectiveId::Canister(effective_canister_id),
+                ..self
+            },
+            Err(_) => self,
+        }
+    }
+
+    /// Pass in an effective subnet id for the update call.
+    ///
+    /// The constructed `create_canister` call is only valid if the caller has subnet administrator permissions.
+    ///
+    /// Boundary nodes use the effective {canister / subnet} id to route the request to the target subnet.
+    ///
+    /// This method, [`Self::with_effective_canister_id`], and [`Self::as_provisional_create_with_specified_id`]
+    /// all write to the same underlying field, so only the last call among them takes effect; earlier
+    /// calls are silently shadowed.
+    pub fn with_effective_subnet_id<C, E>(self, effective_subnet_id: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<Principal, Error = E>,
+    {
+        match effective_subnet_id.try_into() {
+            Ok(subnet_id) => Self {
+                effective_id: EffectiveId::Subnet(subnet_id),
                 ..self
             },
             Err(_) => self,
@@ -285,7 +324,74 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
 
     /// Create an [`AsyncCall`] implementation that, when called, will create a
     /// canister.
+    ///
+    /// Returns an error when the builder was configured with [`Self::with_effective_subnet_id`];
+    /// the subnet-scoped routing requires direct dispatch via [`Self::call`] or
+    /// [`Self::call_and_wait`] and is not expressible through the generic [`AsyncCall`] surface.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = (Principal,)>, AgentError> {
+        let prepared = self.prepare()?;
+        let effective_canister_id = match prepared.effective_id {
+            EffectiveId::Canister(p) => p,
+            EffectiveId::Subnet(_) => {
+                return Err(AgentError::MessageError(
+                    "CreateCanisterBuilder::build() does not support subnet routing; \
+                     use call()/call_and_wait() instead."
+                        .into(),
+                ));
+            }
+        };
+        Ok(prepared
+            .canister
+            .update(prepared.method)
+            .with_arg_raw(prepared.arg_bytes)
+            .with_effective_canister_id(effective_canister_id)
+            .build()
+            .map(|result: (CreateCanisterOut,)| (result.0.canister_id,)))
+    }
+
+    /// Make a call. This is equivalent to the [`AsyncCall::call`].
+    pub async fn call(self) -> Result<CallResponse<(Principal,)>, AgentError> {
+        match self.effective_id {
+            EffectiveId::Canister(_) => self.build()?.call().await,
+            EffectiveId::Subnet(subnet_id) => {
+                let prepared = self.prepare()?;
+                let response = subnet_call(
+                    prepared.canister,
+                    prepared.method,
+                    prepared.arg_bytes,
+                    subnet_id,
+                )
+                .await?;
+                match response {
+                    CallResponse::Response(bytes) => {
+                        let (out,): (CreateCanisterOut,) = decode_args(&bytes)
+                            .map_err(|e| AgentError::CandidError(Box::new(e)))?;
+                        Ok(CallResponse::Response((out.canister_id,)))
+                    }
+                    CallResponse::Poll(request_id) => Ok(CallResponse::Poll(request_id)),
+                }
+            }
+        }
+    }
+
+    /// Make a call. This is equivalent to the [`AsyncCall::call_and_wait`].
+    pub async fn call_and_wait(self) -> Result<(Principal,), AgentError> {
+        match self.effective_id {
+            EffectiveId::Canister(_) => self.build()?.call_and_wait().await,
+            EffectiveId::Subnet(subnet_id) => {
+                let prepared = self.prepare()?;
+                subnet_call_and_wait(
+                    prepared.canister,
+                    prepared.method,
+                    prepared.arg_bytes,
+                    subnet_id,
+                )
+                .await
+            }
+        }
+    }
+
+    fn prepare(self) -> Result<PreparedCreate<'agent, 'canister>, AgentError> {
         let controllers = match self.controllers {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(x),
@@ -337,12 +443,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             None => None,
         };
 
-        #[derive(Deserialize, CandidType)]
-        struct Out {
-            canister_id: Principal,
-        }
-
-        let async_builder = if self.is_provisional_create {
+        let (method, arg_bytes) = if self.is_provisional_create {
             #[derive(CandidType)]
             struct In {
                 amount: Option<Nat>,
@@ -360,47 +461,107 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     wasm_memory_limit,
                     wasm_memory_threshold,
                     log_visibility,
-                    log_memory_limit: log_memory_limit.clone(),
+                    log_memory_limit,
                     environment_variables,
                 },
                 specified_id: self.specified_id,
             };
-            self.canister
-                .update(MgmtMethod::ProvisionalCreateCanisterWithCycles.as_ref())
-                .with_arg(in_arg)
-                .with_effective_canister_id(self.effective_canister_id)
+            (
+                MgmtMethod::ProvisionalCreateCanisterWithCycles.as_ref(),
+                Encode!(&in_arg).map_err(|e| AgentError::CandidError(Box::new(e)))?,
+            )
         } else {
-            self.canister
-                .update(MgmtMethod::CreateCanister.as_ref())
-                .with_arg(CanisterSettings {
-                    controllers,
-                    compute_allocation,
-                    memory_allocation,
-                    freezing_threshold,
-                    reserved_cycles_limit,
-                    wasm_memory_limit,
-                    wasm_memory_threshold,
-                    log_visibility,
-                    log_memory_limit,
-                    environment_variables,
-                })
-                .with_effective_canister_id(self.effective_canister_id)
+            let settings = CanisterSettings {
+                controllers,
+                compute_allocation,
+                memory_allocation,
+                freezing_threshold,
+                reserved_cycles_limit,
+                wasm_memory_limit,
+                wasm_memory_threshold,
+                log_visibility,
+                log_memory_limit,
+                environment_variables,
+            };
+            (
+                MgmtMethod::CreateCanister.as_ref(),
+                Encode!(&settings).map_err(|e| AgentError::CandidError(Box::new(e)))?,
+            )
         };
 
-        Ok(async_builder
-            .build()
-            .map(|result: (Out,)| (result.0.canister_id,)))
+        Ok(PreparedCreate {
+            canister: self.canister,
+            effective_id: self.effective_id,
+            method,
+            arg_bytes,
+        })
     }
+}
 
-    /// Make a call. This is equivalent to the [`AsyncCall::call`].
-    pub async fn call(self) -> Result<CallResponse<(Principal,)>, AgentError> {
-        self.build()?.call().await
-    }
+#[derive(Deserialize, CandidType)]
+struct CreateCanisterOut {
+    canister_id: Principal,
+}
 
-    /// Make a call. This is equivalent to the [`AsyncCall::call_and_wait`].
-    pub async fn call_and_wait(self) -> Result<(Principal,), AgentError> {
-        self.build()?.call_and_wait().await
-    }
+struct PreparedCreate<'agent, 'canister> {
+    canister: &'canister Canister<'agent>,
+    effective_id: EffectiveId,
+    method: &'static str,
+    arg_bytes: Vec<u8>,
+}
+
+/// Submit a `create_canister` (or `provisional_create_canister_with_cycles`) call to the
+/// management canister via the subnet-scoped endpoint and decode the resulting canister id.
+async fn subnet_call_and_wait(
+    canister: &Canister<'_>,
+    method: &str,
+    arg_bytes: Vec<u8>,
+    subnet_id: Principal,
+) -> Result<(Principal,), AgentError> {
+    let agent = canister.agent;
+    let signed = agent
+        .update(&Principal::management_canister(), method)
+        .with_arg(arg_bytes)
+        .sign()?;
+    let effective_id = EffectiveId::Subnet(subnet_id);
+    let response = agent
+        .update_signed(effective_id, signed.signed_update)
+        .await?;
+    let bytes = match response {
+        CallResponse::Response(bytes) => bytes,
+        CallResponse::Poll(request_id) => {
+            let signed_status = agent.sign_request_status(effective_id, request_id)?;
+            agent
+                .wait_signed(
+                    &request_id,
+                    effective_id,
+                    signed_status.signed_request_status,
+                )
+                .await?
+                .0
+        }
+    };
+    let (out,): (CreateCanisterOut,) =
+        decode_args(&bytes).map_err(|e| AgentError::CandidError(Box::new(e)))?;
+    Ok((out.canister_id,))
+}
+
+/// Like [`subnet_call_and_wait`] but returns a [`CallResponse`] without polling, so that the
+/// caller can decide how to wait for the request to complete.
+async fn subnet_call(
+    canister: &Canister<'_>,
+    method: &str,
+    arg_bytes: Vec<u8>,
+    subnet_id: Principal,
+) -> Result<CallResponse<Vec<u8>>, AgentError> {
+    let agent = canister.agent;
+    let signed = agent
+        .update(&Principal::management_canister(), method)
+        .with_arg(arg_bytes)
+        .sign()?;
+    agent
+        .update_signed(EffectiveId::Subnet(subnet_id), signed.signed_update)
+        .await
 }
 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
@@ -409,11 +570,11 @@ impl<'agent, 'canister: 'agent> AsyncCall for CreateCanisterBuilder<'agent, 'can
     type Value = (Principal,);
 
     async fn call(self) -> Result<CallResponse<(Principal,)>, AgentError> {
-        self.build()?.call().await
+        self.call().await
     }
 
     async fn call_and_wait(self) -> Result<(Principal,), AgentError> {
-        self.build()?.call_and_wait().await
+        self.call_and_wait().await
     }
 }
 
@@ -422,7 +583,7 @@ impl<'agent, 'canister: 'agent> IntoFuture for CreateCanisterBuilder<'agent, 'ca
     type Output = Result<(Principal,), AgentError>;
 
     fn into_future(self) -> Self::IntoFuture {
-        AsyncCall::call_and_wait(self)
+        Box::pin(self.call_and_wait())
     }
 }
 

@@ -13,7 +13,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.47.2"
+version = "0.47.3"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2021"
 repository = "https://github.com/dfinity/agent-rs"
@@ -30,10 +30,10 @@ license = "Apache-2.0"
 #   a comment listing those crates). Otherwise, features are declared in the individual crate Cargo.toml.
 #
 # The path dependencies below ensure all workspace members use the same version of internal crates.
-ic-agent = { path = "ic-agent", version = "0.47.2", default-features = false }
-ic-identity-hsm = { path = "ic-identity-hsm", version = "0.47.2" }
-ic-transport-types = { path = "ic-transport-types", version = "0.47.2" }
-ic-utils = { path = "ic-utils", version = "0.47.2" }
+ic-agent = { path = "ic-agent", version = "0.47.3", default-features = false }
+ic-identity-hsm = { path = "ic-identity-hsm", version = "0.47.3" }
+ic-transport-types = { path = "ic-transport-types", version = "0.47.3" }
+ic-utils = { path = "ic-utils", version = "0.47.3" }
 ic-utils-bindgen = { path = "ic-utils-bindgen" }
 ref-tests = { path = "ref-tests" }
 
@@ -76,7 +76,14 @@ p256 = "0.13.2"
 pem = "3"
 pkcs11 = "0.5.0"
 pkcs8 = "0.10.2"
-pocket-ic = "13.0.0"
+# Used by integration tests (ref-tests, ic-utils-bindgen-tests) only. The git
+# rev is pinned to the same IC commit as the pocket-ic server binary downloaded
+# by scripts/download_reftest_assets.sh, so the client lib and server stay in
+# sync. Do NOT use this workspace entry from any crate that is published to
+# crates.io — crates.io rejects packages with git dependencies. Published
+# crates that need pocket-ic must depend on a released version directly (see
+# icx/Cargo.toml).
+pocket-ic = { git = "https://github.com/dfinity/ic", rev = "17524c56ef237c54b510a201ceb58da8d790d4d5" } # https://github.com/dfinity/ic/pull/10226
 rand = "0.10.1"
 rangemap = "1.7"
 reqwest = { version = "0.13.2", default-features = false }
