@@ -1610,7 +1610,7 @@ dependencies = [
  "ic-agent",
  "ic-utils",
  "ic-utils-bindgen",
- "pocket-ic 13.0.0 (git+https://github.com/dfinity/ic?rev=62e841d27ea12451f504e74c54843b7cbf93ca4d)",
+ "pocket-ic 13.0.0 (git+https://github.com/dfinity/ic?rev=17524c56ef237c54b510a201ceb58da8d790d4d5)",
  "ref-tests",
  "serde",
  "tokio",
@@ -2536,7 +2536,7 @@ dependencies = [
 [[package]]
 name = "pocket-ic"
 version = "13.0.0"
-source = "git+https://github.com/dfinity/ic?rev=62e841d27ea12451f504e74c54843b7cbf93ca4d#62e841d27ea12451f504e74c54843b7cbf93ca4d"
+source = "git+https://github.com/dfinity/ic?rev=17524c56ef237c54b510a201ceb58da8d790d4d5#17524c56ef237c54b510a201ceb58da8d790d4d5"
 dependencies = [
  "backoff",
  "base64 0.13.1",
@@ -2836,7 +2836,7 @@ dependencies = [
  "ic-utils",
  "k256",
  "p256",
- "pocket-ic 13.0.0 (git+https://github.com/dfinity/ic?rev=62e841d27ea12451f504e74c54843b7cbf93ca4d)",
+ "pocket-ic 13.0.0 (git+https://github.com/dfinity/ic?rev=17524c56ef237c54b510a201ceb58da8d790d4d5)",
  "rand 0.10.1",
  "serde",
  "serde_bytes",
