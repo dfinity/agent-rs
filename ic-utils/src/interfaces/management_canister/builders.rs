@@ -95,8 +95,12 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
 
     /// Specify the canister id.
     ///
-    /// The `effective_canister_id` will also be set with the same value so that ic-ref can determine
+    /// The effective canister id will also be set to the same value so that ic-ref can determine
     /// the target subnet of this request. The replica implementation ignores it.
+    ///
+    /// This overwrites the effective id previously set by [`Self::with_effective_canister_id`] or
+    /// [`Self::with_effective_subnet_id`] (and is itself overwritten by any later call to those).
+    /// Only the last call among the three takes effect.
     pub fn as_provisional_create_with_specified_id(self, specified_id: Principal) -> Self {
         Self {
             is_provisional_create: true,
@@ -110,8 +114,9 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
     ///
     /// Boundary nodes use the effective {canister / subnet} id to route the request to the target subnet.
     ///
-    /// This method and [`Self::with_effective_subnet_id`] share the same underlying field, so only
-    /// the last call among them takes effect; earlier calls are shadowed.
+    /// This method, [`Self::with_effective_subnet_id`], and [`Self::as_provisional_create_with_specified_id`]
+    /// all write to the same underlying field, so only the last call among them takes effect; earlier
+    /// calls are silently shadowed.
     pub fn with_effective_canister_id<C, E>(self, effective_canister_id: C) -> Self
     where
         E: std::fmt::Display,
@@ -132,8 +137,9 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
     ///
     /// Boundary nodes use the effective {canister / subnet} id to route the request to the target subnet.
     ///
-    /// This method and [`Self::with_effective_canister_id`] share the same underlying field, so only
-    /// the last call among them takes effect; earlier calls are shadowed.
+    /// This method, [`Self::with_effective_canister_id`], and [`Self::as_provisional_create_with_specified_id`]
+    /// all write to the same underlying field, so only the last call among them takes effect; earlier
+    /// calls are silently shadowed.
     pub fn with_effective_subnet_id<C, E>(self, effective_subnet_id: C) -> Self
     where
         E: std::fmt::Display,
