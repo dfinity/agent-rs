@@ -17,7 +17,11 @@ use futures_util::{
     stream::{self, FuturesUnordered},
     FutureExt, Stream, StreamExt, TryStreamExt,
 };
-use ic_agent::{agent::CallResponse, export::Principal, AgentError};
+use ic_agent::{
+    agent::{CallResponse, EffectiveId},
+    export::Principal,
+    AgentError,
+};
 pub use ic_management_canister_types::{
     CanisterInstallMode, CanisterSettings, EnvironmentVariable, InstallCodeArgs, UpgradeFlags,
     WasmMemoryPersistence,
@@ -29,17 +33,6 @@ use std::{
     future::IntoFuture,
     pin::Pin,
 };
-
-/// Routing target for a `create_canister` call.
-#[derive(Debug, Clone, Copy)]
-enum EffectiveId {
-    /// Route via `/api/v4/canister/<id>/call`. The new canister will be created on the same
-    /// subnet as the given canister id.
-    Canister(Principal),
-    /// Route via `/api/v4/subnet/<id>/call`. Only valid when the caller has subnet administrator
-    /// permissions; the new canister will be created on the specified subnet.
-    Subnet(Principal),
-}
 
 /// A builder for a `create_canister` call.
 #[derive(Debug)]
@@ -524,15 +517,20 @@ async fn subnet_call_and_wait(
         .update(&Principal::management_canister(), method)
         .with_arg(arg_bytes)
         .sign()?;
+    let effective_id = EffectiveId::Subnet(subnet_id);
     let response = agent
-        .update_signed_subnet(subnet_id, signed.signed_update)
+        .update_signed(effective_id, signed.signed_update)
         .await?;
     let bytes = match response {
         CallResponse::Response(bytes) => bytes,
         CallResponse::Poll(request_id) => {
-            let signed_status = agent.sign_request_status(subnet_id, request_id)?;
+            let signed_status = agent.sign_request_status(effective_id, request_id)?;
             agent
-                .wait_signed_subnet(&request_id, subnet_id, signed_status.signed_request_status)
+                .wait_signed(
+                    &request_id,
+                    effective_id,
+                    signed_status.signed_request_status,
+                )
                 .await?
                 .0
         }
@@ -556,7 +554,7 @@ async fn subnet_call(
         .with_arg(arg_bytes)
         .sign()?;
     agent
-        .update_signed_subnet(subnet_id, signed.signed_update)
+        .update_signed(EffectiveId::Subnet(subnet_id), signed.signed_update)
         .await
 }
 

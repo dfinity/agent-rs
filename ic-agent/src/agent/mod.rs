@@ -76,6 +76,42 @@ use std::{
 
 use crate::agent::response_authentication::lookup_api_boundary_nodes;
 
+/// The effective ID that routes a request to a particular endpoint shape.
+///
+/// Most calls target a canister and are routed via an
+/// [effective canister id](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-canister-id).
+/// A small set of management-canister calls (currently `create_canister`,
+/// `provisional_create_canister_with_cycles`, and `list_canisters`) are instead
+/// routed via an [effective subnet id](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-subnet-id),
+/// targeting the subnet-scoped HTTP endpoints (`/api/v4/subnet/<id>/call`,
+/// `/api/v3/subnet/<id>/read_state`, `/api/v3/subnet/<id>/query`).
+///
+/// `Principal` converts into `EffectiveId::Canister(_)`, so passing a bare
+/// `Principal` to APIs that accept `impl Into<EffectiveId>` preserves the
+/// canister-scoped behavior of earlier `ic-agent` releases.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EffectiveId {
+    /// An effective canister id. The request is routed to the canister-scoped HTTP endpoints.
+    Canister(Principal),
+    /// An effective subnet id. The request is routed to the subnet-scoped HTTP endpoints.
+    Subnet(Principal),
+}
+
+impl EffectiveId {
+    /// Returns the underlying principal regardless of variant.
+    pub fn as_principal(&self) -> Principal {
+        match self {
+            EffectiveId::Canister(p) | EffectiveId::Subnet(p) => *p,
+        }
+    }
+}
+
+impl From<Principal> for EffectiveId {
+    fn from(p: Principal) -> Self {
+        EffectiveId::Canister(p)
+    }
+}
+
 pub(crate) const IC_STATE_ROOT_DOMAIN_SEPARATOR: &[u8; 14] = b"\x0Dic-state-root";
 
 pub(crate) const IC_ROOT_KEY: &[u8; 133] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00\x81\x4c\x0e\x6e\xc7\x1f\xab\x58\x3b\x08\xbd\x81\x37\x3c\x25\x5c\x3c\x37\x1b\x2e\x84\x86\x3c\x98\xa4\xf1\xe0\x8b\x74\x23\x5d\x14\xfb\x5d\x9c\x0c\xd5\x46\xd9\x68\x5f\x91\x3a\x0c\x0b\x2c\xc5\x34\x15\x83\xbf\x4b\x43\x92\xe4\x67\xdb\x96\xd6\x5b\x9b\xb4\xcb\x71\x71\x12\xf8\x47\x2e\x0d\x5a\x4d\x14\x50\x5f\xfd\x74\x84\xb0\x12\x91\x09\x1c\x5f\x87\xb9\x88\x83\x46\x3f\x98\x09\x1a\x0b\xaa\xae";
@@ -363,6 +399,76 @@ impl Agent {
         serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
     }
 
+    async fn query_subnet_endpoint<A>(
+        &self,
+        subnet_id: Principal,
+        serialized_bytes: Vec<u8>,
+    ) -> Result<A, AgentError>
+    where
+        A: serde::de::DeserializeOwned,
+    {
+        let _permit = self.concurrent_requests_semaphore.acquire().await;
+        let endpoint = format!("api/v3/subnet/{}/query", subnet_id.to_text());
+        let bytes = self
+            .execute(Method::POST, &endpoint, Some(serialized_bytes))
+            .await?
+            .1;
+        serde_cbor::from_slice(&bytes).map_err(AgentError::InvalidCborData)
+    }
+
+    async fn query_endpoint_for<A>(
+        &self,
+        effective_id: EffectiveId,
+        serialized_bytes: Vec<u8>,
+    ) -> Result<A, AgentError>
+    where
+        A: serde::de::DeserializeOwned,
+    {
+        match effective_id {
+            EffectiveId::Canister(p) => self.query_endpoint(p, serialized_bytes).await,
+            EffectiveId::Subnet(p) => self.query_subnet_endpoint(p, serialized_bytes).await,
+        }
+    }
+
+    async fn read_state_endpoint_for<A>(
+        &self,
+        effective_id: EffectiveId,
+        serialized_bytes: Vec<u8>,
+    ) -> Result<A, AgentError>
+    where
+        A: serde::de::DeserializeOwned,
+    {
+        match effective_id {
+            EffectiveId::Canister(p) => self.read_state_endpoint(p, serialized_bytes).await,
+            EffectiveId::Subnet(p) => self.read_subnet_state_endpoint(p, serialized_bytes).await,
+        }
+    }
+
+    async fn call_endpoint_for(
+        &self,
+        effective_id: EffectiveId,
+        serialized_bytes: Vec<u8>,
+    ) -> Result<TransportCallResponse, AgentError> {
+        match effective_id {
+            EffectiveId::Canister(p) => self.call_endpoint(p, serialized_bytes).await,
+            EffectiveId::Subnet(p) => self.call_subnet_endpoint(p, serialized_bytes).await,
+        }
+    }
+
+    async fn get_subnet_for(&self, effective_id: EffectiveId) -> Result<Arc<Subnet>, AgentError> {
+        match effective_id {
+            EffectiveId::Canister(p) => self.get_subnet_by_canister(&p).await,
+            EffectiveId::Subnet(p) => self.get_subnet_by_id(&p).await,
+        }
+    }
+
+    async fn fetch_subnet_for(&self, effective_id: EffectiveId) -> Result<Arc<Subnet>, AgentError> {
+        match effective_id {
+            EffectiveId::Canister(p) => self.fetch_subnet_by_canister(&p).await,
+            EffectiveId::Subnet(p) => self.fetch_subnet_by_id(&p).await,
+        }
+    }
+
     async fn call_endpoint(
         &self,
         effective_canister_id: Principal,
@@ -425,7 +531,7 @@ impl Agent {
         )?;
         let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
         self.query_inner(
-            effective_canister_id,
+            EffectiveId::Canister(effective_canister_id),
             serialized_bytes,
             content.to_request_id(),
             explicit_verify_query_signatures,
@@ -437,9 +543,15 @@ impl Agent {
     /// Send the signed query to the network. Will return a byte vector.
     /// The bytes will be checked if it is a valid query.
     /// If you want to inspect the fields of the query call, use [`signed_query_inspect`] before calling this method.
+    ///
+    /// `effective_id` may be either an effective canister id (the common case) or
+    /// an effective subnet id; in the latter case the request is routed to the
+    /// subnet-scoped `/api/v3/subnet/<id>/query` endpoint. Per the IC interface
+    /// spec, subnet-scoped queries are currently only valid for the
+    /// `list_canisters` method of the Management Canister.
     pub async fn query_signed(
         &self,
-        effective_canister_id: Principal,
+        effective_id: impl Into<EffectiveId>,
         signed_query: Vec<u8>,
     ) -> Result<Vec<u8>, AgentError> {
         let envelope: Envelope =
@@ -466,7 +578,7 @@ impl Agent {
             method: method_name.clone(),
         };
         self.query_inner(
-            effective_canister_id,
+            effective_id.into(),
             signed_query,
             envelope.content.to_request_id(),
             None,
@@ -480,7 +592,7 @@ impl Agent {
     /// This should be used instead of `query_endpoint`. No validation is performed on `signed_query`.
     async fn query_inner(
         &self,
-        effective_canister_id: Principal,
+        effective_id: EffectiveId,
         signed_query: Vec<u8>,
         request_id: RequestId,
         explicit_verify_query_signatures: Option<bool>,
@@ -488,8 +600,8 @@ impl Agent {
     ) -> Result<Vec<u8>, AgentError> {
         let response = if explicit_verify_query_signatures.unwrap_or(self.verify_query_signatures) {
             let (response, mut subnet) = futures_util::try_join!(
-                self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query),
-                self.get_subnet_by_canister(&effective_canister_id)
+                self.query_endpoint_for::<QueryResponse>(effective_id, signed_query),
+                self.get_subnet_for(effective_id)
             )?;
             if response.signatures().is_empty() {
                 return Err(AgentError::MissingSignature);
@@ -510,9 +622,7 @@ impl Agent {
                 let node_key = if let Some(node_key) = subnet.node_keys.get(&signature.identity) {
                     node_key
                 } else {
-                    subnet = self
-                        .fetch_subnet_by_canister(&effective_canister_id)
-                        .await?;
+                    subnet = self.fetch_subnet_for(effective_id).await?;
                     subnet
                         .node_keys
                         .get(&signature.identity)
@@ -547,7 +657,7 @@ impl Agent {
             }
             response
         } else {
-            self.query_endpoint::<QueryResponse>(effective_canister_id, signed_query)
+            self.query_endpoint_for::<QueryResponse>(effective_id, signed_query)
                 .await?
         };
 
@@ -641,11 +751,18 @@ impl Agent {
     /// Send the signed update to the network. Will return a [`CallResponse<Vec<u8>>`].
     /// The bytes will be checked to verify that it is a valid update.
     /// If you want to inspect the fields of the update, use [`signed_update_inspect`] before calling this method.
+    ///
+    /// `effective_id` may be either an effective canister id (the common case) or
+    /// an effective subnet id; in the latter case the request is routed to the
+    /// subnet-scoped `/api/v4/subnet/<id>/call` endpoint. Per the IC interface
+    /// spec, subnet-scoped update calls are currently only valid for canister
+    /// creation calls to the Management Canister.
     pub async fn update_signed(
         &self,
-        effective_canister_id: Principal,
+        effective_id: impl Into<EffectiveId>,
         signed_update: Vec<u8>,
     ) -> Result<CallResponse<Vec<u8>>, AgentError> {
+        let effective_id = effective_id.into();
         let envelope: Envelope =
             serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
         let EnvelopeContent::Call {
@@ -671,83 +788,14 @@ impl Agent {
         });
         let request_id = to_request_id(&envelope.content)?;
 
-        let response_body = self
-            .call_endpoint(effective_canister_id, signed_update)
-            .await?;
+        let response_body = self.call_endpoint_for(effective_id, signed_update).await?;
 
         match response_body {
             TransportCallResponse::Replied { certificate } => {
                 let certificate =
                     serde_cbor::from_slice(&certificate).map_err(AgentError::InvalidCborData)?;
 
-                self.verify(&certificate, effective_canister_id)?;
-                let status = lookup_request_status(&certificate, &request_id)?;
-
-                match status {
-                    RequestStatusResponse::Replied(reply) => Ok(CallResponse::Response(reply.arg)),
-                    RequestStatusResponse::Rejected(reject_response) => {
-                        Err(AgentError::CertifiedReject {
-                            reject: reject_response,
-                            operation,
-                        })?
-                    }
-                    _ => Ok(CallResponse::Poll(request_id)),
-                }
-            }
-            TransportCallResponse::Accepted => Ok(CallResponse::Poll(request_id)),
-            TransportCallResponse::NonReplicatedRejection(reject_response) => {
-                Err(AgentError::UncertifiedReject {
-                    reject: reject_response,
-                    operation,
-                })
-            }
-        }
-    }
-
-    /// Send the signed update to the subnet-scoped call endpoint (`/api/v4/subnet/<subnet_id>/call`).
-    /// Sibling of [`update_signed`](Self::update_signed); use this when routing via an effective
-    /// subnet id. Per the [interface spec], this endpoint only accepts canister creation calls to
-    /// the Management Canister.
-    ///
-    /// [interface spec]: https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-subnet-id
-    pub async fn update_signed_subnet(
-        &self,
-        subnet_id: Principal,
-        signed_update: Vec<u8>,
-    ) -> Result<CallResponse<Vec<u8>>, AgentError> {
-        let envelope: Envelope =
-            serde_cbor::from_slice(&signed_update).map_err(AgentError::InvalidCborData)?;
-        let EnvelopeContent::Call {
-            canister_id,
-            method_name,
-            ..
-        } = &*envelope.content
-        else {
-            return Err(AgentError::CallDataMismatch {
-                field: "request_type".to_string(),
-                value_arg: "update".to_string(),
-                value_cbor: if matches!(*envelope.content, EnvelopeContent::Query { .. }) {
-                    "query"
-                } else {
-                    "read_state"
-                }
-                .to_string(),
-            });
-        };
-        let operation = Some(Operation::Call {
-            canister: *canister_id,
-            method: method_name.clone(),
-        });
-        let request_id = to_request_id(&envelope.content)?;
-
-        let response_body = self.call_subnet_endpoint(subnet_id, signed_update).await?;
-
-        match response_body {
-            TransportCallResponse::Replied { certificate } => {
-                let certificate =
-                    serde_cbor::from_slice(&certificate).map_err(AgentError::InvalidCborData)?;
-
-                self.verify_for_subnet(&certificate, subnet_id)?;
+                self.verify(&certificate, effective_id)?;
                 let status = lookup_request_status(&certificate, &request_id)?;
 
                 match status {
@@ -800,22 +848,23 @@ impl Agent {
     }
 
     /// Wait for `request_status` to return a Replied response and return the arg.
+    ///
+    /// `effective_id` may be either an effective canister id or an effective
+    /// subnet id; in the latter case the request is routed to the subnet-scoped
+    /// `/api/v3/subnet/<id>/read_state` endpoint.
     pub async fn wait_signed(
         &self,
         request_id: &RequestId,
-        effective_canister_id: Principal,
+        effective_id: impl Into<EffectiveId>,
         signed_request_status: Vec<u8>,
     ) -> Result<(Vec<u8>, Certificate), AgentError> {
+        let effective_id = effective_id.into();
         let mut retry_policy = self.get_retry_policy();
 
         let mut request_accepted = false;
         loop {
             let (resp, cert) = self
-                .request_status_signed(
-                    request_id,
-                    effective_canister_id,
-                    signed_request_status.clone(),
-                )
+                .request_status_signed(request_id, effective_id, signed_request_status.clone())
                 .await?;
             match resp {
                 RequestStatusResponse::Unknown => {
@@ -858,84 +907,30 @@ impl Agent {
         }
     }
 
-    /// Sibling of [`wait_signed`](Self::wait_signed) that polls the subnet-scoped
-    /// read_state endpoint (`/api/v3/subnet/<subnet_id>/read_state`).
-    pub async fn wait_signed_subnet(
-        &self,
-        request_id: &RequestId,
-        subnet_id: Principal,
-        signed_request_status: Vec<u8>,
-    ) -> Result<(Vec<u8>, Certificate), AgentError> {
-        let mut retry_policy = self.get_retry_policy();
-
-        let mut request_accepted = false;
-        loop {
-            let (resp, cert) = self
-                .request_status_signed_subnet(request_id, subnet_id, signed_request_status.clone())
-                .await?;
-            match resp {
-                RequestStatusResponse::Unknown => {
-                    if retry_policy.get_elapsed_time() > Duration::from_secs(5 * 60) {
-                        return Err(AgentError::TimeoutWaitingForResponse());
-                    }
-                }
-
-                RequestStatusResponse::Received | RequestStatusResponse::Processing => {
-                    if !request_accepted {
-                        retry_policy.reset();
-                        request_accepted = true;
-                    }
-                }
-
-                RequestStatusResponse::Replied(ReplyResponse { arg, .. }) => {
-                    return Ok((arg, cert))
-                }
-
-                RequestStatusResponse::Rejected(response) => {
-                    return Err(AgentError::CertifiedReject {
-                        reject: response,
-                        operation: None,
-                    })
-                }
-
-                RequestStatusResponse::Done => {
-                    return Err(AgentError::RequestStatusDoneNoReply(String::from(
-                        *request_id,
-                    )))
-                }
-            };
-
-            match retry_policy.next_backoff() {
-                Some(duration) => crate::util::sleep(duration).await,
-
-                None => return Err(AgentError::TimeoutWaitingForResponse()),
-            }
-        }
-    }
-
     /// Call `request_status` on the `RequestId` in a loop and return the response as a byte vector.
+    ///
+    /// `effective_id` may be either an effective canister id or an effective
+    /// subnet id; in the latter case state is polled from the subnet-scoped
+    /// `/api/v3/subnet/<id>/read_state` endpoint.
     pub async fn wait(
         &self,
         request_id: &RequestId,
-        effective_canister_id: Principal,
+        effective_id: impl Into<EffectiveId>,
     ) -> Result<(Vec<u8>, Certificate), AgentError> {
-        self.wait_inner(request_id, effective_canister_id, None)
-            .await
+        self.wait_inner(request_id, effective_id.into(), None).await
     }
 
     async fn wait_inner(
         &self,
         request_id: &RequestId,
-        effective_canister_id: Principal,
+        effective_id: EffectiveId,
         operation: Option<Operation>,
     ) -> Result<(Vec<u8>, Certificate), AgentError> {
         let mut retry_policy = self.get_retry_policy();
 
         let mut request_accepted = false;
         loop {
-            let (resp, cert) = self
-                .request_status_raw(request_id, effective_canister_id)
-                .await?;
+            let (resp, cert) = self.request_status_raw(request_id, effective_id).await?;
             match resp {
                 RequestStatusResponse::Unknown => {
                     // If status is still `Unknown` after 5 minutes, the ingress message is lost.
@@ -984,42 +979,41 @@ impl Agent {
         }
     }
 
-    /// Request the raw state tree directly, under an effective canister ID.
+    /// Request the raw state tree directly.
     /// See [the protocol docs](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-read-state) for more information.
+    ///
+    /// `effective_id` may be either an effective canister id or an effective
+    /// subnet id; in the latter case the request is read from the subnet-scoped
+    /// `/api/v3/subnet/<id>/read_state` endpoint.
     pub async fn read_state_raw(
         &self,
         paths: Vec<Vec<Label>>,
-        effective_canister_id: Principal,
+        effective_id: impl Into<EffectiveId>,
     ) -> Result<Certificate, AgentError> {
+        let effective_id = effective_id.into();
         let content = self.read_state_content(paths)?;
         let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
 
         let read_state_response: ReadStateResponse = self
-            .read_state_endpoint(effective_canister_id, serialized_bytes)
+            .read_state_endpoint_for(effective_id, serialized_bytes)
             .await?;
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
-        self.verify(&cert, effective_canister_id)?;
+        self.verify(&cert, effective_id)?;
         Ok(cert)
     }
 
     /// Request the raw state tree directly, under a subnet ID.
-    /// See [the protocol docs](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-read-state) for more information.
+    ///
+    /// Equivalent to calling [`read_state_raw`](Self::read_state_raw) with
+    /// [`EffectiveId::Subnet`]; retained for backward compatibility.
     pub async fn read_subnet_state_raw(
         &self,
         paths: Vec<Vec<Label>>,
         subnet_id: Principal,
     ) -> Result<Certificate, AgentError> {
-        let content = self.read_state_content(paths)?;
-        let serialized_bytes = sign_envelope(&content, self.identity.clone())?;
-
-        let read_state_response: ReadStateResponse = self
-            .read_subnet_state_endpoint(subnet_id, serialized_bytes)
-            .await?;
-        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
-            .map_err(AgentError::InvalidCborData)?;
-        self.verify_for_subnet(&cert, subnet_id)?;
-        Ok(cert)
+        self.read_state_raw(paths, EffectiveId::Subnet(subnet_id))
+            .await
     }
 
     fn read_state_content(&self, paths: Vec<Vec<Label>>) -> Result<EnvelopeContent, AgentError> {
@@ -1031,13 +1025,20 @@ impl Agent {
     }
 
     /// Verify a certificate, checking delegation if present.
-    /// Only passes if the certificate also has authority over the canister.
+    ///
+    /// For [`EffectiveId::Canister`] the certificate must have authority over
+    /// the canister (its canister-id ranges must include the principal). For
+    /// [`EffectiveId::Subnet`] the certificate must instead be authoritative
+    /// for the specified subnet.
     pub fn verify(
         &self,
         cert: &Certificate,
-        effective_canister_id: Principal,
+        effective_id: impl Into<EffectiveId>,
     ) -> Result<(), AgentError> {
-        self.verify_cert(cert, effective_canister_id)?;
+        match effective_id.into() {
+            EffectiveId::Canister(p) => self.verify_cert(cert, p)?,
+            EffectiveId::Subnet(p) => self.verify_cert_for_subnet(cert, p)?,
+        }
         self.verify_cert_timestamp(cert)?;
         Ok(())
     }
@@ -1064,14 +1065,15 @@ impl Agent {
 
     /// Verify a certificate, checking delegation if present.
     /// Only passes if the certificate is for the specified subnet.
+    ///
+    /// Equivalent to calling [`verify`](Self::verify) with
+    /// [`EffectiveId::Subnet`]; retained for backward compatibility.
     pub fn verify_for_subnet(
         &self,
         cert: &Certificate,
         subnet_id: Principal,
     ) -> Result<(), AgentError> {
-        self.verify_cert_for_subnet(cert, subnet_id)?;
-        self.verify_cert_timestamp(cert)?;
-        Ok(())
+        self.verify(cert, EffectiveId::Subnet(subnet_id))
     }
 
     fn verify_cert_for_subnet(
@@ -1296,15 +1298,19 @@ impl Agent {
     }
 
     /// Fetches the status of a particular request by its ID.
+    ///
+    /// `effective_id` may be either an effective canister id or an effective
+    /// subnet id; in the latter case the request is read from the subnet-scoped
+    /// `/api/v3/subnet/<id>/read_state` endpoint.
     pub async fn request_status_raw(
         &self,
         request_id: &RequestId,
-        effective_canister_id: Principal,
+        effective_id: impl Into<EffectiveId>,
     ) -> Result<(RequestStatusResponse, Certificate), AgentError> {
         let paths: Vec<Vec<Label>> =
             vec![vec!["request_status".into(), request_id.to_vec().into()]];
 
-        let cert = self.read_state_raw(paths, effective_canister_id).await?;
+        let cert = self.read_state_raw(paths, effective_id).await?;
 
         Ok((lookup_request_status(&cert, request_id)?, cert))
     }
@@ -1312,42 +1318,26 @@ impl Agent {
     /// Send the signed `request_status` to the network. Will return [`RequestStatusResponse`].
     /// The bytes will be checked to verify that it is a valid `request_status`.
     /// If you want to inspect the fields of the `request_status`, use [`signed_request_status_inspect`] before calling this method.
+    ///
+    /// `effective_id` may be either an effective canister id or an effective
+    /// subnet id; in the latter case the request is read from the subnet-scoped
+    /// `/api/v3/subnet/<id>/read_state` endpoint.
     pub async fn request_status_signed(
         &self,
         request_id: &RequestId,
-        effective_canister_id: Principal,
+        effective_id: impl Into<EffectiveId>,
         signed_request_status: Vec<u8>,
     ) -> Result<(RequestStatusResponse, Certificate), AgentError> {
+        let effective_id = effective_id.into();
         let _envelope: Envelope =
             serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
         let read_state_response: ReadStateResponse = self
-            .read_state_endpoint(effective_canister_id, signed_request_status)
+            .read_state_endpoint_for(effective_id, signed_request_status)
             .await?;
 
         let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
             .map_err(AgentError::InvalidCborData)?;
-        self.verify(&cert, effective_canister_id)?;
-        Ok((lookup_request_status(&cert, request_id)?, cert))
-    }
-
-    /// Sibling of [`request_status_signed`](Self::request_status_signed) that reads from the
-    /// subnet-scoped endpoint (`/api/v3/subnet/<subnet_id>/read_state`). The returned certificate
-    /// is verified against `subnet_id` rather than against canister range membership.
-    pub async fn request_status_signed_subnet(
-        &self,
-        request_id: &RequestId,
-        subnet_id: Principal,
-        signed_request_status: Vec<u8>,
-    ) -> Result<(RequestStatusResponse, Certificate), AgentError> {
-        let _envelope: Envelope =
-            serde_cbor::from_slice(&signed_request_status).map_err(AgentError::InvalidCborData)?;
-        let read_state_response: ReadStateResponse = self
-            .read_subnet_state_endpoint(subnet_id, signed_request_status)
-            .await?;
-
-        let cert: Certificate = serde_cbor::from_slice(&read_state_response.certificate)
-            .map_err(AgentError::InvalidCborData)?;
-        self.verify_for_subnet(&cert, subnet_id)?;
+        self.verify(&cert, effective_id)?;
         Ok((lookup_request_status(&cert, request_id)?, cert))
     }
 
@@ -1389,9 +1379,10 @@ impl Agent {
     /// depending on which endpoint the caller will submit the signed message to.
     pub fn sign_request_status(
         &self,
-        effective_id: Principal,
+        effective_id: impl Into<EffectiveId>,
         request_id: RequestId,
     ) -> Result<SignedRequestStatus, AgentError> {
+        let effective_id = effective_id.into();
         let paths: Vec<Vec<Label>> =
             vec![vec!["request_status".into(), request_id.to_vec().into()]];
         let read_state_content = self.read_state_content(paths)?;
@@ -1401,7 +1392,7 @@ impl Agent {
         Ok(SignedRequestStatus {
             ingress_expiry,
             sender,
-            effective_canister_id: effective_id,
+            effective_canister_id: effective_id.as_principal(),
             request_id,
             signed_request_status,
         })
@@ -2089,7 +2080,7 @@ impl<'a> UpdateCall<'a> {
                 self.agent
                     .wait_inner(
                         &request_id,
-                        self.effective_canister_id,
+                        EffectiveId::Canister(self.effective_canister_id),
                         Some(Operation::Call {
                             canister: self.canister_id,
                             method: self.method_name,

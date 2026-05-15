@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.47.3] - 2026-05-15
 
-* `ic-agent`: Added subnet-scoped HTTP API methods on `Agent` for routing signed calls via effective subnet id: `update_signed_subnet`, `request_status_signed_subnet`, and `wait_signed_subnet`. These target the `/api/v4/subnet/<subnet_id>/call` and `/api/v3/subnet/<subnet_id>/read_state` endpoints introduced in IC interface spec 0.60.0.
+* `ic-agent`: Added the `EffectiveId` enum (`Canister(Principal)` | `Subnet(Principal)`) and widened `Agent::update_signed`, `query_signed`, `request_status_signed`, `request_status_raw`, `wait`, `wait_signed`, `read_state_raw`, `verify`, and `sign_request_status` to accept `impl Into<EffectiveId>`. Passing a bare `Principal` is unchanged (treated as `EffectiveId::Canister(_)`); passing `EffectiveId::Subnet(_)` routes to the subnet-scoped HTTP endpoints (`/api/v4/subnet/<id>/call`, `/api/v3/subnet/<id>/read_state`, `/api/v3/subnet/<id>/query`) introduced in IC interface spec 0.60.0.
 * `ic-agent`: Renamed the `effective_canister_id` argument of `sign_request_status` to `effective_id` to reflect that it can hold either an effective canister id or an effective subnet id. `SignedRequestStatus::effective_canister_id` is unchanged but its documentation now notes the same.
 * `ic-utils`: Added `CreateCanisterBuilder::with_effective_subnet_id` so subnet administrators can route `create_canister` calls to a specific subnet via the subnet-scoped management-canister endpoints.
 
