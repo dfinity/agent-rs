@@ -224,12 +224,19 @@ impl fmt::Debug for Agent {
 /// never silently flips the installed provider).
 #[cfg(not(target_family = "wasm"))]
 pub(crate) fn install_default_crypto_provider() {
-    #[cfg(feature = "tls-aws-lc-rs")]
+    #[cfg(any(feature = "tls-aws-lc-rs", feature = "tls-ring"))]
     {
+        // Cheap fast-path: if a default is already installed (by us on a prior
+        // `Agent::new`, or by the application), skip constructing a provider.
+        // The check has a benign TOCTOU race — `install_default()` is itself
+        // atomic, so concurrent installers still produce a single winner and
+        // the others' `Err` is discarded.
+        if rustls::crypto::CryptoProvider::get_default().is_some() {
+            return;
+        }
+        #[cfg(feature = "tls-aws-lc-rs")]
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-    }
-    #[cfg(all(feature = "tls-ring", not(feature = "tls-aws-lc-rs")))]
-    {
+        #[cfg(all(feature = "tls-ring", not(feature = "tls-aws-lc-rs")))]
         let _ = rustls::crypto::ring::default_provider().install_default();
     }
     // If neither feature is enabled, do nothing. The user is expected to either
