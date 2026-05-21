@@ -2,10 +2,6 @@
 pub(crate) mod agent_config;
 pub mod agent_error;
 pub(crate) mod builder;
-// delete this module after 0.40
-#[doc(hidden)]
-#[deprecated(since = "0.38.0", note = "use the AgentBuilder methods")]
-pub mod http_transport;
 pub(crate) mod nonce;
 pub(crate) mod response_authentication;
 pub mod route_provider;
