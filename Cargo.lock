@@ -1451,6 +1451,7 @@ dependencies = [
  "ref-tests",
  "reqwest 0.13.2",
  "ring",
+ "rustls",
  "sec1",
  "serde",
  "serde_bytes",

@@ -19,9 +19,15 @@ targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 features = ["wasm-bindgen"]
 
 [features]
-default = ["pem"]
+default = ["pem", "tls-aws-lc-rs"]
 pem = ["dep:pem", "pkcs8/pem"]
 ring = ["dep:ring"]
+# rustls crypto provider selection. Features are additive: if both are enabled,
+# aws-lc-rs is installed as the process-wide rustls default (the ring code is
+# compiled in but unused). To use ring, set `default-features = false` and
+# enable `tls-ring` explicitly.
+tls-aws-lc-rs = ["dep:rustls", "rustls/aws-lc-rs"]
+tls-ring = ["dep:rustls", "rustls/ring"]
 ic_ref_tests = ["default"] # Used to separate integration tests for ic-ref which need a server running.
 wasm-bindgen = [
     "dep:js-sys",
@@ -69,8 +75,9 @@ pem = { workspace = true, optional = true }
 pkcs8 = { workspace = true, features = ["std"] }
 rand = { workspace = true }
 rangemap = { workspace = true }
-reqwest = { workspace = true, default-features = false, features = ["blocking", "json", "rustls", "stream"] }
+reqwest = { workspace = true, default-features = false, features = ["blocking", "json", "rustls-no-provider", "stream"] }
 ring = { workspace = true, optional = true }
+rustls = { workspace = true, default-features = false, features = ["std", "tls12"], optional = true }
 sec1 = { workspace = true, features = ["pem"] }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
@@ -103,6 +110,7 @@ tracing-subscriber = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 mockito = { workspace = true }
+rustls = { workspace = true, features = ["aws-lc-rs", "ring"] }
 tokio = { workspace = true, features = ["full"] }
 
 [target.'cfg(target_family = "wasm")'.dev-dependencies]

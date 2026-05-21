@@ -28,6 +28,7 @@ impl ReqwestTransport {
     pub fn create<U: Into<String>>(url: U) -> Result<Self, AgentError> {
         #[cfg(not(target_family = "wasm"))]
         {
+            crate::agent::install_default_crypto_provider();
             Self::create_with_client(
                 url,
                 Client::builder()
