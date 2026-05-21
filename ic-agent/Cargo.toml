@@ -22,6 +22,7 @@ features = ["wasm-bindgen"]
 default = ["pem", "rustls"]
 rustls = ["reqwest/rustls"]
 rustls-no-provider = ["reqwest/rustls-no-provider"]
+rustls-ring = ["rustls-no-provider", "dep:rustls", "rustls/ring"]
 pem = ["dep:pem", "pkcs8/pem"]
 ring = ["dep:ring"]
 ic_ref_tests = ["default"] # Used to separate integration tests for ic-ref which need a server running.
@@ -73,6 +74,7 @@ rand = { workspace = true }
 rangemap = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["blocking", "json", "stream"] }
 ring = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
 sec1 = { workspace = true, features = ["pem"] }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }

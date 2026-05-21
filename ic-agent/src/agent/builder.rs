@@ -15,6 +15,8 @@ pub struct AgentBuilder {
 impl AgentBuilder {
     /// Create an instance of [Agent] with the information from this builder.
     pub fn build(self) -> Result<Agent, AgentError> {
+        #[cfg(feature = "rustls-ring")]
+        let _ = rustls::crypto::ring::default_provider().install_default();
         Agent::new(self.config)
     }
 
