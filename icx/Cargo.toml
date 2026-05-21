@@ -18,6 +18,9 @@ include = ["src", "Cargo.toml", "../LICENSE", "README.md"]
 name = "icx"
 path = "src/main.rs"
 
+[features]
+reqwest-0_12 = ["ic-agent/reqwest-0_12", "ic-utils/reqwest-0_12"]
+
 [dependencies]
 anyhow = { workspace = true }
 candid = { workspace = true, features = ["value"] }

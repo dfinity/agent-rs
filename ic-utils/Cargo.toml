@@ -20,6 +20,7 @@ features = ["raw", "wasm-bindgen"]
 
 [features]
 raw = []
+reqwest-0_12 = ["ic-agent/reqwest-0_12"]
 wasm-bindgen = ["ic-agent/wasm-bindgen"]
 
 [dependencies]
