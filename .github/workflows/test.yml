@@ -52,42 +52,67 @@ jobs:
         run: |
           ./scripts/download_reftest_assets.sh
 
-      - name: Run Tests (ref-tests)
+      # ---------------------------------------------------------------------
+      # Test matrix
+      # ---------------------------------------------------------------------
+      # Native (Linux + macOS + Windows):
+      #   - Test: workspace (--all-features)        all crates except ref-tests
+      #   - Test: ic-agent (default features)       ship config smoke
+      #   - Test: ic-agent (tls-ring only)          alternate TLS provider
+      #   - Test: ic-agent (no TLS, panic path)     asserts the expected panic
+      #
+      # Linux-only (need extra system setup or have CI resource limits):
+      #   - Test: WASM (ic-agent, wasm-bindgen)     browser target
+      #   - Test: ref-tests (pocket-ic)             integration baseline
+      #   - Test: ref-tests + SoftHSM               HSM-backed identity
+      # ---------------------------------------------------------------------
+
+      - name: Test - workspace (--all-features)
+        # Covers every crate except ref-tests with --all-features. For ic-agent
+        # this enables both TLS providers; the additivity rule selects the
+        # aws-lc-rs code path at runtime.
+        shell: bash
+        run: cargo test --workspace --exclude ref-tests --all-features --no-fail-fast
+
+      - name: Test - ic-agent (default features)
+        # Ship-config smoke: build & test with only the default feature set
+        # (pem + tls-aws-lc-rs), the configuration downstream users get by
+        # default. Catches cfg gates that compile under --all-features but
+        # break with defaults alone.
+        shell: bash
+        run: cargo test -p ic-agent --no-fail-fast
+
+      - name: Test - ic-agent (tls-ring only)
+        # Exercises the tls-ring code path (the minimal-feature config that
+        # dfinity/ic relies on to avoid rustls provider conflicts).
+        shell: bash
+        run: cargo test -p ic-agent --no-default-features --features pem,tls-ring --no-fail-fast
+
+      - name: Test - ic-agent (no TLS, panic path)
+        # When no TLS feature is enabled, building the default reqwest client
+        # must panic with "No provider set". The integration test asserts this
+        # via #[should_panic]; run only that test, since the rest of ic-agent's
+        # lib tests would also panic for the same (expected) reason.
+        shell: bash
+        run: cargo test -p ic-agent --no-default-features --features pem --test crypto_provider_neither --no-fail-fast
+
+      - name: Test - WASM (ic-agent, wasm-bindgen)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: CARGO_TARGET_DIR=target/wasm wasm-pack test --chrome --headless ic-agent --features wasm-bindgen
+
+      - name: Test - ref-tests (pocket-ic)
         # ref-tests are skipped on macOS CI: the GitHub Actions macOS runner has
         # a low per-process thread limit (kern.maxthreadsperproc) that cannot be
         # raised without root. pocket-ic spawns many OS threads per subnet, and
         # tokio's blocking thread pool accumulates idle threads across sequential
         # tests, exhausting the limit before all tests finish. This is a CI
         # resource constraint — ref-tests work fine on a local macOS machine.
+        # --test-threads=1 keeps the thread footprint manageable on Linux too.
         if: ${{ matrix.os == 'ubuntu-latest' }}
         shell: bash
-        run: |
-          cd ref-tests
-          cargo test --no-fail-fast -- --test-threads=1
-        env:
-          RUST_BACKTRACE: 1
+        run: cargo test -p ref-tests --no-fail-fast -- --test-threads=1
 
-      - name: Run Tests
-        shell: bash
-        run: |
-          # Test all features and no features for each package.
-          # ref-tests is excluded here and run separately with --test-threads=1
-          # to avoid exhausting OS thread limits when pocket-ic spawns many threads.
-          for p in $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name != "ref-tests") | .manifest_path'); do
-            pushd $(dirname $p)
-            cargo test --all-features --no-fail-fast
-            cargo test --no-default-features --no-fail-fast
-            popd
-          done
-        env:
-          RUST_BACKTRACE: 1
-
-      - name: Run Tests (WASM)
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: |
-          CARGO_TARGET_DIR=target/wasm wasm-pack test --chrome --headless ic-agent --features wasm-bindgen
-
-      - name: Run Tests (SoftHSM)
+      - name: Test - ref-tests + SoftHSM
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           set -ex
@@ -95,10 +120,8 @@ jobs:
           # create key:
           pkcs11-tool -k --module $HSM_PKCS11_LIBRARY_PATH --login --slot-index $HSM_SLOT_INDEX -d $HSM_KEY_ID --key-type EC:prime256v1 --pin $HSM_PIN
 
-          cd ref-tests
-          cargo test --all-features --no-fail-fast -- --nocapture --test-threads=1
+          cargo test -p ref-tests --all-features --no-fail-fast -- --nocapture --test-threads=1
         env:
-          RUST_BACKTRACE: 1
           HSM_PKCS11_LIBRARY_PATH: /usr/lib/softhsm/libsofthsm2.so
           HSM_SO_PIN: 123456
           HSM_PIN: 1234

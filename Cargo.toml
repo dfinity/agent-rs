@@ -13,7 +13,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.47.3"
+version = "0.48.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2021"
 repository = "https://github.com/dfinity/agent-rs"
@@ -30,10 +30,10 @@ license = "Apache-2.0"
 #   a comment listing those crates). Otherwise, features are declared in the individual crate Cargo.toml.
 #
 # The path dependencies below ensure all workspace members use the same version of internal crates.
-ic-agent = { path = "ic-agent", version = "0.47.3", default-features = false }
-ic-identity-hsm = { path = "ic-identity-hsm", version = "0.47.3" }
-ic-transport-types = { path = "ic-transport-types", version = "0.47.3" }
-ic-utils = { path = "ic-utils", version = "0.47.3" }
+ic-agent = { path = "ic-agent", version = "0.48.0", default-features = false }
+ic-identity-hsm = { path = "ic-identity-hsm", version = "0.48.0" }
+ic-transport-types = { path = "ic-transport-types", version = "0.48.0" }
+ic-utils = { path = "ic-utils", version = "0.48.0" }
 ic-utils-bindgen = { path = "ic-utils-bindgen" }
 ref-tests = { path = "ref-tests" }
 
@@ -88,6 +88,7 @@ rand = "0.10.1"
 rangemap = "1.7"
 reqwest = { version = "0.13.2", default-features = false }
 ring = "0.17"
+rustls = { version = "0.23", default-features = false }
 sec1 = "0.7.2"
 semver = "1.0.7"
 serde = "1.0.215"
