@@ -24,8 +24,12 @@ hex = { workspace = true }
 ic-certification = { workspace = true }
 leb128 = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["blocking", "rustls"] }
+reqwest-0_12 = { workspace = true, optional = true, default-features = false, features = ["blocking", "rustls-tls"] }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
 serde_cbor = { workspace = true }
 sha2 = { workspace = true }
 time = { workspace = true, features = ["formatting"] }
+
+[features]
+reqwest-0_12 = ["dep:reqwest-0_12"]

@@ -89,6 +89,9 @@
 #![cfg_attr(not(target_family = "wasm"), warn(clippy::future_not_send))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+#[cfg(feature = "reqwest-0_12")]
+pub extern crate reqwest_0_12 as reqwest;
+
 #[macro_use]
 mod util;
 

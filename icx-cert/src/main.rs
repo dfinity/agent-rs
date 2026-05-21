@@ -1,3 +1,6 @@
+#[cfg(feature = "reqwest-0_12")]
+extern crate reqwest_0_12 as reqwest;
+
 use anyhow::Result;
 use clap::{crate_authors, crate_version, Parser};
 

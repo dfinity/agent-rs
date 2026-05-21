@@ -87,6 +87,7 @@ pocket-ic = { git = "https://github.com/dfinity/ic", rev = "17524c56ef237c54b510
 rand = "0.10.1"
 rangemap = "1.7"
 reqwest = { version = "0.13.2", default-features = false }
+reqwest-0_12 = { package = "reqwest", version = "0.12", default-features = false }
 ring = "0.17"
 sec1 = "0.7.2"
 semver = "1.0.7"
