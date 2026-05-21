@@ -15,8 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Breaking Changes
 
 * `ic-agent`:
-  * Default feature set changed from `["pem"]` to `["pem", "tls-aws-lc-rs"]`. Stock-default users are unaffected (aws-lc-rs has been the only crypto provider available since 0.46.0).
-  * Consumers using `default-features = false` must now opt into a TLS feature, otherwise `Agent::new` panics with "No provider set" when constructing the default reqwest client.
+  * Default feature set changed from `["pem"]` to `["pem", "tls-aws-lc-rs"]`. Stock-default users are unaffected (aws-lc-rs has been the only crypto provider available since 0.46.0). The `rustls` dependency is declared `cfg(not(target_family = "wasm"))`, so wasm consumers using default features are also unaffected — aws-lc-sys (which does not cross-compile to wasm) is not pulled in on wasm targets.
+  * Consumers using `default-features = false` on a non-wasm target must now opt into a TLS feature, otherwise `Agent::new` panics with "No provider set" when constructing the default reqwest client.
     * Migration: add `tls-aws-lc-rs` (matches previous behavior) or `tls-ring` (matches reqwest 0.12 behavior) to the feature list, or supply your own `reqwest::Client` via `AgentBuilder::with_http_client`.
     * Example: `ic-agent = { version = "0.48", default-features = false, features = ["pem", "tls-ring"] }`.
   * Removed the deprecated `http_transport` module (`ReqwestTransport`, `AgentBuilder::with_transport`, `AgentBuilder::with_arc_transport`), deprecated since 0.38.0.

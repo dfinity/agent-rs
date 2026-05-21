@@ -77,7 +77,6 @@ rand = { workspace = true }
 rangemap = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["blocking", "json", "rustls-no-provider", "stream"] }
 ring = { workspace = true, optional = true }
-rustls = { workspace = true, default-features = false, features = ["std", "tls12"], optional = true }
 sec1 = { workspace = true, features = ["pem"] }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
@@ -92,6 +91,12 @@ tracing = { workspace = true, optional = true }
 url = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
+# rustls is only used off-wasm: on wasm the reqwest client is the browser's
+# fetch API, and the rustls crypto-provider install is gated
+# `cfg(not(target_family = "wasm"))`. Keeping the dep target-conditional means
+# wasm consumers can use the default features without pulling in aws-lc-sys
+# (which doesn't cross-compile to wasm32-unknown-unknown).
+rustls = { workspace = true, default-features = false, features = ["std", "tls12"], optional = true }
 tokio = { workspace = true, default-features = false, features = ["time", "sync"] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
