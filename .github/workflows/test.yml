@@ -94,8 +94,7 @@ jobs:
         # via #[should_panic]; run only that test, since the rest of ic-agent's
         # lib tests would also panic for the same (expected) reason.
         shell: bash
-        run: cargo test -p ic-agent --no-default-features --features pem \
-            --test crypto_provider_neither --no-fail-fast
+        run: cargo test -p ic-agent --no-default-features --features pem --test crypto_provider_neither --no-fail-fast
 
       - name: Test - WASM (ic-agent, wasm-bindgen)
         if: ${{ matrix.os == 'ubuntu-latest' }}
