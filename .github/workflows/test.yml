@@ -25,11 +25,15 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-1
 
-      - name: Install wasm-pack and chromedriver for WASM tests
+      - name: Install wasm-pack for WASM tests
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: |
-          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-          sudo apt-get install -y chromium-chromedriver
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Install Chrome and chromedriver for WASM tests
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        uses: browser-actions/setup-chrome@2e1d749697dd1612b833dba4a722266286fbefcd # v2.1.2
+        with:
+          install-chromedriver: true
 
       - name: Install node for SoftHSM tests
         if: ${{ matrix.os == 'ubuntu-latest' }}
