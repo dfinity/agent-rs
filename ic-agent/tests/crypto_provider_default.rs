@@ -11,13 +11,6 @@
 use ic_agent::Agent;
 use rustls::crypto::CryptoProvider;
 
-/// Address of the static target behind a `&'static dyn Trait`. Each rustls
-/// provider registers its own `&'static dyn SecureRandom` pointing at a
-/// distinct singleton, so two providers compare unequal here.
-fn secure_random_addr(p: &CryptoProvider) -> *const () {
-    (p.secure_random as *const dyn rustls::crypto::SecureRandom).cast()
-}
-
 #[test]
 fn default_client_installs_expected_provider() {
     let _agent = Agent::builder()
@@ -33,8 +26,11 @@ fn default_client_installs_expected_provider() {
     #[cfg(all(feature = "tls-ring", not(feature = "tls-aws-lc-rs")))]
     let expected = rustls::crypto::ring::default_provider();
 
+    // Compare the full `&'static dyn SecureRandom` wide pointer (data + vtable).
+    // Casting to `*const ()` would drop the vtable and could alias across
+    // ZST-backed impls; wide-pointer equality keeps the type identity.
     assert!(
-        std::ptr::eq(secure_random_addr(installed), secure_random_addr(&expected)),
+        std::ptr::eq(installed.secure_random, expected.secure_random),
         "installed provider does not match the one selected by active features"
     );
 }

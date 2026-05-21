@@ -11,10 +11,6 @@
 use ic_agent::Agent;
 use rustls::crypto::CryptoProvider;
 
-fn secure_random_addr(p: &CryptoProvider) -> *const () {
-    (p.secure_random as *const dyn rustls::crypto::SecureRandom).cast()
-}
-
 #[test]
 fn application_provider_wins() {
     // Pick the *opposite* of what ic-agent would install, to detect overwrites.
@@ -23,7 +19,7 @@ fn application_provider_wins() {
     #[cfg(all(feature = "tls-ring", not(feature = "tls-aws-lc-rs")))]
     let user_choice = rustls::crypto::aws_lc_rs::default_provider();
 
-    let user_addr = secure_random_addr(&user_choice);
+    let user_ptr: *const dyn rustls::crypto::SecureRandom = user_choice.secure_random;
     user_choice
         .install_default()
         .expect("test must run before any other provider is installed");
@@ -36,8 +32,10 @@ fn application_provider_wins() {
         .expect("Agent build should succeed");
 
     let installed = CryptoProvider::get_default().expect("provider still installed");
+    // Compare the full `&'static dyn SecureRandom` wide pointer (data + vtable);
+    // casting to `*const ()` would drop the vtable and could alias for ZSTs.
     assert!(
-        std::ptr::eq(secure_random_addr(installed), user_addr),
+        std::ptr::eq(installed.secure_random, user_ptr),
         "ic-agent overwrote a previously installed CryptoProvider"
     );
 }
