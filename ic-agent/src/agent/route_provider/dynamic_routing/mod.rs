@@ -77,11 +77,7 @@
 //!         // Node::new("<api-boundary-node-domain>")?,
 //!     ];
 //!
-//!     // Build dynamic route provider with HTTP client. Because the client is
-//!     // built directly (not via `Agent::new`), a rustls `CryptoProvider` must
-//!     // be installed before `reqwest::Client::new()` — `Agent::new` would
-//!     // normally do this for you.
-//!     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+//!     // Build dynamic route provider with HTTP client
 //!     let http_client = Arc::new(reqwest::Client::new());
 //!     let route_provider = DynamicRouteProviderBuilder::new(seed_nodes, http_client, None)
 //!             // Set how often to fetch the latest API boundary node topology

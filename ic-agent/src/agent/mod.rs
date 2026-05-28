@@ -2,6 +2,10 @@
 pub(crate) mod agent_config;
 pub mod agent_error;
 pub(crate) mod builder;
+// delete this module after 0.40
+#[doc(hidden)]
+#[deprecated(since = "0.38.0", note = "use the AgentBuilder methods")]
+pub mod http_transport;
 pub(crate) mod nonce;
 pub(crate) mod response_authentication;
 pub mod route_provider;
@@ -207,43 +211,6 @@ impl fmt::Debug for Agent {
     }
 }
 
-/// Install a process-wide rustls [`CryptoProvider`] if none is already installed.
-///
-/// Called when [`Agent::new`] builds its default [`reqwest::Client`]. Reqwest's
-/// `rustls-no-provider` feature defers the provider choice to whichever
-/// `CryptoProvider` is registered as the process default; this function makes
-/// the choice based on the active cargo features so users don't have to install
-/// one themselves.
-///
-/// The call is idempotent: `install_default` returns `Err` if a default was
-/// already set, which we ignore. That means an application that installs its
-/// own provider before constructing an `Agent` wins.
-///
-/// Feature precedence: `tls-aws-lc-rs` wins over `tls-ring` when both are
-/// enabled, preserving additivity (enabling `tls-ring` on top of the default
-/// never silently flips the installed provider).
-#[cfg(not(target_family = "wasm"))]
-pub(crate) fn install_default_crypto_provider() {
-    #[cfg(any(feature = "tls-aws-lc-rs", feature = "tls-ring"))]
-    {
-        // Cheap fast-path: if a default is already installed (by us on a prior
-        // `Agent::new`, or by the application), skip constructing a provider.
-        // The check has a benign TOCTOU race — `install_default()` is itself
-        // atomic, so concurrent installers still produce a single winner and
-        // the others' `Err` is discarded.
-        if rustls::crypto::CryptoProvider::get_default().is_some() {
-            return;
-        }
-        #[cfg(feature = "tls-aws-lc-rs")]
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-        #[cfg(all(feature = "tls-ring", not(feature = "tls-aws-lc-rs")))]
-        let _ = rustls::crypto::ring::default_provider().install_default();
-    }
-    // If neither feature is enabled, do nothing. The user is expected to either
-    // call `with_http_client` or install a provider themselves before building
-    // the agent; otherwise reqwest will panic when constructing its TLS config.
-}
-
 impl Agent {
     /// Create an instance of an [`AgentBuilder`] for building an [`Agent`]. This is simpler than
     /// using the [`AgentConfig`] and [`Agent::new()`].
@@ -258,7 +225,6 @@ impl Agent {
                 client: config.client.unwrap_or_else(|| {
                     #[cfg(not(target_family = "wasm"))]
                     {
-                        install_default_crypto_provider();
                         Client::builder()
                             .use_rustls_tls()
                             .timeout(Duration::from_secs(360))

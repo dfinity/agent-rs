@@ -8,20 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-## [0.48.0] - 2026-05-21
-
-* `ic-agent`: Added cargo features `tls-aws-lc-rs` (default) and `tls-ring` to select the rustls crypto provider used by the default `reqwest::Client`. Features are additive: when both are enabled, aws-lc-rs is installed as the process-wide rustls default. Reqwest's `rustls` feature (which hardcoded aws-lc-rs) has been swapped for `rustls-no-provider`; ic-agent now installs the chosen provider via `CryptoProvider::install_default()` on the default-client path, idempotently (an application-installed provider is not overwritten). When the user supplies a client via `AgentBuilder::with_http_client`, ic-agent installs no provider.
-
-### Breaking Changes
-
-* `ic-agent`:
-  * Default feature set changed from `["pem"]` to `["pem", "tls-aws-lc-rs"]`. Stock-default users are unaffected (aws-lc-rs has been the only crypto provider available since 0.46.0). The `rustls` dependency is declared `cfg(not(target_family = "wasm"))`, so wasm consumers using default features are also unaffected — aws-lc-sys (which does not cross-compile to wasm) is not pulled in on wasm targets.
-  * Consumers using `default-features = false` on a non-wasm target must now opt into a TLS feature, otherwise `Agent::new` panics with "No provider set" when constructing the default reqwest client.
-    * Migration: add `tls-aws-lc-rs` (matches previous behavior) or `tls-ring` (matches reqwest 0.12 behavior) to the feature list, or supply your own `reqwest::Client` via `AgentBuilder::with_http_client`.
-    * Example: `ic-agent = { version = "0.48", default-features = false, features = ["pem", "tls-ring"] }`.
-  * Removed the deprecated `http_transport` module (`ReqwestTransport`, `AgentBuilder::with_transport`, `AgentBuilder::with_arc_transport`), deprecated since 0.38.0.
-    * Migration: use the dedicated `AgentBuilder` methods (`with_url`, `with_http_client`, `with_arc_route_provider`, `with_max_response_body_size`, `with_max_tcp_error_retries`).
-
 ## [0.47.3] - 2026-05-15
 
 * `ic-agent`: Added the `EffectiveId` enum (`Canister(Principal)` | `Subnet(Principal)`) and widened `Agent::update_signed`, `query_signed`, `request_status_signed`, `request_status_raw`, `wait`, `wait_signed`, `read_state_raw`, `verify`, and `sign_request_status` to accept `impl Into<EffectiveId>`. Passing a bare `Principal` is unchanged (treated as `EffectiveId::Canister(_)`); passing `EffectiveId::Subnet(_)` routes to the subnet-scoped HTTP endpoints (`/api/v4/subnet/<id>/call`, `/api/v3/subnet/<id>/read_state`, `/api/v3/subnet/<id>/query`) introduced in IC interface spec 0.60.0.
