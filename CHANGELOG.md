@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.48.0] - 2026-07-04
+
+* `ic-transport-types` / `ic-agent`: Added a `permissions` field to `Delegation` and a new `DelegationPermissions` enum (`Queries` | `All`) describing which request kinds a signed delegation authorizes, matching the IC interface-spec addition for read-only delegations. The field serializes as `"queries"`/`"all"` and is omitted when `None`, so existing delegations (which leave it `None`) hash and verify exactly as before. `DelegationPermissions` is re-exported from `ic_agent::identity` alongside `Delegation` and `SignedDelegation`.
+
+### Breaking Changes
+
+* `ic-transport-types`: `Delegation` gained a `permissions: Option<DelegationPermissions>` field. `Delegation` is not `#[non_exhaustive]`, so code that constructs it with a struct literal must add `permissions: None` (or the desired value).
+
 ## [0.47.3] - 2026-05-15
 
 * `ic-agent`: Added the `EffectiveId` enum (`Canister(Principal)` | `Subnet(Principal)`) and widened `Agent::update_signed`, `query_signed`, `request_status_signed`, `request_status_raw`, `wait`, `wait_signed`, `read_state_raw`, `verify`, and `sign_request_status` to accept `impl Into<EffectiveId>`. Passing a bare `Principal` is unchanged (treated as `EffectiveId::Canister(_)`); passing `EffectiveId::Subnet(_)` routes to the subnet-scoped HTTP endpoints (`/api/v4/subnet/<id>/call`, `/api/v3/subnet/<id>/read_state`, `/api/v3/subnet/<id>/query`) introduced in IC interface spec 0.60.0.
