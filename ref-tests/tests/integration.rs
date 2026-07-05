@@ -717,6 +717,7 @@ mod identity {
             expiration: i64::MAX as u64,
             pubkey: signing_identity.public_key().unwrap(),
             targets: None,
+            permissions: None,
         };
         let signature = sending_identity.sign_delegation(&delegation).unwrap();
         let delegated_identity = DelegatedIdentity::new(
@@ -755,6 +756,7 @@ mod identity {
             expiration: i64::MAX as u64,
             pubkey: signing_identity.public_key().unwrap(),
             targets: None,
+            permissions: None,
         };
         let signature = sending_identity.sign_delegation(&delegation).unwrap();
         let delegated_identity = DelegatedIdentity::new(
@@ -808,6 +810,7 @@ mod identity {
                 pubkey: signing_identity.public_key().unwrap(),
                 expiration: i64::MAX as u64,
                 targets: None,
+                permissions: None,
             };
 
             // Build the signature tree:
@@ -904,6 +907,7 @@ mod identity {
                 pubkey: signing_identity.public_key().unwrap(),
                 expiration: i64::MAX as u64,
                 targets: None,
+                permissions: None,
             };
 
             // Compute hash of the delegation message.

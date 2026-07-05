@@ -20,7 +20,7 @@ pub use delegated::DelegatedIdentity;
 #[doc(inline)]
 pub use error::DelegationError;
 #[doc(inline)]
-pub use ic_transport_types::{Delegation, SenderInfo, SignedDelegation};
+pub use ic_transport_types::{Delegation, DelegationPermissions, SenderInfo, SignedDelegation};
 #[doc(inline)]
 pub use info_aware::InfoAwareIdentity;
 #[doc(inline)]
