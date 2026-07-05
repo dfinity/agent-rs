@@ -391,6 +391,20 @@ pub struct Delegation {
     /// If present, this delegation only applies to requests sent to one of these canisters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub targets: Option<Vec<Principal>>,
+    /// If present, this delegation only applies to the specified kinds of requests.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permissions: Option<DelegationPermissions>,
+}
+
+/// The kinds of requests a [`Delegation`] permits.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum DelegationPermissions {
+    /// Only query calls and `read_state` requests are permitted.
+    #[serde(rename = "queries")]
+    Queries,
+    /// All request types are permitted.
+    #[serde(rename = "all")]
+    All,
 }
 
 const IC_REQUEST_DELEGATION_DOMAIN_SEPARATOR: &[u8] = b"\x1Aic-request-auth-delegation";
