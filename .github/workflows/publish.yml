@@ -11,11 +11,38 @@ jobs:
       - uses: rust-lang/crates-io-auth-action@b7e9a28eded4986ec6b1fa40eeee8f8f165559ec # v1
         id: auth
       - run: |
-          cargo publish -p ic-transport-types
-          cargo publish -p ic-agent
-          cargo publish -p ic-identity-hsm
-          cargo publish -p ic-utils
-          cargo publish -p icx
-          cargo publish -p icx-cert
+          set -euo pipefail
+
+          # Publish one crate, tolerating the two things that make a naive
+          # `cargo publish` loop brittle:
+          #   1. Re-running after a partial release: a crate already uploaded at
+          #      this version is a success, not a failure (lets a re-dispatch
+          #      finish the crates that didn't make it the first time).
+          #   2. crates.io index lag: a dependent crate can fail to resolve a
+          #      just-uploaded dependency for up to a minute or two. Retry.
+          publish() {
+            local crate="$1" attempt max=6
+            for attempt in $(seq 1 "$max"); do
+              if cargo publish -p "$crate" 2>&1 | tee /tmp/publish.log; then
+                echo "== $crate published"
+                return 0
+              fi
+              if grep -qiE "already (uploaded|exists)" /tmp/publish.log; then
+                echo "== $crate already published at this version; skipping"
+                return 0
+              fi
+              if [ "$attempt" -lt "$max" ]; then
+                echo "== $crate publish attempt $attempt/$max failed (likely dependency index lag); retrying in 30s"
+                sleep 30
+              fi
+            done
+            echo "== ERROR: $crate failed to publish after $max attempts" >&2
+            return 1
+          }
+
+          # Order matters: dependencies before dependents.
+          for crate in ic-transport-types ic-agent ic-identity-hsm ic-utils icx icx-cert; do
+            publish "$crate"
+          done
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
