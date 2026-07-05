@@ -21,8 +21,8 @@ jobs:
           #   2. crates.io index lag: a dependent crate can fail to resolve a
           #      just-uploaded dependency for up to a minute or two. Retry.
           publish() {
-            local crate="$1" attempt
-            for attempt in $(seq 1 6); do
+            local crate="$1" attempt max=6
+            for attempt in $(seq 1 "$max"); do
               if cargo publish -p "$crate" 2>&1 | tee /tmp/publish.log; then
                 echo "== $crate published"
                 return 0
@@ -31,10 +31,12 @@ jobs:
                 echo "== $crate already published at this version; skipping"
                 return 0
               fi
-              echo "== $crate publish attempt $attempt failed (likely dependency index lag); retrying in 30s"
-              sleep 30
+              if [ "$attempt" -lt "$max" ]; then
+                echo "== $crate publish attempt $attempt/$max failed (likely dependency index lag); retrying in 30s"
+                sleep 30
+              fi
             done
-            echo "== ERROR: $crate failed to publish after retries" >&2
+            echo "== ERROR: $crate failed to publish after $max attempts" >&2
             return 1
           }
 
