@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.48.1] - 2026-07-07
+
+* `ic-transport-types`: `Delegation`, `SignedDelegation`, and `DelegationPermissions` now derive `candid::CandidType`, so they can be used directly in Candid interfaces (e.g. matching Internet Identity's `Delegation`/`SignedDelegation` types). The generated Candid maps the byte fields to `blob` and `DelegationPermissions` to `variant { queries; all }`; the added `permissions` field is `opt`, so the encoding stays subtype-compatible with delegation interfaces that omit it.
+
 ## [0.48.0] - 2026-07-04
 
 * `ic-transport-types` / `ic-agent`: Added a `permissions` field to `Delegation` and a new `DelegationPermissions` enum (`Queries` | `All`) describing which request kinds a signed delegation authorizes, matching the IC interface-spec addition for read-only delegations. The field serializes as `"queries"`/`"all"` and is omitted when `None`, so existing delegations (which leave it `None`) hash and verify exactly as before. `DelegationPermissions` is re-exported from `ic_agent::identity` alongside `Delegation` and `SignedDelegation`.
