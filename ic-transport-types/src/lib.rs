@@ -6,7 +6,7 @@
 
 use std::borrow::Cow;
 
-use candid::Principal;
+use candid::{CandidType, Principal};
 use ic_certification::Label;
 pub use request_id::{to_request_id, RequestId, RequestIdError};
 use serde::{Deserialize, Serialize};
@@ -381,7 +381,7 @@ pub struct ReplyResponse {
 ///
 /// If key A signs a delegation containing key B, then key B may be used to
 /// authenticate as key A's corresponding principal(s).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, CandidType, Serialize, Deserialize)]
 pub struct Delegation {
     /// The delegated-to key.
     #[serde(with = "serde_bytes")]
@@ -397,7 +397,7 @@ pub struct Delegation {
 }
 
 /// The kinds of requests a [`Delegation`] permits.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, CandidType, Serialize, Deserialize)]
 pub enum DelegationPermissions {
     /// Only query calls and `read_state` requests are permitted.
     #[serde(rename = "queries")]
@@ -422,7 +422,7 @@ impl Delegation {
 }
 
 /// A [`Delegation`] that has been signed by an [`Identity`](https://docs.rs/ic-agent/latest/ic_agent/trait.Identity.html).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, CandidType, Serialize, Deserialize)]
 pub struct SignedDelegation {
     /// The signed delegation.
     pub delegation: Delegation,
