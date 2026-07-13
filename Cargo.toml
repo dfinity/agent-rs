@@ -13,7 +13,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.48.1"
+version = "0.49.0"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2021"
 repository = "https://github.com/dfinity/agent-rs"
@@ -30,10 +30,10 @@ license = "Apache-2.0"
 #   a comment listing those crates). Otherwise, features are declared in the individual crate Cargo.toml.
 #
 # The path dependencies below ensure all workspace members use the same version of internal crates.
-ic-agent = { path = "ic-agent", version = "0.48.1", default-features = false }
-ic-identity-hsm = { path = "ic-identity-hsm", version = "0.48.1" }
-ic-transport-types = { path = "ic-transport-types", version = "0.48.1" }
-ic-utils = { path = "ic-utils", version = "0.48.1" }
+ic-agent = { path = "ic-agent", version = "0.49.0", default-features = false }
+ic-identity-hsm = { path = "ic-identity-hsm", version = "0.49.0" }
+ic-transport-types = { path = "ic-transport-types", version = "0.49.0" }
+ic-utils = { path = "ic-utils", version = "0.49.0" }
 ic-utils-bindgen = { path = "ic-utils-bindgen" }
 ref-tests = { path = "ref-tests" }
 
@@ -64,7 +64,7 @@ http-body-util = "0.1.3"
 humantime = "2.0.1"
 ic-certification = "3"
 ic-ed25519 = "0.6.0"
-ic-management-canister-types = "0.7.1"
+ic-management-canister-types = "0.8.0"
 ic_principal = { version = "0.1.2", features = ["rangemap"] }
 ic-verify-bls-signature = "0.6"
 js-sys = "0.3"
@@ -83,7 +83,7 @@ pkcs8 = "0.10.2"
 # crates.io — crates.io rejects packages with git dependencies. Published
 # crates that need pocket-ic must depend on a released version directly (see
 # icx/Cargo.toml).
-pocket-ic = { git = "https://github.com/dfinity/ic", rev = "17524c56ef237c54b510a201ceb58da8d790d4d5" } # https://github.com/dfinity/ic/pull/10226
+pocket-ic = { git = "https://github.com/dfinity/ic", rev = "992628c4f26cc7320396b6b8be37133a666a4386" } # release-2026-07-09_04-35-base
 rand = "0.10.1"
 rangemap = "1.7"
 reqwest = { version = "0.13.2", default-features = false }

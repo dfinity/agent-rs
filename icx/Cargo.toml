@@ -32,7 +32,7 @@ ic-utils = { workspace = true }
 # pin a released semver here instead of inheriting the workspace's git-rev
 # pocket-ic (which is for integration tests only). Keep the major version in
 # rough sync with the workspace pin to avoid API drift.
-pocket-ic = "13.0.0"
+pocket-ic = "15.0.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["full"] }

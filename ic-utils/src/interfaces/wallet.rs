@@ -679,6 +679,7 @@ impl<'agent> WalletCanister<'agent> {
             log_visibility: None,
             log_memory_limit: None,
             environment_variables: None,
+            snapshot_visibility: None,
         };
 
         self.update("wallet_create_canister")
@@ -713,6 +714,7 @@ impl<'agent> WalletCanister<'agent> {
             log_visibility: None,
             log_memory_limit: None,
             environment_variables: None,
+            snapshot_visibility: None,
         };
 
         self.update("wallet_create_canister128")
@@ -845,6 +847,7 @@ impl<'agent> WalletCanister<'agent> {
             log_visibility: None,
             log_memory_limit: None,
             environment_variables: None,
+            snapshot_visibility: None,
         };
 
         self.update("wallet_create_wallet")
@@ -879,6 +882,7 @@ impl<'agent> WalletCanister<'agent> {
             log_visibility: None,
             log_memory_limit: None,
             environment_variables: None,
+            snapshot_visibility: None,
         };
 
         self.update("wallet_create_wallet128")

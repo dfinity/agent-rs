@@ -266,7 +266,7 @@ mod management_canister {
             // Check status for empty canister
             let result = other_ic00
                 .canister_status(&canister_id_3)
-                .call_and_wait()
+                .call()
                 .await?;
             assert_eq!(result.0.status, CanisterStatusType::Running);
             assert_eq!(result.0.settings.controllers.len(), 1);
@@ -283,7 +283,7 @@ mod management_canister {
             // Check status after installing wasm and validate module_hash
             let result = other_ic00
                 .canister_status(&canister_id_3)
-                .call_and_wait()
+                .call()
                 .await?;
             let sha256_digest = Sha256::digest(&canister_wasm);
             assert_eq!(result.0.module_hash, Some(sha256_digest.to_vec()));
@@ -328,7 +328,7 @@ mod management_canister {
                 .await?;
 
             // Controllers should be able to fetch the canister status.
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(result.0.settings.controllers.len(), 2);
             let actual = result
                 .0
@@ -343,10 +343,7 @@ mod management_canister {
                 .collect::<HashSet<_>>();
             assert_eq!(actual, expected);
 
-            let result = other_ic00
-                .canister_status(&canister_id)
-                .call_and_wait()
-                .await?;
+            let result = other_ic00.canister_status(&canister_id).call().await?;
             assert_eq!(result.0.settings.controllers.len(), 2);
             let actual = result
                 .0
@@ -368,24 +365,18 @@ mod management_canister {
                 .await?;
 
             // Only that controller can get canister status
-            let result = ic00.canister_status(&canister_id).call_and_wait().await;
+            let result = ic00.canister_status(&canister_id).call().await;
             assert_err_or_reject(
                 result,
                 vec![RejectCode::DestinationInvalid, RejectCode::CanisterError],
             );
-            let result = other_ic00
-                .canister_status(&canister_id)
-                .call_and_wait()
-                .await;
+            let result = other_ic00.canister_status(&canister_id).call().await;
             assert_err_or_reject(
                 result,
                 vec![RejectCode::DestinationInvalid, RejectCode::CanisterError],
             );
 
-            let result = secp256k1_ic00
-                .canister_status(&canister_id)
-                .call_and_wait()
-                .await?;
+            let result = secp256k1_ic00.canister_status(&canister_id).call().await?;
             assert_eq!(result.0.settings.controllers.len(), 1);
             assert_eq!(result.0.settings.controllers[0], secp256k1_principal);
 
@@ -414,18 +405,12 @@ mod management_canister {
                 .with_controller(prime256v1_principal)
                 .call_and_wait()
                 .await?;
-            let result = secp256k1_ic00
-                .canister_status(&canister_id)
-                .call_and_wait()
-                .await;
+            let result = secp256k1_ic00.canister_status(&canister_id).call().await;
             assert_err_or_reject(
                 result,
                 vec![RejectCode::DestinationInvalid, RejectCode::CanisterError],
             );
-            let result = prime256v1_ic00
-                .canister_status(&canister_id)
-                .call_and_wait()
-                .await?;
+            let result = prime256v1_ic00.canister_status(&canister_id).call().await?;
             assert_eq!(result.0.settings.controllers.len(), 1);
             assert_eq!(result.0.settings.controllers[0], prime256v1_principal);
 
@@ -474,14 +459,14 @@ mod management_canister {
                 .await?;
 
             // A newly installed canister should be running
-            let result = ic00.canister_status(&canister_id).call_and_wait().await;
+            let result = ic00.canister_status(&canister_id).call().await;
             assert_eq!(result?.0.status, CanisterStatusType::Running);
 
             // Stop should succeed.
             ic00.stop_canister(&canister_id).call_and_wait().await?;
 
             // Canister should be stopped
-            let result = ic00.canister_status(&canister_id).call_and_wait().await;
+            let result = ic00.canister_status(&canister_id).call().await;
             assert_eq!(result?.0.status, CanisterStatusType::Stopped);
 
             // Another stop is a noop
@@ -530,7 +515,7 @@ mod management_canister {
             ic00.start_canister(&canister_id).call_and_wait().await?;
 
             // Canister should be running
-            let result = ic00.canister_status(&canister_id).call_and_wait().await;
+            let result = ic00.canister_status(&canister_id).call().await;
             assert_eq!(result?.0.status, CanisterStatusType::Running);
 
             // Can call update
@@ -603,7 +588,7 @@ mod management_canister {
             );
 
             // Cannot query canister status
-            let result = ic00.canister_status(&canister_id).call_and_wait().await;
+            let result = ic00.canister_status(&canister_id).call().await;
             assert!(
                 match &result {
                     Err(AgentError::UncertifiedReject {
@@ -701,10 +686,7 @@ mod management_canister {
             );
 
             // Get canister status as a wrong controller should fail.
-            let result = other_ic00
-                .canister_status(&canister_id)
-                .call_and_wait()
-                .await;
+            let result = other_ic00.canister_status(&canister_id).call().await;
             assert!(
                 matches!(
                     &result,
@@ -767,13 +749,16 @@ mod management_canister {
                     log_visibility: None,
                     log_memory_limit: None,
                     environment_variables: None,
+                    snapshot_visibility: None,
                 },
             };
 
             let args = Argument::from_candid((create_args,));
 
             let creation_fee = 500_000_000_000;
-            let canister_initial_balance = 4_000_000_000;
+            // Must exceed the cycles the replica reserves for the new canister's
+            // memory; pocket-ic's cost model rejects creation below that floor.
+            let canister_initial_balance = 40_000_000_000;
             let (create_result,): (CreateResult,) = wallet
                 .call(
                     Principal::management_canister(),
@@ -812,7 +797,14 @@ mod management_canister {
                 .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .call_and_wait()
                 .await?;
-            let result = ic00.canister_status(&canister_id_1).call_and_wait().await?;
+            // Read the balance via an update call: the cycle-accounting assertions
+            // below need a certified read at a definite round, not a query whose
+            // (auto-advancing) timestamp would reflect extra idle burn.
+            let result = ic00
+                .canister_status(&canister_id_1)
+                .as_update()
+                .call()
+                .await?;
             // assume some cycles are already burned
             let cycles: i128 = result.0.cycles.0.try_into().unwrap();
             let burned = default_canister_balance as i128 - cycles;
@@ -827,7 +819,11 @@ mod management_canister {
                 .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .call_and_wait()
                 .await?;
-            let result = ic00.canister_status(&canister_id_2).call_and_wait().await?;
+            let result = ic00
+                .canister_status(&canister_id_2)
+                .as_update()
+                .call()
+                .await?;
             let cycles: i128 = result.0.cycles.0.try_into().unwrap();
             let burned = amount as i128 - cycles;
             assert!(
@@ -983,6 +979,142 @@ mod management_canister {
         })
         .await
     }
+
+    #[tokio::test]
+    async fn canister_metrics() {
+        with_agent(async move |pic, agent| {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
+                .call_and_wait()
+                .await?;
+
+            // The controller can fetch the canister's metrics. A successful,
+            // decodable response exercises the whole round trip: argument
+            // encoding, routing, and `CanisterMetricsResult` decoding. Exercise
+            // both call styles: the default query and the replicated update.
+            let (_query_metrics,) = ic00.canister_metrics(&canister_id).call().await?;
+            let (_update_metrics,) = ic00
+                .canister_metrics(&canister_id)
+                .as_update()
+                .call()
+                .await?;
+            Ok(())
+        })
+        .await
+    }
+
+    #[tokio::test]
+    async fn list_canisters() {
+        use ref_tests::{create_basic_identity, with_subnet_admin_agent};
+
+        let admin_identity = create_basic_identity();
+        with_subnet_admin_agent(admin_identity, async move |_pic, agent, subnet_id| {
+            let ic00 = ManagementCanister::create(&agent);
+
+            // Create a canister on the admin's subnet.
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_subnet_id(subnet_id)
+                .call_and_wait()
+                .await?;
+
+            // As a subnet administrator, list the subnet's canisters via the
+            // subnet-scoped query endpoint.
+            let result = ic00.list_canisters(subnet_id).await?;
+
+            // The created canister must fall within one of the returned ranges.
+            assert!(
+                result
+                    .canisters
+                    .iter()
+                    .any(|range| range.start <= canister_id && canister_id <= range.end),
+                "created canister {canister_id} not found in returned ranges: {:?}",
+                result.canisters,
+            );
+            Ok(())
+        })
+        .await
+    }
+
+    #[tokio::test]
+    async fn with_canister_settings() {
+        use candid::Nat;
+
+        with_agent(async move |pic, agent| {
+            let agent_principal = agent.get_principal()?;
+            let ic00 = ManagementCanister::create(&agent);
+
+            // create_canister: pass a fully built CanisterSettings struct.
+            let create_settings = CanisterSettings {
+                controllers: Some(vec![agent_principal]),
+                compute_allocation: None,
+                memory_allocation: None,
+                freezing_threshold: None,
+                reserved_cycles_limit: None,
+                wasm_memory_limit: None,
+                wasm_memory_threshold: None,
+                log_visibility: None,
+                log_memory_limit: None,
+                environment_variables: None,
+                snapshot_visibility: None,
+            };
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
+                .with_canister_settings(create_settings.clone())
+                .call_and_wait()
+                .await?;
+
+            let (status,) = ic00.canister_status(&canister_id).call().await?;
+            assert_eq!(status.settings.controllers, vec![agent_principal]);
+
+            // Mixing the whole-struct setter with an individual setter is an error.
+            let mixed = ic00
+                .create_canister()
+                .with_canister_settings(create_settings)
+                .with_controller(agent_principal)
+                .build();
+            assert!(matches!(mixed, Err(AgentError::MessageError(_))));
+
+            // update_settings: pass a fully built CanisterSettings struct.
+            let update_settings = CanisterSettings {
+                controllers: Some(vec![agent_principal]),
+                compute_allocation: None,
+                memory_allocation: None,
+                freezing_threshold: Some(Nat::from(90_000_u64)),
+                reserved_cycles_limit: None,
+                wasm_memory_limit: None,
+                wasm_memory_threshold: None,
+                log_visibility: None,
+                log_memory_limit: None,
+                environment_variables: None,
+                snapshot_visibility: None,
+            };
+            ic00.update_settings(&canister_id)
+                .with_canister_settings(update_settings.clone())
+                .call_and_wait()
+                .await?;
+
+            let (status,) = ic00.canister_status(&canister_id).call().await?;
+            assert_eq!(status.settings.freezing_threshold, Nat::from(90_000_u64));
+
+            let mixed = ic00
+                .update_settings(&canister_id)
+                .with_canister_settings(update_settings)
+                .with_controller(agent_principal)
+                .build();
+            assert!(matches!(mixed, Err(AgentError::MessageError(_))));
+
+            Ok(())
+        })
+        .await
+    }
 }
 
 mod simple_calls {
@@ -1124,7 +1256,7 @@ mod extras {
                 .call_and_wait()
                 .await?;
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(result.0.settings.compute_allocation, Nat::from(1_u64));
             assert_eq!(
                 result.0.settings.memory_allocation,
@@ -1230,7 +1362,7 @@ mod extras {
                 .await
                 .unwrap();
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(
                 result.0.settings.reserved_cycles_limit,
                 Nat::from(2u128.pow(70))
@@ -1254,7 +1386,7 @@ mod extras {
                 .call_and_wait()
                 .await?;
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(
                 result.0.settings.reserved_cycles_limit,
                 Nat::from(2_500_800_000_000u128)
@@ -1265,13 +1397,13 @@ mod extras {
                 .call_and_wait()
                 .await?;
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(
                 result.0.settings.reserved_cycles_limit,
                 Nat::from(3_400_200_000_000u128)
             );
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(
                 result.0.settings.reserved_cycles_limit,
                 Nat::from(3_400_200_000_000u128)
@@ -1346,7 +1478,7 @@ mod extras {
                 .await
                 .unwrap();
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(
                 result.0.settings.wasm_memory_limit,
                 Nat::from(1_000_000_000_u64)
@@ -1370,7 +1502,7 @@ mod extras {
                 .call_and_wait()
                 .await?;
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(
                 result.0.settings.wasm_memory_limit,
                 Nat::from(1_000_000_000_u64)
@@ -1381,13 +1513,13 @@ mod extras {
                 .call_and_wait()
                 .await?;
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(
                 result.0.settings.wasm_memory_limit,
                 Nat::from(3_000_000_000_u64)
             );
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(
                 result.0.settings.wasm_memory_limit,
                 Nat::from(3_000_000_000_u64)
@@ -1412,7 +1544,7 @@ mod extras {
                 .await
                 .unwrap();
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(result.0.settings.log_visibility, LogVisibility::Public);
 
             Ok(())
@@ -1434,7 +1566,7 @@ mod extras {
                 .call_and_wait()
                 .await?;
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(result.0.settings.log_visibility, LogVisibility::Controllers);
 
             // Update to Public.
@@ -1443,10 +1575,10 @@ mod extras {
                 .call_and_wait()
                 .await?;
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(result.0.settings.log_visibility, LogVisibility::Public);
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(result.0.settings.log_visibility, LogVisibility::Public);
 
             Ok(())
@@ -1468,7 +1600,7 @@ mod extras {
                 .await
                 .unwrap();
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(
                 result.0.settings.wasm_memory_threshold,
                 Nat::from(500_000_000_u64)
@@ -1492,7 +1624,7 @@ mod extras {
                 .call_and_wait()
                 .await?;
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(
                 result.0.settings.wasm_memory_threshold,
                 Nat::from(500_000_000_u64)
@@ -1503,7 +1635,7 @@ mod extras {
                 .call_and_wait()
                 .await?;
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(
                 result.0.settings.wasm_memory_threshold,
                 Nat::from(1_000_000_000_u64)
@@ -1529,7 +1661,7 @@ mod extras {
                 .await
                 .unwrap();
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(result.0.settings.log_memory_limit, Nat::from(1_000_000_u64));
 
             Ok(())
@@ -1551,7 +1683,7 @@ mod extras {
                 .call_and_wait()
                 .await?;
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(result.0.settings.log_memory_limit, Nat::from(1_000_000_u64));
 
             ic00.update_settings(&canister_id)
@@ -1559,7 +1691,7 @@ mod extras {
                 .call_and_wait()
                 .await?;
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(result.0.settings.log_memory_limit, Nat::from(2_000_000_u64));
 
             Ok(())
@@ -1592,7 +1724,7 @@ mod extras {
                 .await
                 .unwrap();
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(result.0.settings.environment_variables, env_vars);
 
             Ok(())
@@ -1618,7 +1750,7 @@ mod extras {
                 .call_and_wait()
                 .await?;
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(result.0.settings.environment_variables, initial_vars);
 
             let updated_vars = vec![
@@ -1637,7 +1769,7 @@ mod extras {
                 .call_and_wait()
                 .await?;
 
-            let result = ic00.canister_status(&canister_id).call_and_wait().await?;
+            let result = ic00.canister_status(&canister_id).call().await?;
             assert_eq!(result.0.settings.environment_variables, updated_vars);
 
             Ok(())

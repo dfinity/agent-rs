@@ -406,6 +406,7 @@ async fn wallet_create_wallet() {
                 log_visibility: None,
                 log_memory_limit: None,
                 environment_variables: None,
+                snapshot_visibility: None,
             },
         };
         let args = Argument::from_candid((create_args,));

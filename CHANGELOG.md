@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.49.0] - 2026-07-13
+
+* `ic-utils`: Bump `ic-management-canister-types` to 0.8.0.
+  * Added `with_snapshot_visibility` setter to `CreateCanisterBuilder` and `UpdateSettingsBuilder`.
+  * Added `canister_metrics()` to `ManagementCanister`.
+  * Added `list_canisters()` method to `ManagementCanister`. This is a subnet-scoped, query-only management-canister method (callable only by subnet administrators); the request is routed to the subnet-scoped query endpoint via `Agent::query_signed` with an `EffectiveId::Subnet`.
+  * Re-exported new types: `SnapshotVisibility`, `CanisterIdRange`, `ListCanistersResult`, `CyclesConsumed`, `CanisterMetricsArgs`, `CanisterMetricsResult`.
+* `ic-utils`: Added `with_canister_settings(CanisterSettings)` to `CreateCanisterBuilder` and `UpdateSettingsBuilder`, for callers that already hold a fully built `CanisterSettings` (e.g. decoded from config or forwarded from another call). It is currently mutually exclusive with the individual settings setters (`with_controller`, `with_compute_allocation`, …); building the call returns an error if the two are combined.
+* `ic-utils`: `ManagementCanister::canister_status` and `canister_metrics` now default to a cheap, non-replicated **query** call and return a `QueryOrUpdateCall` builder. Call `.call().await` for the query, or `.as_update().call().await` to issue a replicated update call instead (e.g. when a fully certified result is required). Query responses are replica-signed and verified by the agent unless query-signature verification is disabled. These are the only two management read methods the replica accepts as both query and update; `fetch_canister_logs` and `list_canisters` remain query-only per the interface spec.
+
+### Breaking Changes
+
+* `ic-utils`: The re-exported `CanisterSettings` and `DefiniteCanisterSettings` structs (from `ic-management-canister-types` 0.8.0) gained a `snapshot_visibility` field, controlling who may read a canister's snapshots. Neither struct is `#[non_exhaustive]`, so code that constructs them with a struct literal must add the new field (`snapshot_visibility: None` on `CanisterSettings`, or the desired `SnapshotVisibility`).
+* `ic-utils`: `ManagementCanister::canister_status` no longer returns an `impl AsyncCall` and no longer performs a replicated update call by default. It now returns a `QueryOrUpdateCall` that defaults to a query call.
+  * Migration: replace `canister_status(&id).call_and_wait().await` with `canister_status(&id).call().await` to accept the (cheaper) query, or `canister_status(&id).as_update().call().await` to preserve the previous replicated-update behavior.
+* `ic-utils`: The `MgmtMethod` enum gained `CanisterMetrics` and `ListCanisters` variants. `MgmtMethod` is not `#[non_exhaustive]`, so exhaustive `match` expressions over it must add arms for the new variants.
+
 ## [0.48.1] - 2026-07-07
 
 * `ic-transport-types`: `Delegation`, `SignedDelegation`, and `DelegationPermissions` now derive `candid::CandidType`, so they can be used directly in Candid interfaces (e.g. matching Internet Identity's `Delegation`/`SignedDelegation` types). The generated Candid maps the byte fields to `blob` and `DelegationPermissions` to `variant { queries; all }`; the added `permissions` field is `opt`, so the encoding stays subtype-compatible with delegation interfaces that omit it.
