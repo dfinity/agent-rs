@@ -343,10 +343,7 @@ mod management_canister {
                 .collect::<HashSet<_>>();
             assert_eq!(actual, expected);
 
-            let result = other_ic00
-                .canister_status(&canister_id)
-                .call()
-                .await?;
+            let result = other_ic00.canister_status(&canister_id).call().await?;
             assert_eq!(result.0.settings.controllers.len(), 2);
             let actual = result
                 .0
@@ -373,19 +370,13 @@ mod management_canister {
                 result,
                 vec![RejectCode::DestinationInvalid, RejectCode::CanisterError],
             );
-            let result = other_ic00
-                .canister_status(&canister_id)
-                .call()
-                .await;
+            let result = other_ic00.canister_status(&canister_id).call().await;
             assert_err_or_reject(
                 result,
                 vec![RejectCode::DestinationInvalid, RejectCode::CanisterError],
             );
 
-            let result = secp256k1_ic00
-                .canister_status(&canister_id)
-                .call()
-                .await?;
+            let result = secp256k1_ic00.canister_status(&canister_id).call().await?;
             assert_eq!(result.0.settings.controllers.len(), 1);
             assert_eq!(result.0.settings.controllers[0], secp256k1_principal);
 
@@ -414,18 +405,12 @@ mod management_canister {
                 .with_controller(prime256v1_principal)
                 .call_and_wait()
                 .await?;
-            let result = secp256k1_ic00
-                .canister_status(&canister_id)
-                .call()
-                .await;
+            let result = secp256k1_ic00.canister_status(&canister_id).call().await;
             assert_err_or_reject(
                 result,
                 vec![RejectCode::DestinationInvalid, RejectCode::CanisterError],
             );
-            let result = prime256v1_ic00
-                .canister_status(&canister_id)
-                .call()
-                .await?;
+            let result = prime256v1_ic00.canister_status(&canister_id).call().await?;
             assert_eq!(result.0.settings.controllers.len(), 1);
             assert_eq!(result.0.settings.controllers[0], prime256v1_principal);
 
@@ -701,10 +686,7 @@ mod management_canister {
             );
 
             // Get canister status as a wrong controller should fail.
-            let result = other_ic00
-                .canister_status(&canister_id)
-                .call()
-                .await;
+            let result = other_ic00.canister_status(&canister_id).call().await;
             assert!(
                 matches!(
                     &result,
@@ -818,7 +800,11 @@ mod management_canister {
             // Read the balance via an update call: the cycle-accounting assertions
             // below need a certified read at a definite round, not a query whose
             // (auto-advancing) timestamp would reflect extra idle burn.
-            let result = ic00.canister_status(&canister_id_1).as_update().call().await?;
+            let result = ic00
+                .canister_status(&canister_id_1)
+                .as_update()
+                .call()
+                .await?;
             // assume some cycles are already burned
             let cycles: i128 = result.0.cycles.0.try_into().unwrap();
             let burned = default_canister_balance as i128 - cycles;
@@ -833,7 +819,11 @@ mod management_canister {
                 .with_effective_canister_id(get_effective_canister_id(pic).await)
                 .call_and_wait()
                 .await?;
-            let result = ic00.canister_status(&canister_id_2).as_update().call().await?;
+            let result = ic00
+                .canister_status(&canister_id_2)
+                .as_update()
+                .call()
+                .await?;
             let cycles: i128 = result.0.cycles.0.try_into().unwrap();
             let burned = amount as i128 - cycles;
             assert!(

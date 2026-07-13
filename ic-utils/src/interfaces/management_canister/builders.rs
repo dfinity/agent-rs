@@ -23,8 +23,8 @@ use ic_agent::{
     AgentError,
 };
 pub use ic_management_canister_types::{
-    CanisterInstallMode, CanisterSettings, EnvironmentVariable, InstallCodeArgs, SnapshotVisibility,
-    UpgradeFlags, WasmMemoryPersistence,
+    CanisterInstallMode, CanisterSettings, EnvironmentVariable, InstallCodeArgs,
+    SnapshotVisibility, UpgradeFlags, WasmMemoryPersistence,
 };
 use sha2::{Digest, Sha256};
 use std::{
