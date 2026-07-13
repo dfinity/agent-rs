@@ -15,10 +15,11 @@ use ic_management_canister_types::{
 };
 // Re-export the types that are used be defined in this file.
 pub use ic_management_canister_types::{
-    CanisterLogFilter, CanisterLogRecord, CanisterMetadataArgs, CanisterMetadataResult,
-    CanisterStatusResult, CanisterStatusType, CanisterTimer, ChunkHash, DefiniteCanisterSettings,
-    FetchCanisterLogsArgs, FetchCanisterLogsResult, LogVisibility, MemoryMetrics,
-    OnLowWasmMemoryHookStatus, QueryStats, ReadCanisterSnapshotDataResult,
+    CanisterIdRange, CanisterLogFilter, CanisterLogRecord, CanisterMetadataArgs,
+    CanisterMetadataResult, CanisterMetricsArgs, CanisterMetricsResult, CanisterStatusResult,
+    CanisterStatusType, CanisterTimer, ChunkHash, CyclesConsumed, DefiniteCanisterSettings,
+    FetchCanisterLogsArgs, FetchCanisterLogsResult, ListCanistersResult, LogVisibility,
+    MemoryMetrics, OnLowWasmMemoryHookStatus, QueryStats, ReadCanisterSnapshotDataResult,
     ReadCanisterSnapshotMetadataResult, RenameCanisterRecord, RenameToRecord, Snapshot,
     SnapshotDataKind, SnapshotDataOffset, SnapshotMetadataGlobal, SnapshotSource,
     StoredChunksResult, UploadCanisterSnapshotMetadataResult, UploadChunkResult,
@@ -120,6 +121,8 @@ pub enum MgmtMethod {
     CanisterInfo,
     /// See [`ManagementCanister::canister_metadata`].
     CanisterMetadata,
+    /// See [`ManagementCanister::canister_metrics`].
+    CanisterMetrics,
 }
 
 impl<'agent> ManagementCanister<'agent> {
@@ -477,5 +480,21 @@ impl<'agent> ManagementCanister<'agent> {
             .with_arg(args)
             .with_effective_canister_id(args.canister_id)
             .build()
+    }
+
+    /// Get a set of metrics for a canister, such as the cycles consumed by different use cases.
+    ///
+    /// Only the canister's controllers or subnet administrators may call this method.
+    pub fn canister_metrics(
+        &self,
+        canister_id: &Principal,
+    ) -> impl 'agent + AsyncCall<Value = (CanisterMetricsResult,)> {
+        self.update(MgmtMethod::CanisterMetrics.as_ref())
+            .with_arg(CanisterIdRecord {
+                canister_id: *canister_id,
+            })
+            .with_effective_canister_id(canister_id.to_owned())
+            .build()
+            .map(|result: (CanisterMetricsResult,)| (result.0,))
     }
 }

@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+* `ic-utils`: Bump `ic-management-canister-types` to 0.8.0.
+  * Added `with_snapshot_visibility` setter to `CreateCanisterBuilder` and `UpdateSettingsBuilder`.
+  * Added `canister_metrics()` update method to `ManagementCanister`.
+  * Re-exported new types: `SnapshotVisibility`, `CanisterIdRange`, `ListCanistersResult`, `CyclesConsumed`, `CanisterMetricsArgs`, `CanisterMetricsResult`.
+
+### Breaking Changes
+
+* `ic-utils`: The re-exported `CanisterSettings` and `DefiniteCanisterSettings` structs (from `ic-management-canister-types` 0.8.0) gained a `snapshot_visibility` field, controlling who may read a canister's snapshots. Neither struct is `#[non_exhaustive]`, so code that constructs them with a struct literal must add the new field (`snapshot_visibility: None` on `CanisterSettings`, or the desired `SnapshotVisibility`).
+
 ## [0.48.1] - 2026-07-07
 
 * `ic-transport-types`: `Delegation`, `SignedDelegation`, and `DelegationPermissions` now derive `candid::CandidType`, so they can be used directly in Candid interfaces (e.g. matching Internet Identity's `Delegation`/`SignedDelegation` types). The generated Candid maps the byte fields to `blob` and `DelegationPermissions` to `variant { queries; all }`; the added `permissions` field is `opt`, so the encoding stays subtype-compatible with delegation interfaces that omit it.

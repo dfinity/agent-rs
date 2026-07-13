@@ -23,8 +23,8 @@ use ic_agent::{
     AgentError,
 };
 pub use ic_management_canister_types::{
-    CanisterInstallMode, CanisterSettings, EnvironmentVariable, InstallCodeArgs, UpgradeFlags,
-    WasmMemoryPersistence,
+    CanisterInstallMode, CanisterSettings, EnvironmentVariable, InstallCodeArgs, SnapshotVisibility,
+    UpgradeFlags, WasmMemoryPersistence,
 };
 use sha2::{Digest, Sha256};
 use std::{
@@ -51,6 +51,7 @@ pub struct CreateCanisterBuilder<'agent, 'canister: 'agent> {
     log_visibility: Option<Result<LogVisibility, AgentError>>,
     log_memory_limit: Option<Result<LogMemoryLimit, AgentError>>,
     environment_variables: Option<Result<Vec<EnvironmentVariable>, AgentError>>,
+    snapshot_visibility: Option<Result<SnapshotVisibility, AgentError>>,
     is_provisional_create: bool,
     amount: Option<u128>,
     specified_id: Option<Principal>,
@@ -72,6 +73,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             log_visibility: None,
             log_memory_limit: None,
             environment_variables: None,
+            snapshot_visibility: None,
             is_provisional_create: false,
             amount: None,
             specified_id: None,
@@ -322,6 +324,22 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         }
     }
 
+    /// Pass in a snapshot visibility setting for the canister.
+    pub fn with_snapshot_visibility<C, E>(self, snapshot_visibility: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<SnapshotVisibility, Error = E>,
+    {
+        Self {
+            snapshot_visibility: Some(
+                snapshot_visibility
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
+            ..self
+        }
+    }
+
     /// Create an [`AsyncCall`] implementation that, when called, will create a
     /// canister.
     ///
@@ -442,6 +460,11 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             Some(Ok(x)) => Some(x),
             None => None,
         };
+        let snapshot_visibility = match self.snapshot_visibility {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(x),
+            None => None,
+        };
 
         let (method, arg_bytes) = if self.is_provisional_create {
             #[derive(CandidType)]
@@ -463,6 +486,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                     log_visibility,
                     log_memory_limit,
                     environment_variables,
+                    snapshot_visibility,
                 },
                 specified_id: self.specified_id,
             };
@@ -482,6 +506,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                 log_visibility,
                 log_memory_limit,
                 environment_variables,
+                snapshot_visibility,
             };
             (
                 MgmtMethod::CreateCanister.as_ref(),
@@ -1024,6 +1049,7 @@ pub struct UpdateSettingsBuilder<'agent, 'canister: 'agent> {
     log_visibility: Option<Result<LogVisibility, AgentError>>,
     log_memory_limit: Option<Result<LogMemoryLimit, AgentError>>,
     environment_variables: Option<Result<Vec<EnvironmentVariable>, AgentError>>,
+    snapshot_visibility: Option<Result<SnapshotVisibility, AgentError>>,
 }
 
 impl<'agent, 'canister: 'agent> UpdateSettingsBuilder<'agent, 'canister> {
@@ -1042,6 +1068,7 @@ impl<'agent, 'canister: 'agent> UpdateSettingsBuilder<'agent, 'canister> {
             log_visibility: None,
             log_memory_limit: None,
             environment_variables: None,
+            snapshot_visibility: None,
         }
     }
 
@@ -1213,6 +1240,22 @@ impl<'agent, 'canister: 'agent> UpdateSettingsBuilder<'agent, 'canister> {
         }
     }
 
+    /// Pass in a snapshot visibility setting for the canister.
+    pub fn with_snapshot_visibility<C, E>(self, snapshot_visibility: C) -> Self
+    where
+        E: std::fmt::Display,
+        C: TryInto<SnapshotVisibility, Error = E>,
+    {
+        Self {
+            snapshot_visibility: Some(
+                snapshot_visibility
+                    .try_into()
+                    .map_err(|e| AgentError::MessageError(format!("{e}"))),
+            ),
+            ..self
+        }
+    }
+
     /// Create an [`AsyncCall`] implementation that, when called, will update a
     /// canisters settings.
     pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = ()>, AgentError> {
@@ -1272,6 +1315,11 @@ impl<'agent, 'canister: 'agent> UpdateSettingsBuilder<'agent, 'canister> {
             Some(Ok(x)) => Some(x),
             None => None,
         };
+        let snapshot_visibility = match self.snapshot_visibility {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(x),
+            None => None,
+        };
 
         Ok(self
             .canister
@@ -1289,6 +1337,7 @@ impl<'agent, 'canister: 'agent> UpdateSettingsBuilder<'agent, 'canister> {
                     log_visibility,
                     log_memory_limit,
                     environment_variables,
+                    snapshot_visibility,
                 },
             })
             .with_effective_canister_id(self.canister_id)

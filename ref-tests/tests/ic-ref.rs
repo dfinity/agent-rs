@@ -767,6 +767,7 @@ mod management_canister {
                     log_visibility: None,
                     log_memory_limit: None,
                     environment_variables: None,
+                    snapshot_visibility: None,
                 },
             };
 
