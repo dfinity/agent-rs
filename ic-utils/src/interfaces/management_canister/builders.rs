@@ -52,6 +52,7 @@ pub struct CreateCanisterBuilder<'agent, 'canister: 'agent> {
     log_memory_limit: Option<Result<LogMemoryLimit, AgentError>>,
     environment_variables: Option<Result<Vec<EnvironmentVariable>, AgentError>>,
     snapshot_visibility: Option<Result<SnapshotVisibility, AgentError>>,
+    settings: Option<CanisterSettings>,
     is_provisional_create: bool,
     amount: Option<u128>,
     specified_id: Option<Principal>,
@@ -74,6 +75,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             log_memory_limit: None,
             environment_variables: None,
             snapshot_visibility: None,
+            settings: None,
             is_provisional_create: false,
             amount: None,
             specified_id: None,
@@ -340,6 +342,22 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         }
     }
 
+    /// Pass in a complete [`CanisterSettings`] for the canister.
+    ///
+    /// This is a convenience for callers that already hold a `CanisterSettings`
+    /// (e.g. decoded from a config or forwarded from another call) and do not
+    /// want to decompose it into individual setters.
+    ///
+    /// It is currently **mutually exclusive** with the individual settings
+    /// setters (`with_controller`, `with_compute_allocation`, …): building the
+    /// call returns an error if this method is combined with any of them.
+    pub fn with_canister_settings(self, settings: CanisterSettings) -> Self {
+        Self {
+            settings: Some(settings),
+            ..self
+        }
+    }
+
     /// Create an [`AsyncCall`] implementation that, when called, will create a
     /// canister.
     ///
@@ -409,62 +427,107 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
         }
     }
 
-    fn prepare(self) -> Result<PreparedCreate<'agent, 'canister>, AgentError> {
-        let controllers = match self.controllers {
+    /// Resolve the builder's settings into a single [`CanisterSettings`].
+    ///
+    /// Returns an error if [`Self::with_canister_settings`] was combined with any
+    /// of the individual settings setters, which are currently mutually exclusive.
+    fn resolve_settings(&mut self) -> Result<CanisterSettings, AgentError> {
+        let has_individual_settings = self.controllers.is_some()
+            || self.compute_allocation.is_some()
+            || self.memory_allocation.is_some()
+            || self.freezing_threshold.is_some()
+            || self.reserved_cycles_limit.is_some()
+            || self.wasm_memory_limit.is_some()
+            || self.wasm_memory_threshold.is_some()
+            || self.log_visibility.is_some()
+            || self.log_memory_limit.is_some()
+            || self.environment_variables.is_some()
+            || self.snapshot_visibility.is_some();
+
+        if let Some(settings) = self.settings.take() {
+            if has_individual_settings {
+                return Err(AgentError::MessageError(
+                    "`with_canister_settings` cannot be combined with the individual settings \
+                     setters (`with_controller`, `with_compute_allocation`, etc.)"
+                        .to_string(),
+                ));
+            }
+            return Ok(settings);
+        }
+
+        let controllers = match self.controllers.take() {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(x),
             None => None,
         };
-        let compute_allocation = match self.compute_allocation {
+        let compute_allocation = match self.compute_allocation.take() {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(Nat::from(u8::from(x))),
             None => None,
         };
-        let memory_allocation = match self.memory_allocation {
+        let memory_allocation = match self.memory_allocation.take() {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
-        let freezing_threshold = match self.freezing_threshold {
+        let freezing_threshold = match self.freezing_threshold.take() {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
-        let reserved_cycles_limit = match self.reserved_cycles_limit {
+        let reserved_cycles_limit = match self.reserved_cycles_limit.take() {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(Nat::from(u128::from(x))),
             None => None,
         };
-        let wasm_memory_limit = match self.wasm_memory_limit {
+        let wasm_memory_limit = match self.wasm_memory_limit.take() {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
-        let wasm_memory_threshold = match self.wasm_memory_threshold {
+        let wasm_memory_threshold = match self.wasm_memory_threshold.take() {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
-        let log_visibility = match self.log_visibility {
+        let log_visibility = match self.log_visibility.take() {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(x),
             None => None,
         };
-        let log_memory_limit = match self.log_memory_limit {
+        let log_memory_limit = match self.log_memory_limit.take() {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(Nat::from(u64::from(x))),
             None => None,
         };
-        let environment_variables = match self.environment_variables {
+        let environment_variables = match self.environment_variables.take() {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(x),
             None => None,
         };
-        let snapshot_visibility = match self.snapshot_visibility {
+        let snapshot_visibility = match self.snapshot_visibility.take() {
             Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
             Some(Ok(x)) => Some(x),
             None => None,
         };
+
+        Ok(CanisterSettings {
+            controllers,
+            compute_allocation,
+            memory_allocation,
+            freezing_threshold,
+            reserved_cycles_limit,
+            wasm_memory_limit,
+            wasm_memory_threshold,
+            log_visibility,
+            log_memory_limit,
+            environment_variables,
+            snapshot_visibility,
+        })
+    }
+
+    fn prepare(mut self) -> Result<PreparedCreate<'agent, 'canister>, AgentError> {
+        let settings = self.resolve_settings()?;
 
         let (method, arg_bytes) = if self.is_provisional_create {
             #[derive(CandidType)]
@@ -475,19 +538,7 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
             }
             let in_arg = In {
                 amount: self.amount.map(Nat::from),
-                settings: CanisterSettings {
-                    controllers,
-                    compute_allocation,
-                    memory_allocation,
-                    freezing_threshold,
-                    reserved_cycles_limit,
-                    wasm_memory_limit,
-                    wasm_memory_threshold,
-                    log_visibility,
-                    log_memory_limit,
-                    environment_variables,
-                    snapshot_visibility,
-                },
+                settings,
                 specified_id: self.specified_id,
             };
             (
@@ -495,19 +546,6 @@ impl<'agent, 'canister: 'agent> CreateCanisterBuilder<'agent, 'canister> {
                 Encode!(&in_arg).map_err(|e| AgentError::CandidError(Box::new(e)))?,
             )
         } else {
-            let settings = CanisterSettings {
-                controllers,
-                compute_allocation,
-                memory_allocation,
-                freezing_threshold,
-                reserved_cycles_limit,
-                wasm_memory_limit,
-                wasm_memory_threshold,
-                log_visibility,
-                log_memory_limit,
-                environment_variables,
-                snapshot_visibility,
-            };
             (
                 MgmtMethod::CreateCanister.as_ref(),
                 Encode!(&settings).map_err(|e| AgentError::CandidError(Box::new(e)))?,
@@ -1050,6 +1088,7 @@ pub struct UpdateSettingsBuilder<'agent, 'canister: 'agent> {
     log_memory_limit: Option<Result<LogMemoryLimit, AgentError>>,
     environment_variables: Option<Result<Vec<EnvironmentVariable>, AgentError>>,
     snapshot_visibility: Option<Result<SnapshotVisibility, AgentError>>,
+    settings: Option<CanisterSettings>,
 }
 
 impl<'agent, 'canister: 'agent> UpdateSettingsBuilder<'agent, 'canister> {
@@ -1069,6 +1108,7 @@ impl<'agent, 'canister: 'agent> UpdateSettingsBuilder<'agent, 'canister> {
             log_memory_limit: None,
             environment_variables: None,
             snapshot_visibility: None,
+            settings: None,
         }
     }
 
@@ -1256,89 +1296,138 @@ impl<'agent, 'canister: 'agent> UpdateSettingsBuilder<'agent, 'canister> {
         }
     }
 
+    /// Pass in a complete [`CanisterSettings`] to apply.
+    ///
+    /// This is a convenience for callers that already hold a `CanisterSettings`
+    /// (e.g. decoded from a config or forwarded from another call) and do not
+    /// want to decompose it into individual setters.
+    ///
+    /// It is currently **mutually exclusive** with the individual settings
+    /// setters (`with_controller`, `with_compute_allocation`, …): building the
+    /// call returns an error if this method is combined with any of them.
+    pub fn with_canister_settings(self, settings: CanisterSettings) -> Self {
+        Self {
+            settings: Some(settings),
+            ..self
+        }
+    }
+
+    /// Resolve the builder's settings into a single [`CanisterSettings`].
+    ///
+    /// Returns an error if [`Self::with_canister_settings`] was combined with any
+    /// of the individual settings setters, which are currently mutually exclusive.
+    fn resolve_settings(&mut self) -> Result<CanisterSettings, AgentError> {
+        let has_individual_settings = self.controllers.is_some()
+            || self.compute_allocation.is_some()
+            || self.memory_allocation.is_some()
+            || self.freezing_threshold.is_some()
+            || self.reserved_cycles_limit.is_some()
+            || self.wasm_memory_limit.is_some()
+            || self.wasm_memory_threshold.is_some()
+            || self.log_visibility.is_some()
+            || self.log_memory_limit.is_some()
+            || self.environment_variables.is_some()
+            || self.snapshot_visibility.is_some();
+
+        if let Some(settings) = self.settings.take() {
+            if has_individual_settings {
+                return Err(AgentError::MessageError(
+                    "`with_canister_settings` cannot be combined with the individual settings \
+                     setters (`with_controller`, `with_compute_allocation`, etc.)"
+                        .to_string(),
+                ));
+            }
+            return Ok(settings);
+        }
+
+        let controllers = match self.controllers.take() {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(x),
+            None => None,
+        };
+        let compute_allocation = match self.compute_allocation.take() {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(Nat::from(u8::from(x))),
+            None => None,
+        };
+        let memory_allocation = match self.memory_allocation.take() {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
+            None => None,
+        };
+        let freezing_threshold = match self.freezing_threshold.take() {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
+            None => None,
+        };
+        let reserved_cycles_limit = match self.reserved_cycles_limit.take() {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(Nat::from(u128::from(x))),
+            None => None,
+        };
+        let wasm_memory_limit = match self.wasm_memory_limit.take() {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
+            None => None,
+        };
+        let wasm_memory_threshold = match self.wasm_memory_threshold.take() {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
+            None => None,
+        };
+        let log_visibility = match self.log_visibility.take() {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(x),
+            None => None,
+        };
+        let log_memory_limit = match self.log_memory_limit.take() {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
+            None => None,
+        };
+        let environment_variables = match self.environment_variables.take() {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(x),
+            None => None,
+        };
+        let snapshot_visibility = match self.snapshot_visibility.take() {
+            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
+            Some(Ok(x)) => Some(x),
+            None => None,
+        };
+
+        Ok(CanisterSettings {
+            controllers,
+            compute_allocation,
+            memory_allocation,
+            freezing_threshold,
+            reserved_cycles_limit,
+            wasm_memory_limit,
+            wasm_memory_threshold,
+            log_visibility,
+            log_memory_limit,
+            environment_variables,
+            snapshot_visibility,
+        })
+    }
+
     /// Create an [`AsyncCall`] implementation that, when called, will update a
     /// canisters settings.
-    pub fn build(self) -> Result<impl 'agent + AsyncCall<Value = ()>, AgentError> {
+    pub fn build(mut self) -> Result<impl 'agent + AsyncCall<Value = ()>, AgentError> {
         #[derive(CandidType)]
         struct In {
             canister_id: Principal,
             settings: CanisterSettings,
         }
 
-        let controllers = match self.controllers {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
-            Some(Ok(x)) => Some(x),
-            None => None,
-        };
-        let compute_allocation = match self.compute_allocation {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
-            Some(Ok(x)) => Some(Nat::from(u8::from(x))),
-            None => None,
-        };
-        let memory_allocation = match self.memory_allocation {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
-            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
-            None => None,
-        };
-        let freezing_threshold = match self.freezing_threshold {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
-            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
-            None => None,
-        };
-        let reserved_cycles_limit = match self.reserved_cycles_limit {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
-            Some(Ok(x)) => Some(Nat::from(u128::from(x))),
-            None => None,
-        };
-        let wasm_memory_limit = match self.wasm_memory_limit {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
-            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
-            None => None,
-        };
-        let wasm_memory_threshold = match self.wasm_memory_threshold {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
-            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
-            None => None,
-        };
-        let log_visibility = match self.log_visibility {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
-            Some(Ok(x)) => Some(x),
-            None => None,
-        };
-        let log_memory_limit = match self.log_memory_limit {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
-            Some(Ok(x)) => Some(Nat::from(u64::from(x))),
-            None => None,
-        };
-        let environment_variables = match self.environment_variables {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
-            Some(Ok(x)) => Some(x),
-            None => None,
-        };
-        let snapshot_visibility = match self.snapshot_visibility {
-            Some(Err(x)) => return Err(AgentError::MessageError(format!("{x}"))),
-            Some(Ok(x)) => Some(x),
-            None => None,
-        };
+        let settings = self.resolve_settings()?;
 
         Ok(self
             .canister
             .update(MgmtMethod::UpdateSettings.as_ref())
             .with_arg(In {
                 canister_id: self.canister_id,
-                settings: CanisterSettings {
-                    controllers,
-                    compute_allocation,
-                    memory_allocation,
-                    freezing_threshold,
-                    reserved_cycles_limit,
-                    wasm_memory_limit,
-                    wasm_memory_threshold,
-                    log_visibility,
-                    log_memory_limit,
-                    environment_variables,
-                    snapshot_visibility,
-                },
+                settings,
             })
             .with_effective_canister_id(self.canister_id)
             .build())

@@ -1050,6 +1050,81 @@ mod management_canister {
         })
         .await
     }
+
+    #[tokio::test]
+    async fn with_canister_settings() {
+        use candid::Nat;
+
+        with_agent(async move |pic, agent| {
+            let agent_principal = agent.get_principal()?;
+            let ic00 = ManagementCanister::create(&agent);
+
+            // create_canister: pass a fully built CanisterSettings struct.
+            let create_settings = CanisterSettings {
+                controllers: Some(vec![agent_principal]),
+                compute_allocation: None,
+                memory_allocation: None,
+                freezing_threshold: None,
+                reserved_cycles_limit: None,
+                wasm_memory_limit: None,
+                wasm_memory_threshold: None,
+                log_visibility: None,
+                log_memory_limit: None,
+                environment_variables: None,
+                snapshot_visibility: None,
+            };
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
+                .with_canister_settings(create_settings.clone())
+                .call_and_wait()
+                .await?;
+
+            let (status,) = ic00.canister_status(&canister_id).call().await?;
+            assert_eq!(status.settings.controllers, vec![agent_principal]);
+
+            // Mixing the whole-struct setter with an individual setter is an error.
+            let mixed = ic00
+                .create_canister()
+                .with_canister_settings(create_settings)
+                .with_controller(agent_principal)
+                .build();
+            assert!(matches!(mixed, Err(AgentError::MessageError(_))));
+
+            // update_settings: pass a fully built CanisterSettings struct.
+            let update_settings = CanisterSettings {
+                controllers: Some(vec![agent_principal]),
+                compute_allocation: None,
+                memory_allocation: None,
+                freezing_threshold: Some(Nat::from(90_000_u64)),
+                reserved_cycles_limit: None,
+                wasm_memory_limit: None,
+                wasm_memory_threshold: None,
+                log_visibility: None,
+                log_memory_limit: None,
+                environment_variables: None,
+                snapshot_visibility: None,
+            };
+            ic00.update_settings(&canister_id)
+                .with_canister_settings(update_settings.clone())
+                .call_and_wait()
+                .await?;
+
+            let (status,) = ic00.canister_status(&canister_id).call().await?;
+            assert_eq!(status.settings.freezing_threshold, Nat::from(90_000_u64));
+
+            let mixed = ic00
+                .update_settings(&canister_id)
+                .with_canister_settings(update_settings)
+                .with_controller(agent_principal)
+                .build();
+            assert!(matches!(mixed, Err(AgentError::MessageError(_))));
+
+            Ok(())
+        })
+        .await
+    }
 }
 
 mod simple_calls {
