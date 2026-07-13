@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * `ic-utils`: The re-exported `CanisterSettings` and `DefiniteCanisterSettings` structs (from `ic-management-canister-types` 0.8.0) gained a `snapshot_visibility` field, controlling who may read a canister's snapshots. Neither struct is `#[non_exhaustive]`, so code that constructs them with a struct literal must add the new field (`snapshot_visibility: None` on `CanisterSettings`, or the desired `SnapshotVisibility`).
 * `ic-utils`: `ManagementCanister::canister_status` no longer returns an `impl AsyncCall` and no longer performs a replicated update call by default. It now returns a `QueryOrUpdateCall` that defaults to a query call.
   * Migration: replace `canister_status(&id).call_and_wait().await` with `canister_status(&id).call().await` to accept the (cheaper) query, or `canister_status(&id).as_update().call().await` to preserve the previous replicated-update behavior.
+* `ic-utils`: The `MgmtMethod` enum gained `CanisterMetrics` and `ListCanisters` variants. `MgmtMethod` is not `#[non_exhaustive]`, so exhaustive `match` expressions over it must add arms for the new variants.
 
 ## [0.48.1] - 2026-07-07
 
