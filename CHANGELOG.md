@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.49.0] - 2026-07-13
+
 * `ic-utils`: Bump `ic-management-canister-types` to 0.8.0.
   * Added `with_snapshot_visibility` setter to `CreateCanisterBuilder` and `UpdateSettingsBuilder`.
   * Added `canister_metrics()` to `ManagementCanister`.
