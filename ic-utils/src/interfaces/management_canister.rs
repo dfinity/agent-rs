@@ -6,7 +6,7 @@ use crate::{
     call::{AsyncCall, SyncCall},
     Canister,
 };
-use candid::{Decode, Encode};
+use candid::{utils::ArgumentDecoder, Decode, Encode};
 use ic_agent::{agent::EffectiveId, export::Principal, Agent, AgentError};
 use ic_management_canister_types::{
     CanisterIdRecord, DeleteCanisterSnapshotArgs, LoadCanisterSnapshotArgs,
@@ -25,8 +25,8 @@ pub use ic_management_canister_types::{
     SnapshotDataKind, SnapshotDataOffset, SnapshotMetadataGlobal, SnapshotSource,
     StoredChunksResult, UploadCanisterSnapshotMetadataResult, UploadChunkResult,
 };
-use std::{convert::AsRef, ops::Deref};
-use strum_macros::{AsRefStr, Display, EnumString};
+use std::{convert::AsRef, marker::PhantomData, ops::Deref};
+use strum_macros::{AsRefStr, Display, EnumString, IntoStaticStr};
 
 pub mod attributes;
 pub mod builders;
@@ -49,7 +49,7 @@ impl<'agent> Deref for ManagementCanister<'agent> {
 }
 
 /// All the known methods of the management canister.
-#[derive(AsRefStr, Debug, EnumString, Display)]
+#[derive(AsRefStr, Debug, EnumString, Display, IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum MgmtMethod {
     /// See [`ManagementCanister::create_canister`].
@@ -185,17 +185,15 @@ pub type CanisterSnapshotId = UploadCanisterSnapshotMetadataResult;
 
 impl<'agent> ManagementCanister<'agent> {
     /// Get the status of a canister.
+    ///
+    /// Issued as a (fast, non-replicated) query call by default; call
+    /// [`QueryOrUpdateCall::as_update`] on the returned builder for a replicated
+    /// update call instead.
     pub fn canister_status(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<Value = (CanisterStatusResult,)> {
-        self.update(MgmtMethod::CanisterStatus.as_ref())
-            .with_arg(CanisterIdRecord {
-                canister_id: *canister_id,
-            })
-            .with_effective_canister_id(canister_id.to_owned())
-            .build()
-            .map(|result: (CanisterStatusResult,)| (result.0,))
+    ) -> QueryOrUpdateCall<'agent, '_, (CanisterStatusResult,)> {
+        QueryOrUpdateCall::new(&self.0, MgmtMethod::CanisterStatus.into(), *canister_id)
     }
 
     /// Create a canister.
@@ -488,17 +486,15 @@ impl<'agent> ManagementCanister<'agent> {
     /// Get a set of metrics for a canister, such as the cycles consumed by different use cases.
     ///
     /// Only the canister's controllers or subnet administrators may call this method.
+    ///
+    /// Issued as a (fast, non-replicated) query call by default; call
+    /// [`QueryOrUpdateCall::as_update`] on the returned builder for a replicated
+    /// update call instead.
     pub fn canister_metrics(
         &self,
         canister_id: &Principal,
-    ) -> impl 'agent + AsyncCall<Value = (CanisterMetricsResult,)> {
-        self.update(MgmtMethod::CanisterMetrics.as_ref())
-            .with_arg(CanisterIdRecord {
-                canister_id: *canister_id,
-            })
-            .with_effective_canister_id(canister_id.to_owned())
-            .build()
-            .map(|result: (CanisterMetricsResult,)| (result.0,))
+    ) -> QueryOrUpdateCall<'agent, '_, (CanisterMetricsResult,)> {
+        QueryOrUpdateCall::new(&self.0, MgmtMethod::CanisterMetrics.into(), *canister_id)
     }
 
     /// List all canisters on a subnet, as a set of consecutive canister-id ranges.
@@ -525,5 +521,77 @@ impl<'agent> ManagementCanister<'agent> {
             .query_signed(EffectiveId::Subnet(subnet_id), signed.signed_query)
             .await?;
         Decode!(&bytes, ListCanistersResult).map_err(|e| AgentError::CandidError(Box::new(e)))
+    }
+}
+
+/// A management-canister read call that is issued as a (fast, non-replicated)
+/// query call by default, or as a replicated update call via
+/// [`as_update`](Self::as_update).
+///
+/// Query responses come from a single replica. The agent verifies the replica's
+/// signature unless query-signature verification was disabled, so a verified
+/// query response is authenticated by the subnet. Use [`as_update`](Self::as_update)
+/// when a fully replicated, certified response is required, at the cost of a
+/// slower update call.
+///
+/// Returned by [`ManagementCanister::canister_status`] and
+/// [`ManagementCanister::canister_metrics`].
+#[derive(Debug)]
+pub struct QueryOrUpdateCall<'agent, 'canister, Out> {
+    canister: &'canister Canister<'agent>,
+    method_name: &'static str,
+    canister_id: Principal,
+    as_update: bool,
+    _out: PhantomData<Out>,
+}
+
+impl<'agent: 'canister, 'canister, Out> QueryOrUpdateCall<'agent, 'canister, Out>
+where
+    Out: for<'de> ArgumentDecoder<'de> + Send + Sync,
+{
+    fn new(
+        canister: &'canister Canister<'agent>,
+        method_name: &'static str,
+        canister_id: Principal,
+    ) -> Self {
+        Self {
+            canister,
+            method_name,
+            canister_id,
+            as_update: false,
+            _out: PhantomData,
+        }
+    }
+
+    /// Issue this call as a replicated update call instead of the default query.
+    pub fn as_update(mut self) -> Self {
+        self.as_update = true;
+        self
+    }
+
+    /// Perform the call, awaiting the full response: a single query round-trip
+    /// by default, or (after [`as_update`](Self::as_update)) an update call
+    /// followed by polling for its result.
+    pub async fn call(self) -> Result<Out, AgentError> {
+        let arg = CanisterIdRecord {
+            canister_id: self.canister_id,
+        };
+        if self.as_update {
+            self.canister
+                .update(self.method_name)
+                .with_arg(arg)
+                .with_effective_canister_id(self.canister_id)
+                .build()
+                .call_and_wait()
+                .await
+        } else {
+            self.canister
+                .query(self.method_name)
+                .with_arg(arg)
+                .with_effective_canister_id(self.canister_id)
+                .build()
+                .call()
+                .await
+        }
     }
 }

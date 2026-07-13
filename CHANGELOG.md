@@ -10,13 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * `ic-utils`: Bump `ic-management-canister-types` to 0.8.0.
   * Added `with_snapshot_visibility` setter to `CreateCanisterBuilder` and `UpdateSettingsBuilder`.
-  * Added `canister_metrics()` update method to `ManagementCanister`.
+  * Added `canister_metrics()` to `ManagementCanister`.
   * Added `list_canisters()` method to `ManagementCanister`. This is a subnet-scoped, query-only management-canister method (callable only by subnet administrators); the request is routed to the subnet-scoped query endpoint via `Agent::query_signed` with an `EffectiveId::Subnet`.
   * Re-exported new types: `SnapshotVisibility`, `CanisterIdRange`, `ListCanistersResult`, `CyclesConsumed`, `CanisterMetricsArgs`, `CanisterMetricsResult`.
+* `ic-utils`: `ManagementCanister::canister_status` and `canister_metrics` now default to a cheap, non-replicated **query** call and return a `QueryOrUpdateCall` builder. Call `.call().await` for the query, or `.as_update().call().await` to issue a replicated update call instead (e.g. when a fully certified result is required). Query responses are replica-signed and verified by the agent unless query-signature verification is disabled. These are the only two management read methods the replica accepts as both query and update; `fetch_canister_logs` and `list_canisters` remain query-only per the interface spec.
 
 ### Breaking Changes
 
 * `ic-utils`: The re-exported `CanisterSettings` and `DefiniteCanisterSettings` structs (from `ic-management-canister-types` 0.8.0) gained a `snapshot_visibility` field, controlling who may read a canister's snapshots. Neither struct is `#[non_exhaustive]`, so code that constructs them with a struct literal must add the new field (`snapshot_visibility: None` on `CanisterSettings`, or the desired `SnapshotVisibility`).
+* `ic-utils`: `ManagementCanister::canister_status` no longer returns an `impl AsyncCall` and no longer performs a replicated update call by default. It now returns a `QueryOrUpdateCall` that defaults to a query call.
+  * Migration: replace `canister_status(&id).call_and_wait().await` with `canister_status(&id).call().await` to accept the (cheaper) query, or `canister_status(&id).as_update().call().await` to preserve the previous replicated-update behavior.
 
 ## [0.48.1] - 2026-07-07
 
