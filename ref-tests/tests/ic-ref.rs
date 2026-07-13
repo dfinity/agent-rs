@@ -774,7 +774,9 @@ mod management_canister {
             let args = Argument::from_candid((create_args,));
 
             let creation_fee = 500_000_000_000;
-            let canister_initial_balance = 4_000_000_000;
+            // Must exceed the cycles the replica reserves for the new canister's
+            // memory; pocket-ic's cost model rejects creation below that floor.
+            let canister_initial_balance = 40_000_000_000;
             let (create_result,): (CreateResult,) = wallet
                 .call(
                     Principal::management_canister(),
@@ -979,6 +981,61 @@ mod management_canister {
             assert!(
                 !ranges.is_empty(),
                 "expected at least one canister range on the root subnet"
+            );
+            Ok(())
+        })
+        .await
+    }
+
+    #[tokio::test]
+    async fn canister_metrics() {
+        with_agent(async move |pic, agent| {
+            let ic00 = ManagementCanister::create(&agent);
+
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_canister_id(get_effective_canister_id(pic).await)
+                .call_and_wait()
+                .await?;
+
+            // The controller can fetch the canister's metrics. A successful,
+            // decodable response exercises the whole round trip: argument
+            // encoding, update routing, and `CanisterMetricsResult` decoding.
+            let (_metrics,) = ic00.canister_metrics(&canister_id).call_and_wait().await?;
+            Ok(())
+        })
+        .await
+    }
+
+    #[tokio::test]
+    async fn list_canisters() {
+        use ref_tests::{create_basic_identity, with_subnet_admin_agent};
+
+        let admin_identity = create_basic_identity();
+        with_subnet_admin_agent(admin_identity, async move |_pic, agent, subnet_id| {
+            let ic00 = ManagementCanister::create(&agent);
+
+            // Create a canister on the admin's subnet.
+            let (canister_id,) = ic00
+                .create_canister()
+                .as_provisional_create_with_amount(None)
+                .with_effective_subnet_id(subnet_id)
+                .call_and_wait()
+                .await?;
+
+            // As a subnet administrator, list the subnet's canisters via the
+            // subnet-scoped query endpoint.
+            let result = ic00.list_canisters(subnet_id).await?;
+
+            // The created canister must fall within one of the returned ranges.
+            assert!(
+                result
+                    .canisters
+                    .iter()
+                    .any(|range| range.start <= canister_id && canister_id <= range.end),
+                "created canister {canister_id} not found in returned ranges: {:?}",
+                result.canisters,
             );
             Ok(())
         })

@@ -6,7 +6,8 @@ use crate::{
     call::{AsyncCall, SyncCall},
     Canister,
 };
-use ic_agent::{export::Principal, Agent};
+use candid::{Decode, Encode};
+use ic_agent::{agent::EffectiveId, export::Principal, Agent, AgentError};
 use ic_management_canister_types::{
     CanisterIdRecord, DeleteCanisterSnapshotArgs, LoadCanisterSnapshotArgs,
     ProvisionalTopUpCanisterArgs, ReadCanisterSnapshotDataArgs, ReadCanisterSnapshotMetadataArgs,
@@ -123,6 +124,8 @@ pub enum MgmtMethod {
     CanisterMetadata,
     /// See [`ManagementCanister::canister_metrics`].
     CanisterMetrics,
+    /// See [`ManagementCanister::list_canisters`].
+    ListCanisters,
 }
 
 impl<'agent> ManagementCanister<'agent> {
@@ -496,5 +499,31 @@ impl<'agent> ManagementCanister<'agent> {
             .with_effective_canister_id(canister_id.to_owned())
             .build()
             .map(|result: (CanisterMetricsResult,)| (result.0,))
+    }
+
+    /// List all canisters on a subnet, as a set of consecutive canister-id ranges.
+    ///
+    /// Per the IC interface spec, `list_canisters` is a subnet-scoped, query-only
+    /// method that may only be called by external users with subnet administrator
+    /// privileges (it cannot be called by canisters or via replicated calls). The
+    /// request is therefore signed and routed to the subnet-scoped
+    /// `/api/v3/subnet/<id>/query` endpoint rather than issued through the regular
+    /// (canister-scoped) call surface.
+    pub async fn list_canisters(
+        &self,
+        subnet_id: Principal,
+    ) -> Result<ListCanistersResult, AgentError> {
+        let agent = self.0.agent;
+        let signed = agent
+            .query(
+                &Principal::management_canister(),
+                MgmtMethod::ListCanisters.as_ref(),
+            )
+            .with_arg(Encode!().map_err(|e| AgentError::CandidError(Box::new(e)))?)
+            .sign()?;
+        let bytes = agent
+            .query_signed(EffectiveId::Subnet(subnet_id), signed.signed_query)
+            .await?;
+        Decode!(&bytes, ListCanistersResult).map_err(|e| AgentError::CandidError(Box::new(e)))
     }
 }

@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * `ic-utils`: Bump `ic-management-canister-types` to 0.8.0.
   * Added `with_snapshot_visibility` setter to `CreateCanisterBuilder` and `UpdateSettingsBuilder`.
   * Added `canister_metrics()` update method to `ManagementCanister`.
+  * Added `list_canisters()` method to `ManagementCanister`. This is a subnet-scoped, query-only management-canister method (callable only by subnet administrators); the request is routed to the subnet-scoped query endpoint via `Agent::query_signed` with an `EffectiveId::Subnet`.
   * Re-exported new types: `SnapshotVisibility`, `CanisterIdRange`, `ListCanistersResult`, `CyclesConsumed`, `CanisterMetricsArgs`, `CanisterMetricsResult`.
 
 ### Breaking Changes

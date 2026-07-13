@@ -364,9 +364,9 @@ dependencies = [
 
 [[package]]
 name = "candid"
-version = "0.10.26"
+version = "0.10.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "846adba6d1b4a00eeb8d4a0e4b88dfab570c25ad150cd52e51dfdc4f9d0a66cd"
+checksum = "b649560badafa98cdf260958393f317c013b5aa819dba26f21cc3e26cae41dae"
 dependencies = [
  "anyhow",
  "binread",
@@ -387,9 +387,9 @@ dependencies = [
 
 [[package]]
 name = "candid_derive"
-version = "0.10.26"
+version = "0.10.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c367110b158be2edc335a4ad70f3467fa588d5c5675e149ef38638a8e281fc4"
+checksum = "8f94f9df97dd04077b5a30e82dfb5a5f2eae1a6e8c9d6a98fd24351c8a333464"
 dependencies = [
  "lazy_static",
  "proc-macro2",
@@ -1526,6 +1526,17 @@ dependencies = [
 
 [[package]]
 name = "ic-management-canister-types"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51705516ed4d23f24e8d714a70fe9d7ec17106cfd830d5434a1b29f583ef70ee"
+dependencies = [
+ "candid",
+ "serde",
+ "serde_bytes",
+]
+
+[[package]]
+name = "ic-management-canister-types"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3187ba94198a8df0e38a478f289812fcead6a86c658b9552b00f1f8081f06bb3"
@@ -1540,6 +1551,24 @@ name = "ic-transport-types"
 version = "0.45.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a775244756a5d97ff19b08071a946a4b4896904e35deb036bf215e80f2e703d"
+dependencies = [
+ "candid",
+ "hex",
+ "ic-certification",
+ "leb128",
+ "serde",
+ "serde_bytes",
+ "serde_cbor",
+ "serde_repr",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "ic-transport-types"
+version = "0.47.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2116182b3ec5a831d579db0a205b6cf9c2ca96616493bef99480532d0b3c2f5"
 dependencies = [
  "candid",
  "hex",
@@ -1610,7 +1639,7 @@ dependencies = [
  "ic-agent",
  "ic-utils",
  "ic-utils-bindgen",
- "pocket-ic 13.0.0 (git+https://github.com/dfinity/ic?rev=17524c56ef237c54b510a201ceb58da8d790d4d5)",
+ "pocket-ic 15.0.0 (git+https://github.com/dfinity/ic?rev=992628c4f26cc7320396b6b8be37133a666a4386)",
  "ref-tests",
  "serde",
  "tokio",
@@ -1753,7 +1782,7 @@ dependencies = [
  "ic-agent",
  "ic-ed25519",
  "ic-utils",
- "pocket-ic 13.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pocket-ic 15.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde_json",
  "tokio",
@@ -2502,9 +2531,9 @@ dependencies = [
 
 [[package]]
 name = "pocket-ic"
-version = "13.0.0"
+version = "15.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e30621a12b204880522340df8327930d1b7fdefd784c9fc6093b311440fa0506"
+checksum = "4fe796a5fbeb08244338f5eb30f2de91fa12152ea2b5176f9da20fecd20b1ced"
 dependencies = [
  "backoff",
  "base64 0.13.1",
@@ -2535,8 +2564,8 @@ dependencies = [
 
 [[package]]
 name = "pocket-ic"
-version = "13.0.0"
-source = "git+https://github.com/dfinity/ic?rev=17524c56ef237c54b510a201ceb58da8d790d4d5#17524c56ef237c54b510a201ceb58da8d790d4d5"
+version = "15.0.0"
+source = "git+https://github.com/dfinity/ic?rev=992628c4f26cc7320396b6b8be37133a666a4386#992628c4f26cc7320396b6b8be37133a666a4386"
 dependencies = [
  "backoff",
  "base64 0.13.1",
@@ -2544,9 +2573,9 @@ dependencies = [
  "flate2",
  "hex",
  "ic-certification",
- "ic-management-canister-types 0.5.0",
- "ic-transport-types 0.45.0",
- "reqwest 0.12.28",
+ "ic-management-canister-types 0.7.1",
+ "ic-transport-types 0.47.3",
+ "reqwest 0.13.2",
  "schemars",
  "semver",
  "serde",
@@ -2836,7 +2865,7 @@ dependencies = [
  "ic-utils",
  "k256",
  "p256",
- "pocket-ic 13.0.0 (git+https://github.com/dfinity/ic?rev=17524c56ef237c54b510a201ceb58da8d790d4d5)",
+ "pocket-ic 15.0.0 (git+https://github.com/dfinity/ic?rev=992628c4f26cc7320396b6b8be37133a666a4386)",
  "rand 0.10.1",
  "serde",
  "serde_bytes",
@@ -2930,6 +2959,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-util",
+ "h2",
  "http",
  "http-body",
  "http-body-util",
@@ -2938,6 +2968,7 @@ dependencies = [
  "hyper-util",
  "js-sys",
  "log",
+ "mime_guess",
  "percent-encoding",
  "pin-project-lite",
  "quinn",
