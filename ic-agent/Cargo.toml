@@ -28,9 +28,9 @@ wasm-bindgen = [
     "dep:wasm-bindgen",
     "dep:wasm-bindgen-futures",
     "dep:getrandom",
+    "dep:getrandom_0_2",
     "dep:web-sys",
     "time/wasm-bindgen",
-    "backoff/wasm-bindgen",
     "cached/wasm",
 ]
 _internal_dynamic-routing = []
@@ -41,7 +41,7 @@ arc-swap = { workspace = true }
 async-channel = { workspace = true }
 async-lock = { workspace = true }
 async-trait = { workspace = true }
-backoff = { workspace = true }
+backon = { workspace = true, features = ["std"] }
 bytes = { workspace = true }
 cached = { workspace = true, features = ["ahash"], default-features = false }
 candid = { workspace = true }
@@ -89,7 +89,16 @@ tokio = { workspace = true, default-features = false, features = ["time", "sync"
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 async-watch = { workspace = true }
+# getrandom 0.4 is required (on all targets) by `rand` 0.10, which ic-agent uses
+# directly (e.g. nonce generation). On native it selects a backend automatically;
+# on wasm the `wasm_js` backend must be turned on explicitly, which is the only
+# reason for this direct, wasm-only entry. Enabled via the `wasm-bindgen` feature.
 getrandom = { workspace = true, optional = true, features = ["wasm_js"] }
+# Likewise, getrandom 0.2 is pulled in (on all targets) only transitively, by the
+# crypto crates via rand_core 0.6; on wasm its `js` backend must be turned on. This
+# renamed entry does that (see the workspace manifest), and was previously provided
+# by `backoff/wasm-bindgen`. Enabled via the `wasm-bindgen` feature.
+getrandom_0_2 = { workspace = true, optional = true, features = ["js"] }
 js-sys = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }

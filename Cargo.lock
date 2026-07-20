@@ -240,6 +240,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "backon"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cffb0e931875b666fc4fcb20fee52e9bbd1ef836fd9e9e04ec21555f9f85f7ef"
+dependencies = [
+ "fastrand",
+]
+
+[[package]]
 name = "base16ct"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1413,7 +1422,7 @@ dependencies = [
 
 [[package]]
 name = "ic-agent"
-version = "0.49.0"
+version = "0.49.1"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1421,7 +1430,7 @@ dependencies = [
  "async-lock",
  "async-trait",
  "async-watch",
- "backoff",
+ "backon",
  "bytes",
  "cached",
  "candid",
@@ -1429,6 +1438,7 @@ dependencies = [
  "ed25519-consensus",
  "elliptic-curve",
  "futures-util",
+ "getrandom 0.2.17",
  "getrandom 0.4.2",
  "hex",
  "http",
@@ -1436,7 +1446,7 @@ dependencies = [
  "http-body-util",
  "ic-certification",
  "ic-ed25519",
- "ic-transport-types 0.49.0",
+ "ic-transport-types 0.49.1",
  "ic-verify-bls-signature",
  "ic_principal",
  "js-sys",
@@ -1503,7 +1513,7 @@ dependencies = [
 
 [[package]]
 name = "ic-identity-hsm"
-version = "0.49.0"
+version = "0.49.1"
 dependencies = [
  "hex",
  "ic-agent",
@@ -1584,7 +1594,7 @@ dependencies = [
 
 [[package]]
 name = "ic-transport-types"
-version = "0.49.0"
+version = "0.49.1"
 dependencies = [
  "candid",
  "hex",
@@ -1601,7 +1611,7 @@ dependencies = [
 
 [[package]]
 name = "ic-utils"
-version = "0.49.0"
+version = "0.49.1"
 dependencies = [
  "async-trait",
  "candid",
@@ -1771,7 +1781,7 @@ dependencies = [
 
 [[package]]
 name = "icx"
-version = "0.49.0"
+version = "0.49.1"
 dependencies = [
  "anyhow",
  "candid",
@@ -1790,7 +1800,7 @@ dependencies = [
 
 [[package]]
 name = "icx-cert"
-version = "0.49.0"
+version = "0.49.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -1858,9 +1868,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0242819d153cba4b4b05a5a8f2a7e9bbf97b6055b2a002b395c96b5ff3c0222"
 dependencies = [
  "cfg-if",
- "js-sys",
- "wasm-bindgen",
- "web-sys",
 ]
 
 [[package]]

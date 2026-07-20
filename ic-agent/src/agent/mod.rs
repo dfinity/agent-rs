@@ -53,8 +53,7 @@ use crate::{
     identity::Identity,
     to_request_id, RequestId,
 };
-use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
-use backoff::{exponential::ExponentialBackoff, SystemClock};
+use backon::{BackoffBuilder, ExponentialBackoff, ExponentialBuilder};
 use ic_certification::{Certificate, Delegation, Label};
 use ic_transport_types::{
     signed::{SignedQuery, SignedRequestStatus, SignedUpdate},
@@ -838,12 +837,17 @@ impl Agent {
         })
     }
 
-    fn get_retry_policy(&self) -> ExponentialBackoff<SystemClock> {
-        ExponentialBackoffBuilder::new()
-            .with_initial_interval(Duration::from_millis(500))
-            .with_max_interval(Duration::from_secs(1))
-            .with_multiplier(1.4)
-            .with_max_elapsed_time(Some(self.max_polling_time))
+    /// Backoff schedule for polling `request_status`: 500ms initial delay, growing by 1.4x up to
+    /// 1s, jittered. `with_total_delay` bounds the cumulative sleep by `max_polling_time`, so the
+    /// iterator yields `None` (i.e. "give up") once the budget is spent.
+    fn poll_backoff(&self) -> ExponentialBackoff {
+        ExponentialBuilder::default()
+            .with_min_delay(Duration::from_millis(500))
+            .with_max_delay(Duration::from_secs(1))
+            .with_factor(1.4)
+            .with_jitter()
+            .without_max_times()
+            .with_total_delay(Some(self.max_polling_time))
             .build()
     }
 
@@ -859,7 +863,8 @@ impl Agent {
         signed_request_status: Vec<u8>,
     ) -> Result<(Vec<u8>, Certificate), AgentError> {
         let effective_id = effective_id.into();
-        let mut retry_policy = self.get_retry_policy();
+        let mut backoff = self.poll_backoff();
+        let mut slept = Duration::ZERO;
 
         let mut request_accepted = false;
         loop {
@@ -868,15 +873,18 @@ impl Agent {
                 .await?;
             match resp {
                 RequestStatusResponse::Unknown => {
-                    // If status is still `Unknown` after 5 minutes, the ingress message is lost.
-                    if retry_policy.get_elapsed_time() > Duration::from_secs(5 * 60) {
+                    // If the status is still `Unknown` after 5 minutes of cumulative polling
+                    // backoff, the ingress message is presumed lost. `slept` counts backoff
+                    // sleep, not wall-clock, so this excludes per-poll request latency.
+                    if slept > Duration::from_secs(5 * 60) {
                         return Err(AgentError::TimeoutWaitingForResponse());
                     }
                 }
 
                 RequestStatusResponse::Received | RequestStatusResponse::Processing => {
                     if !request_accepted {
-                        retry_policy.reset();
+                        backoff = self.poll_backoff();
+                        slept = Duration::ZERO;
                         request_accepted = true;
                     }
                 }
@@ -899,9 +907,11 @@ impl Agent {
                 }
             };
 
-            match retry_policy.next_backoff() {
-                Some(duration) => crate::util::sleep(duration).await,
-
+            match backoff.next() {
+                Some(duration) => {
+                    slept += duration;
+                    crate::util::sleep(duration).await;
+                }
                 None => return Err(AgentError::TimeoutWaitingForResponse()),
             }
         }
@@ -926,15 +936,18 @@ impl Agent {
         effective_id: EffectiveId,
         operation: Option<Operation>,
     ) -> Result<(Vec<u8>, Certificate), AgentError> {
-        let mut retry_policy = self.get_retry_policy();
+        let mut backoff = self.poll_backoff();
+        let mut slept = Duration::ZERO;
 
         let mut request_accepted = false;
         loop {
             let (resp, cert) = self.request_status_raw(request_id, effective_id).await?;
             match resp {
                 RequestStatusResponse::Unknown => {
-                    // If status is still `Unknown` after 5 minutes, the ingress message is lost.
-                    if retry_policy.get_elapsed_time() > Duration::from_secs(5 * 60) {
+                    // If the status is still `Unknown` after 5 minutes of cumulative polling
+                    // backoff, the ingress message is presumed lost. `slept` counts backoff
+                    // sleep, not wall-clock, so this excludes per-poll request latency.
+                    if slept > Duration::from_secs(5 * 60) {
                         return Err(AgentError::TimeoutWaitingForResponse());
                     }
                 }
@@ -948,7 +961,8 @@ impl Agent {
                         // instantaneous. Therefore, once we know the request is accepted,
                         // we should restart the backoff so the request does not time out.
 
-                        retry_policy.reset();
+                        backoff = self.poll_backoff();
+                        slept = Duration::ZERO;
                         request_accepted = true;
                     }
                 }
@@ -971,9 +985,11 @@ impl Agent {
                 }
             };
 
-            match retry_policy.next_backoff() {
-                Some(duration) => crate::util::sleep(duration).await,
-
+            match backoff.next() {
+                Some(duration) => {
+                    slept += duration;
+                    crate::util::sleep(duration).await;
+                }
                 None => return Err(AgentError::TimeoutWaitingForResponse()),
             }
         }

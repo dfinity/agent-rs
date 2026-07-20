@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.49.1] - 2026-07-20
+
+* `ic-agent`: Replaced the unmaintained `backoff` dependency with `backon` for the `request_status` polling backoff, using `backon`'s `ExponentialBackoff` iterator directly. The schedule is unchanged (500ms initial delay, growing by 1.4x up to 1s, jittered). `max_polling_time` now bounds the cumulative backoff sleep (via `backon`'s `with_total_delay`) rather than wall-clock elapsed time; in practice they differ only by per-poll request latency.
+
 ## [0.49.0] - 2026-07-13
 
 * `ic-utils`: Bump `ic-management-canister-types` to 0.8.0.
