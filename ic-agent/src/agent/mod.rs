@@ -873,7 +873,9 @@ impl Agent {
                 .await?;
             match resp {
                 RequestStatusResponse::Unknown => {
-                    // If status is still `Unknown` after 5 minutes, the ingress message is lost.
+                    // If the status is still `Unknown` after 5 minutes of cumulative polling
+                    // backoff, the ingress message is presumed lost. `slept` counts backoff
+                    // sleep, not wall-clock, so this excludes per-poll request latency.
                     if slept > Duration::from_secs(5 * 60) {
                         return Err(AgentError::TimeoutWaitingForResponse());
                     }
@@ -942,7 +944,9 @@ impl Agent {
             let (resp, cert) = self.request_status_raw(request_id, effective_id).await?;
             match resp {
                 RequestStatusResponse::Unknown => {
-                    // If status is still `Unknown` after 5 minutes, the ingress message is lost.
+                    // If the status is still `Unknown` after 5 minutes of cumulative polling
+                    // backoff, the ingress message is presumed lost. `slept` counts backoff
+                    // sleep, not wall-clock, so this excludes per-poll request latency.
                     if slept > Duration::from_secs(5 * 60) {
                         return Err(AgentError::TimeoutWaitingForResponse());
                     }

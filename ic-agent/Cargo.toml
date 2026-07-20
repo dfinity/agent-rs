@@ -28,7 +28,7 @@ wasm-bindgen = [
     "dep:wasm-bindgen",
     "dep:wasm-bindgen-futures",
     "dep:getrandom",
-    "getrandom_0_2/js",
+    "dep:getrandom_0_2",
     "dep:web-sys",
     "time/wasm-bindgen",
     "cached/wasm",
@@ -98,7 +98,7 @@ getrandom = { workspace = true, optional = true, features = ["wasm_js"] }
 # crypto crates via rand_core 0.6; on wasm its `js` backend must be turned on. This
 # renamed entry does that (see the workspace manifest), and was previously provided
 # by `backoff/wasm-bindgen`. Enabled via the `wasm-bindgen` feature.
-getrandom_0_2 = { workspace = true, optional = true }
+getrandom_0_2 = { workspace = true, optional = true, features = ["js"] }
 js-sys = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
