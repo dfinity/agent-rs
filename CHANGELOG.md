@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.49.1] - 2026-07-20
+
 * `ic-agent`: Replaced the unmaintained `backoff` dependency with `backon` for the `request_status` polling backoff. Behavior is unchanged (500ms initial delay, growing by 1.4x up to 1s, bounded by `max_polling_time`). Elapsed time is now tracked with `web-time` so it keeps working on `wasm32`.
 
 ## [0.49.0] - 2026-07-13
