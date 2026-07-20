@@ -53,8 +53,7 @@ use crate::{
     identity::Identity,
     to_request_id, RequestId,
 };
-use backoff::{backoff::Backoff, ExponentialBackoffBuilder};
-use backoff::{exponential::ExponentialBackoff, SystemClock};
+use backon::{BackoffBuilder, ExponentialBackoff, ExponentialBuilder};
 use ic_certification::{Certificate, Delegation, Label};
 use ic_transport_types::{
     signed::{SignedQuery, SignedRequestStatus, SignedUpdate},
@@ -208,6 +207,58 @@ impl fmt::Debug for Agent {
         f.debug_struct("Agent")
             .field("ingress_expiry", &self.ingress_expiry)
             .finish_non_exhaustive()
+    }
+}
+
+/// Exponential backoff schedule for polling `request_status`, bounded by an overall time budget.
+///
+/// Wraps [`backon::ExponentialBackoff`] for the delay sequence and tracks wall-clock elapsed time
+/// so the poll loop can give up after `max_elapsed_time`. `web_time::Instant` is used (rather than
+/// `std::time::Instant`) so elapsed-time tracking works both natively and on `wasm32`.
+struct RetryPolicy {
+    backoff: ExponentialBackoff,
+    start: web_time::Instant,
+    max_elapsed_time: Duration,
+}
+
+impl RetryPolicy {
+    fn new(max_elapsed_time: Duration) -> Self {
+        Self {
+            backoff: Self::build_backoff(),
+            start: web_time::Instant::now(),
+            max_elapsed_time,
+        }
+    }
+
+    fn build_backoff() -> ExponentialBackoff {
+        ExponentialBuilder::default()
+            .with_min_delay(Duration::from_millis(500))
+            .with_max_delay(Duration::from_secs(1))
+            .with_factor(1.4)
+            .with_jitter()
+            .without_max_times()
+            .build()
+    }
+
+    /// Wall-clock time elapsed since the policy was created or last [`reset`](Self::reset).
+    fn get_elapsed_time(&self) -> Duration {
+        self.start.elapsed()
+    }
+
+    /// Restart the schedule: reset both the delay sequence and the elapsed-time clock.
+    fn reset(&mut self) {
+        self.backoff = Self::build_backoff();
+        self.start = web_time::Instant::now();
+    }
+
+    /// Next delay to wait before retrying, or `None` once the time budget would be exceeded.
+    fn next_backoff(&mut self) -> Option<Duration> {
+        let next = self.backoff.next()?;
+        if self.get_elapsed_time() + next > self.max_elapsed_time {
+            None
+        } else {
+            Some(next)
+        }
     }
 }
 
@@ -838,13 +889,8 @@ impl Agent {
         })
     }
 
-    fn get_retry_policy(&self) -> ExponentialBackoff<SystemClock> {
-        ExponentialBackoffBuilder::new()
-            .with_initial_interval(Duration::from_millis(500))
-            .with_max_interval(Duration::from_secs(1))
-            .with_multiplier(1.4)
-            .with_max_elapsed_time(Some(self.max_polling_time))
-            .build()
+    fn get_retry_policy(&self) -> RetryPolicy {
+        RetryPolicy::new(self.max_polling_time)
     }
 
     /// Wait for `request_status` to return a Replied response and return the arg.
