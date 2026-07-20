@@ -210,58 +210,6 @@ impl fmt::Debug for Agent {
     }
 }
 
-/// Exponential backoff schedule for polling `request_status`, bounded by an overall time budget.
-///
-/// Wraps [`backon::ExponentialBackoff`] for the delay sequence and tracks wall-clock elapsed time
-/// so the poll loop can give up after `max_elapsed_time`. `web_time::Instant` is used (rather than
-/// `std::time::Instant`) so elapsed-time tracking works both natively and on `wasm32`.
-struct RetryPolicy {
-    backoff: ExponentialBackoff,
-    start: web_time::Instant,
-    max_elapsed_time: Duration,
-}
-
-impl RetryPolicy {
-    fn new(max_elapsed_time: Duration) -> Self {
-        Self {
-            backoff: Self::build_backoff(),
-            start: web_time::Instant::now(),
-            max_elapsed_time,
-        }
-    }
-
-    fn build_backoff() -> ExponentialBackoff {
-        ExponentialBuilder::default()
-            .with_min_delay(Duration::from_millis(500))
-            .with_max_delay(Duration::from_secs(1))
-            .with_factor(1.4)
-            .with_jitter()
-            .without_max_times()
-            .build()
-    }
-
-    /// Wall-clock time elapsed since the policy was created or last [`reset`](Self::reset).
-    fn get_elapsed_time(&self) -> Duration {
-        self.start.elapsed()
-    }
-
-    /// Restart the schedule: reset both the delay sequence and the elapsed-time clock.
-    fn reset(&mut self) {
-        self.backoff = Self::build_backoff();
-        self.start = web_time::Instant::now();
-    }
-
-    /// Next delay to wait before retrying, or `None` once the time budget would be exceeded.
-    fn next_backoff(&mut self) -> Option<Duration> {
-        let next = self.backoff.next()?;
-        if self.get_elapsed_time() + next > self.max_elapsed_time {
-            None
-        } else {
-            Some(next)
-        }
-    }
-}
-
 impl Agent {
     /// Create an instance of an [`AgentBuilder`] for building an [`Agent`]. This is simpler than
     /// using the [`AgentConfig`] and [`Agent::new()`].
@@ -889,8 +837,18 @@ impl Agent {
         })
     }
 
-    fn get_retry_policy(&self) -> RetryPolicy {
-        RetryPolicy::new(self.max_polling_time)
+    /// Backoff schedule for polling `request_status`: 500ms initial delay, growing by 1.4x up to
+    /// 1s, jittered. `with_total_delay` bounds the cumulative sleep by `max_polling_time`, so the
+    /// iterator yields `None` (i.e. "give up") once the budget is spent.
+    fn poll_backoff(&self) -> ExponentialBackoff {
+        ExponentialBuilder::default()
+            .with_min_delay(Duration::from_millis(500))
+            .with_max_delay(Duration::from_secs(1))
+            .with_factor(1.4)
+            .with_jitter()
+            .without_max_times()
+            .with_total_delay(Some(self.max_polling_time))
+            .build()
     }
 
     /// Wait for `request_status` to return a Replied response and return the arg.
@@ -905,7 +863,8 @@ impl Agent {
         signed_request_status: Vec<u8>,
     ) -> Result<(Vec<u8>, Certificate), AgentError> {
         let effective_id = effective_id.into();
-        let mut retry_policy = self.get_retry_policy();
+        let mut backoff = self.poll_backoff();
+        let mut slept = Duration::ZERO;
 
         let mut request_accepted = false;
         loop {
@@ -915,14 +874,15 @@ impl Agent {
             match resp {
                 RequestStatusResponse::Unknown => {
                     // If status is still `Unknown` after 5 minutes, the ingress message is lost.
-                    if retry_policy.get_elapsed_time() > Duration::from_secs(5 * 60) {
+                    if slept > Duration::from_secs(5 * 60) {
                         return Err(AgentError::TimeoutWaitingForResponse());
                     }
                 }
 
                 RequestStatusResponse::Received | RequestStatusResponse::Processing => {
                     if !request_accepted {
-                        retry_policy.reset();
+                        backoff = self.poll_backoff();
+                        slept = Duration::ZERO;
                         request_accepted = true;
                     }
                 }
@@ -945,9 +905,11 @@ impl Agent {
                 }
             };
 
-            match retry_policy.next_backoff() {
-                Some(duration) => crate::util::sleep(duration).await,
-
+            match backoff.next() {
+                Some(duration) => {
+                    slept += duration;
+                    crate::util::sleep(duration).await;
+                }
                 None => return Err(AgentError::TimeoutWaitingForResponse()),
             }
         }
@@ -972,7 +934,8 @@ impl Agent {
         effective_id: EffectiveId,
         operation: Option<Operation>,
     ) -> Result<(Vec<u8>, Certificate), AgentError> {
-        let mut retry_policy = self.get_retry_policy();
+        let mut backoff = self.poll_backoff();
+        let mut slept = Duration::ZERO;
 
         let mut request_accepted = false;
         loop {
@@ -980,7 +943,7 @@ impl Agent {
             match resp {
                 RequestStatusResponse::Unknown => {
                     // If status is still `Unknown` after 5 minutes, the ingress message is lost.
-                    if retry_policy.get_elapsed_time() > Duration::from_secs(5 * 60) {
+                    if slept > Duration::from_secs(5 * 60) {
                         return Err(AgentError::TimeoutWaitingForResponse());
                     }
                 }
@@ -994,7 +957,8 @@ impl Agent {
                         // instantaneous. Therefore, once we know the request is accepted,
                         // we should restart the backoff so the request does not time out.
 
-                        retry_policy.reset();
+                        backoff = self.poll_backoff();
+                        slept = Duration::ZERO;
                         request_accepted = true;
                     }
                 }
@@ -1017,9 +981,11 @@ impl Agent {
                 }
             };
 
-            match retry_policy.next_backoff() {
-                Some(duration) => crate::util::sleep(duration).await,
-
+            match backoff.next() {
+                Some(duration) => {
+                    slept += duration;
+                    crate::util::sleep(duration).await;
+                }
                 None => return Err(AgentError::TimeoutWaitingForResponse()),
             }
         }
