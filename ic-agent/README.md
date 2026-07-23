@@ -3,5 +3,4 @@ in Rust. It is the backend for [`dfx`](https://internetcomputer.org/docs/current
 
 ## Useful links
 
-- [Documentation (master)](https://agent-rust.netlify.app/ic_agent)
 - [Documentation (published)](https://docs.rs/ic_agent)

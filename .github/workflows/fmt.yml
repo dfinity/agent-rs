@@ -3,35 +3,30 @@ name: Format
 on: [pull_request]
 
 jobs:
-  test:
+  fmt:
     name: fmt
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
+    runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Cache Cargo
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      # cargo fmt does not compile anything, so there is nothing worth caching.
+      # setup-rust-toolchain installs the rust-toolchain.toml-pinned rustfmt.
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-1
+          cache: false
 
       - name: Run Cargo Fmt
         run: cargo fmt --all -- --check
         env:
           RUST_BACKTRACE: 1
+
   aggregate:
     name: fmt:required
     runs-on: ubuntu-latest
     if: ${{ always() }}
-    needs: test
+    needs: fmt
     steps:
       - name: Check fmt result
-        if: ${{ needs.test.result != 'success' }}
+        if: ${{ needs.fmt.result != 'success' }}
         run: exit 1
