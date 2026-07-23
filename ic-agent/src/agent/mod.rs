@@ -220,7 +220,7 @@ impl Agent {
     /// Create an instance of an [`Agent`].
     pub fn new(config: agent_config::AgentConfig) -> Result<Agent, AgentError> {
         let client = config.http_service.unwrap_or_else(|| {
-            Arc::new(Retry429Logic {
+            Arc::new(RetryLogic {
                 client: config.client.unwrap_or_else(|| {
                     #[cfg(not(target_family = "wasm"))]
                     {
@@ -2406,13 +2406,13 @@ where
 }
 
 #[derive(Debug)]
-struct Retry429Logic {
+struct RetryLogic {
     client: Client,
 }
 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl HttpService for Retry429Logic {
+impl HttpService for RetryLogic {
     async fn call<'a>(
         &'a self,
         req: &'a (dyn Fn() -> Result<http::Request<Bytes>, AgentError> + Send + Sync),
@@ -2436,7 +2436,9 @@ impl HttpService for Retry429Logic {
                 to_http_response(resp, _size_limit).await?
             };
 
-            if resp.status() == StatusCode::TOO_MANY_REQUESTS {
+            if resp.status() == StatusCode::TOO_MANY_REQUESTS
+                || resp.status() == StatusCode::SERVICE_UNAVAILABLE
+            {
                 if retries == 6 {
                     break Ok(resp);
                 } else {
