@@ -8,7 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-* `ic-agent`: The HTTP retry logic now also retries requests that fail with `StatusCode::SERVICE_UNAVAILABLE` (503), in addition to `TOO_MANY_REQUESTS` (429). This prevents non-idempotent calls from spuriously failing while polling for their status against a replica that is temporarily unhealthy (e.g. has no recent certified state, or a full ingress pool).
+## [0.49.2] - 2026-07-23
+
+* `ic-agent`: The HTTP retry logic now also retries requests that fail with `StatusCode::SERVICE_UNAVAILABLE` (503), in addition to `TOO_MANY_REQUESTS` (429). This prevents non-idempotent calls from spuriously failing while polling for their status against a replica that is temporarily unhealthy (e.g. has no recent certified state, or a full ingress pool). Both status codes share the same retry bound (up to 6 retries).
 
 ## [0.49.1] - 2026-07-20
 
