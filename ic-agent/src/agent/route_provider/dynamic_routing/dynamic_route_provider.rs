@@ -639,7 +639,7 @@ mod tests {
         // Test 2: calls to route() return both seeds, as they become healthy.
         checker.overwrite_healthy_nodes(vec![node_1.clone(), node_2.clone()]);
         tokio::time::sleep(3 * check_interval).await;
-        let routed_domains = route_n_times(6, Arc::clone(&route_provider));
+        let routed_domains = route_n_times(30, Arc::clone(&route_provider)); // Increased for probabilistic routing
         assert_routed_domains(routed_domains, vec![node_1.domain(), node_2.domain()]);
     }
 
@@ -762,7 +762,7 @@ mod tests {
         // Test 2: calls to route() return two healthy seeds, as the unhealthy seed becomes healthy.
         checker.overwrite_healthy_nodes(vec![node_1.clone(), node_2.clone()]);
         tokio::time::sleep(2 * check_interval).await;
-        let routed_domains = route_n_times(6, Arc::clone(&route_provider));
+        let routed_domains = route_n_times(30, Arc::clone(&route_provider)); // Increased for probabilistic routing
         assert_routed_domains(routed_domains, vec![node_1.domain(), node_2.domain()]);
     }
 
