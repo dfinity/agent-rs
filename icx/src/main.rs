@@ -293,7 +293,9 @@ pub fn get_effective_canister_id(
             | MgmtMethod::ReadCanisterSnapshotMetadata
             | MgmtMethod::ReadCanisterSnapshotData
             | MgmtMethod::UploadCanisterSnapshotMetadata
-            | MgmtMethod::UploadCanisterSnapshotData => {
+            | MgmtMethod::UploadCanisterSnapshotData
+            | MgmtMethod::CanisterMetadata
+            | MgmtMethod::CanisterMetrics => {
                 #[derive(CandidType, Deserialize)]
                 struct In {
                     canister_id: Principal,
@@ -332,6 +334,13 @@ pub fn get_effective_canister_id(
             | MgmtMethod::NodeMetricsHistory
             | MgmtMethod::CanisterInfo => {
                 bail!("Management canister method {method_name} can only be run from canisters");
+            }
+            MgmtMethod::ListCanisters => {
+                bail!(
+                    "Management canister method {} is subnet-scoped and cannot be routed by \
+                     effective canister id; it is not supported through icx.",
+                    method_name.as_ref()
+                );
             }
         }
     } else {

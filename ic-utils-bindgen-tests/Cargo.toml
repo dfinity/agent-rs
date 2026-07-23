@@ -6,20 +6,17 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 
-[lints]
-workspace = true
-
 [dependencies]
+candid.workspace = true
 ic-agent = { workspace = true, features = ["pem"] }
 ic-utils.workspace = true
-candid.workspace = true
 pocket-ic.workspace = true
 serde.workspace = true
 tokio.workspace = true
 
 [build-dependencies]
-ic-utils-bindgen = { path = "../ic-utils-bindgen" }
 candid.workspace = true
+ic-utils-bindgen = { workspace = true }
 
 [dev-dependencies]
 ref-tests.workspace = true

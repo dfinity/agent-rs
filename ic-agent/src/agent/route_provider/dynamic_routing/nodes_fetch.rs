@@ -138,11 +138,18 @@ where
             loop {
                 let snapshot = self.routing_snapshot.load();
                 if let Some(node) = snapshot.next_node() {
-                    match self.fetcher.fetch((&node).into()).await {
+                    let fetch_result = futures_util::select! {
+                        result = self.fetcher.fetch((&node).into()).fuse() => result,
+                        _ = self.token.clone().fuse() => {
+                            log!(warn, "{NODES_FETCH_ACTOR}: was gracefully cancelled");
+                            return;
+                        }
+                    };
+                    match fetch_result {
                         Ok(nodes) => {
                             let msg = Some(FetchedNodes { nodes });
                             match self.fetch_sender.send(msg) {
-                                Ok(()) => break, // message sent successfully, exist the loop
+                                Ok(()) => break, // message sent successfully, exit the loop
                                 Err(_err) => {
                                     log!(error, "{NODES_FETCH_ACTOR}: failed to send results to {HEALTH_MANAGER_ACTOR}: {_err:?}");
                                 }
@@ -165,7 +172,13 @@ where
                     "Retrying to fetch the nodes in {:?}",
                     self.fetch_retry_interval
                 );
-                crate::util::sleep(self.fetch_retry_interval).await;
+                futures_util::select! {
+                    _ = crate::util::sleep(self.fetch_retry_interval).fuse() => {}
+                    _ = self.token.clone().fuse() => {
+                        log!(warn, "{NODES_FETCH_ACTOR}: was gracefully cancelled");
+                        return;
+                    }
+                }
             }
             futures_util::select! {
                 _ = crate::util::sleep(self.period).fuse() => {

@@ -6,7 +6,7 @@
 
 use std::borrow::Cow;
 
-use candid::Principal;
+use candid::{CandidType, Principal};
 use ic_certification::Label;
 pub use request_id::{to_request_id, RequestId, RequestIdError};
 use serde::{Deserialize, Serialize};
@@ -15,6 +15,23 @@ use thiserror::Error;
 
 mod request_id;
 pub mod signed;
+
+/// Canister-certified sender information attached to a request envelope.
+///
+/// `sig` must be a canister signature (domain separator `\x0Eic-sender-info`) over the `info`
+/// field, verifiable using the envelope's `sender_pubkey` as the canister sig public key.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SenderInfo {
+    /// The sender information to be passed to the canister.
+    #[serde(with = "serde_bytes")]
+    pub info: Vec<u8>,
+    /// The principal (as raw bytes) of the canister that signed the info.
+    #[serde(with = "serde_bytes")]
+    pub signer: Vec<u8>,
+    /// A canister signature over `\x0Eic-sender-info || info`.
+    #[serde(with = "serde_bytes")]
+    pub sig: Vec<u8>,
+}
 
 /// The authentication envelope, containing the contents and their signature. This struct can be passed to `Agent`'s
 /// `*_signed` methods via [`encode_bytes`](Envelope::encode_bytes).
@@ -66,6 +83,9 @@ pub enum EnvelopeContent {
         /// The argument to pass to the canister method.
         #[serde(with = "serde_bytes")]
         arg: Vec<u8>,
+        /// Canister-certified sender information. See [`SenderInfo`].
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sender_info: Option<SenderInfo>,
     },
     /// A request for information from the [IC state tree](https://internetcomputer.org/docs/current/references/ic-interface-spec#state-tree).
     ReadState {
@@ -92,6 +112,9 @@ pub enum EnvelopeContent {
         /// A random series of bytes to uniquely identify this message.
         #[serde(default, skip_serializing_if = "Option::is_none", with = "serde_bytes")]
         nonce: Option<Vec<u8>>,
+        /// Canister-certified sender information. See [`SenderInfo`].
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sender_info: Option<SenderInfo>,
     },
 }
 
@@ -358,7 +381,7 @@ pub struct ReplyResponse {
 ///
 /// If key A signs a delegation containing key B, then key B may be used to
 /// authenticate as key A's corresponding principal(s).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, CandidType, Serialize, Deserialize)]
 pub struct Delegation {
     /// The delegated-to key.
     #[serde(with = "serde_bytes")]
@@ -368,6 +391,20 @@ pub struct Delegation {
     /// If present, this delegation only applies to requests sent to one of these canisters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub targets: Option<Vec<Principal>>,
+    /// If present, this delegation only applies to the specified kinds of requests.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permissions: Option<DelegationPermissions>,
+}
+
+/// The kinds of requests a [`Delegation`] permits.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, CandidType, Serialize, Deserialize)]
+pub enum DelegationPermissions {
+    /// Only query calls and `read_state` requests are permitted.
+    #[serde(rename = "queries")]
+    Queries,
+    /// All request types are permitted.
+    #[serde(rename = "all")]
+    All,
 }
 
 const IC_REQUEST_DELEGATION_DOMAIN_SEPARATOR: &[u8] = b"\x1Aic-request-auth-delegation";
@@ -385,7 +422,7 @@ impl Delegation {
 }
 
 /// A [`Delegation`] that has been signed by an [`Identity`](https://docs.rs/ic-agent/latest/ic_agent/trait.Identity.html).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, CandidType, Serialize, Deserialize)]
 pub struct SignedDelegation {
     /// The signed delegation.
     pub delegation: Delegation,

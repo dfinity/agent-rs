@@ -9,17 +9,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 * Fix `StatusCode::SERVICE_UNAVAILABLE` in `ic-agent`.
-* Time out `Unknown` statuses after 5 minutes, regardless of the configured `max_polling_time`.
+
+## [0.49.1] - 2026-07-20
+
+* `ic-agent`: Replaced the unmaintained `backoff` dependency with `backon` for the `request_status` polling backoff, using `backon`'s `ExponentialBackoff` iterator directly. The schedule is unchanged (500ms initial delay, growing by 1.4x up to 1s, jittered). `max_polling_time` now bounds the cumulative backoff sleep (via `backon`'s `with_total_delay`) rather than wall-clock elapsed time; in practice they differ only by per-poll request latency.
+
+## [0.49.0] - 2026-07-13
+
+* `ic-utils`: Bump `ic-management-canister-types` to 0.8.0.
+  * Added `with_snapshot_visibility` setter to `CreateCanisterBuilder` and `UpdateSettingsBuilder`.
+  * Added `canister_metrics()` to `ManagementCanister`.
+  * Added `list_canisters()` method to `ManagementCanister`. This is a subnet-scoped, query-only management-canister method (callable only by subnet administrators); the request is routed to the subnet-scoped query endpoint via `Agent::query_signed` with an `EffectiveId::Subnet`.
+  * Re-exported new types: `SnapshotVisibility`, `CanisterIdRange`, `ListCanistersResult`, `CyclesConsumed`, `CanisterMetricsArgs`, `CanisterMetricsResult`.
+* `ic-utils`: Added `with_canister_settings(CanisterSettings)` to `CreateCanisterBuilder` and `UpdateSettingsBuilder`, for callers that already hold a fully built `CanisterSettings` (e.g. decoded from config or forwarded from another call). It is currently mutually exclusive with the individual settings setters (`with_controller`, `with_compute_allocation`, …); building the call returns an error if the two are combined.
+* `ic-utils`: `ManagementCanister::canister_status` and `canister_metrics` now default to a cheap, non-replicated **query** call and return a `QueryOrUpdateCall` builder. Call `.call().await` for the query, or `.as_update().call().await` to issue a replicated update call instead (e.g. when a fully certified result is required). Query responses are replica-signed and verified by the agent unless query-signature verification is disabled. These are the only two management read methods the replica accepts as both query and update; `fetch_canister_logs` and `list_canisters` remain query-only per the interface spec.
 
 ### Breaking Changes
 
-* BREAKING: Removed round-robin routing strategy. `DynamicRouteProvider` now exclusively uses latency-based routing.
+* `ic-utils`: The re-exported `CanisterSettings` and `DefiniteCanisterSettings` structs (from `ic-management-canister-types` 0.8.0) gained a `snapshot_visibility` field, controlling who may read a canister's snapshots. Neither struct is `#[non_exhaustive]`, so code that constructs them with a struct literal must add the new field (`snapshot_visibility: None` on `CanisterSettings`, or the desired `SnapshotVisibility`).
+* `ic-utils`: `ManagementCanister::canister_status` no longer returns an `impl AsyncCall` and no longer performs a replicated update call by default. It now returns a `QueryOrUpdateCall` that defaults to a query call.
+  * Migration: replace `canister_status(&id).call_and_wait().await` with `canister_status(&id).call().await` to accept the (cheaper) query, or `canister_status(&id).as_update().call().await` to preserve the previous replicated-update behavior.
+* `ic-utils`: The `MgmtMethod` enum gained `CanisterMetrics` and `ListCanisters` variants. `MgmtMethod` is not `#[non_exhaustive]`, so exhaustive `match` expressions over it must add arms for the new variants.
+
+## [0.48.1] - 2026-07-07
+
+* `ic-transport-types`: `Delegation`, `SignedDelegation`, and `DelegationPermissions` now derive `candid::CandidType`, so they can be used directly in Candid interfaces (e.g. matching Internet Identity's `Delegation`/`SignedDelegation` types). The generated Candid maps the byte fields to `blob` and `DelegationPermissions` to `variant { queries; all }`; the added `permissions` field is `opt`, so the encoding stays subtype-compatible with delegation interfaces that omit it.
+
+## [0.48.0] - 2026-07-04
+
+* `ic-transport-types` / `ic-agent`: Added a `permissions` field to `Delegation` and a new `DelegationPermissions` enum (`Queries` | `All`) describing which request kinds a signed delegation authorizes, matching the IC interface-spec addition for read-only delegations. The field serializes as `"queries"`/`"all"` and is omitted when `None`, so existing delegations (which leave it `None`) hash and verify exactly as before. `DelegationPermissions` is re-exported from `ic_agent::identity` alongside `Delegation` and `SignedDelegation`.
+
+### Breaking Changes
+
+* `ic-transport-types`: `Delegation` gained a `permissions: Option<DelegationPermissions>` field. `Delegation` is not `#[non_exhaustive]`, so code that constructs it with a struct literal must add `permissions: None` (or the desired value).
+
+## [0.47.3] - 2026-05-15
+
+* `ic-agent`: Added the `EffectiveId` enum (`Canister(Principal)` | `Subnet(Principal)`) and widened `Agent::update_signed`, `query_signed`, `request_status_signed`, `request_status_raw`, `wait`, `wait_signed`, `read_state_raw`, `verify`, and `sign_request_status` to accept `impl Into<EffectiveId>`. Passing a bare `Principal` is unchanged (treated as `EffectiveId::Canister(_)`); passing `EffectiveId::Subnet(_)` routes to the subnet-scoped HTTP endpoints (`/api/v4/subnet/<id>/call`, `/api/v3/subnet/<id>/read_state`, `/api/v3/subnet/<id>/query`) introduced in IC interface spec 0.60.0.
+* `ic-agent`: Renamed the `effective_canister_id` argument of `sign_request_status` to `effective_id` to reflect that it can hold either an effective canister id or an effective subnet id. `SignedRequestStatus::effective_canister_id` is unchanged but its documentation now notes the same.
+* `ic-utils`: Added `CreateCanisterBuilder::with_effective_subnet_id` so subnet administrators can route `create_canister` calls to a specific subnet via the subnet-scoped management-canister endpoints.
+
+## [0.47.2] - 2026-04-22
+
+* `ic-agent`: Added `InfoAwareIdentity` and `Identity::sender_info` for setting canister-certified sender info.
+* `ic-agent`: Added PKCS#8 pem parsing to `Secp256k1Identity` and `Prime256v1Identity`.
+
+## [0.47.0] - 2026-03-23
+
+* `ic-agent`: `DynamicRouteProviderBuilder::new()` and `::from_components()` now accept a `k_top_nodes: Option<usize>` parameter. Pass `Some(k)` to limit routing to the `k` nodes with the highest latency score; pass `None` to retain the existing behaviour of routing across all healthy nodes.
+
+## [0.46.2] - 2026-03-10
+
+* `Subnet`, `SubnetNodeIter`, and `SubnetKeysIter` now implement `Debug`.
+* `ic-agent`: Added `SubnetType` enum (`System`, `Application`, `VerifiedApplication`, `Unknown(String)`) and exposed it via a new `subnet_type()` accessor on `Subnet`. The field is `None` when the certificate was produced by a replica with certification version older than V25, and `Some(SubnetType)` otherwise. `SubnetType` is re-exported from `ic_agent` alongside `Subnet`.
+
+## [0.46.1] - 2026-03-05
+
+* Fix panic in `ic-agent` on non-WASM targets caused by `async-watch` crate; replaced with `tokio::sync::watch`.
+
+## [0.46.0] - 2026-03-04
+
+* Time out `Unknown` statuses after 5 minutes, regardless of the configured `max_polling_time`.
+* `ic-utils`: Bump `ic-management-canister-types` to 0.7.1.
+  * Added `LogMemoryLimit` attribute type and `with_log_memory_limit` setter to `CreateCanisterBuilder` and `UpdateSettingsBuilder`.
+  * Added `canister_metadata()` query method to `ManagementCanister`.
+  * Re-exported new types: `CanisterLogFilter`, `CanisterMetadataArgs`, `CanisterMetadataResult`, `FetchCanisterLogsArgs`, `MemoryMetrics`, `RenameCanisterRecord`, `RenameToRecord`.
+
+### Breaking Changes
+
+* `ic-utils`:
+  * `UpdateCanisterBuilder` renamed to `UpdateSettingsBuilder`.
+    * Migration: Replace all uses of `UpdateCanisterBuilder` with `UpdateSettingsBuilder`.
+  * `ManagementCanister::fetch_canister_logs` now takes `&FetchCanisterLogsArgs` instead of `&Principal`.
+    * Migration: Replace `fetch_canister_logs(&canister_id)` with `fetch_canister_logs(&FetchCanisterLogsArgs { canister_id, filter: None })`.
+  * Snapshot methods (`take_canister_snapshot`, `load_canister_snapshot`, `delete_canister_snapshot`, `read_canister_snapshot_metadata`, `read_canister_snapshot_data`, `upload_canister_snapshot_metadata`, `upload_canister_snapshot_data`) no longer accept a separate `canister_id: &Principal` parameter; the canister ID is now derived from the args struct.
+    * Migration: Remove the leading `&canister_id` argument from these calls.
+  * Removed `with_optional_*` builder methods from `CreateCanisterBuilder` and `UpdateSettingsBuilder` (`with_optional_controller`, `with_optional_compute_allocation`, `with_optional_memory_allocation`, `with_optional_freezing_threshold`, `with_optional_reserved_cycles_limit`, `with_optional_wasm_memory_limit`, `with_optional_wasm_memory_threshold`, `with_optional_log_visibility`, `with_optional_environment_variables`).
+    * Migration: Remove calls passing `None` (they were no-ops). For calls passing `Some(value)`, use the corresponding `with_*` method directly with the value.
+* Removed round-robin routing strategy. `DynamicRouteProvider` now exclusively uses latency-based routing.
   * Removed `DynamicRoutingStrategy` enum and `RoundRobinRoutingSnapshot` type.
   * `DynamicRouteProvider` is no longer generic over routing strategy.
   * `DynamicRouteProviderBuilder::new()`, `::from_components()`, `::run_in_background()`, and `::run_in_background_with_intervals()` no longer accept `snapshot` or `strategy` parameters.
   * Migration: Remove routing strategy arguments from your code - latency-based routing is now the only option.
-* BREAKING: `DynamicRouteProviderBuilder::build()` is no longer async. Background tasks are no longer started automatically during construction. Call `provider.start().await` for explicit initialization, or let it auto-start lazily on first `route()` call.
-* BREAKING: `DynamicRouteProvider::run()` is now private. Use `start()` instead.
+* `DynamicRouteProviderBuilder::build()` is no longer async. Background tasks are no longer started automatically during construction. Call `provider.start().await` for explicit initialization, or let it auto-start lazily on first `route()` call.
+* `DynamicRouteProvider::run()` is now private. Use `start()` instead.
 
 ## [0.45.0] - 2025-12-19
 

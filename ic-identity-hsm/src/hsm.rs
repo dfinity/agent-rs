@@ -11,16 +11,18 @@ use pkcs11::{
     },
     Ctx,
 };
-use sha2::{
-    digest::{generic_array::GenericArray, OutputSizeUser},
-    Digest, Sha256,
-};
+use sha2::{digest::Output, Digest, Sha256};
 use simple_asn1::{
     from_der, oid, to_der,
     ASN1Block::{BitString, ObjectIdentifier, OctetString, Sequence},
     ASN1DecodeErr, ASN1EncodeErr,
 };
-use std::{path::Path, ptr};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    ptr,
+    sync::{Arc, Mutex, OnceLock, Weak},
+};
 use thiserror::Error;
 
 type KeyIdVec = Vec<u8>;
@@ -28,7 +30,7 @@ type KeyId = [u8];
 type DerPublicKeyVec = Vec<u8>;
 
 /// Type alias for a sha256 result (ie. a u256).
-type Sha256Hash = GenericArray<u8, <Sha256 as OutputSizeUser>::OutputSize>;
+type Sha256Hash = Output<Sha256>;
 
 // We expect the parameters to be curve secp256r1.  This is the base127 encoded form:
 const EXPECTED_EC_PARAMS: &[u8; 10] = b"\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07";
@@ -91,11 +93,34 @@ pub enum HardwareIdentityError {
     NoSuchSlotIndex(usize),
 }
 
+/// Global cache of initialized PKCS#11 contexts, keyed by library path.
+/// Uses `Weak` so the `Ctx` is finalized when all `HardwareIdentity` users drop.
+fn ctx_cache() -> &'static Mutex<HashMap<PathBuf, Weak<Ctx>>> {
+    static CACHE: OnceLock<Mutex<HashMap<PathBuf, Weak<Ctx>>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn get_or_init_ctx(path: &Path) -> Result<Arc<Ctx>, HardwareIdentityError> {
+    let mut cache = ctx_cache().lock().unwrap();
+    let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+
+    if let Some(weak) = cache.get(&canonical) {
+        if let Some(arc) = weak.upgrade() {
+            return Ok(arc);
+        }
+    }
+
+    let ctx = Ctx::new_and_initialize(path)?;
+    let arc = Arc::new(ctx);
+    cache.insert(canonical, Arc::downgrade(&arc));
+    Ok(arc)
+}
+
 /// An identity based on an HSM
 #[derive(Debug)]
 pub struct HardwareIdentity {
     key_id: KeyIdVec,
-    ctx: Ctx,
+    ctx: Arc<Ctx>,
     session_handle: CK_SESSION_HANDLE,
     logged_in: bool,
     public_key: DerPublicKeyVec,
@@ -119,7 +144,7 @@ impl HardwareIdentity {
         P: AsRef<Path>,
         PinFn: FnOnce() -> Result<String, String>,
     {
-        let ctx = Ctx::new_and_initialize(pkcs11_lib_path)?;
+        let ctx = get_or_init_ctx(pkcs11_lib_path.as_ref())?;
         let slot_id = get_slot_id(&ctx, slot_index)?;
         let session_handle = open_session(&ctx, slot_id)?;
         let logged_in = login_if_required(&ctx, session_handle, pin_fn, slot_id)?;

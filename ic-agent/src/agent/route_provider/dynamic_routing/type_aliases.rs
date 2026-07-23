@@ -2,9 +2,15 @@ use arc_swap::ArcSwap;
 use std::sync::Arc;
 
 /// A type alias for the sender end of a watch channel.
+#[cfg(not(target_family = "wasm"))]
+pub(super) type SenderWatch<T> = tokio::sync::watch::Sender<Option<T>>;
+#[cfg(target_family = "wasm")]
 pub(super) type SenderWatch<T> = async_watch::Sender<Option<T>>;
 
 /// A type alias for the receiver end of a watch channel.
+#[cfg(not(target_family = "wasm"))]
+pub(super) type ReceiverWatch<T> = tokio::sync::watch::Receiver<Option<T>>;
+#[cfg(target_family = "wasm")]
 pub(super) type ReceiverWatch<T> = async_watch::Receiver<Option<T>>;
 
 /// A type alias for the sender end of a multi-producer, single-consumer channel.

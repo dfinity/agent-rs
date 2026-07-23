@@ -21,7 +21,7 @@ pub enum PemError {
     /// An error occurred while reading the file in DER format.
     #[cfg(feature = "pem")]
     #[error("An error occurred while reading the file: {0}")]
-    DerError(#[from] der::Error),
+    DerError(#[from] pkcs8::der::Error),
 
     /// The private key is invalid.
     #[error("Invalid private key: {0}")]
@@ -46,9 +46,12 @@ pub enum DelegationError {
         /// The delegation that didn't match, or `None` if the `Identity` didn't match
         to: Option<Delegation>,
     },
-    /// A key with an unknown algorithm was used. The IC supports Ed25519, secp256k1, and prime256v1, and in ECDSA the curve must be specified.
+    /// A key with an unknown algorithm was used. The IC supports Ed25519, secp256k1, prime256v1, and canister signatures, and in ECDSA the curve must be specified.
     #[error("The delegation chain contained a key with an unknown algorithm")]
     UnknownAlgorithm,
+    /// A canister signature in the delegation chain failed verification.
+    #[error("A canister signature in the delegation chain could not be verified: {0}")]
+    InvalidCanisterSignature(String),
     /// One of `Identity`'s functions returned an error.
     #[error("A delegated-to identity encountered an error: {0}")]
     IdentityError(String),

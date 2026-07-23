@@ -170,7 +170,7 @@ impl DynamicRouteProvider {
         client: Arc<dyn HttpService>,
     ) -> Result<Self, AgentError> {
         let seed_nodes: Result<Vec<_>, _> = seed_domains.into_iter().map(Node::new).collect();
-        let provider = DynamicRouteProviderBuilder::new(seed_nodes?, client).build();
+        let provider = DynamicRouteProviderBuilder::new(seed_nodes?, client, None).build();
         provider.start().await;
 
         Ok(Self {
@@ -185,7 +185,7 @@ impl DynamicRouteProvider {
         health_check_interval: Duration,
     ) -> Result<Self, AgentError> {
         let seed_nodes: Result<Vec<_>, _> = seed_domains.into_iter().map(Node::new).collect();
-        let provider = DynamicRouteProviderBuilder::new(seed_nodes?, client)
+        let provider = DynamicRouteProviderBuilder::new(seed_nodes?, client, None)
             .with_fetch_period(list_update_interval)
             .with_check_period(health_check_interval)
             .build();

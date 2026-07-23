@@ -1,3 +1,4 @@
+#![allow(clippy::needless_lifetimes)]
 use crate::call::{AsyncCaller, SyncCaller};
 use candid::utils::ArgumentEncoder;
 use candid::{ser::IDLBuilder, types::value::IDLValue, utils::ArgumentDecoder, CandidType, Encode};
@@ -386,7 +387,6 @@ impl<'agent: 'canister, 'canister> AsyncCallBuilder<'agent, 'canister> {
 #[cfg(all(test, unix))] // pocket-ic
 mod tests {
     use super::*;
-    use crate::call::AsyncCall;
     use crate::interfaces::ManagementCanister;
 
     #[tokio::test]
@@ -410,7 +410,7 @@ mod tests {
 
             let (status,) = management_canister
                 .canister_status(&new_canister_id)
-                .call_and_wait()
+                .call()
                 .await
                 .unwrap();
 

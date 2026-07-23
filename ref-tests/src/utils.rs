@@ -3,6 +3,9 @@ use ic_agent::identity::{Prime256v1Identity, Secp256k1Identity};
 use ic_agent::{export::Principal, identity::BasicIdentity, Agent, Identity};
 use ic_identity_hsm::HardwareIdentity;
 use ic_utils::interfaces::{management_canister::builders::MemoryAllocation, ManagementCanister};
+use pocket_ic::common::rest::{
+    CanisterCyclesCostSchedule, ExtendedSubnetConfigSet, SubnetId, SubnetSpec,
+};
 use pocket_ic::nonblocking::PocketIc;
 use pocket_ic::PocketIcBuilder;
 use std::time::Duration;
@@ -28,17 +31,17 @@ pub fn create_identity() -> Result<Box<dyn Identity>, String> {
 }
 
 fn expect_env_var(name: &str) -> Result<String, String> {
-    std::env::var(name).map_err(|_| format!("Need to specify the {} environment variable", name))
+    std::env::var(name).map_err(|_| format!("Need to specify the {name} environment variable"))
 }
 
 pub fn create_hsm_identity() -> Result<HardwareIdentity, String> {
     let path = expect_env_var(HSM_PKCS11_LIBRARY_PATH)?;
     let slot_index = expect_env_var(HSM_SLOT_INDEX)?
         .parse::<usize>()
-        .map_err(|e| format!("Unable to parse {} value: {}", HSM_SLOT_INDEX, e))?;
+        .map_err(|e| format!("Unable to parse {HSM_SLOT_INDEX} value: {e}"))?;
     let key = expect_env_var(HSM_KEY_ID)?;
     let id = HardwareIdentity::new(path, slot_index, &key, get_hsm_pin)
-        .map_err(|e| format!("Unable to create hw identity: {}", e))?;
+        .map_err(|e| format!("Unable to create hw identity: {e}"))?;
     Ok(id)
 }
 
@@ -101,7 +104,7 @@ pub async fn create_agent(
         .with_identity(identity)
         .with_max_polling_time(Duration::from_secs(15))
         .build()
-        .map_err(|e| format!("{:?}", e))?;
+        .map_err(|e| format!("{e:?}"))?;
     agent.fetch_root_key().await.unwrap();
     Ok(agent)
 }
@@ -179,7 +182,48 @@ where
         .await;
     match f(&pic).await {
         Ok(r) => r,
-        Err(e) => panic!("{:?}", e),
+        Err(e) => panic!("{e:?}"),
+    }
+}
+
+/// Like [`with_agent_as`], but the agent's identity is registered as a subnet
+/// administrator of a cloud engine subnet. The subnet id is passed to `f` so
+/// the test can route calls via `with_effective_subnet_id`.
+pub async fn with_subnet_admin_agent<I, F, R>(admin_identity: I, f: F) -> R
+where
+    I: Identity + 'static,
+    F: AsyncFnOnce(&PocketIc, Agent, SubnetId) -> Result<R, Box<dyn Error>>,
+{
+    if !check_assets_uptodate() {
+        panic!("Test assets are out of date. Please run `scripts/download_reftest_assets.sh` to update them.");
+    }
+    let admin_principal = admin_identity
+        .sender()
+        .expect("admin identity has a sender principal");
+    let config = ExtendedSubnetConfigSet {
+        nns: Some(SubnetSpec::default()),
+        cloud_engine: vec![SubnetSpec::default()
+            .with_subnet_admins(vec![admin_principal])
+            .with_cost_schedule(CanisterCyclesCostSchedule::Free)],
+        ..Default::default()
+    };
+    let pic = PocketIcBuilder::new_with_config(config)
+        .with_server_binary(format!("{}/assets/pocket-ic", env!("CARGO_MANIFEST_DIR")).into())
+        .with_auto_progress()
+        .build_async()
+        .await;
+    let agent = create_agent(&pic, admin_identity)
+        .await
+        .expect("Could not create an agent.");
+    let subnet_id = *pic
+        .topology()
+        .await
+        .get_cloud_engines()
+        .first()
+        .expect("cloud engine subnet exists");
+    match f(&pic, agent, subnet_id).await {
+        Ok(r) => r,
+        Err(e) => panic!("{e:?}"),
     }
 }
 

@@ -1,6 +1,6 @@
 //! Types representing signed messages.
 
-use crate::request_id::RequestId;
+use crate::{request_id::RequestId, SenderInfo};
 use candid::Principal;
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +32,9 @@ pub struct SignedQuery {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(with = "serde_bytes")]
     pub nonce: Option<Vec<u8>>,
+    /// Canister-certified sender information included in the request content.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_info: Option<SenderInfo>,
 }
 
 /// A signed update request message. Produced by
@@ -64,6 +67,9 @@ pub struct SignedUpdate {
     pub signed_update: Vec<u8>,
     /// The request ID.
     pub request_id: RequestId,
+    /// Canister-certified sender information included in the request content.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_info: Option<SenderInfo>,
 }
 
 /// A signed request-status request message. Produced by
@@ -76,7 +82,11 @@ pub struct SignedRequestStatus {
     pub ingress_expiry: u64,
     /// The principal ID of the caller.
     pub sender: Principal,
-    /// The [effective canister ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-canister-id) of the destination.
+    /// The [effective canister ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-canister-id)
+    /// of the destination. Despite the name, this may also hold an
+    /// [effective subnet ID](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-effective-subnet-id)
+    /// when the underlying `request_status` targets a subnet-scoped endpoint
+    /// (e.g., when passed to [`Agent::request_status_signed_subnet`](https://docs.rs/ic-agent/latest/ic_agent/struct.Agent.html#method.request_status_signed_subnet)).
     pub effective_canister_id: Principal,
     /// The request ID.
     pub request_id: RequestId,
@@ -102,6 +112,7 @@ mod tests {
             effective_canister_id: Principal::management_canister(),
             signed_query: vec![0, 1, 2, 3],
             nonce: None,
+            sender_info: None,
         };
         let serialized = serde_json::to_string(&query).unwrap();
         let deserialized = serde_json::from_str::<SignedQuery>(&serialized);
@@ -120,6 +131,7 @@ mod tests {
             effective_canister_id: Principal::management_canister(),
             signed_update: vec![0, 1, 2, 3],
             request_id: RequestId::new(&[0; 32]),
+            sender_info: None,
         };
         let serialized = serde_json::to_string(&update).unwrap();
         let deserialized = serde_json::from_str::<SignedUpdate>(&serialized);
