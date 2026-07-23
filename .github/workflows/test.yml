@@ -86,6 +86,16 @@ jobs:
         with:
           cache-shared-key: ${{ runner.os }}-test
           cache-bin: false
+          # setup-rust-toolchain defaults RUSTFLAGS to "-D warnings"; the tests
+          # were never built warnings-as-errors (that is lint's job), so clear it.
+          rustflags: ""
+
+      # The ic-agent doctests spin up pocket-ic via ref-tests' helpers, so they
+      # need the downloaded assets. Skipped on Windows (the download script and
+      # those doctests are unix-only), matching the previous single-job setup.
+      - name: Download test assets
+        if: ${{ !contains(matrix.os, 'windows') }}
+        run: ./scripts/download_reftest_assets.sh
 
       - name: Run Tests
         run: |
@@ -121,6 +131,7 @@ jobs:
         with:
           cache-shared-key: ${{ runner.os }}-reftests
           cache-bin: false
+          rustflags: ""
 
       - name: Install node for SoftHSM tests
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -179,6 +190,7 @@ jobs:
         with:
           cache-shared-key: ${{ runner.os }}-wasm
           cache-bin: false
+          rustflags: ""
 
       - name: Install wasm-pack and chromedriver
         run: |
