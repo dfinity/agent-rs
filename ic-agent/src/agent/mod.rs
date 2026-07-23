@@ -2436,7 +2436,9 @@ impl HttpService for RetryLogic {
                 to_http_response(resp, _size_limit).await?
             };
 
-            if resp.status() == StatusCode::TOO_MANY_REQUESTS {
+            if resp.status() == StatusCode::TOO_MANY_REQUESTS
+                || resp.status() == StatusCode::SERVICE_UNAVAILABLE
+            {
                 if retries == 6 {
                     break Ok(resp);
                 } else {
@@ -2444,9 +2446,6 @@ impl HttpService for RetryLogic {
                     crate::util::sleep(Duration::from_millis(250)).await;
                     continue;
                 }
-            } else if resp.status() == StatusCode::SERVICE_UNAVAILABLE {
-                crate::util::sleep(Duration::from_millis(250)).await;
-                continue;
             } else {
                 break Ok(resp);
             }
