@@ -2,5 +2,4 @@
 
 ## Useful links
 
-- [Documentation (master)](https://agent-rust.netlify.app/ic_identity_hsm)
 - [Documentation (published)](https://docs.rs/ic_identity_hsm)

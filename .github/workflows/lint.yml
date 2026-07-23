@@ -2,24 +2,54 @@ name: Lint
 
 on: [pull_request]
 
+env:
+  # Retry dependency downloads on transient network errors.
+  CARGO_NET_RETRY: 10
+  # Incremental compilation only pays off for repeated local rebuilds; in CI it
+  # just bloats the target dir (and the cache) for no benefit.
+  CARGO_INCREMENTAL: 0
+  # Smaller debug info => smaller object files => faster linking and caches.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+
 jobs:
-  test:
+  # Skip clippy/docs on docs-only changes; the required `lint:required` check
+  # passes via the skip (a skipped required check counts as passing).
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      src: ${{ steps.filter.outputs.src }}
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: filter
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            src:
+              - '**'
+              - '!**.md'
+
+  lint:
     name: lint
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
+    needs: changes
+    if: needs.changes.outputs.src == 'true'
+    runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      # rust-cache keys on all installed toolchains; the image's bundled `stable`
+      # drifts as the image updates, moving the key and causing misses. Remove it
+      # so only the rust-toolchain.toml-pinned version remains.
+      - name: Remove the runner's bundled Rust toolchain
+        run: rustup toolchain remove stable 2>/dev/null || true
+
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          cache-shared-key: ${{ runner.os }}-lint
+          cache-bin: false
 
       - uses: taiki-e/install-action@80e6af7a2ec7f280fffe2d0a9d3a12a9d11d86e9 # v2.75.1
         with:
@@ -44,15 +74,15 @@ jobs:
           rustup target add wasm32-unknown-unknown --toolchain nightly
           for package in $(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.publish == null and (.targets | any(.kind == ["lib"]))) | .name')
           do
-            CARGO_TARGET_DIR=target/nightly cargo +nightly docs-rs -p "$package" 
+            CARGO_TARGET_DIR=target/nightly cargo +nightly docs-rs -p "$package"
           done
 
   aggregate:
     name: lint:required
     runs-on: ubuntu-latest
-    if: ${{ always() }}
-    needs: test
+    if: always() && needs.changes.outputs.src == 'true'
+    needs: [changes, lint]
     steps:
       - name: Check lint result
-        if: ${{ needs.test.result != 'success' }}
+        if: ${{ needs.lint.result != 'success' }}
         run: exit 1

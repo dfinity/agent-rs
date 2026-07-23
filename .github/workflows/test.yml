@@ -6,73 +6,102 @@ on:
       - main
   pull_request:
 
+env:
+  # Retry dependency downloads on transient network errors.
+  CARGO_NET_RETRY: 10
+  # Incremental compilation only pays off for repeated local rebuilds; in CI it
+  # just bloats the target dir (and the cache) for no benefit.
+  CARGO_INCREMENTAL: 0
+  # Smaller debug info => smaller object files => faster linking (the dominant
+  # cost on Windows MSVC) and smaller caches. line-tables-only keeps file:line
+  # numbers in backtraces.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  # Link with LLVM's lld-link instead of the slow MSVC link.exe. LLVM ships at
+  # C:\Program Files\LLVM on the windows-2025 image. Only consumed when building
+  # the windows-msvc target, so it is a no-op on Linux/macOS.
+  CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: "C:/Program Files/LLVM/bin/lld-link.exe"
+
+defaults:
+  run:
+    shell: bash
+
 jobs:
+  # Skip the (expensive) test jobs on docs-only changes. The heavy jobs gate on
+  # this output, so a docs-only PR skips them and the required `test:required`
+  # check passes via the skip.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      src: ${{ steps.filter.outputs.src }}
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: filter
+        with:
+          # With 'every', a changed file matches only when it satisfies the
+          # positive pattern AND every negated pattern.
+          predicate-quantifier: 'every'
+          filters: |
+            src:
+              - '**'
+              - '!**.md'
+
+  # Workspace tests for every crate except ref-tests, on all three OSes. Because
+  # each crate is tested from its own directory, the heavy pocket-ic dependency
+  # (only used by ref-tests) never compiles here, keeping this job's cache small.
   test:
+    name: Run Tests on ${{ matrix.os }}
+    needs: changes
+    if: needs.changes.outputs.src == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # windows is pinned to 2025 so the lld-link path above is guaranteed.
+        os: [ubuntu-latest, macos-latest, windows-2025]
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-1
-
-      - name: Install wasm-pack and chromedriver for WASM tests
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+      # Defender real-time scanning of every object/rlib slows file-heavy Rust
+      # builds and cache extraction considerably on Windows.
+      - name: Exclude build dirs from Windows Defender
+        if: ${{ contains(matrix.os, 'windows') }}
+        shell: pwsh
         run: |
-          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-          sudo apt-get install -y chromium-chromedriver
+          Add-MpPreference -ExclusionPath `
+            "$env:GITHUB_WORKSPACE", `
+            "$env:USERPROFILE\.cargo", `
+            "$env:USERPROFILE\.rustup" -ErrorAction SilentlyContinue
 
-      - name: Install node for SoftHSM tests
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      # rust-cache keys on all installed toolchains; the image's bundled `stable`
+      # drifts as the image updates, moving the key and causing misses. Remove it
+      # so only the rust-toolchain.toml-pinned version remains.
+      - name: Remove the runner's bundled Rust toolchain
+        run: rustup toolchain remove stable 2>/dev/null || true
+
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
         with:
-          node-version: 20
+          cache-shared-key: ${{ runner.os }}-test
+          cache-bin: false
+          # setup-rust-toolchain defaults RUSTFLAGS to "-D warnings"; the tests
+          # were never built warnings-as-errors (that is lint's job), so clear it.
+          rustflags: ""
 
-      - name: Install and Configure SoftHSM
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: |
-          set -ex
-          sudo apt-get install -f libsofthsm2 opensc-pkcs11 opensc
-          sudo usermod -a -G softhsm $USER
-          echo "SOFTHSM2_CONF=$HOME/softhsm.conf" >>$GITHUB_ENV
-          echo "directories.tokendir = $HOME/softhsm/tokens/" >$HOME/softhsm.conf
-          mkdir -p $HOME/softhsm/tokens
-
+      # The ic-agent doctests spin up pocket-ic via ref-tests' helpers, so they
+      # need the downloaded assets. Skipped on Windows (the download script and
+      # those doctests are unix-only), matching the previous single-job setup.
       - name: Download test assets
         if: ${{ !contains(matrix.os, 'windows') }}
-        run: |
-          ./scripts/download_reftest_assets.sh
-
-      - name: Run Tests (ref-tests)
-        # ref-tests are skipped on macOS CI: the GitHub Actions macOS runner has
-        # a low per-process thread limit (kern.maxthreadsperproc) that cannot be
-        # raised without root. pocket-ic spawns many OS threads per subnet, and
-        # tokio's blocking thread pool accumulates idle threads across sequential
-        # tests, exhausting the limit before all tests finish. This is a CI
-        # resource constraint — ref-tests work fine on a local macOS machine.
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        shell: bash
-        run: |
-          cd ref-tests
-          cargo test --no-fail-fast -- --test-threads=1
-        env:
-          RUST_BACKTRACE: 1
+        run: ./scripts/download_reftest_assets.sh
 
       - name: Run Tests
-        shell: bash
         run: |
           # Test all features and no features for each package.
-          # ref-tests is excluded here and run separately with --test-threads=1
-          # to avoid exhausting OS thread limits when pocket-ic spawns many threads.
+          # ref-tests is excluded here and runs in the ref-tests job with
+          # --test-threads=1 (pocket-ic spawns many threads per subnet).
           for p in $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name != "ref-tests") | .manifest_path'); do
             pushd $(dirname $p)
             cargo test --all-features --no-fail-fast
@@ -82,13 +111,53 @@ jobs:
         env:
           RUST_BACKTRACE: 1
 
-      - name: Run Tests (WASM)
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+  # ref-tests + SoftHSM run together: both need the compiled ref-tests binary,
+  # so co-locating them avoids compiling it (and pocket-ic) twice. Linux-only:
+  # the GitHub macOS runner's low per-process thread limit cannot be raised
+  # without root, and pocket-ic exhausts it; Windows lacks the assets.
+  ref_tests:
+    name: ref-tests
+    needs: changes
+    if: needs.changes.outputs.src == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Remove the runner's bundled Rust toolchain
+        run: rustup toolchain remove stable 2>/dev/null || true
+
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
+        with:
+          cache-shared-key: ${{ runner.os }}-reftests
+          cache-bin: false
+          rustflags: ""
+
+      - name: Install node for SoftHSM tests
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+
+      - name: Install and Configure SoftHSM
         run: |
-          CARGO_TARGET_DIR=target/wasm wasm-pack test --chrome --headless ic-agent --features wasm-bindgen
+          set -ex
+          sudo apt-get install -f libsofthsm2 opensc-pkcs11 opensc
+          sudo usermod -a -G softhsm $USER
+          echo "SOFTHSM2_CONF=$HOME/softhsm.conf" >>$GITHUB_ENV
+          echo "directories.tokendir = $HOME/softhsm/tokens/" >$HOME/softhsm.conf
+          mkdir -p $HOME/softhsm/tokens
+
+      - name: Download test assets
+        run: ./scripts/download_reftest_assets.sh
+
+      - name: Run Tests (ref-tests)
+        run: |
+          cd ref-tests
+          cargo test --no-fail-fast -- --test-threads=1
+        env:
+          RUST_BACKTRACE: 1
 
       - name: Run Tests (SoftHSM)
-        if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           set -ex
           softhsm2-util --init-token --slot $HSM_SLOT_INDEX --label "agent-rs-token" --so-pin $HSM_SO_PIN --pin $HSM_PIN
@@ -105,12 +174,48 @@ jobs:
           HSM_SLOT_INDEX: 0
           HSM_KEY_ID: abcdef
 
+  wasm:
+    name: WASM tests
+    needs: changes
+    if: needs.changes.outputs.src == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Remove the runner's bundled Rust toolchain
+        run: rustup toolchain remove stable 2>/dev/null || true
+
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
+        with:
+          cache-shared-key: ${{ runner.os }}-wasm
+          cache-bin: false
+          rustflags: ""
+
+      - name: Install wasm-pack and chromedriver
+        run: |
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+          sudo apt-get install -y chromium-chromedriver
+
+      # CARGO_TARGET_DIR=target/wasm keeps wasm artifacts under ./target, so
+      # rust-cache (which caches ./target) still picks them up.
+      - name: Run Tests (WASM)
+        run: CARGO_TARGET_DIR=target/wasm wasm-pack test --chrome --headless ic-agent --features wasm-bindgen
+
   aggregate:
     name: test:required
+    # Runs only when the test jobs ran; on docs-only changes this skips, and a
+    # skipped required check counts as passing for branch protection.
+    if: always() && needs.changes.outputs.src == 'true'
     runs-on: ubuntu-latest
-    if: ${{ always() }}
-    needs: test
+    needs: [changes, test, ref_tests, wasm]
     steps:
       - name: Check test result
         if: ${{ needs.test.result != 'success' }}
+        run: exit 1
+      - name: Check ref-tests result
+        if: ${{ needs.ref_tests.result != 'success' }}
+        run: exit 1
+      - name: Check wasm result
+        if: ${{ needs.wasm.result != 'success' }}
         run: exit 1
