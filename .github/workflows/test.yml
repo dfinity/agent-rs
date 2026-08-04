@@ -48,6 +48,70 @@ jobs:
               - '**'
               - '!**.md'
 
+  # Everything else in CI runs on `stable` (see rust-toolchain.toml), so the MSRV
+  # promised to downstream users needs its own gate. This job is the only place
+  # the MSRV toolchain is used; it reads the version from the workspace
+  # Cargo.toml so `rust-version` stays the single source of truth.
+  #
+  # Scope: build only, no `--all-targets`. The promise is that consumers can
+  # *build* the published crates with the MSRV, not that our test suite runs
+  # there — dev-dependencies are free to require a newer compiler.
+  #
+  # Linux-only: MSRV regressions almost always come from a dependency raising its
+  # own `rust-version`, which is platform-independent. Running the full OS matrix
+  # would triple the cost to catch only platform-gated regressions (e.g. a
+  # windows-sys bump), which the stable `test` matrix would surface anyway once
+  # the dependency reaches a release we build.
+  msrv:
+    name: MSRV build
+    needs: changes
+    if: needs.changes.outputs.src == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Read MSRV from Cargo.toml
+        id: msrv
+        run: |
+          set -euo pipefail
+          version=$(awk -F'"' '/^rust-version *=/ { print $2; exit }' Cargo.toml)
+          if [ -z "$version" ]; then
+            echo "::error file=Cargo.toml::could not parse rust-version"
+            exit 1
+          fi
+          echo "Detected MSRV: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Remove the runner's bundled Rust toolchain
+        run: rustup toolchain remove stable 2>/dev/null || true
+
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+          target: wasm32-unknown-unknown
+          cache-shared-key: ${{ runner.os }}-msrv
+          cache-bin: false
+          rustflags: ""
+
+      # ref-tests and ic-utils-bindgen-tests are the only `publish = false`
+      # members; they depend on pocket-ic from the IC monorepo, whose MSRV runs
+      # far ahead of ours. Excluding (rather than listing the published crates)
+      # keeps a newly added published crate covered by default.
+      - name: Build with MSRV
+        run: |
+          cargo build --locked --workspace \
+            --exclude ref-tests --exclude ic-utils-bindgen-tests
+          cargo build --locked --workspace \
+            --exclude ref-tests --exclude ic-utils-bindgen-tests --all-features
+
+      # Browser consumers build ic-agent for wasm at the MSRV too; mirrors the
+      # WASM step in lint.yml.
+      - name: Build with MSRV (WASM)
+        run: |
+          CARGO_TARGET_DIR=target/wasm cargo build --locked --target wasm32-unknown-unknown \
+            -p ic-agent --features wasm-bindgen -p ic-utils
+
   # Workspace tests for every crate except ref-tests, on all three OSes. Because
   # each crate is tested from its own directory, the heavy pocket-ic dependency
   # (only used by ref-tests) never compiles here, keeping this job's cache small.
@@ -208,8 +272,11 @@ jobs:
     # skipped required check counts as passing for branch protection.
     if: always() && needs.changes.outputs.src == 'true'
     runs-on: ubuntu-latest
-    needs: [changes, test, ref_tests, wasm]
+    needs: [changes, msrv, test, ref_tests, wasm]
     steps:
+      - name: Check MSRV result
+        if: ${{ needs.msrv.result != 'success' }}
+        run: exit 1
       - name: Check test result
         if: ${{ needs.test.result != 'success' }}
         run: exit 1

@@ -17,9 +17,16 @@ version = "0.49.2"
 authors = ["DFINITY Stiftung <sdk@dfinity.org>"]
 edition = "2021"
 repository = "https://github.com/dfinity/agent-rs"
-# MSRV
-# Avoid updating this field unless we use new Rust features
-# Sync rust-version in rust-toolchain.toml
+# MSRV — the single source of truth. The `msrv` job in
+# .github/workflows/test.yml parses this line to pick its toolchain, so bumping
+# the MSRV is a one-line change here.
+#
+# Avoid updating this field unless we need new Rust features, or a dependency
+# forces it. It is a compatibility promise to downstream users: raise it only in
+# a minor (not patch) release, and note it in CHANGELOG.md.
+#
+# rust-toolchain.toml is intentionally NOT pinned to this version; it tracks
+# stable.
 rust-version = "1.88.0"
 license = "Apache-2.0"
 
