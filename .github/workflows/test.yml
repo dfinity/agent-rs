@@ -263,8 +263,15 @@ jobs:
 
       # CARGO_TARGET_DIR=target/wasm keeps wasm artifacts under ./target, so
       # rust-cache (which caches ./target) still picks them up.
+      #
+      # --lib restricts this to the lib target's #[wasm_bindgen_test] tests. Newer
+      # toolchains also run doctests for wasm targets (1.88 skipped them), and
+      # ic-agent's doctests cannot compile there: they use #[tokio::main], and
+      # tokio is deliberately a dev-dependency only under
+      # cfg(not(target_family = "wasm")). Doctests are covered on the host by the
+      # `test` job above; running them inside a headless browser adds nothing.
       - name: Run Tests (WASM)
-        run: CARGO_TARGET_DIR=target/wasm wasm-pack test --chrome --headless ic-agent --features wasm-bindgen
+        run: CARGO_TARGET_DIR=target/wasm wasm-pack test --chrome --headless ic-agent --features wasm-bindgen --lib
 
   aggregate:
     name: test:required

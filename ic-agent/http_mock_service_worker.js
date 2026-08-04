@@ -38,10 +38,31 @@ async function getMock(nonce) {
     });
 }
 
+// Handle one request at a time.
+//
+// Both the `hits` counter and the route list are read-modify-write cycles over a
+// single IndexedDB record: `getMock` reads the whole record in one transaction,
+// the handler mutates its copy, and `setMock` writes the whole record back in
+// another. Two requests in flight against the same mock therefore both read the
+// pre-state and the second write silently discards the first one's mutation.
+//
+// That is not hypothetical: `Agent::query` issues its `query` and its
+// `read_state` concurrently via `try_join!`, so a certifying-agent test reliably
+// has two overlapping requests and can lose one of the two hit increments. There
+// is nothing to gain from serving these concurrently — the responses come from
+// canned data — so serialize the handlers and keep each cycle atomic.
+let tail = Promise.resolve();
+function serialized(fn) {
+    const run = tail.then(fn);
+    // Keep the chain alive regardless of how this handler settles.
+    tail = run.then(() => {}, () => {});
+    return run;
+}
+
 // Status codes are chosen to avoid being picked up as successes by tests expecting a 404 or 500.
 
 self.addEventListener("fetch", (event) => {
-    event.respondWith((async () => {
+    event.respondWith(serialized(async () => {
         try {
             const request = event.request;
             const url = new URL(request.url);
@@ -83,7 +104,7 @@ self.addEventListener("fetch", (event) => {
         } catch (e) {
             return new Response(e.toString(), { status: 503 });
         }
-    })())
+    }));
 });
 
 self.addEventListener("activate", (event) => {

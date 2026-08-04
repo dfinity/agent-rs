@@ -878,7 +878,10 @@ mod mock {
 
     pub async fn assert_mock(nonce: String) {
         let hits = get_hits(&nonce).await;
-        assert!(hits.values().all(|x| *x > 0));
+        assert!(
+            hits.values().all(|x| *x > 0),
+            "some mocked routes were never hit: {hits:?}"
+        );
     }
 
     pub async fn assert_single_mock(method: &str, path: &str, nonce: &String) {
