@@ -1,7 +1,14 @@
 [toolchain]
-# MSRV
-# Avoid updating this field unless we use new Rust features
-# Sync rust-version in workspace Cargo.toml
-channel = "1.88.0"
+# Development toolchain — NOT the MSRV.
+#
+# We deliberately track the latest stable release here so that local builds,
+# rust-analyzer, clippy and rustfmt all use a current compiler. Pinning this to
+# the MSRV instead makes the repo progressively harder to work in as the MSRV
+# ages (rust-analyzer refuses to work with sufficiently old toolchains) and
+# hides new clippy/rustc diagnostics until the MSRV is bumped.
+#
+# The MSRV is `rust-version` in the workspace Cargo.toml, and is enforced by the
+# `msrv` job in .github/workflows/test.yml, which reads it from there.
+channel = "stable"
 components = ["rustfmt", "clippy"]
 targets = ["wasm32-unknown-unknown"]
