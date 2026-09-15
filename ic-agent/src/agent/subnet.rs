@@ -30,6 +30,12 @@ pub enum SubnetType {
 /// Range information may be incomplete depending on how the subnet was fetched. The lack of a canister ID
 /// within assigned ranges should not be treated immediately as an authorization failure without fetching
 /// fresh data with [`Agent::fetch_subnet_by_canister`](crate::Agent::fetch_subnet_by_canister).
+///
+/// Conversely, the *presence* of a canister ID within the ranges is only authoritative when the
+/// subnet was fetched by canister. A subnet fetched by ID via
+/// [`Agent::fetch_subnet_by_id`](crate::Agent::fetch_subnet_by_id) reports ranges that it attested
+/// itself. Use [`Agent::fetch_subnet_by_canister`](crate::Agent::fetch_subnet_by_canister) to
+/// decide whether a subnet may speak for a canister.
 #[derive(Debug, Clone)]
 pub struct Subnet {
     pub(crate) id: Principal,
@@ -37,6 +43,9 @@ pub struct Subnet {
     // If a future agent needs to know the subnet key then it should fetch /subnet from the *root* subnet.
     pub(crate) key: Vec<u8>,
     pub(crate) node_keys: HashMap<Principal, Vec<u8>>,
+    // Only authoritative when this subnet was looked up by canister, in which case the ranges came
+    // from the NNS-root-signed delegation. When looked up by subnet ID they are self-attested, and
+    // so must not be used to decide which subnet may answer for a canister.
     pub(crate) canister_ranges: RangeInclusiveSet<Principal>,
     /// Present when the certificate's version is V25 or higher; `None` for older certificates.
     pub(crate) subnet_type: Option<SubnetType>,
@@ -44,10 +53,16 @@ pub struct Subnet {
 
 impl Subnet {
     /// Checks whether the given canister ID is contained within the subnet's assigned canister ranges.
+    ///
+    /// Note that this is not authoritative if the subnet was fetched by subnet ID; see the
+    /// type-level documentation.
     pub fn contains_canister(&self, canister_id: &Principal) -> bool {
         self.canister_ranges.contains(canister_id)
     }
     /// Returns an iterator over the known canister ID ranges assigned to this subnet.
+    ///
+    /// Note that these are self-reported, and so not authoritative, if the subnet was fetched by
+    /// subnet ID; see the type-level documentation.
     pub fn iter_canister_ranges(&self) -> CanisterRangesIter<'_> {
         CanisterRangesIter {
             inner: self.canister_ranges.iter(),
