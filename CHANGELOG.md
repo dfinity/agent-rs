@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+* `ic-agent`: Canister-to-subnet resolution now only uses canister ranges that came from an NNS-root-signed delegation. `Agent::fetch_subnet_by_id` previously cached the ranges from the certificate's outer tree, which the subnet signs itself, and those ranges are not authoritative for deciding which subnet may answer for a given canister. Resolution now stays with `Agent::fetch_subnet_by_canister`, which validates ranges against the delegation and enforces containment. Subnets fetched by ID are still cached by ID for their node keys, and still report their self-declared ranges via `Subnet::iter_canister_ranges` and `Subnet::contains_canister`; those are now documented as non-authoritative on that path. Update calls and `read_state` are unchanged — they re-derive ranges from the delegation on every call.
+
 ## [0.49.2] - 2026-07-23
 
 * `ic-agent`: The HTTP retry logic now also retries requests that fail with `StatusCode::SERVICE_UNAVAILABLE` (503), in addition to `TOO_MANY_REQUESTS` (429). This prevents non-idempotent calls from spuriously failing while polling for their status against a replica that is temporarily unhealthy (e.g. has no recent certified state, or a full ingress pool). Both status codes share the same retry bound (up to 6 retries).

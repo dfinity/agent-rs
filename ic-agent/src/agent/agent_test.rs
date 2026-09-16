@@ -669,6 +669,121 @@ async fn too_many_delegations() {
     ));
 }
 
+// This canister falls inside the canister ranges that NODE_KEYS_UZR34 declares. UZR34 legitimately
+// serves it, so the claim is truthful — what matters here is its provenance, not its accuracy.
+const CANISTER_IN_SELF_DECLARED_RANGE_OF_UZR34: &str = "rdmx6-jaaaa-aaaaa-aaadq-cai";
+
+// A subnet-scoped `read_state` is answered by the subnet itself, and the NNS-root-signed
+// delegation it carries attests only `/subnet/<id>/public_key` and `/time` — never the canister
+// ranges, which live in the outer tree the subnet signs itself. `fetch_subnet_by_id` must
+// therefore not let ranges of that provenance resolve canisters to subnets.
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+async fn fetch_subnet_by_id_does_not_index_self_declared_ranges() {
+    let subnet_id =
+        Principal::from_text("uzr34-akd3s-xrdag-3ql62-ocgoh-ld2ao-tamcv-54e7j-krwgb-2gm4z-oqe")
+            .unwrap();
+    let canister = Principal::from_text(CANISTER_IN_SELF_DECLARED_RANGE_OF_UZR34).unwrap();
+
+    let (_read_mock, url) = mock(
+        "POST",
+        format!("/api/v3/subnet/{subnet_id}/read_state").as_str(),
+        200,
+        NODE_KEYS_UZR34.into(),
+        Some("application/cbor"),
+    )
+    .await;
+    let agent = make_untimed_agent(&url);
+    let subnet = agent
+        .fetch_subnet_by_id(&subnet_id)
+        .await
+        .expect("fetch_subnet_by_id failed");
+
+    // The subnet does report the range, and we keep reporting it verbatim...
+    assert!(subnet.contains_canister(&canister));
+    // ...but it must not have been indexed for canister resolution.
+    assert!(
+        agent
+            .subnet_key_cache
+            .lock()
+            .unwrap()
+            .get_subnet_by_canister(&canister)
+            .is_none(),
+        "self-attested ranges from fetch_subnet_by_id were indexed for canister resolution"
+    );
+    // The subnet itself is still cached by ID, since its own keys are legitimately attested.
+    assert!(agent
+        .subnet_key_cache
+        .lock()
+        .unwrap()
+        .get_subnet_by_id(&subnet_id)
+        .is_some());
+
+    // So resolving the canister falls through to the canister-scoped path, which validates ranges
+    // against the root-signed delegation. That endpoint is not mocked, so this must fail rather
+    // than answer out of the cache.
+    let err = agent
+        .get_subnet_by_canister(&canister)
+        .await
+        .expect_err("canister resolved out of the subnet-scoped cache");
+    assert!(
+        !matches!(err, AgentError::CertificateNotAuthorized()),
+        "expected a fall-through to the canister-scoped path, got {err:?}"
+    );
+}
+
+#[cfg_attr(not(target_family = "wasm"), test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+fn subnet_cache_only_routes_root_attested_ranges() {
+    use crate::agent::{subnet::Subnet, SubnetCache};
+    use rangemap::RangeInclusiveSet;
+    use std::collections::HashMap;
+
+    fn subnet_claiming_everything(id: Principal) -> Arc<Subnet> {
+        // An over-broad claim spanning the whole canister-ID space. `Principal` orders by length
+        // before bytes, so these bounds have to be canister-ID-shaped to cover it.
+        let mut canister_ranges = RangeInclusiveSet::new();
+        canister_ranges.insert(
+            Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap()
+                ..=Principal::from_text("37pka-5h777-77777-7777q-cai").unwrap(),
+        );
+        Arc::new(Subnet {
+            id,
+            key: vec![],
+            node_keys: HashMap::new(),
+            canister_ranges,
+            subnet_type: None,
+        })
+    }
+
+    let subnet_id =
+        Principal::from_text("uzr34-akd3s-xrdag-3ql62-ocgoh-ld2ao-tamcv-54e7j-krwgb-2gm4z-oqe")
+            .unwrap();
+    let canister = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai").unwrap();
+    assert!(subnet_claiming_everything(subnet_id).contains_canister(&canister));
+
+    // Self-attested ranges are cached for lookup by ID, but never for lookup by canister.
+    let mut cache = SubnetCache::new();
+    cache.insert_subnet_keys_only(subnet_id, subnet_claiming_everything(subnet_id));
+    assert!(cache.get_subnet_by_id(&subnet_id).is_some());
+    assert!(cache.get_subnet_by_canister(&canister).is_none());
+
+    // Root-attested ranges still resolve, so the fix does not disable the cache.
+    let mut cache = SubnetCache::new();
+    cache.insert_subnet(subnet_id, subnet_claiming_everything(subnet_id));
+    assert_eq!(
+        cache.get_subnet_by_canister(&canister).map(|s| s.id()),
+        Some(subnet_id)
+    );
+
+    // A keys-only insert must not upgrade a range the canister-scoped path never attested, even
+    // when the subnet is already in the canister index from an earlier authoritative fetch.
+    let mut cache = SubnetCache::new();
+    cache.insert_subnet(subnet_id, subnet_claiming_everything(subnet_id));
+    cache.insert_subnet_keys_only(subnet_id, subnet_claiming_everything(subnet_id));
+    assert!(cache.get_subnet_by_canister(&canister).is_none());
+}
+
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 async fn retry_ratelimit() {

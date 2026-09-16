@@ -1473,6 +1473,10 @@ impl Agent {
     ///
     /// This function does not read from the cache; most users want
     /// [`get_subnet_by_canister`](Self::get_subnet_by_canister) instead.
+    ///
+    /// This is the only path that may establish a canister-to-subnet mapping, because it is the
+    /// only one whose canister ranges come from an NNS-root-signed delegation and are checked to
+    /// contain the canister. Contrast [`fetch_subnet_by_id`](Self::fetch_subnet_by_id).
     pub async fn fetch_subnet_by_canister(
         &self,
         canister: &Principal,
@@ -1510,6 +1514,12 @@ impl Agent {
     ///
     /// This function does not read from the cache; most users want
     /// [`get_subnet_by_id`](Self::get_subnet_by_id) instead.
+    ///
+    /// The returned [`Subnet::iter_canister_ranges`] are *self-reported*: a subnet-scoped
+    /// `read_state` is answered by the subnet itself, and the NNS-root-signed delegation it
+    /// carries attests only `/subnet/<id>/public_key`, never the ranges. They are therefore not
+    /// used to resolve canisters to subnets; that goes through
+    /// [`fetch_subnet_by_canister`](Self::fetch_subnet_by_canister) instead.
     pub async fn fetch_subnet_by_id(
         &self,
         subnet_id: &Principal,
@@ -1525,10 +1535,12 @@ impl Agent {
             .await?;
         let subnet = lookup_subnet_and_ranges(subnet_id, &subnet_cert)?;
         let subnet = Arc::new(subnet);
+        // Deliberately keys-only: the ranges in `subnet_cert` are attested by this subnet itself,
+        // which is not a sufficient basis for resolving canisters to it. See the method docs.
         self.subnet_key_cache
             .lock()
             .unwrap()
-            .insert_subnet(*subnet_id, subnet.clone());
+            .insert_subnet_keys_only(*subnet_id, subnet.clone());
         Ok(subnet)
     }
 
@@ -1843,9 +1855,22 @@ pub fn signed_request_status_inspect(
     Ok(())
 }
 
+/// A cached subnet, tagged with the provenance of its canister ranges.
+///
+/// The ranges decide which subnet may authenticate a response for a given canister, so they
+/// are only usable for routing when they came from a certificate the NNS root signed. See
+/// [`SubnetCache::insert_subnet_keys_only`] for why the subnet-scoped path cannot supply that.
+#[derive(Clone)]
+struct CachedSubnet {
+    subnet: Arc<Subnet>,
+    /// True when `subnet.canister_ranges` came from an NNS-root-signed delegation, i.e. from
+    /// [`Agent::fetch_subnet_by_canister`]. False when the subnet merely attested them itself.
+    ranges_authoritative: bool,
+}
+
 #[derive(Clone)]
 struct SubnetCache {
-    subnets: TimedCache<Principal, Arc<Subnet>>,
+    subnets: TimedCache<Principal, CachedSubnet>,
     canister_index: RangeInclusiveMap<Principal, Principal>,
 }
 
@@ -1861,18 +1886,50 @@ impl SubnetCache {
         self.canister_index
             .get(canister)
             .and_then(|subnet_id| self.subnets.cache_get(subnet_id).cloned())
+            // Only root-attested ranges may resolve a canister to a subnet — including when
+            // some earlier lookup put this subnet in `canister_index` legitimately.
+            .filter(|cached| cached.ranges_authoritative)
+            .map(|cached| cached.subnet)
             .filter(|subnet| subnet.canister_ranges.contains(canister))
     }
 
     fn get_subnet_by_id(&mut self, subnet_id: &Principal) -> Option<Arc<Subnet>> {
-        self.subnets.cache_get(subnet_id).cloned()
+        self.subnets
+            .cache_get(subnet_id)
+            .map(|cached| cached.subnet.clone())
     }
 
+    /// Caches a subnet whose canister ranges came from an NNS-root-signed delegation, and indexes
+    /// those ranges so canisters within them resolve to this subnet.
     fn insert_subnet(&mut self, subnet_id: Principal, subnet: Arc<Subnet>) {
-        self.subnets.cache_set(subnet_id, subnet.clone());
         for range in subnet.canister_ranges.iter() {
             self.canister_index.insert(range.clone(), subnet_id);
         }
+        self.subnets.cache_set(
+            subnet_id,
+            CachedSubnet {
+                subnet,
+                ranges_authoritative: true,
+            },
+        );
+    }
+
+    /// Caches a subnet looked up by subnet ID, *without* indexing its canister ranges.
+    ///
+    /// A subnet-scoped `read_state` is answered by the subnet itself, and the NNS-root-signed
+    /// delegation it carries contains only `/subnet/<id>/public_key` and `/time` — the canister
+    /// ranges exist solely in the outer tree, which the subnet signs itself. Ranges of that
+    /// provenance are not authoritative for deciding which subnet may answer for a canister, so
+    /// they must not enter the index. Resolution stays with [`Agent::fetch_subnet_by_canister`],
+    /// which validates ranges against the delegation.
+    fn insert_subnet_keys_only(&mut self, subnet_id: Principal, subnet: Arc<Subnet>) {
+        self.subnets.cache_set(
+            subnet_id,
+            CachedSubnet {
+                subnet,
+                ranges_authoritative: false,
+            },
+        );
     }
 }
 
