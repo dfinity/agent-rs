@@ -1485,7 +1485,7 @@ impl Agent {
             .read_state_raw(vec![vec!["subnet".into()]], *canister)
             .await?;
         let subnet_id = if let Some(delegation) = canister_cert.delegation.as_ref() {
-            Principal::from_slice(&delegation.subnet_id)
+            Principal::try_from_slice(&delegation.subnet_id)?
         } else {
             // if no delegation, it comes from the root subnet
             Principal::self_authenticating(&self.root_key.read().unwrap()[..])

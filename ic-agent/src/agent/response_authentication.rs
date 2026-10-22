@@ -221,7 +221,7 @@ pub(crate) fn lookup_incomplete_subnet<Storage: AsRef<[u8]> + Clone>(
                     .collect(),
             ));
         }
-        let node_id = Principal::from_slice(path[0].as_bytes());
+        let node_id = Principal::try_from_slice(path[0].as_bytes())?;
         let node_key = lookup_value(&node_keys_subtree, [node_id.as_slice(), b"public_key"])?;
         node_keys.insert(node_id, node_key.to_vec());
     }
@@ -270,10 +270,14 @@ pub(crate) fn lookup_canister_ranges<Storage: AsRef<[u8]> + Clone>(
             )?;
             let mut canister_ranges = RangeInclusiveSet::new_with_step_fns();
             for shard in canister_ranges_tree.list_paths() {
+                // /canister_ranges/<subnet_id>/<shard>
+                let [shard] = shard.as_slice() else {
+                    return Err(AgentError::CertificateVerificationFailed());
+                };
                 let shard_ranges: Vec<(Principal, Principal)> =
                     serde_cbor::from_slice::<Vec<(Principal, Principal)>>(lookup_value(
                         &canister_ranges_tree,
-                        [shard[0].as_bytes()],
+                        [shard.as_bytes()],
                     )?)?;
                 for (low, high) in shard_ranges {
                     canister_ranges.insert(low..=high);
@@ -298,7 +302,14 @@ pub(crate) fn lookup_api_boundary_nodes<Storage: AsRef<[u8]> + Clone>(
 
     let mut api_bns = Vec::<ApiBoundaryNode>::new();
     let paths = api_bn_tree.list_paths();
-    let node_ids: HashSet<&[u8]> = paths.iter().map(|path| path[0].as_bytes()).collect();
+    let node_ids = paths
+        .iter()
+        .map(|path| {
+            path.first()
+                .map(Label::as_bytes)
+                .ok_or_else(AgentError::CertificateVerificationFailed)
+        })
+        .collect::<Result<HashSet<&[u8]>, _>>()?;
 
     for node_id in node_ids {
         let domain =
@@ -491,5 +502,75 @@ pub fn lookup_tree<P: LookupPath, Storage: AsRef<[u8]> + Clone>(
         SubtreeLookupResult::Absent => Err(LookupPathAbsent(path.into_vec())),
         SubtreeLookupResult::Unknown => Err(LookupPathUnknown(path.into_vec())),
         SubtreeLookupResult::Found(value) => Ok(value),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ic_certification::hash_tree::{fork, label, leaf};
+    #[cfg(all(target_family = "wasm", feature = "wasm-bindgen"))]
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    // The lookups below run on certificates whose signature has already been verified, but a
+    // malicious subnet can still sign a malformed tree. They must reject it rather than panic.
+
+    fn cert(tree: HashTree<Vec<u8>>) -> Certificate<Vec<u8>> {
+        Certificate {
+            tree,
+            signature: vec![],
+            delegation: None,
+        }
+    }
+
+    fn subnet_id() -> Principal {
+        Principal::from_text("uzr34-akd3s-xrdag-3ql62-ocgoh-ld2ao-tamcv-54e7j-krwgb-2gm4z-oqe")
+            .unwrap()
+    }
+
+    #[cfg_attr(not(target_family = "wasm"), test)]
+    #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+    fn oversized_node_id_is_rejected() {
+        let subnet_id = subnet_id();
+        let node = label(
+            vec![0xff; 30],
+            label(b"public_key".to_vec(), leaf(b"key".to_vec())),
+        );
+        let subnet = fork(
+            label(b"node".to_vec(), node),
+            label(b"public_key".to_vec(), leaf(b"key".to_vec())),
+        );
+        let tree = label(
+            b"subnet".to_vec(),
+            label(subnet_id.as_slice().to_vec(), subnet),
+        );
+        assert!(matches!(
+            lookup_incomplete_subnet(&subnet_id, &cert(tree)),
+            Err(AgentError::PrincipalError(_))
+        ));
+    }
+
+    #[cfg_attr(not(target_family = "wasm"), test)]
+    #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+    fn leaf_canister_ranges_is_rejected() {
+        let subnet_id = subnet_id();
+        let tree = label(
+            b"canister_ranges".to_vec(),
+            label(subnet_id.as_slice().to_vec(), leaf(vec![])),
+        );
+        assert!(matches!(
+            lookup_canister_ranges(&subnet_id, &cert(tree)),
+            Err(AgentError::CertificateVerificationFailed())
+        ));
+    }
+
+    #[cfg_attr(not(target_family = "wasm"), test)]
+    #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+    fn leaf_api_boundary_nodes_is_rejected() {
+        let tree = label(b"api_boundary_nodes".to_vec(), leaf(vec![]));
+        assert!(matches!(
+            lookup_api_boundary_nodes(cert(tree)),
+            Err(AgentError::CertificateVerificationFailed())
+        ));
     }
 }
