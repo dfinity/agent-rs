@@ -8,8 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.49.3] - 2026-10-22
+
 ### Fixed
 
+* `ic-agent`: Malformed data in a validly signed certificate now returns an error instead of panicking. A subnet could previously crash the agent by certifying a node ID longer than 29 bytes under `/subnet/<id>/node`, or a bare leaf at `/canister_ranges/<subnet_id>` or `/api_boundary_nodes`. This affected `Agent::fetch_subnet_by_id`, `Agent::fetch_subnet_by_canister` and `Agent::fetch_api_boundary_nodes_by_{canister,subnet}_id`. An oversized `subnet_id` in a delegation is now rejected the same way.
 * `ic-agent`: Canister-to-subnet resolution now only uses canister ranges that came from an NNS-root-signed delegation. `Agent::fetch_subnet_by_id` previously cached the ranges from the certificate's outer tree, which the subnet signs itself, and those ranges are not authoritative for deciding which subnet may answer for a given canister. Resolution now stays with `Agent::fetch_subnet_by_canister`, which validates ranges against the delegation and enforces containment. Subnets fetched by ID are still cached by ID for their node keys, and still report their self-declared ranges via `Subnet::iter_canister_ranges` and `Subnet::contains_canister`; those are now documented as non-authoritative on that path. Update calls and `read_state` are unchanged — they re-derive ranges from the delegation on every call.
 
 ## [0.49.2] - 2026-07-23

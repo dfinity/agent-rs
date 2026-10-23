@@ -176,13 +176,13 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.89"
+version = "0.1.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9035ad2d096bed7955a320ee7e2230574d28fd3c3a0f186cbea1ff3c7eed5dbb"
+checksum = "82f6aeea286b8eb4dd3431a1be1b59d290ace00f5bfd8e2a159bc2a05e2c1667"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.117",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -1420,7 +1420,7 @@ dependencies = [
 
 [[package]]
 name = "ic-agent"
-version = "0.49.2"
+version = "0.49.3"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1444,7 +1444,7 @@ dependencies = [
  "http-body-util",
  "ic-certification",
  "ic-ed25519",
- "ic-transport-types 0.49.2",
+ "ic-transport-types 0.49.3",
  "ic-verify-bls-signature",
  "ic_principal",
  "js-sys",
@@ -1511,7 +1511,7 @@ dependencies = [
 
 [[package]]
 name = "ic-identity-hsm"
-version = "0.49.2"
+version = "0.49.3"
 dependencies = [
  "hex",
  "ic-agent",
@@ -1592,7 +1592,7 @@ dependencies = [
 
 [[package]]
 name = "ic-transport-types"
-version = "0.49.2"
+version = "0.49.3"
 dependencies = [
  "candid",
  "hex",
@@ -1609,7 +1609,7 @@ dependencies = [
 
 [[package]]
 name = "ic-utils"
-version = "0.49.2"
+version = "0.49.3"
 dependencies = [
  "async-trait",
  "candid",
@@ -1779,7 +1779,7 @@ dependencies = [
 
 [[package]]
 name = "icx"
-version = "0.49.2"
+version = "0.49.3"
 dependencies = [
  "anyhow",
  "candid",
@@ -1798,7 +1798,7 @@ dependencies = [
 
 [[package]]
 name = "icx-cert"
-version = "0.49.2"
+version = "0.49.3"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -3597,6 +3597,17 @@ name = "syn"
 version = "2.0.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e665b8803e7b1d2a727f4023456bbbbe74da67099c585258af0ad9c5013b9b99"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
+[[package]]
+name = "syn"
+version = "3.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b"
 dependencies = [
  "proc-macro2",
  "quote",
