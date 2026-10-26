@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+* Breaking: Upgraded the RustCrypto elliptic-curve stack to clear [RUSTSEC-2026-0387](https://rustsec.org/advisories/RUSTSEC-2026-0387) (non-constant-time arithmetic in `crypto-bigint` < 0.7.6, which the 0.13 stack pins at 0.5). `k256` and `p256` go to 0.14, `elliptic-curve` to 0.14, `ecdsa` to 0.17, `pkcs8` to 0.11, `sec1` to 0.8 and `sha2` to 0.11. Their types show up in the public API, for example `Secp256k1Identity::from_private_key` and `PemError::ErrorStack`, so downstream crates that name them have to move to the same versions.
+
 ## [0.49.3] - 2026-10-22
 
 ### Fixed

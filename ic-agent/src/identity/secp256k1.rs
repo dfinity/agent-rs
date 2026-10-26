@@ -35,7 +35,7 @@ impl Secp256k1Identity {
     /// Accepts keys in SEC1 ("EC PRIVATE KEY") or PKCS#8 ("PRIVATE KEY") format.
     #[cfg(feature = "pem")]
     pub fn from_pem<B: AsRef<[u8]>>(pem_contents: B) -> Result<Self, PemError> {
-        use pkcs8::{AssociatedOid, PrivateKeyInfo};
+        use pkcs8::{AssociatedOid, PrivateKeyInfoRef as PrivateKeyInfo};
         use sec1::{pem::PemLabel, EcPrivateKey};
 
         const EC_PARAMETERS: &str = "EC PARAMETERS";
@@ -54,7 +54,7 @@ impl Secp256k1Identity {
             if pem.tag() == EcPrivateKey::PEM_LABEL {
                 // SEC1 "EC PRIVATE KEY" format
                 let private_key = SecretKey::from_sec1_der(pem.contents())
-                    .map_err(|_| pkcs8::Error::KeyMalformed)?;
+                    .map_err(|_| pkcs8::Error::KeyMalformed(pkcs8::KeyError::Invalid))?;
                 return Ok(Self::from_private_key(private_key));
             }
 
@@ -65,8 +65,8 @@ impl Secp256k1Identity {
                     k256::Secp256k1::OID,
                     "secp256k1",
                 )?;
-                let private_key =
-                    SecretKey::from_sec1_der(&key_bytes).map_err(|_| pkcs8::Error::KeyMalformed)?;
+                let private_key = SecretKey::from_sec1_der(&key_bytes)
+                    .map_err(|_| pkcs8::Error::KeyMalformed(pkcs8::KeyError::Invalid))?;
                 return Ok(Self::from_private_key(private_key));
             }
         }
