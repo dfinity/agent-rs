@@ -15,8 +15,7 @@ use serde::{
 };
 use sha2::{Digest, Sha256};
 use std::{
-    fmt::{self, Display, Formatter},
-    io::Write,
+    fmt::{self, Display, Formatter, Write},
     ops::Deref,
     str::FromStr,
 };
@@ -306,9 +305,19 @@ impl Serializer for RequestIdSerializer {
     }
     // Optimized version of serialize_str for types that serialize by rendering themselves to strings.
     fn collect_str<T: Display + ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error> {
-        let mut hasher = Sha256::new();
+        let mut hasher = HashWriter(Sha256::new());
         write!(hasher, "{value}").map_err(|e| RequestIdError::CustomSerdeError(format!("{e}")))?;
-        Ok(Some(hasher.finalize().into()))
+        Ok(Some(hasher.0.finalize().into()))
+    }
+}
+
+/// Feeds formatted output straight into a hasher, without an intermediate `String`.
+struct HashWriter(Sha256);
+
+impl Write for HashWriter {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.0.update(s.as_bytes());
+        Ok(())
     }
 }
 
@@ -930,6 +939,42 @@ mod tests {
         assert_eq!(
             hex::encode(&r#struct[..]),
             "c2b325a8f7633df8054e9bd538ac8d26dc85cba4ad542cdbfca7109e1a60cf0c"
+        );
+    }
+
+    #[test]
+    fn structural_equivalence_collect_str() {
+        // Writes its text in several fragments, so the hasher sees more than one `write_str`.
+        struct Fragmented;
+        impl Display for Fragmented {
+            fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+                write!(f, "héllo")?;
+                f.write_str(", ")?;
+                write!(f, "wörld-{}", 6 * 7)?;
+                f.write_char('🦀')
+            }
+        }
+        impl Serialize for Fragmented {
+            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                serializer.collect_str(self)
+            }
+        }
+
+        #[derive(Serialize)]
+        struct ViaCollectStr {
+            x: Fragmented,
+        }
+        #[derive(Serialize)]
+        struct ViaStr {
+            x: &'static str,
+        }
+        assert_eq!(
+            to_request_id(&ViaCollectStr { x: Fragmented }).unwrap(),
+            to_request_id(&ViaStr {
+                x: "héllo, wörld-42🦀"
+            })
+            .unwrap(),
+            "collect_str hashed identically to the equivalent str"
         );
     }
 }
