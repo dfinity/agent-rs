@@ -941,4 +941,40 @@ mod tests {
             "c2b325a8f7633df8054e9bd538ac8d26dc85cba4ad542cdbfca7109e1a60cf0c"
         );
     }
+
+    #[test]
+    fn structural_equivalence_collect_str() {
+        // Writes its text in several fragments, so the hasher sees more than one `write_str`.
+        struct Fragmented;
+        impl Display for Fragmented {
+            fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+                write!(f, "héllo")?;
+                f.write_str(", ")?;
+                write!(f, "wörld-{}", 6 * 7)?;
+                f.write_char('🦀')
+            }
+        }
+        impl Serialize for Fragmented {
+            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                serializer.collect_str(self)
+            }
+        }
+
+        #[derive(Serialize)]
+        struct ViaCollectStr {
+            x: Fragmented,
+        }
+        #[derive(Serialize)]
+        struct ViaStr {
+            x: &'static str,
+        }
+        assert_eq!(
+            to_request_id(&ViaCollectStr { x: Fragmented }).unwrap(),
+            to_request_id(&ViaStr {
+                x: "héllo, wörld-42🦀"
+            })
+            .unwrap(),
+            "collect_str hashed identically to the equivalent str"
+        );
+    }
 }
