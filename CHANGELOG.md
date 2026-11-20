@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+* `ic-agent`: Certificate verification now bounds the age of the NNS delegation carried by certificates from subnets other than the NNS root subnet, as the interface spec requires. Previously only the outer certificate's `/time` was checked, so a delegation of any age was accepted. A delegation recorded while a canister was on one subnet therefore kept that subnet authoritative for the canister after it migrated to another subnet, and one recorded before a subnet was re-keyed kept the old key valid. The default bound is 30 days, matching the JavaScript agent; replicas refresh their delegation every few minutes, so this only rejects delegations that are not current. It can be changed with `AgentBuilder::with_max_certificate_delegation_age` (or `AgentConfig::max_certificate_delegation_age`). A delegation that is too old is reported as `AgentError::CertificateOutdated`, the same as a certificate that is too old. This applies to `Agent::verify` and `Agent::verify_for_subnet`, and so to update calls, `read_state`, and subnet lookups used for query signature verification.
+
 ## [0.50.0] - 2026-11-20
 
 ### Changed
