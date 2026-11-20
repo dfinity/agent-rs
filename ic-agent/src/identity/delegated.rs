@@ -182,7 +182,7 @@ fn verify_delegation_link(
         if curve == Secp256k1::OID {
             let pt = EncodedPoint::from_bytes(spki.subject_public_key.raw_bytes())
                 .map_err(|_| DelegationError::Parse)?;
-            let vk = k256::ecdsa::VerifyingKey::from_encoded_point(&pt)
+            let vk = k256::ecdsa::VerifyingKey::from_sec1_point(&pt)
                 .map_err(|_| DelegationError::Parse)?;
             let sig =
                 k256::ecdsa::Signature::try_from(signature).map_err(|_| DelegationError::Parse)?;
@@ -194,7 +194,7 @@ fn verify_delegation_link(
         } else if curve == NistP256::OID {
             let pt = EncodedPoint::from_bytes(spki.subject_public_key.raw_bytes())
                 .map_err(|_| DelegationError::Parse)?;
-            let vk = p256::ecdsa::VerifyingKey::from_encoded_point(&pt)
+            let vk = p256::ecdsa::VerifyingKey::from_sec1_point(&pt)
                 .map_err(|_| DelegationError::Parse)?;
             let sig =
                 p256::ecdsa::Signature::try_from(signature).map_err(|_| DelegationError::Parse)?;

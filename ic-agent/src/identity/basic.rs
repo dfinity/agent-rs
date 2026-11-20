@@ -36,7 +36,7 @@ impl BasicIdentity {
     #[cfg(feature = "pem")]
     pub fn from_pem<B: AsRef<[u8]>>(pem_contents: B) -> Result<Self, PemError> {
         use pkcs8::der::{asn1::OctetString, Decode, ErrorKind, SliceReader, Tag, TagNumber};
-        use pkcs8::PrivateKeyInfo;
+        use pkcs8::PrivateKeyInfoRef as PrivateKeyInfo;
 
         let bytes = pem_contents.as_ref();
         let pem = pem::parse(bytes)?;
@@ -49,7 +49,7 @@ impl BasicIdentity {
                     == (ErrorKind::Noncanonical {
                         tag: Tag::ContextSpecific {
                             constructed: true,
-                            number: TagNumber::new(1),
+                            number: TagNumber(1),
                         },
                     })
                 {
@@ -68,7 +68,7 @@ impl BasicIdentity {
                 }
             }
         };
-        let decoded_key = OctetString::from_der(pki.private_key)?; // ed25519 uses an octet string within another octet string
+        let decoded_key = OctetString::from_der(pki.private_key.as_bytes())?; // ed25519 uses an octet string within another octet string
         let key_len = decoded_key.as_bytes().len();
         if key_len != 32 {
             Err(PemError::InvalidPrivateKey(format!(

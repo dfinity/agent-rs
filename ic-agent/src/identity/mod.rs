@@ -147,7 +147,7 @@ fn parse_ec_pkcs8_key_bytes(
 ) -> Result<Vec<u8>, error::PemError> {
     use pkcs8::{
         der::{Decode, Encode},
-        PrivateKeyInfo,
+        PrivateKeyInfoRef as PrivateKeyInfo,
     };
 
     let mut truncated: Vec<u8>;
@@ -177,12 +177,12 @@ fn parse_ec_pkcs8_key_bytes(
     let curve_oid = pki
         .algorithm
         .parameters_oid()
-        .map_err(|_| pkcs8::Error::KeyMalformed)?;
+        .map_err(|_| pkcs8::Error::KeyMalformed(pkcs8::KeyError::Invalid))?;
     if curve_oid != expected_curve {
         return Err(error::PemError::UnsupportedKeyCurve(
             curve_name.to_string(),
             curve_oid.to_der().unwrap_or_default(),
         ));
     }
-    Ok(pki.private_key.to_vec())
+    Ok(pki.private_key.as_bytes().to_vec())
 }

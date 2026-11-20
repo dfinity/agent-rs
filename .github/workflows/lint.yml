@@ -68,13 +68,20 @@ jobs:
       - name: Run Lint (docs)
         run: RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps
 
+      # Pinned: since nightly-2026-11-10, rustc rejects the target probe that
+      # cargo-docs-rs (<= 1.0.4) runs before documenting a non-host target
+      # (`echo '#![no_std]' | rustc - --target wasm32-unknown-unknown
+      # -Zunpretty=expanded`) with "`#[panic_handler]` function required".
+      # The actual rustdoc build for wasm32 still passes on current nightly, so
+      # docs.rs itself is unaffected. Unpin once cargo-docs-rs fixes the probe.
       - name: Check docs.rs build
+        env:
+          DOCS_RS_NIGHTLY: nightly-2026-10-25
         run: |
-          rustup update nightly
-          rustup target add wasm32-unknown-unknown --toolchain nightly
+          rustup toolchain install "$DOCS_RS_NIGHTLY" --profile minimal --target wasm32-unknown-unknown
           for package in $(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.publish == null and (.targets | any(.kind == ["lib"]))) | .name')
           do
-            CARGO_TARGET_DIR=target/nightly cargo +nightly docs-rs -p "$package"
+            CARGO_TARGET_DIR=target/nightly cargo "+$DOCS_RS_NIGHTLY" docs-rs -p "$package"
           done
 
   aggregate:
