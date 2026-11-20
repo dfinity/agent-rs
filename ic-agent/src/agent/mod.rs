@@ -190,6 +190,7 @@ pub struct Agent {
     nonce_factory: Arc<dyn NonceGenerator>,
     identity: Arc<dyn Identity>,
     ingress_expiry: Duration,
+    max_certificate_delegation_age: Duration,
     root_key: Arc<RwLock<Vec<u8>>>,
     client: Arc<dyn HttpService>,
     route_provider: Arc<dyn RouteProvider>,
@@ -206,6 +207,10 @@ impl fmt::Debug for Agent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         f.debug_struct("Agent")
             .field("ingress_expiry", &self.ingress_expiry)
+            .field(
+                "max_certificate_delegation_age",
+                &self.max_certificate_delegation_age,
+            )
             .finish_non_exhaustive()
     }
 }
@@ -241,6 +246,7 @@ impl Agent {
             nonce_factory: config.nonce_factory,
             identity: config.identity,
             ingress_expiry: config.ingress_expiry,
+            max_certificate_delegation_age: config.max_certificate_delegation_age,
             root_key: Arc::new(RwLock::new(IC_ROOT_KEY.to_vec())),
             client: client.clone(),
             route_provider: if let Some(route_provider) = config.route_provider {
@@ -1114,16 +1120,16 @@ impl Agent {
 
     fn verify_cert_timestamp(&self, cert: &Certificate) -> Result<(), AgentError> {
         // Verify that the certificate is not older than ingress expiry
-        // Certificates with timestamps in the future are allowed
-        let time = lookup_time(cert)?;
-        if (OffsetDateTime::now_utc()
-            - OffsetDateTime::from_unix_timestamp_nanos(time.into()).unwrap())
-            > self.ingress_expiry
-        {
-            Err(AgentError::CertificateOutdated(self.ingress_expiry))
-        } else {
-            Ok(())
-        }
+        check_certificate_age(cert, self.ingress_expiry)
+    }
+
+    /// Verifies that an NNS delegation certificate is not older than
+    /// `max_certificate_delegation_age`. The interface spec requires the delegation, not only the
+    /// certificate carrying it, to be "recent enough": without this, a delegation recorded before a
+    /// canister migrated away from a subnet (or before the subnet was re-keyed) would keep that
+    /// subnet authoritative for the canister (or that key valid) indefinitely.
+    fn verify_delegation_cert_timestamp(&self, cert: &Certificate) -> Result<(), AgentError> {
+        check_certificate_age(cert, self.max_certificate_delegation_age)
     }
 
     fn check_delegation(
@@ -1140,6 +1146,7 @@ impl Agent {
                     return Err(AgentError::CertificateHasTooManyDelegations);
                 }
                 self.verify_cert(&cert, effective_canister_id)?;
+                self.verify_delegation_cert_timestamp(&cert)?;
                 let canister_range_shards_lookup =
                     ["canister_ranges".as_bytes(), delegation.subnet_id.as_ref()];
                 let ranges: Vec<(Principal, Principal)> =
@@ -1214,6 +1221,7 @@ impl Agent {
                     return Err(AgentError::CertificateHasTooManyDelegations);
                 }
                 self.verify_cert_for_subnet(&cert, subnet_id)?;
+                self.verify_delegation_cert_timestamp(&cert)?;
                 let public_key_path = [
                     "subnet".as_bytes(),
                     subnet_id.as_ref(),
@@ -1618,6 +1626,19 @@ impl Agent {
 
 // Checks if a principal is contained within a list of principal ranges
 // A range is a tuple: (low: Principal, high: Principal), as described here: https://internetcomputer.org/docs/current/references/ic-interface-spec#state-tree-subnet
+/// Checks that `cert`'s `/time` is no more than `max_age` in the past. Timestamps in the future are
+/// allowed.
+fn check_certificate_age(cert: &Certificate, max_age: Duration) -> Result<(), AgentError> {
+    let time = lookup_time(cert)?;
+    if (OffsetDateTime::now_utc() - OffsetDateTime::from_unix_timestamp_nanos(time.into()).unwrap())
+        > max_age
+    {
+        Err(AgentError::CertificateOutdated(max_age))
+    } else {
+        Ok(())
+    }
+}
+
 fn principal_is_within_ranges(principal: &Principal, ranges: &[(Principal, Principal)]) -> bool {
     ranges
         .iter()

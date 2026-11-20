@@ -9,6 +9,16 @@ use std::{sync::Arc, time::Duration};
 
 use super::{route_provider::RouteProvider, HttpService};
 
+/// The default for `AgentConfig::max_certificate_delegation_age`: 30 days, the same bound
+/// `@icp-sdk/core` (the JavaScript agent) applies.
+///
+/// Replicas refresh their NNS delegation every few minutes, and immediately when it no longer
+/// matches the subnet's state (e.g. after a canister migration), so delegations seen in practice
+/// are minutes old. The bound is deliberately much looser than that so that an NNS outage, during
+/// which replicas keep serving their last delegation, does not make every other subnet unverifiable.
+pub(crate) const DEFAULT_MAX_CERTIFICATE_DELEGATION_AGE: Duration =
+    Duration::from_secs(30 * 24 * 60 * 60);
+
 /// A configuration for an agent.
 #[non_exhaustive]
 pub struct AgentConfig {
@@ -18,6 +28,8 @@ pub struct AgentConfig {
     pub identity: Arc<dyn Identity>,
     /// See [`with_ingress_expiry`](super::AgentBuilder::with_ingress_expiry).
     pub ingress_expiry: Duration,
+    /// See [`with_max_certificate_delegation_age`](super::AgentBuilder::with_max_certificate_delegation_age).
+    pub max_certificate_delegation_age: Duration,
     /// See [`with_http_client`](super::AgentBuilder::with_http_client).
     pub client: Option<Client>,
     /// See [`with_route_provider`](super::AgentBuilder::with_route_provider).
@@ -46,6 +58,7 @@ impl Default for AgentConfig {
             nonce_factory: Arc::new(NonceFactory::random()),
             identity: Arc::new(AnonymousIdentity {}),
             ingress_expiry: Duration::from_secs(3 * 60),
+            max_certificate_delegation_age: DEFAULT_MAX_CERTIFICATE_DELEGATION_AGE,
             client: None,
             http_service: None,
             verify_query_signatures: true,

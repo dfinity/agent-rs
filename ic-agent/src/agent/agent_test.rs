@@ -38,6 +38,7 @@ fn make_untimed_agent(url: &str) -> Agent {
         .with_url(url)
         .with_verify_query_signatures(false)
         .with_ingress_expiry(Duration::from_secs(u32::MAX.into()))
+        .with_max_certificate_delegation_age(Duration::from_secs(u32::MAX.into()))
         .build()
         .unwrap()
 }
@@ -46,6 +47,7 @@ fn make_certifying_agent(url: &str) -> Agent {
     Agent::builder()
         .with_url(url)
         .with_ingress_expiry(Duration::from_secs(u32::MAX.into()))
+        .with_max_certificate_delegation_age(Duration::from_secs(u32::MAX.into()))
         .build()
         .unwrap()
 }
@@ -541,6 +543,112 @@ async fn check_subnet_range_fallback_pruned_range() {
         )
         .await;
     assert!(result.is_err());
+}
+
+/// Returns how long ago the NNS delegation in a recorded `read_state` response body was issued.
+fn recorded_delegation_age(read_state_response: &[u8]) -> Duration {
+    let response: ic_transport_types::ReadStateResponse =
+        serde_cbor::from_slice(read_state_response).unwrap();
+    let cert: Certificate = serde_cbor::from_slice(&response.certificate).unwrap();
+    let delegation_cert: Certificate =
+        serde_cbor::from_slice(&cert.delegation.unwrap().certificate).unwrap();
+    let issued = crate::agent::response_authentication::lookup_time(&delegation_cert).unwrap();
+    // `SystemTime::now` panics on wasm32-unknown-unknown; `OffsetDateTime::now_utc` uses the
+    // browser clock there, as the verifier does.
+    let age = time::OffsetDateTime::now_utc()
+        - time::OffsetDateTime::from_unix_timestamp_nanos(issued.into()).unwrap();
+    age.try_into().unwrap()
+}
+
+/// An agent that accepts certificates of any age, but delegations only up to `max_delegation_age`.
+fn make_delegation_age_bounded_agent(url: &str, max_delegation_age: Duration) -> Agent {
+    Agent::builder()
+        .with_url(url)
+        .with_verify_query_signatures(false)
+        .with_ingress_expiry(Duration::from_secs(u32::MAX.into()))
+        .with_max_certificate_delegation_age(max_delegation_age)
+        .build()
+        .unwrap()
+}
+
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+// A delegation older than `max_certificate_delegation_age` must be rejected for canister-scoped
+// certificates even when the certificate carrying it is acceptable. Otherwise a delegation recorded
+// while a canister was on subnet A would keep A authoritative for it after the canister migrated
+// to subnet B.
+async fn canister_cert_with_stale_delegation_is_rejected() {
+    let canister = Principal::from_text(REQ_WITH_DELEGATED_CERT_CANISTER).unwrap();
+    let age = recorded_delegation_age(REQ_WITH_DELEGATED_CERT_RESPONSE);
+    let margin = Duration::from_secs(60 * 60);
+    let (_read_mock, url) = mock(
+        "POST",
+        "/api/v3/canister/ivg37-qiaaa-aaaab-aaaga-cai/read_state",
+        200,
+        REQ_WITH_DELEGATED_CERT_RESPONSE.into(),
+        Some("application/cbor"),
+    )
+    .await;
+    let read = |agent: Agent| async move {
+        agent
+            .read_state_raw(
+                vec![REQ_WITH_DELEGATED_CERT_PATH
+                    .into_iter()
+                    .map(Label::from)
+                    .collect()],
+                canister,
+            )
+            .await
+    };
+
+    let too_strict = age - margin;
+    assert_eq!(
+        read(make_delegation_age_bounded_agent(&url, too_strict))
+            .await
+            .unwrap_err(),
+        AgentError::CertificateOutdated(too_strict)
+    );
+    // The same response passes once the bound admits the delegation, so the rejection above is
+    // due to the delegation's age and nothing else.
+    read(make_delegation_age_bounded_agent(&url, age + margin))
+        .await
+        .expect("delegation within the bound must be accepted");
+}
+
+#[cfg_attr(not(target_family = "wasm"), tokio::test)]
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+// Same as above, for subnet-scoped certificates, whose delegation is checked by
+// `check_delegation_for_subnet`.
+async fn subnet_cert_with_stale_delegation_is_rejected() {
+    let subnet_id =
+        Principal::from_text("uzr34-akd3s-xrdag-3ql62-ocgoh-ld2ao-tamcv-54e7j-krwgb-2gm4z-oqe")
+            .unwrap();
+    let age = recorded_delegation_age(NODE_KEYS_UZR34);
+    let margin = Duration::from_secs(60 * 60);
+    let (_read_mock, url) = mock(
+        "POST",
+        &format!("/api/v3/subnet/{subnet_id}/read_state"),
+        200,
+        NODE_KEYS_UZR34.into(),
+        Some("application/cbor"),
+    )
+    .await;
+    let read = |agent: Agent| async move {
+        agent
+            .read_subnet_state_raw(vec![vec![Label::from_bytes(b"subnet")]], subnet_id)
+            .await
+    };
+
+    let too_strict = age - margin;
+    assert_eq!(
+        read(make_delegation_age_bounded_agent(&url, too_strict))
+            .await
+            .unwrap_err(),
+        AgentError::CertificateOutdated(too_strict)
+    );
+    read(make_delegation_age_bounded_agent(&url, age + margin))
+        .await
+        .expect("delegation within the bound must be accepted");
 }
 
 #[cfg_attr(not(target_family = "wasm"), tokio::test)]
