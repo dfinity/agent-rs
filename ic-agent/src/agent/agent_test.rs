@@ -553,10 +553,11 @@ fn recorded_delegation_age(read_state_response: &[u8]) -> Duration {
     let delegation_cert: Certificate =
         serde_cbor::from_slice(&cert.delegation.unwrap().certificate).unwrap();
     let issued = crate::agent::response_authentication::lookup_time(&delegation_cert).unwrap();
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap();
-    now - Duration::from_nanos(issued)
+    // `SystemTime::now` panics on wasm32-unknown-unknown; `OffsetDateTime::now_utc` uses the
+    // browser clock there, as the verifier does.
+    let age = time::OffsetDateTime::now_utc()
+        - time::OffsetDateTime::from_unix_timestamp_nanos(issued.into()).unwrap();
+    age.try_into().unwrap()
 }
 
 /// An agent that accepts certificates of any age, but delegations only up to `max_delegation_age`.
