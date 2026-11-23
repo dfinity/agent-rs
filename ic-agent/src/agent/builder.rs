@@ -94,6 +94,22 @@ impl AgentBuilder {
         self
     }
 
+    /// Sets the maximum age of the NNS delegation carried by certificates from subnets other than
+    /// the NNS root subnet. Defaults to 30 days, the same bound the JavaScript agent applies.
+    ///
+    /// The delegation is the NNS's statement of which public key a subnet has and which canisters
+    /// it is responsible for. Both can change: subnets can be re-keyed during recovery, and canisters
+    /// can migrate between subnets. Bounding the delegation's age bounds how long a subnet can keep
+    /// answering for a canister, or with a key, that the NNS no longer assigns to it.
+    ///
+    /// This is checked separately from, and in addition to, the certificate's own age, which is
+    /// bounded by [`with_ingress_expiry`](Self::with_ingress_expiry). Delegations with timestamps in
+    /// the future are allowed.
+    pub fn with_max_certificate_delegation_age(mut self, max_age: std::time::Duration) -> Self {
+        self.config.max_certificate_delegation_age = max_age;
+        self
+    }
+
     /// Allows disabling query signature verification. Query signatures improve resilience but require
     /// a separate read-state call to fetch node keys.
     pub fn with_verify_query_signatures(mut self, verify_query_signatures: bool) -> Self {
